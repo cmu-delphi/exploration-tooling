@@ -1,0 +1,57 @@
+Package: epieval
+Title: Evaluating Timeseries Forecasting on Archival Data
+Version: 0.1.0
+Authors@R: 
+    person("Davie", "Weber", , "davidweb@andrew.cmu.edu", role = c("aut", "cre"),
+           comment = c(ORCID = "YOUR-ORCID-ID"))
+Description: Given a timeseries and accompanying auxillary timeseries, evaluate a collection of forecasters implementable with epipredict using several metrics on historical data. Assuming the source of your timeseries provides versioned data, the evaluation at any given timepoint will only use data that was available at that point.
+License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
+    license
+Depends:
+    epiprocess (>= 0.6.0),
+    parsnip (>= 1.0.0),
+    R (>= 3.5.0)
+Imports:
+    cli,
+    distributional,
+    dplyr,
+    fs,
+    generics,
+    glue,
+    hardhat (>= 1.3.0),
+    magrittr,
+    methods,
+    quantreg,
+    recipes (>= 1.0.4),
+    rlang,
+    smoothqr,
+    stats,
+    tibble,
+    tidyr,
+    tidyselect,
+    usethis,
+    vctrs,
+    workflows (>= 1.0.0)
+Suggests:
+    covidcast,
+    data.table,
+    epidatr,
+    ggplot2,
+    knitr,
+    lubridate,
+    poissonreg,
+    ranger,
+    RcppRoll,
+    rmarkdown,
+    testthat (>= 3.0.0),
+    xgboost
+VignetteBuilder:
+    knitr
+Remotes:
+    cmu-delphi/epidatr,
+    cmu-delphi/epiprocess,
+    dajmcdon/smoothqr
+Encoding: UTF-8
+Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
