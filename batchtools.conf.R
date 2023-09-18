@@ -1,3 +1,4 @@
 cluster.functions <- makeClusterFunctionsInteractive()
 work.dir <- "."
-## package <- union(packages, "epipredict", "epiprocess", "scoringutils", "epieval")
+file.dir <- "registry"
+packages <- union(packages, c("epipredict", "epiprocess", "scoringutils", "e1071"))

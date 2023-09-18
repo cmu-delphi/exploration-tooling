@@ -2,13 +2,13 @@ here::here()
 renv::install("cmu-delphi/epiprocess")
 renv::install("cmu-delphi/epipredict")
 renv::install("cmu-delphi/epidatr")
-calc_wis_one_ahead <- function(ahead, model, model_name, lags, training_window = 120, training_window_pad = 20, extra_sources = c("chng"), refit = FALSE) {
+calc_wis_one_ahead <- function(ahead, model, model_name, lags, n_training = 120, n_training_pad = 20, extra_sources = c("chng"), refit = FALSE) {
   #
   # loading old results and file system variables
   #
   lag_string <- paste(unlist(c("lags", lags)), collapse = "_")
   extras_string <- paste(extra_sources, collapse = "_")
-  training_string <- glue::glue("window={training_window}")
+  training_string <- glue::glue("window={n_training}")
   if (extras_string != "") {
     save_dir <- file.path(here::here(), results_directory, model_name, extras_string, training_string, lag_string)
   } else {
@@ -16,21 +16,21 @@ calc_wis_one_ahead <- function(ahead, model, model_name, lags, training_window =
   }
   save_file <- file.path(save_dir, glue::glue("ahead_{ahead}.gz.parquet"))
   if ((is.null(refit) || !refit) && file.exists(save_file)) {
-    print(glue::glue("ahead={ahead}, model={model_name}, {lag_string}, training_window = {training_window}, extra sources={extras_string} was already fit! returning the cached model"))
+    print(glue::glue("ahead={ahead}, model={model_name}, {lag_string}, n_training = {n_training}, extra sources={extras_string} was already fit! returning the cached model"))
     return(read_parquet(save_file))
   }
   #
   # it hasn't already been fit and/or we're refitting
   #
-  start_date <- min(archive$DT$time_value) + training_window + training_window_pad
+  start_date <- min(archive$DT$time_value) + n_training + n_training_pad
   end_date <- max(archive$DT$time_value) - ahead
   valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = 1)
-  print(glue::glue("evaluating ahead={ahead}, model={model_name}, {lag_string}, training_window = {training_window}, extra sources={extras_string}"))
+  print(glue::glue("evaluating ahead={ahead}, model={model_name}, {lag_string}, n_training = {n_training}, extra sources={extras_string}"))
   col_name <- glue::glue("{model_name}")
   duration <- system.time(res <- epix_slide(
     archive,
-    ~ testing_forecast(ahead, .x, model, lags, extra_sources, quantiles, "hhs", training_window),
-    before = training_window + training_window_pad - 1,
+    ~ testing_forecast(ahead, .x, model, lags, extra_sources, quantiles, "hhs", n_training),
+    before = n_training + n_training_pad - 1,
     ref_time_values = valid_predict_dates,
     new_col_name = col_name,
   ))

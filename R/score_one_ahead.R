@@ -1,4 +1,4 @@
-calc_wis_one_ahead <- function(ahead, model, model_name, lags, training_window = 120, training_window_pad = 20, extra_sources = c("chng"), refit = FALSE) {
+calc_wis_one_ahead <- function(ahead, model, model_name, lags, n_training = 120, n_training_pad = 20, extra_sources = c("chng"), refit = FALSE) {
   #
   # reformatting the results
   #

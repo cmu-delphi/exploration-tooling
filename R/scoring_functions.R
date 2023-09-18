@@ -1,3 +1,7 @@
+#' tables don't play nicely with functions directly
+scoring_lookup <- function(string_name) {
+
+}
 weighted_interval_score <- function(predictions) {
   predictions %>%
     group_by(across(-c(

@@ -1,12 +1,56 @@
-# Hmm, annoying. I think the short answer is to wrap a workflow in a function of the arguments. Then loop over all the combinations. The longer answer is that plus something like batchtools that will let you parallelize all that (and track the results in a database): https://mllg.github.io/batchtools/
-#' build a workflow given a list of preprocessing steps (step =, args =) and post-processing steps (layer = , args=). Each has a special "step" given by list(step = "default") and list(layer = "default") that performs the operations as arx_forecaster would, using the given args_list. This allows the
+new_forecaster <- function(pre_preprocessing, preprocessing, postprocessing, post_postprocessing, params) {
+  # TODO add checks
+  structure(pre_preprocessing, preprocessing, postprocessing, post_postprocessing, params,)
+}
 
 
-# instead of this, define dummy data, and directly build the workflows
-# add `step_arx_forecaster`
-# add `step_arx_classifier`
-# add `layer_arx_forecaster`
-# add `layer_interval` (or something that dispatches on the trainer)
+#' given a particular epi_df
+#' @description
+#' The equivalent to arx_forecaster, but for the more general forecaster model
+#' that allows for pre- and post- processing.
+predict_forecasting_workflow <- function(epi_data, outcome, predictors, trainer = NULL, pre_preprocessing = list(), preprocessing = list(list(step = "default")), postprocessing = list(list(step = "default")), post_postprocessing = list(), args_list = arx_args_list()) {
+  if (!epipredict:::is_regression(trainer)) {
+    cli::cli_abort("`trainer` must be a {.pkg parsnip} model of mode 'regression'.")
+  }
+  for (step in pre_preprocessing) {
+    epi_data %<>% rlang::exec(step$step, ., !!!step$args)
+  }
+
+  workflow <- build_forecasting_workflow(epi_data, outcome, predictors, trainer, pre_preprocessing, preprocessing, postprocessing, post_postprocessing, args_list)
+
+  latest <- get_test_data(
+    hardhat::extract_preprocessor(workflow), epi_data, TRUE, args_list$nafill_buffer,
+    args_list$forecast_date %||% max(epi_data$time_value)
+  )
+  workflow <- generics::fit(workflow, epi_data)
+  preds <- predict(workflow, new_data = latest) %>%
+    tibble::as_tibble() %>%
+    dplyr::select(-time_value)
+  for (step in postprocessing) {
+    if (is.character(step$step) && step$step == "default") {
+      # the proccessing steps of arx_forecaster
+      r %<>% arx_preprocess(outcome, predictors, lags, args_list)
+    } else if (is.function(step$step) && grepl("step", as.character(step$step))) {
+      # its a step as defined by epipredict or parsnip
+      r %<>% rlang::exec(step$step, ., !!!step$args)
+    }
+  }
+
+  structure(
+    list(
+      predictions = preds,
+      epi_workflow = wf,
+      metadata = list(
+        training = attr(epi_data, "metadata"),
+        forecast_created = Sys.time()
+      )
+    ),
+    class = c("arx_fcast", "canned_epipred")
+  )
+}
+#' turn a model spec into an actually run workflow
+#' @description
+#' this is the equivalent of arx_fcast_epi_workflow, and is mostly internal
 create_forecaster_workflow <- function(epi_data, outcome, predictors, trainer = NULL, pre_preprocessing = list(), preprocessing = list(list(step = "default")), postprocessing = list(list(step = "default")), post_postprocessing = list(), args_list = arx_args_list()) {
   epipredict:::validate_forecaster_inputs(epi_data, outcome, predictors)
   if (!inherits(args_list, c("arx_fcast", "alist"))) {
@@ -17,10 +61,6 @@ create_forecaster_workflow <- function(epi_data, outcome, predictors, trainer = 
   }
   lags <- epipredict:::arx_lags_validator(predictors, args_list$lags)
   # first, transform the data using any pure functions in the pipeline (these have to happen before the epipredict steps)
-  for (step in pre_preprocessing) {
-    epi_data %<>% rlang::exec(step$step, ., !!!step$args)
-  }
-
   r <- epi_recipe(epi_data)
   for (step in preprocessing) {
     if (is.character(step$step) && step$step == "default") {
@@ -34,17 +74,9 @@ create_forecaster_workflow <- function(epi_data, outcome, predictors, trainer = 
   forecast_date <- args_list$forecast_date %||% max(epi_data$time_value)
   target_date <- args_list$target_date %||% forecast_date + args_list$ahead
   f <- frosting()
-  for (step in postprocessing) {
-    if (is.character(step$step) && step$step == "default") {
-      # the proccessing steps of arx_forecaster
-      r %<>% arx_preprocess(outcome, predictors, lags, args_list)
-    } else if (is.function(step$step) && grepl("step", as.character(step$step))) {
-      # its a step as defined by epipredict or parsnip
-      r %<>% rlang::exec(step$step, ., !!!step$args)
-    }
-  }
 }
 
+# TODO replace with `step_arx_forecaster`
 arx_preprocess <- function(r, outcome, predictors, lags, args_list) {
   # input already validated
   for (l in seq_along(lags)) {
@@ -58,6 +90,7 @@ arx_preprocess <- function(r, outcome, predictors, lags, args_list) {
   return(r)
 }
 
+# TODO replace with `layer_arx_forecaster`
 arx_postprocess <- function(f, trainer, outcome, predictors, lags, args_list, forecast_date, target_date) {
   f %<>% layer_predict()
   if (inherits(trainer, "quantile_reg")) {
@@ -83,84 +116,3 @@ arx_postprocess <- function(f, trainer, outcome, predictors, lags, args_list, fo
 
 
 
-execute_forecasting_workflow <- function(epi_data, outcome, predictors, trainer = NULL, pre_preprocessing = list(), preprocessing = list(list(step = "default")), postprocessing = list(list(step = "default")), post_postprocessing = list(), args_list = arx_args_list()) {
-  browser()
-  if (!epipredict:::is_regression(trainer)) {
-    cli::cli_abort("`trainer` must be a {.pkg parsnip} model of mode 'regression'.")
-  }
-  workflow <- build_forecasting_workflow(epi_data, outcome, predictors, trainer, pre_preprocessing, preprocessing, postprocessing, post_postprocessing, args_list)
-
-  latest <- get_test_data(
-    hardhat::extract_preprocessor(workflow), epi_data, TRUE, args_list$nafill_buffer,
-    args_list$forecast_date %||% max(epi_data$time_value)
-  )
-  workflow <- generics::fit(workflow, epi_data)
-  preds <- predict(workflow, new_data = latest) %>%
-    tibble::as_tibble() %>%
-    dplyr::select(-time_value)
-
-  structure(
-    list(
-      predictions = preds,
-      epi_workflow = wf,
-      metadata = list(
-        training = attr(epi_data, "metadata"),
-        forecast_created = Sys.time()
-      )
-    ),
-    class = c("arx_fcast", "canned_epipred")
-  )
-}
-
-# example pre-workflow
-args_list <- arx_args_list()
-pre_preprocessing <- list(
-  list(
-    step = your_favorite_smoother,
-    args = some_extra_args()
-  )
-)
-preprocessing <- list(
-  list(
-    step = step_population_scaling,
-    args = list(
-      all_numeric(),
-      df = state_census,
-      df_pop_col = "pop",
-      create_new = FALSE,
-      rate_rescaling = 1e5,
-      by = c("geo_value" = "abbr")
-    )
-  ),
-  list(step = "default")
-)
-postprocessing <- list(
-  list(
-    layer = layer_population_scaling,
-    args = list(
-      ".pred",
-      df = state_census,
-      df_pop_col = "pop",
-      create_new = FALSE,
-      rate_rescaling = 1e5,
-      by = c("geo_value" = "abbr")
-    )
-  ),
-  list(step = "default")
-)
-
-
-source(file = file.path("..", "hospitalization-forecaster", "basic-epipredict-forecaster", "download-script.R"))
-epi_data <- archive$as_of(as.Date("2022-01-01"))
-outcome <- "hhs"
-predictors <- "chng"
-trainer <- parsnip::linear_reg()
-
-library(epipredict)
-library(epiprocess)
-library(tidyverse)
-library(parsnip)
-library(recipes)
-
-workflow <- build_forecasting_workflow(epi_data, outcome, predictors, trainer, preprocessing = preprocessing, postprocessing = postprocessing)
-execute_forecasting_workflow(epi_data, outcome, predictors, trainer, preprocessing = preprocessing, postprocessing = postprocessing)
