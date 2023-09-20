@@ -1,9 +1,4 @@
 library(epipredict)
-new_forecaster <- function(pre_preprocessing, preprocessing, postprocessing, post_postprocessing, params) {
-  # TODO add checks
-  structure(pre_preprocessing, preprocessing, postprocessing, post_postprocessing, params, )
-}
-
 
 #' helper function for those writing forecasters
 #' @description
