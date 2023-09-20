@@ -119,6 +119,7 @@ forecaster_pred <- function(data,
   # TODO maybe allow for other params that are actually functions
   trainer <- match.fun(trainer)
   # first generate the forecasts
+  # TODO forecaster probably needs a do.call
   res <- epix_slide(
     archive,
     ~ forecaster(
@@ -131,6 +132,6 @@ forecaster_pred <- function(data,
     ref_time_values = valid_predict_dates,
     new_col_name = ".pred_distn",
   )
-  #
+  # TODO append the truth data
   return(res)
 }

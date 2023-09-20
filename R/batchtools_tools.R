@@ -35,7 +35,7 @@ set_registry <- function(registry_folder = here::here("registry")) {
 #'   ahead, levels)` which converts the output of epipredict into the format
 #'   expected by the scoring utils. See [formatters.R] for some examples]
 #' @inheritDotParams addProblem -name -data
-add_data_problem <- function(problem_name,
+add_forecast_problem <- function(problem_name,
                              archive,
                              outcome,
                              extra_sources,
@@ -55,9 +55,11 @@ add_data_problem <- function(problem_name,
 #' because there is quite a bit of shared code around evaluating a given
 #'   forecaster, we don't expect the user to define the slide and other
 #'   evaluation details.
-add_forecaster <- function(forecaster_name, forecaster, reg = getDefaultRegistry()) {
+add_forecaster <- function(forecaster_name,
+                           forecaster,
+                           reg = getDefaultRegistry()) {
   wrapper <- function(..., forecaster = forecaster) {
-    forecaster_eval(..., forecaster = forecaster)
+    forecaster_pred(..., forecaster = forecaster)
   }
   addAlgorithm(forecaster_name, fun = wrapper, reg = reg)
 }
