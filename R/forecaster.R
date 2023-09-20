@@ -1,57 +1,17 @@
+library(epipredict)
 new_forecaster <- function(pre_preprocessing, preprocessing, postprocessing, post_postprocessing, params) {
   # TODO add checks
-  structure(pre_preprocessing, preprocessing, postprocessing, post_postprocessing, params,)
+  structure(pre_preprocessing, preprocessing, postprocessing, post_postprocessing, params, )
 }
 
 
-#' given a particular epi_df
+#' helper function for those writing forecasters
 #' @description
-#' The equivalent to arx_forecaster, but for the more general forecaster model
-#' that allows for pre- and post- processing.
-predict_forecasting_workflow <- function(epi_data, outcome, predictors, trainer = NULL, pre_preprocessing = list(), preprocessing = list(list(step = "default")), postprocessing = list(list(step = "default")), post_postprocessing = list(), args_list = arx_args_list()) {
-  if (!epipredict:::is_regression(trainer)) {
-    cli::cli_abort("`trainer` must be a {.pkg parsnip} model of mode 'regression'.")
-  }
-  for (step in pre_preprocessing) {
-    epi_data %<>% rlang::exec(step$step, ., !!!step$args)
-  }
-
-  workflow <- build_forecasting_workflow(epi_data, outcome, predictors, trainer, pre_preprocessing, preprocessing, postprocessing, post_postprocessing, args_list)
-
-  latest <- get_test_data(
-    hardhat::extract_preprocessor(workflow), epi_data, TRUE, args_list$nafill_buffer,
-    args_list$forecast_date %||% max(epi_data$time_value)
-  )
-  workflow <- generics::fit(workflow, epi_data)
-  preds <- predict(workflow, new_data = latest) %>%
-    tibble::as_tibble() %>%
-    dplyr::select(-time_value)
-  for (step in postprocessing) {
-    if (is.character(step$step) && step$step == "default") {
-      # the proccessing steps of arx_forecaster
-      r %<>% arx_preprocess(outcome, predictors, lags, args_list)
-    } else if (is.function(step$step) && grepl("step", as.character(step$step))) {
-      # its a step as defined by epipredict or parsnip
-      r %<>% rlang::exec(step$step, ., !!!step$args)
-    }
-  }
-
-  structure(
-    list(
-      predictions = preds,
-      epi_workflow = wf,
-      metadata = list(
-        training = attr(epi_data, "metadata"),
-        forecast_created = Sys.time()
-      )
-    ),
-    class = c("arx_fcast", "canned_epipred")
-  )
-}
-#' turn a model spec into an actually run workflow
-#' @description
-#' this is the equivalent of arx_fcast_epi_workflow, and is mostly internal
-create_forecaster_workflow <- function(epi_data, outcome, predictors, trainer = NULL, pre_preprocessing = list(), preprocessing = list(list(step = "default")), postprocessing = list(list(step = "default")), post_postprocessing = list(), args_list = arx_args_list()) {
+perform_sanity_checks <- function(epi_data,
+                                  outcome,
+                                  predictors,
+                                  trainer,
+                                  args_list) {
   epipredict:::validate_forecaster_inputs(epi_data, outcome, predictors)
   if (!inherits(args_list, c("arx_fcast", "alist"))) {
     cli::cli_abort("args_list was not created using `arx_args_list().")
@@ -59,26 +19,19 @@ create_forecaster_workflow <- function(epi_data, outcome, predictors, trainer = 
   if (!(is.null(trainer) || epipredict:::is_regression(trainer))) {
     cli::cli_abort("{trainer} must be a `{parsnip}` model of mode 'regression'.")
   }
-  lags <- epipredict:::arx_lags_validator(predictors, args_list$lags)
-  # first, transform the data using any pure functions in the pipeline (these have to happen before the epipredict steps)
-  r <- epi_recipe(epi_data)
-  for (step in preprocessing) {
-    if (is.character(step$step) && step$step == "default") {
-      # the proccessing steps of arx_forecaster
-      r %<>% arx_preprocess(outcome, predictors, lags, args_list)
-    } else if (is.function(step$step) && getNamespaceName(environment(step$step)) == "epipredict") {
-      # its a step as defined by epipredict or parsnip
-      r %<>% rlang::exec(step$step, ., !!!step$args)
-    }
+  args_list$lags <- epipredict:::arx_lags_validator(predictors, args_list$lags)
+  # only needed an empty string to prevent the tibble from going crazy
+  if (extra_sources == c("")) {
+    extra_sources <- c()
   }
-  forecast_date <- args_list$forecast_date %||% max(epi_data$time_value)
-  target_date <- args_list$target_date %||% forecast_date + args_list$ahead
-  f <- frosting()
+  return(args_list)
 }
 
 # TODO replace with `step_arx_forecaster`
-arx_preprocess <- function(r, outcome, predictors, lags, args_list) {
+arx_preprocess <- function(r, outcome, predictors, args_list) {
   # input already validated
+  args_list <- perform_sanity_checks(trainer, args_list)
+  lags <- args_list$lags
   for (l in seq_along(lags)) {
     p <- predictors[l]
     r %<>% step_epi_lag(!!p, lag = lags[[l]])
@@ -91,11 +44,15 @@ arx_preprocess <- function(r, outcome, predictors, lags, args_list) {
 }
 
 # TODO replace with `layer_arx_forecaster`
-arx_postprocess <- function(f, trainer, outcome, predictors, lags, args_list, forecast_date, target_date) {
+arx_postprocess <- function(f,
+                            trainer,
+                            args_list,
+                            forecast_date,
+                            target_date) {
   f %<>% layer_predict()
   if (inherits(trainer, "quantile_reg")) {
     # add all levels to the forecaster and update postprocessor
-    tau <- sort(compare_quantile_args(
+    tau <- sort(epipredict:::compare_quantile_args(
       args_list$levels,
       rlang::eval_tidy(trainer$args$tau)
     ))
@@ -114,5 +71,71 @@ arx_postprocess <- function(f, trainer, outcome, predictors, lags, args_list, fo
   return(f)
 }
 
+#' helper function to run a epipredict model and reformat to hub format
+run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
+  workflow <- epi_workflow(preproc, trainer) %>%
+    fit(epi_data) %>%
+    add_frosting(postproc)
+  latest <- get_test_data(recipe = preproc, x = epi_data)
+  pred <- predict(workflow, latest)
+  # the forecast_date may currently be the max time_value
+  true_forecast_date <- attributes(epi_data)$metadata$as_of
+  return(format_storage(pred, true_forecast_date))
+}
 
-
+#' generate forecaster predictions on a particular dataset
+#' @description
+#' a wrapper that turns a forecaster, parameters, data
+#' combination into an actual experiment that outputs a
+#' prediction.
+#' as far as batchtools is concerned, the scoring function is a particular
+#'   parameter of the forecaster (or Algorithm, as they call it).
+#' @param data as per batchtools
+#' @param job as per batchtools
+#' @param instance as per batchtools
+#' @param scoring_function TODO detailed spec
+#' @param forecaster a function that does the actual forecasting for a given
+#'   day. See `exampleSpec.R` for an example function and its documentation for
+#'   the general parameter requirements.
+#' @param slide_training a required parameter that governs the window size that
+#'   epix_slide hands off to epipredict.
+#' @param slide_training_pad a required parameter that determines padding
+#' @param trainer should be given as a string, which will be converted to a
+#'   function.
+#' @param ahead a necessary parameter to specify an experiment
+#' @param ... any extra parameters the user has defined for forecaster.
+forecaster_pred <- function(data,
+                            job,
+                            instance,
+                            forecaster=scaled_pop,
+                            slide_training = Inf,
+                            slide_training_pad = 20L,
+                            trainer = "linear_reg",
+                            ahead = 1,
+                            ...) {
+  archive <- instance$archive
+  outcome <- instance$outcome
+  extra_sources <- instance$extra_sources
+  output_format <- instance$output_formatter
+  # restrict the dataset to areas where training is possible
+  start_date <- min(archive$DT$time_value) + slide_training + slide_training_pad
+  end_date <- max(archive$DT$time_value) - ahead
+  valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = 1)
+  # TODO maybe allow for other params that are actually functions
+  trainer <- match.fun(trainer)
+  # first generate the forecasts
+  res <- epix_slide(
+    archive,
+    ~ forecaster(
+      ahead,
+      .x,
+      trainer,
+      ... # TODO update to fit the spec
+    ),
+    before = n_training + n_training_pad - 1,
+    ref_time_values = valid_predict_dates,
+    new_col_name = ".pred_distn",
+  )
+  #
+  return(res)
+}

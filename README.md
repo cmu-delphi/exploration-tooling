@@ -30,10 +30,12 @@ currently, I'm producing forecasts and evaluating at the same time. Actually, no
     - evaluate forecast
     - save
 
-# Forecaster definition
-
-This will be particular to models built using epipredict/process, though it won't strictly be doing operations allowed by those methods.
-Probably the most difficult case to handle is ensemble forecasters; calibration and any other pre- or post- processing of single forecasters is straightforward.
-If we're aiming at making an eval tool that is independent of the actual production of the forecast, we may need to completely specify every model independently, and not introduce dependencies between forecasters.
+# Kinds of forecasters
+## Basic
+The basic forecaster takes in an epi_df, does some pre-processing, does an epipredict workflow, and then some post-processing
+## Ensemble
+This kind of forecaster has two components: a list of existing forecasters it depends on, and a function that aggregates those forecasters.
+## (to be named)
+Any forecaster which requires a pre-trained component. An example is a forecaster with a sophisticated imputation method. Evaluating these has some thorns around training/testing splitting. It may be foldable into the basic variety though.
 # later things
 - a way to check that a given function is or is not in the right format to be a forecaster
