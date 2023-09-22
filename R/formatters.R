@@ -17,6 +17,7 @@ format_storage <- function(pred, true_forecast_date, target_end_date) {
     rename(quantile = tau, value = q, target_end_date = target_date) %>%
     relocate(geo_value, forecast_date, target_end_date, quantile, value)
 }
+
 #' format for the COVID-19 Forecast Hub
 #' @description
 #' expects the pred to have the columns geo_value, .pred, .pred_distn,
