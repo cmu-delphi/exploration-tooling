@@ -2,11 +2,12 @@ library(epipredict)
 library(recipes)
 library(tidyverse)
 library(magrittr)
-# to define a forecaster:
-# first define any pre-epipredict steps (they should be operating on a epi_df)
-# then define any post-epipredict steps (same)
-# then create the forecaster as a function, which must have the following
-# arguments:
+
+#' to define a forecaster:
+#' first define any pre-epipredict steps (they should be operating on a epi_df)
+#' then define any post-epipredict steps (same)
+#' then create the forecaster as a function, which must have the following
+#' arguments:
 #' @param epi_df the actual data used
 #' @param outcome the name of the target variable
 #' @param extra_sources the name of any extra columns to use. This list could be

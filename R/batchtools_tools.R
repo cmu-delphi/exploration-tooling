@@ -1,8 +1,10 @@
 library(epiprocess)
 library(batchtools)
 library(epidatr)
+
 explore_env <- new.env(parent = emptyenv())
 explore_env$registry <- NULL
+
 #' setup the batchtools registry
 #' @description
 #' settings come from. Can either load an existing registry, or make a new one
