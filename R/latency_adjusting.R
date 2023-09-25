@@ -6,14 +6,23 @@
 #'   ahead to be 6, since the 9th (the target date) is 6 days after the last day
 #'   of data.
 extend_ahead <- function(epi_data, ahead) {
-  effective_ahead <- as.numeric(
-    attributes(epi_data)$metadata$as_of - max(epi_data$time_value) + ahead
-  )
+  time_values <- epi_data$time_value
+  if (length(time_values) > 0) {
+    effective_ahead <- as.integer(
+      as.Date(attributes(epi_data)$metadata$as_of) -
+        max(time_values) +
+        ahead
+    )
+  } else {
+    effective_ahead <- Inf
+  }
   return(list(epi_data, effective_ahead))
 }
 
 #' last observation carried forward
 #' @description
+#' instead of modifying `ahead`, interpolate `epi_data` to contain last
+#'   observation carried forward
 locf_latency <- function(epi_data, ahead) {
   # TODO
 }

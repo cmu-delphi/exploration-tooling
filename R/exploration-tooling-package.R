@@ -1,5 +1,4 @@
 #' @keywords internal
-#' @include cache.R
 "_PACKAGE"
 library(epidatr)
 .onLoad <- function(libname, pkgname) {
