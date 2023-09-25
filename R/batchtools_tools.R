@@ -9,7 +9,7 @@ explore_env$registry <- NULL
 #' @description
 #' settings come from. Can either load an existing registry, or make a new one
 #'   in the case it doesn't exist
-#' @params registry_folder where the registry is stored
+#' @param registry_folder where the registry is stored
 #' @return [`NULL`]
 #' @export
 set_registry <- function(registry_folder = here::here("registry")) {
@@ -33,15 +33,13 @@ set_registry <- function(registry_folder = here::here("registry")) {
 #' @param outcome the target variable
 #' @param extra_sources any potential side information the model has available
 #'   in the archive
-#' @param output_formatter a function with signature `output_formatter(pred,
-#'   ahead, levels)` which converts the output of epipredict into the format
-#'   expected by the scoring utils. See [formatters.R] for some examples]
-#' @inheritDotParams addProblem -name -data
+#' @inheritDotParams batchtools::addProblem -name -data
+#' @export
 add_forecast_problem <- function(problem_name,
-                             archive,
-                             outcome,
-                             extra_sources,
-                             ...) {
+                                 archive,
+                                 outcome,
+                                 extra_sources,
+                                 ...) {
   addProblem(
     name = problem_name,
     data = list(
@@ -57,6 +55,7 @@ add_forecast_problem <- function(problem_name,
 #' because there is quite a bit of shared code around evaluating a given
 #'   forecaster, we don't expect the user to define the slide and other
 #'   evaluation details.
+#' @export
 add_forecaster <- function(forecaster_name,
                            forecaster,
                            reg = getDefaultRegistry()) {

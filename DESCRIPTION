@@ -56,12 +56,11 @@ Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.3
 Collate: 
+    'small_utils.R'
     'batchtools_tools.R'
-    'cache.R'
     'exploration-tooling-package.R'
     'forecaster.R'
     'formatters.R'
     'latency_adjusting.R'
     'manage_S3_cache.R'
     'scoring_functions.R'
-    'small_utils.R'

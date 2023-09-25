@@ -1,19 +1,19 @@
-library(magrittr)
-library(tidyverse)
-library(dplyr)
-library(epipredict)
 #' storage format
 #' @description
 #' the columns for any stored prediction are
 #' `(geo_value, forecast_date, target_end_date, quantile, value)`
 #' in that particular order. It does not include the point estimate as a
 #'   separate row.
-format_storage <- function(pred, true_forecast_date) {
+#' @import magrittr dplyr epipredict
+#' @export
+format_storage <- function(pred, true_forecast_date, target_end_date) {
   pred %>%
-    mutate(forecast_date = true_forecast_date,
-           .dstn = nested_quantiles(.pred_distn)) %>%
+    mutate(
+      forecast_date = true_forecast_date,
+      .dstn = nested_quantiles(.pred_distn)
+    ) %>%
     unnest(.dstn) %>%
-    select(-.pred_distn, -.pred) %>%
+    select(-.pred_distn, -.pred, -time_value) %>%
     rename(quantile = tau, value = q, target_end_date = target_date) %>%
     relocate(geo_value, forecast_date, target_end_date, quantile, value)
 }
