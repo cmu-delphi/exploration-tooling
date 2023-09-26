@@ -146,28 +146,31 @@ forecaster_pred <- function(data,
   if (slide_training < Inf) {
     start_date <- min(archive$DT$time_value) + slide_training + slide_training_pad
   } else {
-    start_date <- min(archive$DT$time_value)
+    start_date <- min(archive$DT$time_value) + slide_training_pad
   }
   end_date <- max(archive$DT$time_value) - ahead
   valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = 1)
+  browser()
   # first generate the forecasts
   # TODO forecaster probably needs a do.call
-  res <- epix_slide(
-    archive,
-    function(data, gk, rtv, ...) {
-      forecaster(
-        epi_data = data,
-        outcome = outcome,
-        extra_sources = extra_sources,
-        ahead = ahead,
-        trainer = trainer,
-        ...
-      )
-    },
-    before = n_training + n_training_pad - 1,
-    ref_time_values = valid_predict_dates,
-    new_col_name = ".pred_distn",
-  )
+  res <- archive %>%
+    group_by(geo_value) %>%
+    epix_slide(
+      function(data, gk, rtv, ...) {
+        forecaster(
+          epi_data = data,
+          outcome = outcome,
+          extra_sources = extra_sources,
+          ahead = ahead,
+          trainer = trainer,
+          ...
+        )
+      },
+      before = n_training + n_training_pad - 1,
+      ref_time_values = valid_predict_dates,
+      new_col_name = ".pred_distn",
+    ) %>%
+    ungroup()
   # TODO append the truth data
   return(res)
 }

@@ -12,7 +12,7 @@ forecaster_pred(
   slide_training = Inf,
   slide_training_pad = 20L,
   ahead = 1,
-  trainer = parsnip::linear_reg,
+  trainer = parsnip::linear_reg(),
   n_training = 32,
   n_training_pad = 0,
   ...

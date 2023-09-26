@@ -1,6 +1,6 @@
 name|type|data|command|depend|seed|path|time|size|bytes|format|repository|iteration|parent|children|seconds|warnings|error
 .onLoad|function|8f7bad287ffd0ccc|||||||||||||||
-.Random.seed|object|9c117accf1b33058|||||||||||||||
+.Random.seed|object|612bc5a98be04340|||||||||||||||
 absolute_error|function|7b15ac3ada89f54d|||||||||||||||
 add_forecast_problem|function|cb7d4350b0859ef3|||||||||||||||
 add_forecaster|function|d7e1884f1311e203|||||||||||||||
@@ -57,7 +57,7 @@ sig_pop_predictions_.linear_reg..._1|stem||3920e1a5fa94a3de|66e4ca1151d091b9|108
 sig_pop_predictions_.parsnip..linear_reg._1|stem||2d5b3747e9d1c839|66e4ca1151d091b9|-1875113018||t19626.0644967262s||0|rds|local|vector|||0.003||object parsniplinear_reg not found
 sig_pop_predictions_.parsnip..linear_reg..._1|stem||da1a1c29ee7134df|66e4ca1151d091b9|824138327||t19626.059932859s||0|rds|local|vector|||0.003||object parsniplinear_reg not found
 sig_pop_predictions_.quantile_reg..._1|stem||bb27a2a7ef25a9a6|66e4ca1151d091b9|-1765712128||t19626.0624075426s||0|rds|local|vector|||0.023||object quantile_reg not found
-sig_pop_predictions_1|stem||3194b8e4e125e62c|66e4ca1151d091b9|1770988199||t19626.0272726368s||0|rds|local|vector|||61.093|no nonmissing arguments to max returning Inf|ℹ In index 3.Caused by error in lm.fit 0 nonNA cases
+sig_pop_predictions_1|stem||3194b8e4e125e62c|66e4ca1151d091b9|1770988199||t19626.0272726368s||0|rds|local|vector|||23.657|prediction from rankdeficient fit consider predict., rankdeficientNA|ℹ In index 1.Caused by error in as_list_of Cant find common type for elements of x.
 sig_pop_predictions_2_1|stem||4d938332e3965e60|f0ff074789ab89de|-1066577542||t19626.0115041716s||0|rds|local|vector|||0.264||2L is not a function, character or symbol
 sig_pop_predictions_3_1|stem||b0a940527ce7aad0|d8dad4654e9a46fa|-252181929||t19625.9973167063s||0|rds|local|vector|||0.26||1L is not a function, character or symbol
 sig_pop_predictions_linear_reg_1|stem||2c70bbd9de3f8795|b2c0300c1dffc22e|-255979912||t19626.0126349239s||0|rds|local|vector|||8.183||ℹ In index 3.Caused by error in get_parsnip_mode trainer must be a parsnip model.ℹ This trainer has classs function.

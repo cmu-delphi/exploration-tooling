@@ -39,7 +39,7 @@
 #' @export
 scaled_pop <- function(epi_data,
                        outcome,
-                       extra_sources,
+                       extra_sources = "",
                        ahead,
                        pop_scaling = TRUE,
                        trainer = parsnip::linear_reg(),
@@ -48,7 +48,6 @@ scaled_pop <- function(epi_data,
   # perform any preprocessing not supported by epipredict
   # one that every forecaster will need to handle: how to manage max(time_value)
   # that's older than the `as_of` date
-  browser()
   epidataAhead <- extend_ahead(epi_data, ahead)
   # see latency_adjusting for other examples
   # this next part is basically unavoidable boilerplate you'll want to copy
@@ -105,6 +104,7 @@ scaled_pop <- function(epi_data,
       by = c("geo_value" = "abbr")
     )
   }
+  browser()
   # with all the setup done, we execute and format
   pred <- run_workflow_and_format(preproc, postproc, trainer, epi_data)
   # now pred has the columns
