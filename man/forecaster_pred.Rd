@@ -6,22 +6,20 @@
 \usage{
 forecaster_pred(
   data,
-  job,
-  instance,
+  outcome,
+  extra_sources = "",
   forecaster = scaled_pop,
   slide_training = Inf,
   slide_training_pad = 20L,
-  trainer = "linear_reg",
   ahead = 1,
+  trainer = parsnip::linear_reg,
+  n_training = 32,
+  n_training_pad = 0,
   ...
 )
 }
 \arguments{
 \item{data}{as per batchtools}
-
-\item{job}{as per batchtools}
-
-\item{instance}{as per batchtools}
 
 \item{forecaster}{a function that does the actual forecasting for a given
 day. See \code{exampleSpec.R} for an example function and its documentation for
@@ -32,12 +30,16 @@ epix_slide hands off to epipredict.}
 
 \item{slide_training_pad}{a required parameter that determines padding}
 
+\item{ahead}{a necessary parameter to specify an experiment}
+
 \item{trainer}{should be given as a string, which will be converted to a
 function.}
 
-\item{ahead}{a necessary parameter to specify an experiment}
-
 \item{...}{any extra parameters the user has defined for forecaster.}
+
+\item{job}{as per batchtools}
+
+\item{instance}{as per batchtools}
 
 \item{scoring_function}{TODO detailed spec}
 }
