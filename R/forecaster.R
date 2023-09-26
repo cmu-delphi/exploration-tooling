@@ -150,11 +150,9 @@ forecaster_pred <- function(data,
   }
   end_date <- max(archive$DT$time_value) - ahead
   valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = 1)
-  browser()
   # first generate the forecasts
   # TODO forecaster probably needs a do.call
   res <- archive %>%
-    group_by(geo_value) %>%
     epix_slide(
       function(data, gk, rtv, ...) {
         forecaster(
@@ -169,8 +167,7 @@ forecaster_pred <- function(data,
       before = n_training + n_training_pad - 1,
       ref_time_values = valid_predict_dates,
       new_col_name = ".pred_distn",
-    ) %>%
-    ungroup()
+    )
   # TODO append the truth data
   return(res)
 }

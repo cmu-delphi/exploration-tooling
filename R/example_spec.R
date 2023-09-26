@@ -53,6 +53,7 @@ scaled_pop <- function(epi_data,
   # this next part is basically unavoidable boilerplate you'll want to copy
   epi_data <- epidataAhead[[1]]
   effective_ahead <- epidataAhead[[2]]
+  # TODO add the case where there's too many NA's
   # edge case where there is no data; eventually epipredict will handle this
   if (is.infinite(effective_ahead)) {
     effective_ahead <- 0
@@ -104,7 +105,6 @@ scaled_pop <- function(epi_data,
       by = c("geo_value" = "abbr")
     )
   }
-  browser()
   # with all the setup done, we execute and format
   pred <- run_workflow_and_format(preproc, postproc, trainer, epi_data)
   # now pred has the columns

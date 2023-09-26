@@ -170,7 +170,7 @@ list(
         forecaster_pred(
           data = data_archive_2023,
           outcome = "hhs",
-          extra_sources = "chng",
+          extra_sources = c(""),
           forecaster = scaled_pop,
           slide_training = Inf,
           slide_training_pad = 20L,

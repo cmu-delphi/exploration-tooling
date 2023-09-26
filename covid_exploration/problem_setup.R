@@ -1,4 +1,4 @@
-library(explorationTools)
+#library(explorationTools)
 source_signal_pairs <- list(
   list(covidcast, "hhs", "confirmed_admissions_covid_1d"),
   list(covidcast, "chng", "smoothed_adj_outpatient_covid")
