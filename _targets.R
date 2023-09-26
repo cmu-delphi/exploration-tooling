@@ -10,6 +10,8 @@ library(tarchetypes) # Load other packages as needed.
 library(epipredict)
 library(parsnip)
 library(tidyr)
+library(epieval)
+library(epidatr)
 
 # Set target options:
 tar_option_set(
@@ -19,16 +21,18 @@ tar_option_set(
     "epipredict",
     "parsnip",
     "tibble",
-    "tidyr"
-  ) # packages that your targets need to run
-  # format = "qs", # Optionally set the default storage format. qs is fast.
+    "tidyr",
+    "epidatr"
+  ), # packages that your targets need to run
+  imports = c("epieval", "parsnip"),
+  format = "qs", # Optionally set the default storage format. qs is fast.
   #
   # For distributed computing in tar_make(), supply a {crew} controller
   # as discussed at https://books.ropensci.org/targets/crew.html.
   # Choose a controller that suits your needs. For example, the following
   # sets a controller with 2 workers which will run as local R processes:
   #
-  #   controller = crew::crew_controller_local(workers = 2)
+  controller = crew::crew_controller_local(workers = 8),
   #
   # Alternatively, if you want workers to run on a high-performance computing
   # cluster, select a controller from the {crew.cluster} package. The following
@@ -56,92 +60,28 @@ options(clustermq.scheduler = "multicore")
 
 # Run the R scripts in the R/ folder with your custom functions:
 # tar_source()
-
+linreg <- parsnip::linear_reg()
+quantreg <- quantile_reg()
 values <- expand_grid(
-  # trainer = rlang::syms(c("linear_reg()", "quantile_reg()")),
-  # trainer = rlang::syms(c("parsnip::linear_reg()")),
-  ahead = c(1, 2, 3)
+  trainer = rlang::syms(c("linreg", "quantreg")),
+  ahead = 1:4,
+  pop_scaling = c(TRUE, FALSE)
 )
 
 # Replace the target list below with your own:
 list(
   tar_target(
-    name = evaluation_data_file,
-    command = "/home/dshemeto/repos/covid-hosp-forecast/evaluation-data-2023-09-15.RDS",
-    format = "file"
+    name = hhs_data_2022,
+    command = download_data("hhs", "confirmed_admissions_covid_1d", "20220101", "20220401")
   ),
   tar_target(
-    name = evaluation_data,
-    command = read_evaluation_data(evaluation_data_file)
+    name = chng_data_2022,
+    command = download_data("chng", "smoothed_adj_outpatient_covid", "20220101", "20220401")
   ),
   tar_target(
-    name = prediction_cards_file,
-    command = "/home/dshemeto/repos/covid-hosp-forecast/exploration-predictions-2023-09-15.RDS",
-    format = "file"
-  ),
-  tar_target(
-    name = prediction_cards,
-    command = read_prediction_data(
-      prediction_cards_file, "AR3_rate_acctlatency_1dtargets_postprocessing"
-    )
-  ),
-  tar_map(
-    values = list(measure = rlang::syms(c("weighted_interval_score", "absolute_error"))),
-    tar_target(
-      name = measure_eval_out,
-      command = run_evaluation_measure(prediction_cards, evaluation_data, measure)
-    ),
-    tar_target(
-      name = measure_eval_out2,
-      command = measure_eval_out[[1L]]
-    )
-  ),
-  tar_target(
-    name = forecaster1,
-    command = read_prediction_data(prediction_cards_file, "AR3_rate_acctlatency_1dtargets_postprocessing")
-  ),
-  tar_target(
-    name = forecaster2,
-    command = read_prediction_data(prediction_cards_file, "CDFens5p")
-  ),
-  tar_map(
-    values = list(a = c(1000, 2000, 3000)),
-    tar_target(
-      name = ensemble_forecast,
-      command = {
-        forecaster1 %<>% select(geo_value, forecast_date, target_end_date, quantile, value)
-        forecaster2 %<>% select(geo_value, forecast_date, target_end_date, quantile, value)
-        ensemble_forecast <- forecaster1 %>%
-          full_join(
-            forecaster2,
-            by = c("geo_value", "forecast_date", "target_end_date", "quantile")
-          ) %>%
-          mutate(
-            value = (value.x + value.y + a) / 2
-          ) %>%
-          select(
-            geo_value,
-            forecast_date,
-            target_end_date,
-            quantile,
-            value
-          )
-        ensemble_forecast
-      }
-    )
-  ),
-  tar_target(
-    name = hhs_data_2023,
-    command = download_data("hhs", "confirmed_admissions_covid_1d", "20230101", "20230401")
-  ),
-  tar_target(
-    name = chng_data_2023,
-    command = download_data("chng", "smoothed_adj_outpatient_covid", "20230101", "20230401")
-  ),
-  tar_target(
-    name = data_archive_2023,
+    name = data_archive_2022,
     command = {
-      hhs_data_2023 %<>%
+      hhs_data_2022 %<>%
         select(geo_value, time_value, value, issue) %>%
         rename("hhs" := value) %>%
         rename(version = issue) %>%
@@ -150,7 +90,7 @@ list(
           time_type = "day",
           compactify = TRUE
         )
-      chng_data_2023 %<>%
+      chng_data_2022 %<>%
         select(geo_value, time_value, value, issue) %>%
         rename("chng" := value) %>%
         rename(version = issue) %>%
@@ -159,7 +99,7 @@ list(
           time_type = "day",
           compactify = TRUE
         )
-      epix_merge(hhs_data_2023, chng_data_2023, sync = "locf")
+      epix_merge(hhs_data_2022, chng_data_2022, sync = "locf")
     }
   ),
   tar_map(
@@ -168,15 +108,42 @@ list(
       name = sig_pop_predictions,
       command = {
         forecaster_pred(
-          data = data_archive_2023,
+          data = data_archive_2022,
           outcome = "hhs",
           extra_sources = c(""),
           forecaster = scaled_pop,
           slide_training = Inf,
-          slide_training_pad = 20L,
-          ahead = ahead
+          slide_training_pad = 30L,
+          ahead = ahead,
+          trainer = trainer
         )
       }
     )
   )
+  ## tar_map(
+  ##   values = list(a = c(300, 15)),
+  ##   tar_target(
+  ##     name = ensemble_forecast,
+  ##     command = {
+  ##       forecasterA <- `sig_pop_predictions_.parsnip..linear_reg..._1_TRUE`
+  ##       forecasterB <- `sig_pop_predictions_.parsnip..linear_reg..._1_FALSE`
+  ##       ensemble_forecast <- forecasterA %>%
+  ##         full_join(
+  ##           forecasterB,
+  ##           by = c("geo_value", "forecast_date", "target_end_date", "quantile")
+  ##         ) %>%
+  ##         mutate(
+  ##           value = (value.x + value.y + a) / 2
+  ##         ) %>%
+  ##         select(
+  ##           geo_value,
+  ##           forecast_date,
+  ##           target_end_date,
+  ##           quantile,
+  ##           value
+  ##         )
+  ##       ensemble_forecast
+  ##     }
+  ##   )
+  ## )
 )

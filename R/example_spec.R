@@ -53,7 +53,7 @@ scaled_pop <- function(epi_data,
   # this next part is basically unavoidable boilerplate you'll want to copy
   epi_data <- epidataAhead[[1]]
   effective_ahead <- epidataAhead[[2]]
-  # TODO add the case where there's too many NA's
+  # TODO add the case where there's too many NA's in the prediction variables (and not just the target)
   # edge case where there is no data; eventually epipredict will handle this
   if (is.infinite(effective_ahead)) {
     effective_ahead <- 0

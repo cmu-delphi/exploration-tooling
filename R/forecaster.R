@@ -105,6 +105,7 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
   pred <- predict(workflow, latest)
   # the forecast_date may currently be the max time_value
   true_forecast_date <- attributes(epi_data)$metadata$as_of
+  #TODO confirm time value is removed
   return(format_storage(pred, true_forecast_date))
 }
 
@@ -123,8 +124,10 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
 #'   day. See `exampleSpec.R` for an example function and its documentation for
 #'   the general parameter requirements.
 #' @param slide_training a required parameter that governs the window size that
-#'   epix_slide hands off to epipredict.
-#' @param slide_training_pad a required parameter that determines padding
+#'   epix_slide hands off to epipredict. Note that
+#' @param slide_training_pad a required parameter that determines how much extra
+#'   to hand-off to guarantee that at least `slide_training` examples are passed
+#'   on (e.g. b/c of missing data).
 #' @param trainer should be given as a string, which will be converted to a
 #'   function.
 #' @param ahead a necessary parameter to specify an experiment
@@ -166,8 +169,9 @@ forecaster_pred <- function(data,
       },
       before = n_training + n_training_pad - 1,
       ref_time_values = valid_predict_dates,
-      new_col_name = ".pred_distn",
     )
+  res %<>% select(-time_value)
+  names(res) <- sub('^slide_value_', '', names(res))
   # TODO append the truth data
   return(res)
 }
