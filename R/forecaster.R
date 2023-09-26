@@ -1,5 +1,3 @@
-library(epipredict)
-
 #' helper function for those writing forecasters
 #' @description
 #' a smorgasbord of checks that any epipredict-based forecaster should do:
@@ -23,9 +21,9 @@ perform_sanity_checks <- function(epi_data,
   if (!inherits(args_list, c("arx_fcast", "alist"))) {
     cli::cli_abort("args_list was not created using `arx_args_list().")
   }
-  if (!(is.null(trainer) || epipredict:::is_regression(trainer))) {
-    cli::cli_abort("{trainer} must be a `{parsnip}` model of mode 'regression'.")
-  }
+  # if (!(is.null(trainer) || epipredict:::is_regression(trainer))) {
+  #   cli::cli_abort("{trainer} must be a `{parsnip}` model of mode 'regression'.")
+  # }
   args_list$lags <- epipredict:::arx_lags_validator(predictors, args_list$lags)
   return(list(args_list, predictors))
 }
@@ -131,35 +129,41 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
 #'   function.
 #' @param ahead a necessary parameter to specify an experiment
 #' @param ... any extra parameters the user has defined for forecaster.
+#' @export
 forecaster_pred <- function(data,
-                            job,
-                            instance,
+                            outcome,
+                            extra_sources = "",
                             forecaster = scaled_pop,
                             slide_training = Inf,
                             slide_training_pad = 20L,
-                            trainer = "linear_reg",
                             ahead = 1,
+                            trainer = parsnip::linear_reg(),
+                            n_training = 32,
+                            n_training_pad = 0,
                             ...) {
-  archive <- instance$archive
-  outcome <- instance$outcome
-  extra_sources <- instance$extra_sources
-  output_format <- instance$output_formatter
+  archive <- data
   # restrict the dataset to areas where training is possible
-  start_date <- min(archive$DT$time_value) + slide_training + slide_training_pad
+  if (slide_training < Inf) {
+    start_date <- min(archive$DT$time_value) + slide_training + slide_training_pad
+  } else {
+    start_date <- min(archive$DT$time_value)
+  }
   end_date <- max(archive$DT$time_value) - ahead
   valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = 1)
-  # TODO maybe allow for other params that are actually functions
-  trainer <- match.fun(trainer)
   # first generate the forecasts
   # TODO forecaster probably needs a do.call
   res <- epix_slide(
     archive,
-    ~ forecaster(
-      ahead,
-      .x,
-      trainer,
-      ... # TODO update to fit the spec
-    ),
+    function(data, gk, rtv, ...) {
+      forecaster(
+        epi_data = data,
+        outcome = outcome,
+        extra_sources = extra_sources,
+        ahead = ahead,
+        trainer = trainer,
+        ...
+      )
+    },
     before = n_training + n_training_pad - 1,
     ref_time_values = valid_predict_dates,
     new_col_name = ".pred_distn",

@@ -7,9 +7,20 @@
 library(targets)
 library(tarchetypes) # Load other packages as needed.
 
+library(epipredict)
+library(parsnip)
+library(tidyr)
+
 # Set target options:
 tar_option_set(
-  packages = c("tibble") # packages that your targets need to run
+  packages = c(
+    "assertthat",
+    "epieval",
+    "epipredict",
+    "parsnip",
+    "tibble",
+    "tidyr"
+  ) # packages that your targets need to run
   # format = "qs", # Optionally set the default storage format. qs is fast.
   #
   # For distributed computing in tar_make(), supply a {crew} controller
@@ -45,8 +56,12 @@ options(clustermq.scheduler = "multicore")
 
 # Run the R scripts in the R/ folder with your custom functions:
 # tar_source()
-source("exampleEvaluation-targets.R")
 
+values <- expand_grid(
+  # trainer = rlang::syms(c("linear_reg()", "quantile_reg()")),
+  # trainer = rlang::syms(c("parsnip::linear_reg()")),
+  ahead = c(1, 2, 3)
+)
 
 # Replace the target list below with your own:
 list(
@@ -112,6 +127,55 @@ list(
             value
           )
         ensemble_forecast
+      }
+    )
+  ),
+  tar_target(
+    name = hhs_data_2023,
+    command = download_data("hhs", "confirmed_admissions_covid_1d", "20230101", "20230401")
+  ),
+  tar_target(
+    name = chng_data_2023,
+    command = download_data("chng", "smoothed_adj_outpatient_covid", "20230101", "20230401")
+  ),
+  tar_target(
+    name = data_archive_2023,
+    command = {
+      hhs_data_2023 %<>%
+        select(geo_value, time_value, value, issue) %>%
+        rename("hhs" := value) %>%
+        rename(version = issue) %>%
+        as_epi_archive(
+          geo_type = "state",
+          time_type = "day",
+          compactify = TRUE
+        )
+      chng_data_2023 %<>%
+        select(geo_value, time_value, value, issue) %>%
+        rename("chng" := value) %>%
+        rename(version = issue) %>%
+        as_epi_archive(
+          geo_type = "state",
+          time_type = "day",
+          compactify = TRUE
+        )
+      epix_merge(hhs_data_2023, chng_data_2023, sync = "locf")
+    }
+  ),
+  tar_map(
+    values = values,
+    tar_target(
+      name = sig_pop_predictions,
+      command = {
+        forecaster_pred(
+          data = data_archive_2023,
+          outcome = "hhs",
+          extra_sources = "chng",
+          forecaster = scaled_pop,
+          slide_training = Inf,
+          slide_training_pad = 20L,
+          ahead = ahead
+        )
       }
     )
   )

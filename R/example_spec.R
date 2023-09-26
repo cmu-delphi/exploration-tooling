@@ -34,6 +34,8 @@
 #'   use the filename as the parameter.
 #' @seealso some utilities for making forecasters: [format_storage], [perform_sanity_checks]
 #' @import magrittr recipes epipredict
+#' @importFrom epipredict epi_recipe step_population_scaling
+#' @importFrom tibble tibble
 #' @export
 scaled_pop <- function(epi_data,
                        outcome,
@@ -46,6 +48,7 @@ scaled_pop <- function(epi_data,
   # perform any preprocessing not supported by epipredict
   # one that every forecaster will need to handle: how to manage max(time_value)
   # that's older than the `as_of` date
+  browser()
   epidataAhead <- extend_ahead(epi_data, ahead)
   # see latency_adjusting for other examples
   # this next part is basically unavoidable boilerplate you'll want to copy
@@ -54,7 +57,13 @@ scaled_pop <- function(epi_data,
   # edge case where there is no data; eventually epipredict will handle this
   if (is.infinite(effective_ahead)) {
     effective_ahead <- 0
-    null_result <- tibble(geo_value = character(), forecast_date = Date(), target_end_date = Date(), quantile = numeric(), value = numeric())
+    null_result <- tibble(
+      geo_value = character(),
+      forecast_date = Date(),
+      target_end_date = Date(),
+      quantile = numeric(),
+      value = numeric()
+    )
     return(null_result)
   }
   args_input <- list(...)
