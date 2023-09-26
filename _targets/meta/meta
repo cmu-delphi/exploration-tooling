@@ -1,0 +1,68 @@
+name|type|data|command|depend|seed|path|time|size|bytes|format|repository|iteration|parent|children|seconds|warnings|error
+.onLoad|function|8f7bad287ffd0ccc|||||||||||||||
+.Random.seed|object|9c117accf1b33058|||||||||||||||
+absolute_error|function|7b15ac3ada89f54d|||||||||||||||
+add_forecast_problem|function|cb7d4350b0859ef3|||||||||||||||
+add_forecaster|function|d7e1884f1311e203|||||||||||||||
+ahead|object|a2a52dfe4e065e93|||||||||||||||
+arx_postprocess|function|edab5742117c78e0|||||||||||||||
+arx_preprocess|function|d27b0450b0dc280d|||||||||||||||
+auto_loads|object|4dc8dd5771e873dc|||||||||||||||
+chng_data_2023|stem|0bb71efa18a1c806|11fa722d9fcb041b|ef46db3751d8e999|-92935204||t19626.0462902527s|ea83a9cec7070738|407228|rds|local|vector|||5.209||
+collapse_cards|function|55fd69295319070f|||||||||||||||
+covidhub_probs|function|3143e164627ae749|||||||||||||||
+data_archive_2023|stem|75b950667d6b858b|216a236d64e04458|99f414b176fef24a|718388149||t19625.9828723192s|3bc06ce17aee7c00|484051|rds|local|vector|||0.512||
+download_data|function|22a53e9e72c49f55|||||||||||||||
+ensemble_forecast_1000|stem|c7476fa18473b0e8|ad84c335dd5b1e50|38e53a87602f86be|-683304994||t19625.9599330089s|3fcc2eb97793e18a|2245635|rds|local|vector|||0.589||
+ensemble_forecast_2000|stem|8ff922ccff67f089|29fd9ed2fcd5e113|38e53a87602f86be|1182529921||t19625.9599423608s|0deaa6665bcaa939|2229646|rds|local|vector|||0.346||
+ensemble_forecast_3000|stem|791b6a07cce5b394|74670286281786b3|38e53a87602f86be|2050434049||t19625.9599516663s|658505d1cbd8950c|2217603|rds|local|vector|||0.332||
+err_measures|object|44ac315d7b88e3ab|||||||||||||||
+evaluate_predictions|function|40d7f3d3d968feda|||||||||||||||
+evaluation_data|stem|bdb334271828d49e|f1901a9108c30cc8|49bac68479ed9e5a|409476375||t19626.0520018735s|c6a59c435a8347c8|155246|rds|local|vector|||0.109||
+evaluation_data_file|stem|5e7907ba4b686be2|2e5839bdfe7e482b|ef46db3751d8e999|825493346|/home/dshemeto/repos/covid-hosp-forecast/evaluation-data-2023-09-15.RDS|t19615.8937877544s|cedd211761b79718|155401|file|local|vector|||0||
+explore_env|object|c18595f85d74bd98|||||||||||||||
+extend_ahead|function|5ec3b56a67e8d5d7|||||||||||||||
+find_quantile_match|function|9d8fb96392b86eff|||||||||||||||
+forecaster_pred|function|ff641a182ab0c3aa|||||||||||||||
+forecaster1|stem|f02243ca846cb81d|40ef78a94b8ce754|c75d1b17e05b92d7|664112564||t19626.0472067344s|d2ff58324bc8385f|3235404|rds|local|vector|||36.087||
+forecaster2|stem|919e54575f1a475e|d47aa91e833829eb|c75d1b17e05b92d7|290152736||t19626.0476356697s|7372232c42b210e8|3704113|rds|local|vector|||36.126||
+format_covidhub|function|58e87ec82e8a7dda|||||||||||||||
+format_storage|function|99b8486cb2ffd726|||||||||||||||
+hhs_data_2023|stem|f6b05b0547469b6b|176ee277c8925f1f|ef46db3751d8e999|317860153||t19626.0463188175s|ef88b4eb5db91014|100915|rds|local|vector|||2.389||
+interval_coverage|function|a2d1331c5d5eb827|||||||||||||||
+is_symmetric|function|92168d2ebafb57c5|||||||||||||||
+locf_latency|function|f3b79eb31983bc30|||||||||||||||
+manage_S3_forecast_cache|function|49b3370d8e3dba3c|||||||||||||||
+measure_eval_out_absolute_error|stem|a54c3da28dea358d|809379fcb9917a24|39bc3c034dbe590e|-1669451690||t19625.9178344324s|4908f588d863b6ed|179596|rds|local|vector|||1.704||
+measure_eval_out_weighted_interval_score|stem|e06861aef159d774|0c3116b7c46940bb|cbcbcea838a3a763|1741231592||t19625.9178138305s|97d51fdedf997e67|181615|rds|local|vector|||2.716|1m22mUse of .data in tidyselect expressions was deprecated in tidyselect 1.2.0.36mℹ39m Please use quantile instead of .dataquantile. 1m22mUse of .data in tidyselect expressions was deprecated in tidyselect 1.2.0.36mℹ39m Please use value instead of .datavalue. 1m22mUse of .data in tidyselect expressions was deprecated in tidyselect 1.2.0.36mℹ39m Please use geo_value instead of .datageo_value|
+measure_eval_out2_absolute_error|stem|c7d1a6e0d10dabbf|e8de25f8ffc26928|28547f7c25c256b0|-1084545725||t19625.9403093468s|d2cfd674020a1aed|3494|rds|local|vector|||0.047||
+measure_eval_out2_weighted_interval_score|stem|c7d1a6e0d10dabbf|637a710aa542b99c|fa750874a82f3292|-1440957999||t19625.9403080968s|d2cfd674020a1aed|3494|rds|local|vector|||0.001||
+out|object|1d12782c797effcf|||||||||||||||
+overprediction|function|c33faf3aa2a03ca0|||||||||||||||
+params|object|629ee7f9f8531249|||||||||||||||
+perform_sanity_checks|function|a1144270d176d583|||||||||||||||
+prediction_cards|stem|f02243ca846cb81d|40ef78a94b8ce754|c75d1b17e05b92d7|2005147316||t19626.0467772898s|d2ff58324bc8385f|3235404|rds|local|vector|||38.505||
+prediction_cards_file|stem|47d43df50cd8e0a1|daad2ae9c9c44922|ef46db3751d8e999|-827305483|/home/dshemeto/repos/covid-hosp-forecast/exploration-predictions-2023-09-15.RDS|t19616.1117837478s|52b3eefe52b671a2|220691547|file|local|vector|||0||
+read_evaluation_data|function|6e5df35af4866ed5|||||||||||||||
+read_first_row|function|c6702a77acb8adcc|||||||||||||||
+read_prediction_data|function|62e32c78b6192949|||||||||||||||
+run_evaluation_measure|function|52bc085e67a2f701|||||||||||||||
+run_workflow_and_format|function|2157b588aa11986a|||||||||||||||
+scaled_pop|function|0dd0494a80ef642b|||||||||||||||
+score_func_param_checker|function|32e9e80767b38dbc|||||||||||||||
+scoring_lookup|function|d2a8a7d85935ffb9|||||||||||||||
+set_registry|function|2faab7966f245056|||||||||||||||
+sharpness|function|7f2bca46a8857a86|||||||||||||||
+sig_pop_predictions_.linear_reg..._1|stem||3920e1a5fa94a3de|66e4ca1151d091b9|108512452||t19626.063040362s||0|rds|local|vector|||0.003||object linear_reg not found
+sig_pop_predictions_.parsnip..linear_reg._1|stem||2d5b3747e9d1c839|66e4ca1151d091b9|-1875113018||t19626.0644967262s||0|rds|local|vector|||0.003||object parsniplinear_reg not found
+sig_pop_predictions_.parsnip..linear_reg..._1|stem||da1a1c29ee7134df|66e4ca1151d091b9|824138327||t19626.059932859s||0|rds|local|vector|||0.003||object parsniplinear_reg not found
+sig_pop_predictions_.quantile_reg..._1|stem||bb27a2a7ef25a9a6|66e4ca1151d091b9|-1765712128||t19626.0624075426s||0|rds|local|vector|||0.023||object quantile_reg not found
+sig_pop_predictions_1|stem||3194b8e4e125e62c|66e4ca1151d091b9|1770988199||t19626.0272726368s||0|rds|local|vector|||61.093|no nonmissing arguments to max returning Inf|ℹ In index 3.Caused by error in lm.fit 0 nonNA cases
+sig_pop_predictions_2_1|stem||4d938332e3965e60|f0ff074789ab89de|-1066577542||t19626.0115041716s||0|rds|local|vector|||0.264||2L is not a function, character or symbol
+sig_pop_predictions_3_1|stem||b0a940527ce7aad0|d8dad4654e9a46fa|-252181929||t19625.9973167063s||0|rds|local|vector|||0.26||1L is not a function, character or symbol
+sig_pop_predictions_linear_reg_1|stem||2c70bbd9de3f8795|b2c0300c1dffc22e|-255979912||t19626.0126349239s||0|rds|local|vector|||8.183||ℹ In index 3.Caused by error in get_parsnip_mode trainer must be a parsnip model.ℹ This trainer has classs function.
+sig_pop_predictions_list.list..0.5...NULL..regression..TRUE..NULL..rq..TRUE._1|stem||5953d72495b176ba|66e4ca1151d091b9|1331901822||t19626.0615439581s||0|rds|local|vector|||0.003||listlist0.5, NULL, regression, TRUE, NULL, rq, TRUE is not a function, character or symbol
+trainer|object|5f5eadeca03f7390|||||||||||||||
+underprediction|function|1f4bfcafc79cf2fa|||||||||||||||
+values|object|629ee7f9f8531249|||||||||||||||
+weighted_interval_score|function|4fcb9a8e3faf9524|||||||||||||||
