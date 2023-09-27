@@ -8,8 +8,10 @@ library(targets)
 library(tarchetypes) # Load other packages as needed.
 
 library(epipredict)
-library(parsnip)
 library(epieval)
+library(parsnip)
+library(tibble)
+library(tidyr)
 
 # Set target options:
 tar_option_set(
