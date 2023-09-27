@@ -24,5 +24,4 @@ extend_ahead <- function(epi_data, ahead) {
 #' instead of modifying `ahead`, interpolate `epi_data` to contain last
 #'   observation carried forward
 locf_latency <- function(epi_data, ahead) {
-  # TODO
 }

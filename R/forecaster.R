@@ -101,11 +101,9 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
     fit(epi_data) %>%
     add_frosting(postproc)
   latest <- get_test_data(recipe = preproc, x = epi_data)
-  # TODO stop the constant warnings, we know its out of date
   pred <- predict(workflow, latest)
   # the forecast_date may currently be the max time_value
   true_forecast_date <- attributes(epi_data)$metadata$as_of
-  #TODO confirm time value is removed
   return(format_storage(pred, true_forecast_date))
 }
 
@@ -119,7 +117,6 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
 #' @param data as per batchtools
 #' @param job as per batchtools
 #' @param instance as per batchtools
-#' @param scoring_function TODO detailed spec
 #' @param forecaster a function that does the actual forecasting for a given
 #'   day. See `exampleSpec.R` for an example function and its documentation for
 #'   the general parameter requirements.
@@ -154,7 +151,6 @@ forecaster_pred <- function(data,
   end_date <- max(archive$DT$time_value) - ahead
   valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = 1)
   # first generate the forecasts
-  # TODO forecaster probably needs a do.call
   res <- archive %>%
     epix_slide(
       function(data, gk, rtv, ...) {
@@ -171,7 +167,15 @@ forecaster_pred <- function(data,
       ref_time_values = valid_predict_dates,
     )
   res %<>% select(-time_value)
-  names(res) <- sub('^slide_value_', '', names(res))
-  # TODO append the truth data
+  names(res) <- sub("^slide_value_", "", names(res))
+
+  # append the truth data
+  true_value <- archive$as_of(archive$versions_end) %>%
+    select(geo_value, time_value, outcome) %>%
+    rename(true_value = !!outcome)
+  res %<>%
+    inner_join(true_value,
+      by = join_by(geo_value, target_end_date == time_value)
+    )
   return(res)
 }

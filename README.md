@@ -39,3 +39,8 @@ This kind of forecaster has two components: a list of existing forecasters it de
 Any forecaster which requires a pre-trained component. An example is a forecaster with a sophisticated imputation method. Evaluating these has some thorns around training/testing splitting. It may be foldable into the basic variety though.
 # later things
 - a way to check that a given function is or is not in the right format to be a forecaster
+
+
+# Random notes
+Currently, to run in parallel, you need to install the package via `renv::install(".")`.
+The parallel workers will continue to use the version as of the last time you ran `renv::install`, while the non-parallel ones won't. This separates development from exploration.
