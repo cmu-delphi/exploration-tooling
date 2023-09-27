@@ -52,19 +52,10 @@ tar_option_set(
   # Set other options as needed.
 )
 
-# tar_make_clustermq() is an older (pre-{crew}) way to do distributed computing
-# in {targets}, and its configuration for your machine is below.
-options(clustermq.scheduler = "multicore")
-
-# tar_make_future() is an older (pre-{crew}) way to do distributed computing
-# in {targets}, and its configuration for your machine is below.
-# Install packages {{future}}, {{future.callr}}, and {{future.batchtools}} to allow use_targets() to configure tar_make_future() options.
-
 # Run the R scripts in the R/ folder with your custom functions:
 # tar_source()
 linreg <- parsnip::linear_reg()
 quantreg <- quantile_reg()
-
 
 forecaster_param_grids <- rbind(
   # Define a separate parameter grid per forecaster
@@ -77,7 +68,6 @@ forecaster_param_grids <- rbind(
     )
   )
 )
-
 
 # Replace the target list below with your own:
 list(
@@ -108,6 +98,8 @@ list(
         time_type = "day",
         geo_values = "*",
         time_values = epirange(from = "20220101", to = "20220401"),
+        issue = "*",
+        fetch_args = fetch_args_list(return_empty = TRUE, timeout_seconds = 100)
       )
     }
   ),
@@ -121,6 +113,8 @@ list(
         time_type = "day",
         geo_values = "*",
         time_values = epirange(from = "20220101", to = "20220401"),
+        issue = "*",
+        fetch_args = fetch_args_list(return_empty = TRUE, timeout_seconds = 100)
       )
     }
   ),
