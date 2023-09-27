@@ -98,7 +98,7 @@ list(
         time_type = "day",
         geo_values = "*",
         time_values = epirange(from = "20220101", to = "20220401"),
-        issue = "*",
+        issues = "*",
         fetch_args = fetch_args_list(return_empty = TRUE, timeout_seconds = 100)
       )
     }
@@ -113,7 +113,7 @@ list(
         time_type = "day",
         geo_values = "*",
         time_values = epirange(from = "20220101", to = "20220401"),
-        issue = "*",
+        issues = "*",
         fetch_args = fetch_args_list(return_empty = TRUE, timeout_seconds = 100)
       )
     }

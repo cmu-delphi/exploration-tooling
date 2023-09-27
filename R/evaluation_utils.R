@@ -16,13 +16,10 @@ run_evaluation_measure <- function(data, evaluation_data, measures) {
       evaluation_data,
       err_measures = measures,
       grp_vars = c(
-        "forecaster",
-        "data_source",
         "signal",
         "geo_value",
         "forecast_date",
-        "target_end_date",
-        "ahead"
+        "target_end_date"
       )
     )
 }
