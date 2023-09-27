@@ -26,9 +26,11 @@ day. See \code{exampleSpec.R} for an example function and its documentation for
 the general parameter requirements.}
 
 \item{slide_training}{a required parameter that governs the window size that
-epix_slide hands off to epipredict.}
+epix_slide hands off to epipredict. Note that}
 
-\item{slide_training_pad}{a required parameter that determines padding}
+\item{slide_training_pad}{a required parameter that determines how much extra
+to hand-off to guarantee that at least \code{slide_training} examples are passed
+on (e.g. b/c of missing data).}
 
 \item{ahead}{a necessary parameter to specify an experiment}
 
@@ -40,8 +42,6 @@ function.}
 \item{job}{as per batchtools}
 
 \item{instance}{as per batchtools}
-
-\item{scoring_function}{TODO detailed spec}
 }
 \description{
 a wrapper that turns a forecaster, parameters, data
