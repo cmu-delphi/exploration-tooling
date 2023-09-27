@@ -9,16 +9,16 @@ library(tarchetypes) # Load other packages as needed.
 
 library(epipredict)
 library(parsnip)
-library(tidyr)
 library(epieval)
-library(epidatr)
 
 # Set target options:
 tar_option_set(
   packages = c(
     "assertthat",
+    "dplyr",
     "epieval",
     "epipredict",
+    "lubridate",
     "parsnip",
     "tibble",
     "tidyr",
@@ -62,21 +62,65 @@ options(clustermq.scheduler = "multicore")
 # tar_source()
 linreg <- parsnip::linear_reg()
 quantreg <- quantile_reg()
-values <- expand_grid(
-  trainer = rlang::syms(c("linreg", "quantreg")),
-  ahead = 1:4,
-  pop_scaling = c(TRUE, FALSE)
+
+
+forecaster_param_grids <- rbind(
+  # Define a separate parameter grid per forecaster
+  tibble(
+    forecaster = rlang::syms(c("scaled_pop")),
+    expand_grid(
+      trainer = rlang::syms(c("linreg", "quantreg")),
+      ahead = 1:4,
+      pop_scaling = c(TRUE, FALSE)
+    )
+  )
 )
+
 
 # Replace the target list below with your own:
 list(
   tar_target(
+    name = hhs_evaluation_data,
+    command = {
+      epidatr::pub_covidcast(
+        source = "hhs",
+        signals = "confirmed_admissions_covid_1d",
+        geo_type = "state",
+        time_type = "day",
+        geo_values = "*",
+        time_values = epirange(from = "2020-01-01", to = "2024-01-01"),
+      ) %>%
+        rename(
+          actual = value,
+          target_end_date = time_value
+        )
+    }
+  ),
+  tar_target(
     name = hhs_data_2022,
-    command = download_data("hhs", "confirmed_admissions_covid_1d", "20220101", "20220401")
+    command = {
+      epidatr::pub_covidcast(
+        source = "hhs",
+        signals = "confirmed_admissions_covid_1d",
+        geo_type = "state",
+        time_type = "day",
+        geo_values = "*",
+        time_values = epirange(from = "20220101", to = "20220401"),
+      )
+    }
   ),
   tar_target(
     name = chng_data_2022,
-    command = download_data("chng", "smoothed_adj_outpatient_covid", "20220101", "20220401")
+    command = {
+      epidatr::pub_covidcast(
+        source = "chng",
+        signals = "smoothed_adj_outpatient_covid",
+        geo_type = "state",
+        time_type = "day",
+        geo_values = "*",
+        time_values = epirange(from = "20220101", to = "20220401"),
+      )
+    }
   ),
   tar_target(
     name = data_archive_2022,
@@ -103,47 +147,67 @@ list(
     }
   ),
   tar_map(
-    values = values,
+    values = forecaster_param_grids,
     tar_target(
-      name = sig_pop_predictions,
+      name = forecast,
       command = {
         forecaster_pred(
           data = data_archive_2022,
           outcome = "hhs",
-          extra_sources = c(""),
-          forecaster = scaled_pop,
+          extra_sources = "",
+          forecaster = forecaster,
           slide_training = Inf,
           slide_training_pad = 30L,
           ahead = ahead,
           trainer = trainer
         )
       }
+    ),
+    tar_target(
+      name = score,
+      command = {
+        run_evaluation_measure(
+          data = forecast,
+          evaluation_data = hhs_evaluation_data,
+          measure = list(
+            wis = weighted_interval_score,
+            ae = absolute_error,
+            ic80 = interval_coverage(0.8)
+          )
+        )
+      }
+    )
+  ),
+  tar_map(
+    values = list(a = c(300, 15)),
+    tar_target(
+      name = ensemble_forecast,
+      command = {
+        Reduce(function(x, y) {
+          full_join(x, y, by = c("geo_value", "forecast_date", "target_end_date", "quantile")) %>%
+            mutate(value = (value.x + value.y + a) / 2) %>%
+            select(-value.x, -value.y)
+        }, list(
+          forecast_scaled_pop_linreg_3_FALSE,
+          forecast_scaled_pop_linreg_3_TRUE,
+          forecast_scaled_pop_quantreg_3_FALSE,
+          forecast_scaled_pop_quantreg_3_TRUE
+        ))
+      }
+    ),
+    tar_target(
+      name = ensemble_score,
+      command = {
+        run_evaluation_measure(
+          data = ensemble_forecast,
+          evaluation_data = hhs_evaluation_data,
+          measure = list(
+            wis = weighted_interval_score,
+            ae = absolute_error,
+            ic80 = interval_coverage(0.8)
+          )
+        )
+      }
     )
   )
-  ## tar_map(
-  ##   values = list(a = c(300, 15)),
-  ##   tar_target(
-  ##     name = ensemble_forecast,
-  ##     command = {
-  ##       forecasterA <- `sig_pop_predictions_.parsnip..linear_reg..._1_TRUE`
-  ##       forecasterB <- `sig_pop_predictions_.parsnip..linear_reg..._1_FALSE`
-  ##       ensemble_forecast <- forecasterA %>%
-  ##         full_join(
-  ##           forecasterB,
-  ##           by = c("geo_value", "forecast_date", "target_end_date", "quantile")
-  ##         ) %>%
-  ##         mutate(
-  ##           value = (value.x + value.y + a) / 2
-  ##         ) %>%
-  ##         select(
-  ##           geo_value,
-  ##           forecast_date,
-  ##           target_end_date,
-  ##           quantile,
-  ##           value
-  ##         )
-  ##       ensemble_forecast
-  ##     }
-  ##   )
-  ## )
 )
