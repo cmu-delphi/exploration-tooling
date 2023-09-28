@@ -6,40 +6,42 @@
 \usage{
 forecaster_pred(
   data,
-  job,
-  instance,
+  outcome,
+  extra_sources = "",
   forecaster = scaled_pop,
   slide_training = Inf,
   slide_training_pad = 20L,
-  trainer = "linear_reg",
   ahead = 1,
+  trainer = parsnip::linear_reg(),
+  n_training = 32,
+  n_training_pad = 0,
   ...
 )
 }
 \arguments{
 \item{data}{as per batchtools}
 
-\item{job}{as per batchtools}
-
-\item{instance}{as per batchtools}
-
 \item{forecaster}{a function that does the actual forecasting for a given
 day. See \code{exampleSpec.R} for an example function and its documentation for
 the general parameter requirements.}
 
 \item{slide_training}{a required parameter that governs the window size that
-epix_slide hands off to epipredict.}
+epix_slide hands off to epipredict. Note that}
 
-\item{slide_training_pad}{a required parameter that determines padding}
+\item{slide_training_pad}{a required parameter that determines how much extra
+to hand-off to guarantee that at least \code{slide_training} examples are passed
+on (e.g. b/c of missing data).}
+
+\item{ahead}{a necessary parameter to specify an experiment}
 
 \item{trainer}{should be given as a string, which will be converted to a
 function.}
 
-\item{ahead}{a necessary parameter to specify an experiment}
-
 \item{...}{any extra parameters the user has defined for forecaster.}
 
-\item{scoring_function}{TODO detailed spec}
+\item{job}{as per batchtools}
+
+\item{instance}{as per batchtools}
 }
 \description{
 a wrapper that turns a forecaster, parameters, data

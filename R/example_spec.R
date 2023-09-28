@@ -34,11 +34,13 @@
 #'   use the filename as the parameter.
 #' @seealso some utilities for making forecasters: [format_storage], [perform_sanity_checks]
 #' @import magrittr recipes epipredict
+#' @importFrom epipredict epi_recipe step_population_scaling
+#' @importFrom tibble tibble
 #' @export
 scaled_pop <- function(epi_data,
                        outcome,
-                       extra_sources,
-                       ahead,
+                       extra_sources = "",
+                       ahead=1,
                        pop_scaling = TRUE,
                        trainer = parsnip::linear_reg(),
                        levels = covidhub_probs(),
@@ -54,7 +56,13 @@ scaled_pop <- function(epi_data,
   # edge case where there is no data; eventually epipredict will handle this
   if (is.infinite(effective_ahead)) {
     effective_ahead <- 0
-    null_result <- tibble(geo_value = character(), forecast_date = Date(), target_end_date = Date(), quantile = numeric(), value = numeric())
+    null_result <- tibble(
+      geo_value = character(),
+      forecast_date = Date(),
+      target_end_date = Date(),
+      quantile = numeric(),
+      value = numeric()
+    )
     return(null_result)
   }
   args_input <- list(...)

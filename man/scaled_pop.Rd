@@ -7,7 +7,7 @@
 scaled_pop(
   epi_data,
   outcome,
-  extra_sources,
+  extra_sources = "",
   ahead,
   pop_scaling = TRUE,
   trainer = parsnip::linear_reg(),

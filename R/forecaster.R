@@ -1,5 +1,3 @@
-library(epipredict)
-
 #' helper function for those writing forecasters
 #' @description
 #' a smorgasbord of checks that any epipredict-based forecaster should do:
@@ -23,9 +21,9 @@ perform_sanity_checks <- function(epi_data,
   if (!inherits(args_list, c("arx_fcast", "alist"))) {
     cli::cli_abort("args_list was not created using `arx_args_list().")
   }
-  if (!(is.null(trainer) || epipredict:::is_regression(trainer))) {
-    cli::cli_abort("{trainer} must be a `{parsnip}` model of mode 'regression'.")
-  }
+  # if (!(is.null(trainer) || epipredict:::is_regression(trainer))) {
+  #   cli::cli_abort("{trainer} must be a `{parsnip}` model of mode 'regression'.")
+  # }
   args_list$lags <- epipredict:::arx_lags_validator(predictors, args_list$lags)
   return(list(args_list, predictors))
 }
@@ -103,7 +101,6 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
     fit(epi_data) %>%
     add_frosting(postproc)
   latest <- get_test_data(recipe = preproc, x = epi_data)
-  # TODO stop the constant warnings, we know its out of date
   pred <- predict(workflow, latest)
   # the forecast_date may currently be the max time_value
   true_forecast_date <- attributes(epi_data)$metadata$as_of
@@ -120,50 +117,70 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
 #' @param data as per batchtools
 #' @param job as per batchtools
 #' @param instance as per batchtools
-#' @param scoring_function TODO detailed spec
 #' @param forecaster a function that does the actual forecasting for a given
 #'   day. See `exampleSpec.R` for an example function and its documentation for
 #'   the general parameter requirements.
 #' @param slide_training a required parameter that governs the window size that
-#'   epix_slide hands off to epipredict.
-#' @param slide_training_pad a required parameter that determines padding
+#'   epix_slide hands off to epipredict. Note that
+#' @param slide_training_pad a required parameter that determines how much extra
+#'   to hand-off to guarantee that at least `slide_training` examples are passed
+#'   on (e.g. b/c of missing data).
 #' @param trainer should be given as a string, which will be converted to a
 #'   function.
 #' @param ahead a necessary parameter to specify an experiment
 #' @param ... any extra parameters the user has defined for forecaster.
+#' @import rlang epipredict
+#' @export
 forecaster_pred <- function(data,
-                            job,
-                            instance,
+                            outcome,
+                            extra_sources = "",
                             forecaster = scaled_pop,
                             slide_training = Inf,
                             slide_training_pad = 20L,
-                            trainer = "linear_reg",
-                            ahead = 1,
-                            ...) {
-  archive <- instance$archive
-  outcome <- instance$outcome
-  extra_sources <- instance$extra_sources
-  output_format <- instance$output_formatter
+                            n_training = 32,
+                            n_training_pad = 0,
+                            forecaster_args = list(),
+                            forecaster_args_names = list()) {
+  archive <- data
+  if (length(forecaster_args) > 0) {
+    names(forecaster_args) <- forecaster_args_names
+  }
   # restrict the dataset to areas where training is possible
-  start_date <- min(archive$DT$time_value) + slide_training + slide_training_pad
-  end_date <- max(archive$DT$time_value) - ahead
+  if (slide_training < Inf) {
+    start_date <- min(archive$DT$time_value) + slide_training + slide_training_pad
+  } else {
+    start_date <- min(archive$DT$time_value) + slide_training_pad
+  }
+  end_date <- max(archive$DT$time_value) - forecaster_args$ahead
   valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = 1)
-  # TODO maybe allow for other params that are actually functions
-  trainer <- match.fun(trainer)
   # first generate the forecasts
-  # TODO forecaster probably needs a do.call
-  res <- epix_slide(
-    archive,
-    ~ forecaster(
-      ahead,
-      .x,
-      trainer,
-      ... # TODO update to fit the spec
-    ),
+  res <- epix_slide(archive,
+    function(data, gk, rtv, ...) {
+      do.call(
+        forecaster,
+        append(
+          list(
+            epi_data = data,
+            outcome = outcome,
+            extra_sources = extra_sources
+          ),
+          forecaster_args
+        )
+      )
+    },
     before = n_training + n_training_pad - 1,
     ref_time_values = valid_predict_dates,
-    new_col_name = ".pred_distn",
   )
-  # TODO append the truth data
+  res %<>% select(-time_value)
+  names(res) <- sub("^slide_value_", "", names(res))
+
+  # append the truth data
+  true_value <- archive$as_of(archive$versions_end) %>%
+    select(geo_value, time_value, outcome) %>%
+    rename(true_value = !!outcome)
+  res %<>%
+    inner_join(true_value,
+      by = join_by(geo_value, target_end_date == time_value)
+    )
   return(res)
 }

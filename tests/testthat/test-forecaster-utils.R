@@ -2,7 +2,6 @@ test_that("perform_sanity_checks", {
   epi_data <- case_death_rate_subset
   # don't need to test validate_forecaster_inputs as that's inherited
   # testing args_list inheritance
-  case_death_rate_subset
   ex_args <- arx_args_list()
   expect_error(perform_sanity_checks(epi_data, "case_rate", c("case_rate"), 5, ex_args))
   argsPredictors <- perform_sanity_checks(

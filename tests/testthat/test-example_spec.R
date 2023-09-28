@@ -1,9 +1,9 @@
 test_that("scaled_pop", {
+  library(epipredict)
   jhu <- case_death_rate_subset %>%
     dplyr::filter(time_value >= as.Date("2021-12-01"))
   # the as_of for this is wildly far in the future
   attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
-  library(epipredict)
   expect_warning(res <- scaled_pop(jhu, "case_rate", c("death_rate"), -2L))
   expect_equal(
     names(res),
