@@ -11,6 +11,7 @@ library(dplyr)
 library(epipredict)
 library(epieval)
 library(parsnip)
+library(purrr)
 library(tibble)
 library(tidyr)
 
