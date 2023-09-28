@@ -14,6 +14,8 @@ library(parsnip)
 library(purrr)
 library(tibble)
 library(tidyr)
+library(rlang)
+library(purrr)
 
 # Set target options:
 tar_option_set(
@@ -59,43 +61,39 @@ tar_option_set(
 linreg <- parsnip::linear_reg()
 quantreg <- quantile_reg()
 
-forecaster_param_grids <- dplyr::bind_rows(
-  # Define a separate parameter grid per forecaster
-  tibble(
-    # forecaster = rlang::syms(c("scaled_pop")),
-    expand_grid(
+grid <- list(forecaster = rlang::syms(c("scaled_pop")),
+  params = expand_grid(
       trainer = rlang::syms(c("linreg", "quantreg")),
       ahead = 1:4,
       pop_scaling = c(TRUE, FALSE)
-    )
-  ),
-  tibble(
-    # forecaster = rlang::syms(c("scaled_pop")),
-    expand_grid(
-      a = 1:2,
-      b = 1:4
-    )
+    ))
+grid
+make_target_param_grid <- function(grid) {
+  params <- transpose(grid$params)
+  names(grid$params)
+  forecaster_param_grids <- tibble(
+    forecaster = grid$forecaster,
+    params = params,
+    param_names = list(names(grid$params)),
+    id = 1:16
   )
-)
+  forecaster_param_grids
+  return(forecaster_param_grids)
+}
 
-tibble(
-  forecaster = rlang::syms(c("scaled_pop")),
-  args = map(transpose(
-    expand_grid(
-      trainer = rlang::syms(c("linreg", "quantreg")),
-      ahead = 1:4,
-      pop_scaling = c(TRUE, FALSE)
-    )
-  ), quote)
-)
+forecaster_param_grids <- make_target_param_grid(grid)
 
-tibble::tribble(
-  ~NAME, ~PARAMS,
-  1, quote(list(a = 3, b = 5, c = 25)), # quote()
-  2, quote(list(a = 0, b = 1, c = 42)) # quote()
-)
-
-# Replace the target list below with your own:
+## forecaster_param_grids <- tibble(
+##   forecaster = rlang::syms(c("scaled_pop")),
+##   params = map(transpose(
+##     expand_grid(
+##       trainer = rlang::syms(c("linreg", "quantreg")),
+##       ahead = 1:4,
+##       pop_scaling = c(TRUE, FALSE)
+##     )
+##   ), enquote),
+##   id = 1:16
+## )
 list(
   tar_target(
     name = hhs_evaluation_data,
@@ -125,7 +123,7 @@ list(
         geo_values = "*",
         time_values = epirange(from = "20220101", to = "20220401"),
         issues = "*",
-        fetch_args = fetch_args_list(return_empty = TRUE, timeout_seconds = 100)
+        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
       )
     }
   ),
@@ -140,7 +138,7 @@ list(
         geo_values = "*",
         time_values = epirange(from = "20220101", to = "20220401"),
         issues = "*",
-        fetch_args = fetch_args_list(return_empty = TRUE, timeout_seconds = 100)
+        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
       )
     }
   ),
@@ -170,82 +168,67 @@ list(
   ),
   tar_map(
     values = forecaster_param_grids,
+    names = id,
     tar_target(
-      name = forecaster_instance,
+      name = forecast,
       command = {
-        list(
-          # forecaster = forecaster,
-          # trainer = trainer,
-          # ahead = ahead,
-          a = a,
-          b = b
+        forecaster_pred(
+          data = data_archive_2022,
+          outcome = "hhs",
+          extra_sources = "",
+          forecaster = forecaster,
+          slide_training = Inf,
+          slide_training_pad = 30L,
+          forecaster_args = params,
+          forecaster_args_names = param_names
+        )
+      }
+    ),
+    tar_target(
+      name = score,
+      command = {
+        run_evaluation_measure(
+          data = forecast,
+          evaluation_data = hhs_evaluation_data,
+          measure = list(
+            wis = weighted_interval_score,
+            ae = absolute_error,
+            ic80 = interval_coverage(0.8)
+          )
+        )
+      }
+    )
+  ),
+  tar_map(
+    values = list(a = c(300, 15)),
+    tar_target(
+      name = ensemble_forecast,
+      command = {
+        Reduce(function(x, y) {
+          full_join(x, y, by = c("geo_value", "forecast_date", "target_end_date", "quantile")) %>%
+            mutate(value = (value.x + value.y + a) / 2) %>%
+            select(-value.x, -value.y)
+        }, list(
+          forecast_scaled_pop_linreg_3_FALSE,
+          forecast_scaled_pop_linreg_3_TRUE,
+          forecast_scaled_pop_quantreg_3_FALSE,
+          forecast_scaled_pop_quantreg_3_TRUE
+        ))
+      }
+    ),
+    tar_target(
+      name = ensemble_score,
+      command = {
+        run_evaluation_measure(
+          data = ensemble_forecast,
+          evaluation_data = hhs_evaluation_data,
+          measure = list(
+            wis = weighted_interval_score,
+            ae = absolute_error,
+            ic80 = interval_coverage(0.8)
+          )
         )
       }
     )
   )
-  # tar_map(
-  #   values = forecaster_param_grids,
-  #   tar_target(
-  #     name = forecast,
-  #     command = {
-  #       forecaster_pred(
-  #         data = data_archive_2022,
-  #         outcome = "hhs",
-  #         extra_sources = "",
-  #         forecaster = forecaster,
-  #         slide_training = Inf,
-  #         slide_training_pad = 30L,
-  #         ahead = ahead,
-  #         trainer = trainer,
-  #         pop_scaling = pop_scaling,
-  #       )
-  #     }
-  #   ),
-  #   tar_target(
-  #     name = score,
-  #     command = {
-  #       run_evaluation_measure(
-  #         data = forecast,
-  #         evaluation_data = hhs_evaluation_data,
-  #         measure = list(
-  #           wis = weighted_interval_score,
-  #           ae = absolute_error,
-  #           ic80 = interval_coverage(0.8)
-  #         )
-  #       )
-  #     }
-  #   )
-  # ),
-  # tar_map(
-  #   values = list(a = c(300, 15)),
-  #   tar_target(
-  #     name = ensemble_forecast,
-  #     command = {
-  #       Reduce(function(x, y) {
-  #         full_join(x, y, by = c("geo_value", "forecast_date", "target_end_date", "quantile")) %>%
-  #           mutate(value = (value.x + value.y + a) / 2) %>%
-  #           select(-value.x, -value.y)
-  #       }, list(
-  #         forecast_scaled_pop_linreg_3_FALSE,
-  #         forecast_scaled_pop_linreg_3_TRUE,
-  #         forecast_scaled_pop_quantreg_3_FALSE,
-  #         forecast_scaled_pop_quantreg_3_TRUE
-  #       ))
-  #     }
-  #   ),
-  #   tar_target(
-  #     name = ensemble_score,
-  #     command = {
-  #       run_evaluation_measure(
-  #         data = ensemble_forecast,
-  #         evaluation_data = hhs_evaluation_data,
-  #         measure = list(
-  #           wis = weighted_interval_score,
-  #           ae = absolute_error,
-  #           ic80 = interval_coverage(0.8)
-  #         )
-  #       )
-  #     }
-  #   )
-  # )
 )

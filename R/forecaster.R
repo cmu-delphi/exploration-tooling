@@ -129,6 +129,7 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
 #'   function.
 #' @param ahead a necessary parameter to specify an experiment
 #' @param ... any extra parameters the user has defined for forecaster.
+#' @import rlang epipredict
 #' @export
 forecaster_pred <- function(data,
                             outcome,
@@ -136,36 +137,40 @@ forecaster_pred <- function(data,
                             forecaster = scaled_pop,
                             slide_training = Inf,
                             slide_training_pad = 20L,
-                            ahead = 1,
-                            trainer = parsnip::linear_reg(),
                             n_training = 32,
                             n_training_pad = 0,
-                            ...) {
+                            forecaster_args = list(),
+                            forecaster_args_names = list()) {
   archive <- data
+  if (length(forecaster_args) > 0) {
+    names(forecaster_args) <- forecaster_args_names
+  }
   # restrict the dataset to areas where training is possible
   if (slide_training < Inf) {
     start_date <- min(archive$DT$time_value) + slide_training + slide_training_pad
   } else {
     start_date <- min(archive$DT$time_value) + slide_training_pad
   }
-  end_date <- max(archive$DT$time_value) - ahead
+  end_date <- max(archive$DT$time_value) - forecaster_args$ahead
   valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = 1)
   # first generate the forecasts
-  res <- archive %>%
-    epix_slide(
-      function(data, gk, rtv, ...) {
-        forecaster(
-          epi_data = data,
-          outcome = outcome,
-          extra_sources = extra_sources,
-          ahead = ahead,
-          trainer = trainer,
-          ...
+  res <- epix_slide(archive,
+    function(data, gk, rtv, ...) {
+      do.call(
+        forecaster,
+        append(
+          list(
+            epi_data = data,
+            outcome = outcome,
+            extra_sources = extra_sources
+          ),
+          forecaster_args
         )
-      },
-      before = n_training + n_training_pad - 1,
-      ref_time_values = valid_predict_dates,
-    )
+      )
+    },
+    before = n_training + n_training_pad - 1,
+    ref_time_values = valid_predict_dates,
+  )
   res %<>% select(-time_value)
   names(res) <- sub("^slide_value_", "", names(res))
 
