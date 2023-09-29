@@ -15,7 +15,6 @@ library(purrr)
 library(tibble)
 library(tidyr)
 library(rlang)
-library(purrr)
 
 # Set target options:
 tar_option_set(
@@ -38,7 +37,7 @@ tar_option_set(
   # Choose a controller that suits your needs. For example, the following
   # sets a controller with 2 workers which will run as local R processes:
   #
-  # controller = crew::crew_controller_local(workers = 8),
+  # controller = crew::crew_controller_local(workers = parallel::detectCores() - 1),
   #
   # Alternatively, if you want workers to run on a high-performance computing
   # cluster, select a controller from the {crew.cluster} package. The following
@@ -61,24 +60,6 @@ tar_option_set(
 linreg <- parsnip::linear_reg()
 quantreg <- epipredict::quantile_reg()
 
-grids <- list(
-  list(
-    forecaster = rlang::syms(c("scaled_pop")),
-    params = tidyr::expand_grid(
-      trainer = rlang::syms(c("linreg", "quantreg")),
-      ahead = 1:4,
-      pop_scaling = c(TRUE, FALSE)
-    )
-  ),
-  list(
-    forecaster = rlang::syms(c("scaled_pop")),
-    params = tidyr::expand_grid(
-      trainer = rlang::syms(c("linreg", "quantreg")),
-      ahead = 5:7,
-      pop_scaling = c(TRUE, FALSE)
-    )
-  )
-)
 make_target_param_grid <- function(grids) {
   purrr::map(grids, function(grid) {
     tibble(
@@ -90,7 +71,26 @@ make_target_param_grid <- function(grids) {
     bind_rows() %>%
     mutate(id = row_number())
 }
-forecaster_param_grids <- make_target_param_grid(grids)
+forecaster_param_grids <- make_target_param_grid(
+  list(
+    list(
+      forecaster = rlang::syms(c("scaled_pop")),
+      params = tidyr::expand_grid(
+        trainer = rlang::syms(c("linreg", "quantreg")),
+        ahead = 1:4,
+        pop_scaling = c(TRUE, FALSE)
+      )
+    ),
+    list(
+      forecaster = rlang::syms(c("scaled_pop")),
+      params = tidyr::expand_grid(
+        trainer = rlang::syms(c("linreg", "quantreg")),
+        ahead = 5:7,
+        pop_scaling = c(TRUE, FALSE)
+      )
+    )
+  )
+)
 
 data <- list(
   tar_target(
@@ -111,7 +111,7 @@ data <- list(
     }
   ),
   tar_target(
-    name = hhs_data_2022,
+    name = hhs_archive_data_2022,
     command = {
       epidatr::pub_covidcast(
         source = "hhs",
@@ -126,7 +126,7 @@ data <- list(
     }
   ),
   tar_target(
-    name = chng_data_2022,
+    name = chng_archive_data_2022,
     command = {
       epidatr::pub_covidcast(
         source = "chng",
@@ -141,9 +141,9 @@ data <- list(
     }
   ),
   tar_target(
-    name = data_archive_2022,
+    name = joined_archive_data_2022,
     command = {
-      hhs_data_2022 %<>%
+      hhs_archive_data_2022 %<>%
         select(geo_value, time_value, value, issue) %>%
         rename("hhs" := value) %>%
         rename(version = issue) %>%
@@ -152,7 +152,7 @@ data <- list(
           time_type = "day",
           compactify = TRUE
         )
-      chng_data_2022 %<>%
+      chng_archive_data_2022 %<>%
         select(geo_value, time_value, value, issue) %>%
         rename("chng" := value) %>%
         rename(version = issue) %>%
@@ -161,7 +161,35 @@ data <- list(
           time_type = "day",
           compactify = TRUE
         )
-      epix_merge(hhs_data_2022, chng_data_2022, sync = "locf")
+      epix_merge(hhs_archive_data_2022, chng_archive_data_2022, sync = "locf")
+    }
+  ),
+  tar_target(
+    name = hhs_latest_data_2022,
+    command = {
+      epidatr::pub_covidcast(
+        source = "hhs",
+        signals = "confirmed_admissions_covid_1d",
+        geo_type = "state",
+        time_type = "day",
+        geo_values = "*",
+        time_values = epirange(from = "20220101", to = "20220401"),
+        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
+      )
+    }
+  ),
+  tar_target(
+    name = chng_latest_data_2022,
+    command = {
+      epidatr::pub_covidcast(
+        source = "chng",
+        signals = "smoothed_adj_outpatient_covid",
+        geo_type = "state",
+        time_type = "day",
+        geo_values = "*",
+        time_values = epirange(from = "20220101", to = "20220401"),
+        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
+      )
     }
   )
 )
@@ -173,7 +201,7 @@ forecasts_and_scores <- tar_map(
     name = forecast,
     command = {
       forecaster_pred(
-        data = data_archive_2022,
+        data = joined_archive_data_2022,
         outcome = "hhs",
         extra_sources = "",
         forecaster = forecaster,
@@ -239,8 +267,19 @@ ensemble_forecast <- tar_map(
     }
   )
 )
+notebooks <- list(
+  tar_render(
+    name = report,
+    path = "extras/report.Rmd",
+    params = list(
+      exclude_geos = c("as", "gu", "mp", "vi")
+    )
+  )
+)
+
 list(
   data,
   forecasts_and_scores,
-  ensemble_forecast
+  ensemble_forecast,
+  notebooks
 )

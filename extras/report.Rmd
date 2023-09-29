@@ -1,0 +1,52 @@
+---
+title: "Flu Forecasts"
+author: "CMU-TimeSeries"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_document
+params:
+  exclude_geos: !r character(0L)
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+# Copied and modified on 2023-09-29 from:
+#   cmu-delphi/flu-hosp-forecast/code/plot_prediction_cards.R
+library(dplyr)
+library(magrittr)
+library(targets)
+
+source("extras/plotting.R")
+
+flu_forecasts <- bind_rows(
+  tar_read("forecast_1"), tar_read("forecast_2"), tar_read("forecast_3"),
+  .id = "forecaster"
+) %>% filter(forecaster == "1")
+```
+
+## Trajectory plots
+
+- Fan displays 50/80/95% confidence intervals
+
+```{r, fig.height = 80, fig.width = 15, echo=FALSE}
+# setup the plot and join corrections to the truth
+plot_state_forecasters(
+  flu_forecasts %>% filter(geo_value != "us"),
+  exclude_geos = params$exclude_geos,
+  start_day = "2022-01-01",
+  ncol = 2
+) %>%
+  suppressMessages() %>%
+  suppressWarnings() %>%
+  plotly::ggplotly()
+```
+
+```{r, fig.height = 10, fig.width = 15, echo=FALSE}
+# setup the plot and join corrections to the truth
+plot_nation_forecasters(
+  flu_forecasts,
+  exclude_geos = params$exclude_geos,
+  start_day = "2022-01-01"
+) %>%
+  suppressMessages() %>%
+  suppressWarnings() %>%
+  plotly::ggplotly()
+```
