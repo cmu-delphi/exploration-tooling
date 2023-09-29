@@ -60,24 +60,6 @@ tar_option_set(
 linreg <- parsnip::linear_reg()
 quantreg <- epipredict::quantile_reg()
 
-grids <- list(
-  list(
-    forecaster = rlang::syms(c("scaled_pop")),
-    params = tidyr::expand_grid(
-      trainer = rlang::syms(c("linreg", "quantreg")),
-      ahead = 1:4,
-      pop_scaling = c(TRUE, FALSE)
-    )
-  ),
-  list(
-    forecaster = rlang::syms(c("scaled_pop")),
-    params = tidyr::expand_grid(
-      trainer = rlang::syms(c("linreg", "quantreg")),
-      ahead = 5:7,
-      pop_scaling = c(TRUE, FALSE)
-    )
-  )
-)
 make_target_param_grid <- function(grids) {
   purrr::map(grids, function(grid) {
     tibble(
@@ -89,7 +71,26 @@ make_target_param_grid <- function(grids) {
     bind_rows() %>%
     mutate(id = row_number())
 }
-forecaster_param_grids <- make_target_param_grid(grids)
+forecaster_param_grids <- make_target_param_grid(
+  list(
+    list(
+      forecaster = rlang::syms(c("scaled_pop")),
+      params = tidyr::expand_grid(
+        trainer = rlang::syms(c("linreg", "quantreg")),
+        ahead = 1:4,
+        pop_scaling = c(TRUE, FALSE)
+      )
+    ),
+    list(
+      forecaster = rlang::syms(c("scaled_pop")),
+      params = tidyr::expand_grid(
+        trainer = rlang::syms(c("linreg", "quantreg")),
+        ahead = 5:7,
+        pop_scaling = c(TRUE, FALSE)
+      )
+    )
+  )
+)
 
 data <- list(
   tar_target(
