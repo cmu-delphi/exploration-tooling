@@ -2,6 +2,5 @@
 .idea
 *.log
 tmp/
-registry
 extras/**.html
 *.pdf
