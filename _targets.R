@@ -59,42 +59,40 @@ tar_option_set(
 # Run the R scripts in the R/ folder with your custom functions:
 # tar_source()
 linreg <- parsnip::linear_reg()
-quantreg <- quantile_reg()
+quantreg <- epipredict::quantile_reg()
 
-grid <- list(forecaster = rlang::syms(c("scaled_pop")),
-  params = expand_grid(
+grids <- list(
+  list(
+    forecaster = rlang::syms(c("scaled_pop")),
+    params = tidyr::expand_grid(
       trainer = rlang::syms(c("linreg", "quantreg")),
       ahead = 1:4,
       pop_scaling = c(TRUE, FALSE)
-    ))
-grid
-make_target_param_grid <- function(grid) {
-  params <- transpose(grid$params)
-  names(grid$params)
-  forecaster_param_grids <- tibble(
-    forecaster = grid$forecaster,
-    params = params,
-    param_names = list(names(grid$params)),
-    id = 1:16
+    )
+  ),
+  list(
+    forecaster = rlang::syms(c("scaled_pop")),
+    params = tidyr::expand_grid(
+      trainer = rlang::syms(c("linreg", "quantreg")),
+      ahead = 5:7,
+      pop_scaling = c(TRUE, FALSE)
+    )
   )
-  forecaster_param_grids
-  return(forecaster_param_grids)
+)
+make_target_param_grid <- function(grids) {
+  purrr::map(grids, function(grid) {
+    tibble(
+      forecaster = grid$forecaster,
+      params = transpose(grid$params),
+      param_names = list(names(grid$params))
+    )
+  }) %>%
+    bind_rows() %>%
+    mutate(id = row_number())
 }
+forecaster_param_grids <- make_target_param_grid(grids)
 
-forecaster_param_grids <- make_target_param_grid(grid)
-
-## forecaster_param_grids <- tibble(
-##   forecaster = rlang::syms(c("scaled_pop")),
-##   params = map(transpose(
-##     expand_grid(
-##       trainer = rlang::syms(c("linreg", "quantreg")),
-##       ahead = 1:4,
-##       pop_scaling = c(TRUE, FALSE)
-##     )
-##   ), enquote),
-##   id = 1:16
-## )
-list(
+data <- list(
   tar_target(
     name = hhs_evaluation_data,
     command = {
@@ -165,38 +163,84 @@ list(
         )
       epix_merge(hhs_data_2022, chng_data_2022, sync = "locf")
     }
-  ),
-  tar_map(
-    values = forecaster_param_grids,
-    names = id,
-    tar_target(
-      name = forecast,
-      command = {
-        forecaster_pred(
-          data = data_archive_2022,
-          outcome = "hhs",
-          extra_sources = "",
-          forecaster = forecaster,
-          slide_training = Inf,
-          slide_training_pad = 30L,
-          forecaster_args = params,
-          forecaster_args_names = param_names
-        )
-      }
-    ),
-    tar_target(
-      name = score,
-      command = {
-        run_evaluation_measure(
-          data = forecast,
-          evaluation_data = hhs_evaluation_data,
-          measure = list(
-            wis = weighted_interval_score,
-            ae = absolute_error,
-            ic80 = interval_coverage(0.8)
-          )
-        )
-      }
-    )
   )
+)
+forecasts_and_scores <- tar_map(
+  values = forecaster_param_grids,
+  names = id,
+  unlist = FALSE,
+  tar_target(
+    name = forecast,
+    command = {
+      forecaster_pred(
+        data = data_archive_2022,
+        outcome = "hhs",
+        extra_sources = "",
+        forecaster = forecaster,
+        slide_training = Inf,
+        slide_training_pad = 30L,
+        forecaster_args = params,
+        forecaster_args_names = param_names
+      )
+    }
+  ),
+  tar_target(
+    name = score,
+    command = {
+      run_evaluation_measure(
+        data = forecast,
+        evaluation_data = hhs_evaluation_data,
+        measure = list(
+          wis = weighted_interval_score,
+          ae = absolute_error,
+          ic80 = interval_coverage(0.8)
+        )
+      )
+    }
+  )
+)
+# The combine approach below is taken from the manual:
+#   https://books.ropensci.org/targets/static.html#combine
+# The key is that the map above has unlist = FALSE.
+ensemble_forecast <- tar_map(
+  values = list(a = c(300, 15)),
+  tar_combine(
+    name = ensemble_forecast,
+    # TODO: Needs a lookup table to select the right forecasters
+    list(
+      forecasts_and_scores[["forecast"]][[1]],
+      forecasts_and_scores[["forecast"]][[2]]
+    ),
+    command = {
+      bind_rows(!!!.x, .id = "forecaster") %>%
+        pivot_wider(
+          names_prefix = "forecaster",
+          names_from = forecaster,
+          values_from = value
+        ) %>%
+        mutate(
+          value = a + rowMeans(across(starts_with("forecaster")))
+        ) %>%
+        select(-starts_with("forecaster"))
+    }
+  ),
+  tar_target(
+    name = ensemble_score,
+    command = {
+      run_evaluation_measure(
+        data = ensemble_forecast,
+        evaluation_data = hhs_evaluation_data,
+        measures = list(
+          wis = weighted_interval_score,
+          ae = absolute_error,
+          ic80 = interval_coverage(0.8)
+        )
+      )
+    }
+  )
+)
+list(
+  data,
+  forecasts_and_scores,
+  ensemble_forecast
 )
