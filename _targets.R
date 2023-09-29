@@ -37,7 +37,7 @@ tar_option_set(
   # Choose a controller that suits your needs. For example, the following
   # sets a controller with 2 workers which will run as local R processes:
   #
-  # controller = crew::crew_controller_local(workers = 8),
+  # controller = crew::crew_controller_local(workers = parallel::detectCores() - 1),
   #
   # Alternatively, if you want workers to run on a high-performance computing
   # cluster, select a controller from the {crew.cluster} package. The following
