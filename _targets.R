@@ -7,6 +7,7 @@
 library(targets)
 library(tarchetypes) # Load other packages as needed.
 
+library(crew)
 library(dplyr)
 library(epipredict)
 library(epieval)
