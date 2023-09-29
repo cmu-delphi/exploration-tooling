@@ -9,7 +9,12 @@
 Given a timeseries and accompanying auxillary timeseries, evaluate a collection of forecasters implementable with epipredict using several metrics on historical data. Assuming the source of your timeseries provides versioned data, the evaluation at any given timepoint will only use data that was available at that point.
 }
 \author{
-\strong{Maintainer}: David Weber \email{davidweb@andrew.cmu.edu} (\href{https://orcid.org/YOUR-ORCID-ID}{ORCID})
+\strong{Maintainer}: David Weber \email{davidweb@andrew.cmu.edu} [contributor]
+
+Authors:
+\itemize{
+  \item Dmitry Shemetov \email{dshemeto@andrew.cmu.edu}
+}
 
 }
 \keyword{internal}

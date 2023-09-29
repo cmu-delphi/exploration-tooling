@@ -51,29 +51,43 @@ arx_preprocess <- function(rec, outcome, predictors, args_list) {
     step_training_window(n_recent = args_list$n_training)
   return(rec)
 }
-
-# TODO replace with `layer_arx_forecaster`
-#' add the default layers for arx_forecaster
+#' predict, na omit, threshold and add dates
 #' @description
-#' add the default layers for arx_forecaster
+#' add some basic layers that make sure a prediction is present, that the values
+#'   in the prediction are thresholded to be positive, and that the default
+#'   forecast date and target date are available as columns.
 #' @param frost an [`epipredict::frosting`]
-#' @param outcome a character of the column to be predicted
-#' @param predictors a character vector of the columns used as predictors
-#' @param args_list an [`epipredict::arx_args_list`]
 #' @param forecast_date the date from which the forecast was made. defaults to
 #'   the default of `layer_add_forecast_date`, which is currently the max
 #'   time_value present in the data
 #' @param target_date the date about which the forecast was made. defaults to
 #'   the default of `layer_add_target_date`, which is either
 #'   `forecast_date+ahead`, or the `max time_value + ahead`
+#' @import epipredict
+#' @export
+arx_basics <- function(frost, forecast_date = NULL, target_date = NULL, nonneg = TRUE) {
+  frost %>%
+    layer_predict() %>%
+    layer_naomit(.pred)
+  frost %<>% layer_add_forecast_date(forecast_date = forecast_date) %>%
+    layer_add_target_date(target_date = target_date)
+  if (nonneg) {
+    frost %<>% layer_threshold(dplyr::starts_with(".pred"))
+  }
+  return(frost)
+}
+
+# TODO replace with layer version
+#' make sure to have a quantile forecast
+#' @description
+#' dispatch on the trainer to make sure that the right kind of quantiles are added
+#' @param frost an [`epipredict::frosting`]
+#' @param args_list an [`epipredict::arx_args_list`]
 #' @seealso [arx_preprocess] for the step equivalent
 #' @export
-arx_postprocess <- function(frost,
-                            trainer,
-                            args_list,
-                            forecast_date = NULL,
-                            target_date = NULL) {
-  frost %<>% layer_predict()
+add_quantiles <- function(frost,
+                          trainer,
+                          args_list) {
   if (inherits(trainer, "quantile_reg")) {
     # add all levels to the forecaster and update postprocessor
     tau <- sort(epipredict:::compare_quantile_args(
@@ -89,9 +103,6 @@ arx_postprocess <- function(frost,
       by_key = args_list$quantile_by_key
     )
   }
-  frost %<>% layer_add_forecast_date(forecast_date = forecast_date) %>%
-    layer_add_target_date(target_date = target_date)
-  if (args_list$nonneg) frost %<>% layer_threshold(dplyr::starts_with(".pred"))
   return(frost)
 }
 

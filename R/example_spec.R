@@ -93,7 +93,7 @@ scaled_pop <- function(epi_data,
 
   # postprocessing supported by epipredict
   postproc <- frosting()
-  postproc %<>% arx_postprocess(trainer, args_list)
+  postproc %<>% arx_basics()
   if (pop_scaling) {
     postproc %<>% layer_population_scaling(
       ".pred",
@@ -104,6 +104,7 @@ scaled_pop <- function(epi_data,
       by = c("geo_value" = "abbr")
     )
   }
+  postproc %<>% add_quantiles(trainer, args_list)
   # with all the setup done, we execute and format
   pred <- run_workflow_and_format(preproc, postproc, trainer, epi_data)
   # now pred has the columns

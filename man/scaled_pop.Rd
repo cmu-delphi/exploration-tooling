@@ -8,7 +8,7 @@ scaled_pop(
   epi_data,
   outcome,
   extra_sources = "",
-  ahead,
+  ahead = 1,
   pop_scaling = TRUE,
   trainer = parsnip::linear_reg(),
   levels = covidhub_probs(),

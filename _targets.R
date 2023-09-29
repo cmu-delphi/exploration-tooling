@@ -10,6 +10,7 @@ library(tarchetypes) # Load other packages as needed.
 library(dplyr)
 library(epipredict)
 library(epieval)
+library(lubridate)
 library(parsnip)
 library(purrr)
 library(tibble)

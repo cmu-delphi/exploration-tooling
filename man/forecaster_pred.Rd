@@ -11,11 +11,10 @@ forecaster_pred(
   forecaster = scaled_pop,
   slide_training = Inf,
   slide_training_pad = 20L,
-  ahead = 1,
-  trainer = parsnip::linear_reg(),
   n_training = 32,
   n_training_pad = 0,
-  ...
+  forecaster_args = list(),
+  forecaster_args_names = list()
 )
 }
 \arguments{
@@ -32,16 +31,16 @@ epix_slide hands off to epipredict. Note that}
 to hand-off to guarantee that at least \code{slide_training} examples are passed
 on (e.g. b/c of missing data).}
 
-\item{ahead}{a necessary parameter to specify an experiment}
+\item{job}{as per batchtools}
+
+\item{instance}{as per batchtools}
 
 \item{trainer}{should be given as a string, which will be converted to a
 function.}
 
+\item{ahead}{a necessary parameter to specify an experiment}
+
 \item{...}{any extra parameters the user has defined for forecaster.}
-
-\item{job}{as per batchtools}
-
-\item{instance}{as per batchtools}
 }
 \description{
 a wrapper that turns a forecaster, parameters, data
