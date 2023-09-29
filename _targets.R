@@ -24,6 +24,7 @@ tar_option_set(
     "dplyr",
     "epieval",
     "epipredict",
+    "ggplot2",
     "lubridate",
     "parsnip",
     "tibble",
