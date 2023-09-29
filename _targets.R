@@ -111,7 +111,7 @@ data <- list(
     }
   ),
   tar_target(
-    name = hhs_data_2022,
+    name = hhs_archive_data_2022,
     command = {
       epidatr::pub_covidcast(
         source = "hhs",
@@ -126,7 +126,7 @@ data <- list(
     }
   ),
   tar_target(
-    name = chng_data_2022,
+    name = chng_archive_data_2022,
     command = {
       epidatr::pub_covidcast(
         source = "chng",
@@ -141,9 +141,9 @@ data <- list(
     }
   ),
   tar_target(
-    name = data_archive_2022,
+    name = joined_archive_data_2022,
     command = {
-      hhs_data_2022 %<>%
+      hhs_archive_data_2022 %<>%
         select(geo_value, time_value, value, issue) %>%
         rename("hhs" := value) %>%
         rename(version = issue) %>%
@@ -152,7 +152,7 @@ data <- list(
           time_type = "day",
           compactify = TRUE
         )
-      chng_data_2022 %<>%
+      chng_archive_data_2022 %<>%
         select(geo_value, time_value, value, issue) %>%
         rename("chng" := value) %>%
         rename(version = issue) %>%
@@ -161,7 +161,35 @@ data <- list(
           time_type = "day",
           compactify = TRUE
         )
-      epix_merge(hhs_data_2022, chng_data_2022, sync = "locf")
+      epix_merge(hhs_archive_data_2022, chng_archive_data_2022, sync = "locf")
+    }
+  ),
+  tar_target(
+    name = hhs_latest_data_2022,
+    command = {
+      epidatr::pub_covidcast(
+        source = "hhs",
+        signals = "confirmed_admissions_covid_1d",
+        geo_type = "state",
+        time_type = "day",
+        geo_values = "*",
+        time_values = epirange(from = "20220101", to = "20220401"),
+        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
+      )
+    }
+  ),
+  tar_target(
+    name = chng_latest_data_2022,
+    command = {
+      epidatr::pub_covidcast(
+        source = "chng",
+        signals = "smoothed_adj_outpatient_covid",
+        geo_type = "state",
+        time_type = "day",
+        geo_values = "*",
+        time_values = epirange(from = "20220101", to = "20220401"),
+        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
+      )
     }
   )
 )
@@ -173,7 +201,7 @@ forecasts_and_scores <- tar_map(
     name = forecast,
     command = {
       forecaster_pred(
-        data = data_archive_2022,
+        data = joined_archive_data_2022,
         outcome = "hhs",
         extra_sources = "",
         forecaster = forecaster,
@@ -239,8 +267,19 @@ ensemble_forecast <- tar_map(
     }
   )
 )
+notebooks <- list(
+  tar_render(
+    name = report,
+    path = "extras/report.Rmd",
+    params = list(
+      exclude_geos = c("as", "gu", "mp", "vi")
+    )
+  )
+)
+
 list(
   data,
   forecasts_and_scores,
-  ensemble_forecast
+  ensemble_forecast,
+  notebooks
 )
