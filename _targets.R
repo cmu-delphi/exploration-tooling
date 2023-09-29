@@ -15,7 +15,6 @@ library(purrr)
 library(tibble)
 library(tidyr)
 library(rlang)
-library(purrr)
 
 # Set target options:
 tar_option_set(
