@@ -198,37 +198,5 @@ list(
         )
       }
     )
-  ),
-  tar_map(
-    values = list(a = c(300, 15)),
-    tar_target(
-      name = ensemble_forecast,
-      command = {
-        Reduce(function(x, y) {
-          full_join(x, y, by = c("geo_value", "forecast_date", "target_end_date", "quantile")) %>%
-            mutate(value = (value.x + value.y + a) / 2) %>%
-            select(-value.x, -value.y)
-        }, list(
-          forecast_scaled_pop_linreg_3_FALSE,
-          forecast_scaled_pop_linreg_3_TRUE,
-          forecast_scaled_pop_quantreg_3_FALSE,
-          forecast_scaled_pop_quantreg_3_TRUE
-        ))
-      }
-    ),
-    tar_target(
-      name = ensemble_score,
-      command = {
-        run_evaluation_measure(
-          data = ensemble_forecast,
-          evaluation_data = hhs_evaluation_data,
-          measure = list(
-            wis = weighted_interval_score,
-            ae = absolute_error,
-            ic80 = interval_coverage(0.8)
-          )
-        )
-      }
-    )
   )
 )
