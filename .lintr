@@ -4,3 +4,7 @@ linters: linters_with_defaults(
   object_length_linter(length = 40L),
   commented_code_linter = NULL
   )
+exclusions: list(
+  "renv",
+  "venv"
+  )
