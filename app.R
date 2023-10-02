@@ -13,29 +13,32 @@ POPULATION_DF <-
 MIN_RANGE_DATE <- as.Date("2020-01-01")
 MAX_RANGE_DATE <- Sys.Date()
 
-# TODO: use a standard shiny cachem cache so that we can automatically boot old objs.
-list_forecaster_data <- list()
-load_forecast_data <- function(forecaster) {
-  if (!(forecaster %in% names(list_forecaster_data))) {
-    list_forecaster_data[[forecaster]] <<- inject(tar_read(!!forecaster)) %>%
-      left_join(POPULATION_DF, by = "geo_value") %>%
-      mutate(across(c(wis, ae), list(
-        "count_scale" = function(x) x / 100e3 * population,
-        "per_100k" = identity
-      ))) %>%
-      select(-wis, -ae) %>%
-      rename(wis = wis_count_scale, ae = ae_count_scale) %>%
-      mutate(
-        ahead = as.integer(target_end_date - forecast_date),
-        forecaster = forecaster
-      ) %>%
-      {
-        .
-      }
-  }
 
-  return(list_forecaster_data[[forecaster]])
+# Set application-level caching location. Stores up to 1GB. Removes
+# least recently used objects first.
+shinyOptions(cache = cachem::cache_mem(max_size = 1000 * 1024^2, evict = "lru"))
+cache <- getShinyOption("cache")
+
+load_forecast_data_raw <- function(forecaster) {
+  inject(tar_read(!!forecaster)) %>%
+    left_join(POPULATION_DF, by = "geo_value") %>%
+    ## TODO Check what units our forecasts use.
+    mutate(across(c(wis, ae), list(
+      "count_scale" = function(x) x / 100e3 * population,
+      "per_100k" = identity
+    ))) %>%
+    select(-wis, -ae) %>%
+    rename(wis = wis_count_scale, ae = ae_count_scale) %>%
+    mutate(
+      ahead = as.integer(target_end_date - forecast_date),
+      forecaster = forecaster
+    ) %>%
+    {
+      .
+    }
 }
+
+load_forecast_data <- memoise::memoise(load_forecast_data_raw, cache = cache)
 
 #### Adapted from shiny-eval.R from cmu-delphi/hospitalization-forecaster
 
@@ -45,7 +48,7 @@ shinyApp(
   },
   ui = function(request) {
     fluidPage(
-      titlePanel("Eval Summary Dashboard (stats on 7dav rather than 7dsum, no national)"),
+      titlePanel("Eval Summary Dashboard (no national)"),
       bookmarkButton(),
       sidebarLayout(
         sidebarPanel(
