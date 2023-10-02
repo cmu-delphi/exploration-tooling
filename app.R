@@ -58,11 +58,11 @@ shinyApp(
             "selected_metric",
             "Metric:",
             c(
-              "Mean WIS" = "wis_mean",
-              "Mean WIS per 100k" = "wis_per_100k_mean",
-              "Mean AE" = "ae_mean",
-              "Mean AE per 100k" = "ae_per_100k_mean",
-              "80%PI Coverage" = "ic80_mean"
+              "Mean WIS" = "wis",
+              "Mean WIS per 100k" = "wis_per_100k",
+              "Mean AE" = "ae",
+              "Mean AE per 100k" = "ae_per_100k",
+              "80%PI Coverage" = "ic80"
             )
           ),
           selectInput("x_var",
@@ -123,19 +123,19 @@ shinyApp(
     output$main_plot <- renderPlotly({
       input_df <- filtered_scorecards_reactive()
       if (nrow(input_df) == 0) { return() }
-      browser()
+      
       input_df %>>%
         group_by(across(all_of(input$x_var)), across(all_of(input$facet_vars)), forecaster) %>>%
         ## TODO Could make the metric a faceting option with free_y
-        summarize(across(!!input$selected_metric, list(mean = mean)), n = n(), .groups = "drop") %>>%
+        summarize(across(input$selected_metric, list(mean = mean)), n = n(), .groups = "drop") %>>%
         (~plot.df) %>>%
-        ggplot(aes_string(input$x_var, input$selected_metric, colour = "forecaster")) %>>%
-        `+`(expand_limits(y = if (grepl("cov_", input$selected_metric)) c(0, 1) else 0)) %>>%
+        ggplot(aes_string(input$x_var, paste0(input$selected_metric, "_mean"), colour = "forecaster")) %>>%
+        `+`(expand_limits(y = if (grepl("cov_", paste0(input$selected_metric, "_mean"))) c(0, 1) else 0)) %>>%
         `+`(geom_hline(
           linetype = "dashed",
           ## It's natural here to have the default
           yintercept = switch(input$selected_metric,
-            ic80_mean = 0.80,
+            ic80 = 0.80,
             ## (Avoid
             ## https://github.com/plotly/plotly.R/issues/1947
             ## by using NA default and na.rm=TRUE
