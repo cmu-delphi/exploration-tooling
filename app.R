@@ -93,7 +93,7 @@ shinyApp(
             "Exclude geo values:",
             choices = setdiff(POPULATION_DF$geo_value, "us"),
             multiple = TRUE,
-            selected = c("vi")
+            selected = c("as", "gu", "mp", "vi")
           ),
         ),
         mainPanel(
