@@ -5,7 +5,8 @@
 # See https://books.ropensci.org/targets/hpc.html
 # to learn about your options.
 
-renv::init()
+# renv::init()
+renv::restore()
 
 suppressMessages({
   library(targets)
@@ -19,9 +20,9 @@ tar_make()
 # tar_make_future(workers = 2) # nolint
 
 
-# Prevent functions defined in /R dir from being loaded
+# Prevent functions defined in /R dir from being loaded unnecessarily
 options(shiny.autoload.r=FALSE)
-## Alternately, create and save an object in `_targets.R`
+## TODO: Alternately, create and save an object in `_targets.R`
 ## that lists all objs of interest and `tar_read` that in.
 forecaster_options <- tar_objects(names=contains("score"))
-runApp("app.R")
+runApp(here::here("app.R"))
