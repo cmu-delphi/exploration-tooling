@@ -71,9 +71,11 @@ scaled_pop <- function(epi_data,
   args_list <- do.call(arx_args_list, args_input)
   # if you want to ignore extra_sources, setting predictors is the way to do it
   predictors <- c(outcome, extra_sources)
-  argsPredictors <- perform_sanity_checks(epi_data, outcome, predictors, trainer, args_list)
-  args_list <- argsPredictors[[1]]
-  predictors <- argsPredictors[[2]]
+  argsPredictorsTrainer <- perform_sanity_checks(epi_data, outcome, predictors, trainer, args_list)
+  args_list <- argsPredictorsTrainer[[1]]
+  predictors <- argsPredictorsTrainer[[2]]
+  trainer <- argsPredictorsTrainer[[3]]
+  # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
 
@@ -93,10 +95,11 @@ scaled_pop <- function(epi_data,
 
   # postprocessing supported by epipredict
   postproc <- frosting()
-  postproc %<>% arx_basics()
+  postproc %<>% arx_postprocess(trainer, args_list)
+  postproc
   if (pop_scaling) {
     postproc %<>% layer_population_scaling(
-      ".pred",
+      .pred, .pred_distn,
       df = state_census,
       df_pop_col = "pop",
       create_new = FALSE,
@@ -104,7 +107,6 @@ scaled_pop <- function(epi_data,
       by = c("geo_value" = "abbr")
     )
   }
-  postproc %<>% add_quantiles(trainer, args_list)
   # with all the setup done, we execute and format
   pred <- run_workflow_and_format(preproc, postproc, trainer, epi_data)
   # now pred has the columns

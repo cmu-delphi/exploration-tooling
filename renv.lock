@@ -51,9 +51,9 @@
     },
     "Matrix": {
       "Package": "Matrix",
-      "Version": "1.6-1",
+      "Version": "1.6-1.1",
       "Source": "Repository",
-      "Repository": "RSPM",
+      "Repository": "CRAN",
       "Requirements": [
         "R",
         "grDevices",
@@ -64,7 +64,7 @@
         "stats",
         "utils"
       ],
-      "Hash": "cb6855ac711958ca734b75e631b2035d"
+      "Hash": "1a00d4828f33a9d690806e98bd17150c"
     },
     "MatrixModels": {
       "Package": "MatrixModels",
@@ -109,6 +109,20 @@
         "utils"
       ],
       "Hash": "ae6cbbe1492f4de79c45fce06f967ce8"
+    },
+    "RcppEigen": {
+      "Package": "RcppEigen",
+      "Version": "0.3.3.9.3",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "Matrix",
+        "R",
+        "Rcpp",
+        "stats",
+        "utils"
+      ],
+      "Hash": "1e035db628cefb315c571202d70202fe"
     },
     "SQUAREM": {
       "Package": "SQUAREM",
@@ -1435,13 +1449,13 @@
     },
     "nanonext": {
       "Package": "nanonext",
-      "Version": "0.10.0",
+      "Version": "0.10.2",
       "Source": "Repository",
       "Repository": "RSPM",
       "Requirements": [
         "R"
       ],
-      "Hash": "cdb1b788141ab8d2c0af5bd45a61d369"
+      "Hash": "816b604f54e48518ab595a276abb4a20"
     },
     "nlme": {
       "Package": "nlme",
@@ -1637,10 +1651,13 @@
     },
     "prettyunits": {
       "Package": "prettyunits",
-      "Version": "1.1.1",
+      "Version": "1.2.0",
       "Source": "Repository",
-      "Repository": "RSPM",
-      "Hash": "95ef9167b75dde9d2ccc3c7528393e7e"
+      "Repository": "CRAN",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "6b01fc98b1e86c4f705ce9dcfd2f57c7"
     },
     "processx": {
       "Package": "processx",
@@ -1758,6 +1775,19 @@
         "survival"
       ],
       "Hash": "1bbc97f7d637ab3917c514a69047b2c1"
+    },
+    "ranger": {
+      "Package": "ranger",
+      "Version": "0.15.1",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "Matrix",
+        "R",
+        "Rcpp",
+        "RcppEigen"
+      ],
+      "Hash": "ec74161e5a464623b0cdfc435f9926ed"
     },
     "rappdirs": {
       "Package": "rappdirs",
@@ -2417,7 +2447,7 @@
     },
     "withr": {
       "Package": "withr",
-      "Version": "2.5.0",
+      "Version": "2.5.1",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -2426,7 +2456,7 @@
         "graphics",
         "stats"
       ],
-      "Hash": "c0e49a9760983e81e55cdd9be92e7182"
+      "Hash": "d77c6f74be05c33164e33fbc85540cae"
     },
     "workflows": {
       "Package": "workflows",

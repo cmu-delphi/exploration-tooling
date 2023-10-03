@@ -57,25 +57,12 @@ tar_option_set(
   #
   # Set other options as needed.
 )
-
 # Run the R scripts in the R/ folder with your custom functions:
 # tar_source()
 linreg <- parsnip::linear_reg()
 quantreg <- epipredict::quantile_reg()
 
-make_target_param_grid <- function(grids) {
-  purrr::map(grids, function(grid) {
-    tibble(
-      forecaster = grid$forecaster,
-      params = transpose(grid$params),
-      param_names = list(names(grid$params))
-    )
-  }) %>%
-    bind_rows() %>%
-    mutate(id = row_number())
-}
-forecaster_param_grids <- make_target_param_grid(
-  list(
+grids <- list(
     list(
       forecaster = rlang::syms(c("scaled_pop")),
       params = tidyr::expand_grid(
@@ -93,7 +80,18 @@ forecaster_param_grids <- make_target_param_grid(
       )
     )
   )
-)
+make_target_param_grid <- function(grids) {
+  purrr::map(grids, function(grid) {
+    tibble(
+      forecaster = grid$forecaster,
+      params = transpose(grid$params),
+      param_names = list(names(grid$params))
+    )
+  }) %>%
+    bind_rows() %>%
+    mutate(id = row_number())
+}
+forecaster_param_grids <- make_target_param_grid(grids)
 
 data <- list(
   tar_target(
