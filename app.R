@@ -16,7 +16,8 @@ MAX_RANGE_DATE <- Sys.Date()
 
 # Set application-level caching location. Stores up to 1GB. Removes
 # least recently used objects first.
-shinyOptions(cache = cachem::cache_mem(max_size = 1000 * 1024^2, evict = "lru"))
+CACHE_LIMIT_MB <- 1000
+shinyOptions(cache = cachem::cache_mem(max_size = CACHE_LIMIT_MB * 1024^2, evict = "lru"))
 cache <- getShinyOption("cache")
 
 load_forecast_data_raw <- function(forecaster) {
