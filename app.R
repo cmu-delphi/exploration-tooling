@@ -140,7 +140,9 @@ shinyApp(
         summarize(across(input$selected_metric, list(mean = mean)), n = n(), .groups = "drop") %>>%
         (~plot.df) %>>%
         # Select x and y vars to display
-        ggplot(aes_string(input$x_var, paste0(input$selected_metric, "_mean"), colour = "forecaster")) %>>%
+        # Use https://stackoverflow.com/a/53168593/14401472 to refer to x, y,
+        # group by var/string
+        ggplot(aes(!!sym(input$x_var), !!sym(paste0(input$selected_metric, "_mean")), colour = !!sym("forecaster"))) %>>%
         `+`(expand_limits(y = if (grepl("cov_", paste0(input$selected_metric, "_mean"))) c(0, 1) else 0)) %>>%
         # Add a horizontal reference line if plotting coverage
         `+`(geom_hline(
@@ -171,7 +173,7 @@ shinyApp(
         } else {
           facet_grid(as.formula(paste0(input$facet_vars[[1L]], " ~ ", paste(collapse = " + ", input$facet_vars[-1L]))))
         }) %>>%
-        ggplotly() %>%
+        ggplotly() %>>%
         layout(hovermode = "x unified")
     })
   }
