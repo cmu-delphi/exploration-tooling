@@ -4,12 +4,14 @@ suppressMessages({
   library(shiny)
   library(ggplot2)
   library(rlang)
+  library(dplyr)
 })
 
 POPULATION_DF <-
   covidcast::state_census %>>%
   transmute(geo_value = tolower(ABBR), population = POPESTIMATE2019)
 
+# Dates used for slider.
 MIN_RANGE_DATE <- as.Date("2020-01-01")
 MAX_RANGE_DATE <- Sys.Date()
 
@@ -20,6 +22,8 @@ CACHE_LIMIT_MB <- 1000
 shinyOptions(cache = cachem::cache_mem(max_size = CACHE_LIMIT_MB * 1024^2, evict = "lru"))
 cache <- getShinyOption("cache")
 
+# Load a single score file of `targets` output. Do some scaling and renaming
+# of error scores. Calculate `ahead`s.
 load_forecast_data_raw <- function(forecaster) {
   inject(tar_read(!!forecaster)) %>%
     left_join(POPULATION_DF, by = "geo_value") %>%
@@ -39,6 +43,7 @@ load_forecast_data_raw <- function(forecaster) {
     }
 }
 
+# Have loading function use the cache.
 load_forecast_data <- memoise::memoise(load_forecast_data_raw, cache = cache)
 
 #### Adapted from shiny-eval.R from cmu-delphi/hospitalization-forecaster
@@ -129,27 +134,28 @@ shinyApp(
       if (nrow(input_df) == 0) { return() }
       
       input_df %>>%
+        # Aggregate scores over all geos
         group_by(across(all_of(input$x_var)), across(all_of(input$facet_vars)), forecaster) %>>%
         ## TODO Could make the metric a faceting option with free_y
         summarize(across(input$selected_metric, list(mean = mean)), n = n(), .groups = "drop") %>>%
         (~plot.df) %>>%
+        # Select x and y vars to display
         ggplot(aes_string(input$x_var, paste0(input$selected_metric, "_mean"), colour = "forecaster")) %>>%
         `+`(expand_limits(y = if (grepl("cov_", paste0(input$selected_metric, "_mean"))) c(0, 1) else 0)) %>>%
+        # Add a horizontal reference line if plotting coverage
         `+`(geom_hline(
           linetype = "dashed",
-          ## It's natural here to have the default
           yintercept = switch(input$selected_metric,
             ic80 = 0.80,
-            ## (Avoid
-            ## https://github.com/plotly/plotly.R/issues/1947
-            ## by using NA default and na.rm=TRUE
-            ## rather than numeric(0L) default)
+            # Avoid https://github.com/plotly/plotly.R/issues/1947 by using NA
+            # default and na.rm=TRUE rather than numeric(0L) default
             NA_real_
           ),
           na.rm = TRUE
         )) %>>%
+        # Use scatterplot or lines depending on the x var
         {
-          if (input$x_var %in% c(input$facet_vars, "geo_value", "forecaster") || range(plot.df[["n"]]) %>>% {
+          if (input$x_var %in% c(input$facet_vars, "geo_value", "forecaster", "ahead") || range(plot.df[["n"]]) %>>% {
             .[[2L]] > 1.2 * .[[1L]]
           }) {
             . + geom_point(aes(size = n)) + expand_limits(size = 0)
@@ -157,6 +163,7 @@ shinyApp(
             . + geom_line()
           }
         } %>>%
+        # Create subplots if requested
         `+`(if (length(input$facet_vars) == 0L) {
           theme()
         } else if (length(input$facet_vars) == 1L) {
