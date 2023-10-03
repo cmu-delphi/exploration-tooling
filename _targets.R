@@ -63,23 +63,23 @@ linreg <- parsnip::linear_reg()
 quantreg <- epipredict::quantile_reg()
 
 grids <- list(
-    list(
-      forecaster = rlang::syms(c("scaled_pop")),
-      params = tidyr::expand_grid(
-        trainer = rlang::syms(c("linreg", "quantreg")),
-        ahead = 1:4,
-        pop_scaling = c(TRUE, FALSE)
-      )
-    ),
-    list(
-      forecaster = rlang::syms(c("scaled_pop")),
-      params = tidyr::expand_grid(
-        trainer = rlang::syms(c("linreg", "quantreg")),
-        ahead = 5:7,
-        pop_scaling = c(TRUE, FALSE)
-      )
+  list(
+    forecaster = rlang::syms(c("scaled_pop")),
+    params = tidyr::expand_grid(
+      trainer = rlang::syms(c("linreg", "quantreg")),
+      ahead = 1:4,
+      pop_scaling = c(TRUE, FALSE)
+    )
+  ),
+  list(
+    forecaster = rlang::syms(c("scaled_pop")),
+    params = tidyr::expand_grid(
+      trainer = rlang::syms(c("linreg", "quantreg")),
+      ahead = 5:7,
+      pop_scaling = c(TRUE, FALSE)
     )
   )
+)
 make_target_param_grid <- function(grids) {
   purrr::map(grids, function(grid) {
     tibble(
