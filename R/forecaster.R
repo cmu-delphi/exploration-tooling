@@ -2,10 +2,11 @@
 #' @description
 #' a smorgasbord of checks that any epipredict-based forecaster should do:
 #' 1. check that the args list is created correctly,
-#' 2. validate the outcome and predictors as present,
-#' 3. make sure the trainer is a `regression` model from `parsnip`
-#' 4. remake the lags to match the numebr of predictors
-#' 5. rewrite an empty extra sources list from an empty string
+#' 2. rewrite an empty extra sources list from an empty string
+#' 3. validate the outcome and predictors as present,
+#' 4. make sure the trainer is a `regression` model from `parsnip`
+#' 5. adjust the trainer's quantiles based on those in args_list if it's a quantile trainer
+#' 6. remake the lags to match the numebr of predictors
 #' @inheritParams scaled_pop
 #' @param args_list the args list created by [`epipredict::arx_args_list`]
 #' @export
@@ -14,18 +15,26 @@ perform_sanity_checks <- function(epi_data,
                                   predictors,
                                   trainer,
                                   args_list) {
-  # if "" has made its way into the list, throw it out, as it represents no
-  # extra predictors
-  predictors <- predictors[predictors != ""]
-  epipredict:::validate_forecaster_inputs(epi_data, outcome, predictors)
   if (!inherits(args_list, c("arx_fcast", "alist"))) {
     cli::cli_abort("args_list was not created using `arx_args_list().")
   }
-  # if (!(is.null(trainer) || epipredict:::is_regression(trainer))) {
-  #   cli::cli_abort("{trainer} must be a `{parsnip}` model of mode 'regression'.")
-  # }
+
+  predictors <- predictors[predictors != ""]
+  epipredict:::validate_forecaster_inputs(epi_data, outcome, predictors)
+
+  if (!is.null(trainer) && !epipredict:::is_regression(trainer)) {
+    cli::cli_abort("{trainer} must be a `{parsnip}` model of mode 'regression'.")
+  } else if (inherits(trainer, "quantile_reg")) {
+    # add all levels to the trainer and update args list
+    tau <- sort(epipredict:::compare_quantile_args(
+      args_list$levels,
+      rlang::eval_tidy(trainer$args$tau)
+    ))
+    args_list$levels <- tau
+    trainer$args$tau <- rlang::enquo(tau)
+  }
   args_list$lags <- epipredict:::arx_lags_validator(predictors, args_list$lags)
-  return(list(args_list, predictors))
+  return(list(args_list, predictors, trainer))
 }
 
 # TODO replace with `step_arx_forecaster`
@@ -51,59 +60,45 @@ arx_preprocess <- function(rec, outcome, predictors, args_list) {
     step_training_window(n_recent = args_list$n_training)
   return(rec)
 }
-#' predict, na omit, threshold and add dates
+
+# TODO replace with `layer_arx_forecaster`
+#' add the default layers for arx_forecaster
 #' @description
-#' add some basic layers that make sure a prediction is present, that the values
-#'   in the prediction are thresholded to be positive, and that the default
-#'   forecast date and target date are available as columns.
+#' add the default layers for arx_forecaster
 #' @param frost an [`epipredict::frosting`]
+#' @param trainer the trainer used (e.g. linear_reg() or quantile_reg())
+#' @param args_list an [`epipredict::arx_args_list`]
 #' @param forecast_date the date from which the forecast was made. defaults to
 #'   the default of `layer_add_forecast_date`, which is currently the max
 #'   time_value present in the data
 #' @param target_date the date about which the forecast was made. defaults to
 #'   the default of `layer_add_target_date`, which is either
 #'   `forecast_date+ahead`, or the `max time_value + ahead`
-#' @import epipredict
-#' @export
-arx_basics <- function(frost, forecast_date = NULL, target_date = NULL, nonneg = TRUE) {
-  frost %>%
-    layer_predict() %>%
-    layer_naomit(.pred)
-  frost %<>% layer_add_forecast_date(forecast_date = forecast_date) %>%
-    layer_add_target_date(target_date = target_date)
-  if (nonneg) {
-    frost %<>% layer_threshold(dplyr::starts_with(".pred"))
-  }
-  return(frost)
-}
-
-# TODO replace with layer version
-#' make sure to have a quantile forecast
-#' @description
-#' dispatch on the trainer to make sure that the right kind of quantiles are added
-#' @param frost an [`epipredict::frosting`]
-#' @param args_list an [`epipredict::arx_args_list`]
 #' @seealso [arx_preprocess] for the step equivalent
 #' @export
-add_quantiles <- function(frost,
-                          trainer,
-                          args_list) {
+arx_postprocess <- function(postproc,
+                            trainer,
+                            args_list,
+                            forecast_date = NULL,
+                            target_date = NULL) {
+  postproc %<>% layer_predict()
   if (inherits(trainer, "quantile_reg")) {
-    # add all levels to the forecaster and update postprocessor
-    tau <- sort(epipredict:::compare_quantile_args(
-      args_list$levels,
-      rlang::eval_tidy(trainer$args$tau)
-    ))
-    args_list$levels <- tau
-    trainer$args$tau <- rlang::enquo(tau)
-    frost %<>% layer_quantile_distn(levels = tau) %>% layer_point_from_distn()
+
+    postproc %<>% layer_quantile_distn(levels = args_list$levels) %>% layer_point_from_distn()
   } else {
-    frost %<>% layer_residual_quantiles(
+    postproc %<>% layer_residual_quantiles(
       probs = args_list$levels, symmetrize = args_list$symmetrize,
       by_key = args_list$quantile_by_key
     )
   }
-  return(frost)
+  if (args_list$nonneg) {
+    postproc %<>% layer_threshold(dplyr::starts_with(".pred"))
+  }
+
+  postproc %<>% layer_naomit(dplyr::starts_with(".pred"))
+  postproc %<>% layer_add_forecast_date(forecast_date = forecast_date) %>%
+    layer_add_target_date(target_date = target_date)
+  return(postproc)
 }
 
 #' helper function to run a epipredict model and reformat to hub format

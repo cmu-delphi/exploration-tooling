@@ -17,9 +17,10 @@ perform_sanity_checks(epi_data, outcome, predictors, trainer, args_list)
 a smorgasbord of checks that any epipredict-based forecaster should do:
 \enumerate{
 \item check that the args list is created correctly,
+\item rewrite an empty extra sources list from an empty string
 \item validate the outcome and predictors as present,
 \item make sure the trainer is a \code{regression} model from \code{parsnip}
+\item adjust the trainer's quantiles based on those in args_list if it's a quantile trainer
 \item remake the lags to match the numebr of predictors
-\item rewrite an empty extra sources list from an empty string
 }
 }

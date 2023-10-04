@@ -10,6 +10,7 @@ scaled_pop(
   extra_sources = "",
   ahead = 1,
   pop_scaling = TRUE,
+  group_by_state = FALSE,
   trainer = parsnip::linear_reg(),
   levels = covidhub_probs(),
   ...
