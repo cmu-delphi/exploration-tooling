@@ -6,3 +6,19 @@ covidhub_probs <- function(type = c("standard", "inc_case")) {
     inc_case = c(0.025, 0.100, 0.250, 0.500, 0.750, 0.900, 0.975)
   )
 }
+
+
+#' add a unique id based on the column contents
+#' @description
+#' feed a character represenation of the column contents through md5 and reencoding in base64 to get short unique hashes
+#' make sure that there are no columns with `NA`'s
+#' @import openssl
+#' @export
+add_id <- function(df, name_length = 5) {
+  df %<>%
+    rowwise() %>%
+    mutate(id = md5(paste(across(everything()), collapse = ""))) %>% # make a full md5 hash
+    mutate(id = openssl::base64_encode((id))) %>%
+    mutate(id = substr(id, 1, name_length)) # only keep first  `name_length` characters
+  return(df)
+}

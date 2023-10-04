@@ -44,3 +44,11 @@ Any forecaster which requires a pre-trained component. An example is a forecaste
 # Random notes
 Currently, to run in parallel, you need to install the package via `renv::install(".")`.
 The parallel workers will continue to use the version as of the last time you ran `renv::install`, while the non-parallel ones won't. This separates development from exploration.
+
+
+# Targets projects
+- testing: for debugging forecasters and doing sanity checks
+- flu_hosp_explore: for exploring flu hospitalization forecasters
+- covid_hosp_explore: for exploring covid hospitalization forecasters
+- flu_hosp_prod: for predicting flu hospitalizations
+- covid_hosp_prod: for predicting flu hospitalizations
