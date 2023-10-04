@@ -34,28 +34,7 @@ tar_option_set(
   ), # packages that your targets need to run
   imports = c("epieval", "parsnip"),
   format = "qs", # Optionally set the default storage format. qs is fast.
-  #
-  # For distributed computing in tar_make(), supply a {crew} controller
-  # as discussed at https://books.ropensci.org/targets/crew.html.
-  # Choose a controller that suits your needs. For example, the following
-  # sets a controller with 2 workers which will run as local R processes:
-  #
   # controller = crew::crew_controller_local(workers = parallel::detectCores() - 1),
-  #
-  # Alternatively, if you want workers to run on a high-performance computing
-  # cluster, select a controller from the {crew.cluster} package. The following
-  # example is a controller for Sun Grid Engine (SGE).
-  #
-  #   controller = crew.cluster::crew_controller_sge(
-  #     workers = 50,
-  #     # Many clusters install R as an environment module, and you can load it
-  #     # with the script_lines argument. To select a specific verison of R,
-  #     # you may need to include a version string, e.g. "module load R/4.3.0".
-  #     # Check with your system administrator if you are unsure.
-  #     script_lines = "module load R"
-  #   )
-  #
-  # Set other options as needed.
 )
 # Run the R scripts in the R/ folder with your custom functions:
 # tar_source()
@@ -63,35 +42,36 @@ linreg <- parsnip::linear_reg()
 quantreg <- epipredict::quantile_reg()
 
 grids <- list(
-  list(
-    forecaster = rlang::syms(c("scaled_pop")),
-    params = tidyr::expand_grid(
-      trainer = rlang::syms(c("linreg", "quantreg")),
-      ahead = 1:4,
-      pop_scaling = c(TRUE, FALSE)
-    )
+  tidyr::expand_grid(
+    forecaster = "scaled_pop",
+    trainer = c("linreg", "quantreg"),
+    ahead = 1:4,
+    pop_scaling = c(TRUE, FALSE)
   ),
-  list(
-    forecaster = rlang::syms(c("scaled_pop")),
-    params = tidyr::expand_grid(
-      trainer = rlang::syms(c("linreg", "quantreg")),
-      ahead = 5:7,
-      pop_scaling = c(TRUE, FALSE)
-    )
+  tidyr::expand_grid(
+    forecaster = "scaled_pop",
+    trainer = c("linreg", "quantreg"),
+    ahead = 5:7,
+    lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14)),
+    pop_scaling = c(TRUE, FALSE)
   )
 )
-make_target_param_grid <- function(grids) {
-  purrr::map(grids, function(grid) {
-    tibble(
-      forecaster = grid$forecaster,
-      params = transpose(grid$params),
-      param_names = list(names(grid$params))
-    )
-  }) %>%
-    bind_rows() %>%
-    mutate(id = row_number())
-}
-forecaster_param_grids <- make_target_param_grid(grids)
+# bind them together and give static ids; if you add a new field to a given
+# expand_grid, everything will get a new id, so it's better to add a new
+# expand_grid instead
+param_grid <- bind_rows(map(grids, add_id)) %>% relocate(id, .after = last_col())
+
+forecaster_param_grids <- make_target_param_grid(param_grid)
+
+# not actually used downstream, this is for lookup during plotting and human evaluation
+forecasters <- list(
+  tar_target(
+    name = forecasters,
+    command = {
+      grids
+    }
+  )
+)
 
 data <- list(
   tar_target(
@@ -194,6 +174,8 @@ data <- list(
     }
   )
 )
+
+
 forecasts_and_scores <- tar_map(
   values = forecaster_param_grids,
   names = id,
@@ -228,6 +210,7 @@ forecasts_and_scores <- tar_map(
     }
   )
 )
+
 # The combine approach below is taken from the manual:
 #   https://books.ropensci.org/targets/static.html#combine
 # The key is that the map above has unlist = FALSE.
@@ -280,6 +263,7 @@ notebooks <- list(
 
 list(
   data,
+  forecasters,
   forecasts_and_scores,
   ensemble_forecast,
   notebooks
