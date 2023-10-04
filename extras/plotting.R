@@ -107,7 +107,7 @@ plot_state_forecasters <- function(
 
   td1 <- tar_read("hhs_latest_data_2022") %>%
     filter(!geo_value %in% exclude_geos) %>%
-    mutate(value = 7L * .data$value) %>%
+    mutate(value = .data$value) %>%
     rename(target_end_date = time_value)
   td1$data_source <- "hhs"
   td2 <- tar_read("chng_latest_data_2022") %>%
