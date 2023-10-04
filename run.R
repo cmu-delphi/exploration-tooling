@@ -25,4 +25,4 @@ options(shiny.autoload.r=FALSE)
 ## TODO: Alternately, create and save an object in `_targets.R`
 ## that lists all objs of interest and `tar_read` that in.
 forecaster_options <- tar_objects(names=contains("score"))
-runApp(here::here("app.R"))
+runApp(here::here("app.R"), port=3838)
