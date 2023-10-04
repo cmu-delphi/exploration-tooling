@@ -68,7 +68,7 @@ forecasters <- list(
   tar_target(
     name = forecasters,
     command = {
-      grids
+      param_grid
     }
   )
 )
