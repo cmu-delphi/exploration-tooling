@@ -4,8 +4,11 @@
 \alias{make_target_param_grid}
 \title{convert a list of forecasters}
 \usage{
-make_target_param_grid(param_grid)
+make_target_param_grid(
+  param_grid,
+  actually_symbol = c("forecaster", "trainer")
+)
 }
 \description{
-the required format for targets is a little jank; this takes a human legible table and makes it targets legible
+the required format for targets is a little jank; this takes a human legible tibble and makes it targets legible
 }
