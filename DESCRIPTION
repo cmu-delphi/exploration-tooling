@@ -12,6 +12,7 @@ License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
     license
 Depends:
     epiprocess (>= 0.6.0),
+    epipredict,
     R (>= 3.5.0)
 Imports:
     assertthat,
@@ -60,6 +61,7 @@ VignetteBuilder:
     knitr
 Remotes:
     cmu-delphi/epidatr,
+    cmu-delphi/epipredict,
     cmu-delphi/epiprocess,
     dajmcdon/smoothqr
 Encoding: UTF-8
