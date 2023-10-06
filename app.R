@@ -58,6 +58,7 @@ shinyApp(
       bookmarkButton(),
       sidebarLayout(
         sidebarPanel(
+          width = 3,
           selectInput("selected_forecasters",
             "Forecasters:",
             choices = forecaster_options,
@@ -106,7 +107,8 @@ shinyApp(
           ),
         ),
         mainPanel(
-          plotlyOutput("main_plot", height = "90em")
+          plotlyOutput("main_plot", height = "90em"),
+          width=8
         )
       )
     )
@@ -132,7 +134,10 @@ shinyApp(
     output$main_plot <- renderPlotly({
       input_df <- filtered_scorecards_reactive()
       if (nrow(input_df) == 0) { return() }
-      
+
+      x_tick_angle <- list(tickangle = -30)
+      facet_x_tick_angles <- setNames(rep(list(x_tick_angle), 10), paste0("xaxis", 1:10))
+
       input_df %>>%
         # Aggregate scores over all geos
         group_by(across(all_of(input$x_var)), across(all_of(input$facet_vars)), forecaster) %>>%
@@ -174,7 +179,8 @@ shinyApp(
           facet_grid(as.formula(paste0(input$facet_vars[[1L]], " ~ ", paste(collapse = " + ", input$facet_vars[-1L]))))
         }) %>>%
         ggplotly() %>>%
-        layout(hovermode = "x unified")
+        {inject(layout(., hovermode = "x unified", legend = list(orientation = "h", title = list(text = "forecaster")), xaxis = x_tick_angle, !!!facet_x_tick_angles))}
+
     })
   }
 )
