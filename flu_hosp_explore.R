@@ -11,6 +11,7 @@ library(purrr)
 library(tibble)
 library(tidyr)
 library(rlang)
+library(epidatr)
 
 tar_option_set(
   packages = c(
@@ -66,16 +67,15 @@ forecasters <- list(
   )
 )
 
-geo_type <- "state"
-response_data_source <- "hhs"
 response_signal <- "confirmed_admissions_influenza_1d_prop_7dav"
+target_range <- epirange(from = "20211001", to = "20220401")
 data <- list(
   tar_target(
     name = hhs_evaluation_data,
     command = {
       epidatr::pub_covidcast(
         source = "hhs",
-        signals = "confirmed_admissions_influenza_1d_prop_7dav",
+        signals = response_signal,
         geo_type = "state",
         time_type = "day",
         geo_values = "*",
@@ -92,11 +92,11 @@ data <- list(
     command = {
       epidatr::pub_covidcast(
         source = "hhs",
-        signals = "confirmed_admissions_covid_1d",
+        signals = response_signal,
         geo_type = "state",
         time_type = "day",
         geo_values = "*",
-        time_values = epirange(from = "20220101", to = "20220401"),
+        time_values = target_range,
         issues = "*",
         fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
       )
@@ -107,11 +107,11 @@ data <- list(
     command = {
       epidatr::pub_covidcast(
         source = "chng",
-        signals = "smoothed_adj_outpatient_covid",
+        signals = "smoothed_adj_outpatient_flu",
         geo_type = "state",
         time_type = "day",
         geo_values = "*",
-        time_values = epirange(from = "20220101", to = "20220401"),
+        time_values = target_range,
         issues = "*",
         fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
       )
@@ -258,9 +258,9 @@ notebooks <- list(
 )
 
 list(
-  data,
-  forecasters,
-  forecasts_and_scores,
-  ensemble_forecast,
-  notebooks
+  data
+  ## forecasters,
+  ## forecasts_and_scores,
+  ## ensemble_forecast,
+  ## notebooks
 )
