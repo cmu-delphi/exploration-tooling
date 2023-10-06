@@ -4,19 +4,21 @@
 #   https://books.ropensci.org/targets/walkthrough.html#inspect-the-pipeline
 
 # Load packages required to define the pipeline:
-library(targets)
-library(tarchetypes) # Load other packages as needed.
+suppressMessages({
+  library(targets)
+  library(tarchetypes) # Load other packages as needed.
 
-library(crew)
-library(dplyr)
-library(epipredict)
-library(epieval)
-library(lubridate)
-library(parsnip)
-library(purrr)
-library(tibble)
-library(tidyr)
-library(rlang)
+  library(crew)
+  library(dplyr)
+  library(epipredict)
+  library(epieval)
+  library(lubridate)
+  library(parsnip)
+  library(purrr)
+  library(tibble)
+  library(tidyr)
+  library(rlang)
+})
 
 # Set target options:
 tar_option_set(

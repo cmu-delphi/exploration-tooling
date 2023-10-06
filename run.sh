@@ -4,6 +4,9 @@
 # module load R # Uncomment if R is an environment module.
 nohup nice -4 R CMD BATCH run.R &
 
+export APP_PORT=`grep runApp run.R | grep -Eo '[0-9]{4}'`
+echo "Look at nohup.out and run.Rout for logs. The shiny app should be running on http://127.0.0.1:${APP_PORT}"
+
 # Change the nice level above as appropriate
 # for your situation and system.
 
