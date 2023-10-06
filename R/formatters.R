@@ -4,7 +4,8 @@
 #' `(geo_value, forecast_date, target_end_date, quantile, value)`
 #' in that particular order. It does not include the point estimate as a
 #'   separate row.
-#' @import magrittr dplyr epipredict
+#' @import dplyr epipredict
+#' @importFrom magrittr %>% %<>%
 #' @export
 format_storage <- function(pred, true_forecast_date, target_end_date) {
   pred %>%

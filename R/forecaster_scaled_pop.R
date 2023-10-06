@@ -33,7 +33,8 @@
 #'   complicated parameters, it is better to store them in separate files, and
 #'   use the filename as the parameter.
 #' @seealso some utilities for making forecasters: [format_storage], [perform_sanity_checks]
-#' @import magrittr recipes epipredict
+#' @import recipes epipredict
+#' @importFrom magrittr %>% %<>%
 #' @importFrom epipredict epi_recipe step_population_scaling
 #' @importFrom tibble tibble
 #' @export
