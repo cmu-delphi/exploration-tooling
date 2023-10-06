@@ -85,6 +85,13 @@ shinyApp(
             choices = c("forecaster", "ahead", "geo_value"),
             multiple = TRUE
           ),
+          radioButtons("facets_share_scale",
+            "Share y scale between subplots:",
+            c(
+              "Yes" = "fixed",
+              "No" = "free_y"
+            )
+          ),
           sliderInput("selected_forecast_date_range",
             "Forecast date range:",
             ## TODO: load the baseline to start and set forecast and target date ranges to
@@ -174,9 +181,9 @@ shinyApp(
         `+`(if (length(input$facet_vars) == 0L) {
           theme()
         } else if (length(input$facet_vars) == 1L) {
-          facet_wrap(input$facet_vars)
+          facet_wrap(input$facet_vars, scales = input$facets_share_scale)
         } else {
-          facet_grid(as.formula(paste0(input$facet_vars[[1L]], " ~ ", paste(collapse = " + ", input$facet_vars[-1L]))))
+          facet_grid(as.formula(paste0(input$facet_vars[[1L]], " ~ ", paste(collapse = " + ", input$facet_vars[-1L]))), scales = input$facets_share_scale)
         }) %>>%
         ggplotly() %>>%
         {inject(layout(., hovermode = "x unified", legend = list(orientation = "h", title = list(text = "forecaster")), xaxis = x_tick_angle, !!!facet_x_tick_angles))}
