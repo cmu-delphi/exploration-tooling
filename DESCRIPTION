@@ -11,6 +11,7 @@ Description: Given a timeseries and accompanying auxillary timeseries, evaluate 
 License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
     license
 Depends:
+    epidatr,
     epiprocess (>= 0.6.0),
     epipredict,
     R (>= 3.5.0)
