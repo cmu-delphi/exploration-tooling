@@ -38,6 +38,7 @@ test_that("scaled_pop", {
   # test case where the epi_df is empty
   null_jhu <- jhu %>% filter(time_value < as.Date("0009-01-01"))
   expect_no_error(null_res <- scaled_pop(null_jhu, "case_rate", c("death_rate")))
+  null_res <- scaled_pop(null_jhu, "case_rate", c("death_rate"))
   expect_identical(names(null_res), names(res))
   expect_equal(nrow(null_res), 0)
   expect_identical(null_res, tibble(geo_value = character(), forecast_date = Date(), target_end_date = Date(), quantile = numeric(), value = numeric()))

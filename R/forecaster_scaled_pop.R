@@ -37,6 +37,7 @@
 #' @importFrom magrittr %>% %<>%
 #' @importFrom epipredict epi_recipe step_population_scaling
 #' @importFrom tibble tibble
+#' @importFrom lubridate Date
 #' @export
 scaled_pop <- function(epi_data,
                        outcome,

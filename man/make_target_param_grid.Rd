@@ -4,11 +4,12 @@
 \alias{make_target_param_grid}
 \title{convert a list of forecasters}
 \usage{
-make_target_param_grid(
-  param_grid,
-  actually_symbol = c("forecaster", "trainer")
-)
+make_target_param_grid(param_grid)
+}
+\arguments{
+\item{param_grid}{the tibble of parameters. Must have forecaster and trainer, everything else is optional}
 }
 \description{
-the required format for targets is a little jank; this takes a human legible tibble and makes it targets legible
+the required format for targets is a little jank; this takes a human legible tibble and makes it targets legible.
+Currently only \code{forecaster} and \code{trainer} can be symbols.
 }

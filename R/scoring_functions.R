@@ -22,7 +22,7 @@
 #' @param predictions_cards tibble of quantile forecasts, which contains at
 #'   least `quantile` and `value` columns, as well as any other prediction task
 #'   identifiers. For covid data, a predictions card may be created by the
-#'   function [get_predictions()], downloaded with [get_covidhub_predictions()]
+#'   function get_predictions(), downloaded with get_covidhub_predictions()
 #'   or created manually.
 #' @param err_measures Named list of one or more functions, where each function
 #'   takes a data frame with three columns `quantile`, `value` and `actual`
@@ -39,7 +39,7 @@
 #'   for the truth (named `actual`).
 #'
 #' @importFrom rlang quo .data
-#'
+#' @importFrom assertthat assert_that
 #' @export
 evaluate_predictions <- function(
     predictions_cards,

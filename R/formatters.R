@@ -25,7 +25,8 @@ format_storage <- function(pred, true_forecast_date, target_end_date) {
 #'   forecast_date, and target_date
 #' It does not assume that the forecast_date is accurate
 #' The end result
-format_covidhub <- function(pred, true_forecast_date, levels) {
+#' @import dplyr
+format_covidhub <- function(pred, true_forecast_date, levels, quantiles) {
   pred %<>%
     group_by(forecast_date, geo_value, target_date) %>%
     rename(target_end_date = target_date) %>%

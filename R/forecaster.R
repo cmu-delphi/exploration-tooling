@@ -135,7 +135,8 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
 #'   function.
 #' @param ahead a necessary parameter to specify an experiment
 #' @param ... any extra parameters the user has defined for forecaster.
-#' @import rlang epipredict
+#' @import rlang epipredict dplyr
+#' @importFrom epiprocess epix_slide
 #' @export
 forecaster_pred <- function(data,
                             outcome,
