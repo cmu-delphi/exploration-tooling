@@ -26,14 +26,17 @@ cache <- getShinyOption("cache")
 # of error scores. Calculate `ahead`s.
 load_forecast_data_raw <- function(forecaster) {
   inject(tar_read(!!forecaster)) %>%
-    left_join(POPULATION_DF, by = "geo_value") %>%
-    ## TODO Check what units our forecasts use.
-    mutate(across(c(wis, ae), list(
-      "count_scale" = function(x) x / 100e3 * population,
-      "per_100k" = identity
-    ))) %>%
-    select(-wis, -ae) %>%
-    rename(wis = wis_count_scale, ae = ae_count_scale) %>%
+    ## TODO Only display raw error scores for now. We'd want to make sure we
+    ## have scores available both raw and normalized by population, but that
+    ## depends on the units our forecasts use, and if all models are
+    ## population-normalized or just some.
+    # left_join(POPULATION_DF, by = "geo_value") %>%
+    # mutate(across(c(wis, ae), list(
+    #   "count_scale" = function(x) x / 100e3 * population,
+    #   "per_100k" = identity
+    # ))) %>%
+    # select(-wis, -ae) %>%
+    # rename(wis = wis_count_scale, ae = ae_count_scale) %>%
     mutate(
       ahead = as.integer(target_end_date - forecast_date),
       forecaster = forecaster
@@ -69,9 +72,9 @@ shinyApp(
             "Metric:",
             c(
               "Mean WIS" = "wis",
-              "Mean WIS per 100k" = "wis_per_100k",
+              # "Mean WIS per 100k" = "wis_per_100k",
               "Mean AE" = "ae",
-              "Mean AE per 100k" = "ae_per_100k",
+              # "Mean AE per 100k" = "ae_per_100k",
               "80%PI Coverage" = "ic80"
             )
           ),
@@ -122,10 +125,6 @@ shinyApp(
   },
   server = function(input, output, session) {
     filtered_scorecards_reactive <- reactive({
-      ## TODO this is just an experiment with `reactive`; it may or may not be a
-      ## good idea. Might speed up computations with the same set of data to
-      ## summarize when the summary is changed, but might also eat a bunch of
-      ## extra memory.
       if (length(input$selected_forecasters) == 0) { return(data.frame()) }
 
       processed_evaluations_internal <- lapply(input$selected_forecasters, function(forecaster) {
