@@ -7,7 +7,12 @@
 perform_sanity_checks(epi_data, outcome, predictors, trainer, args_list)
 }
 \arguments{
+\item{epi_data}{the actual data used}
+
 \item{outcome}{the name of the target variable}
+
+\item{predictors}{the full list of predictors including the outcome. can
+include empty strings}
 
 \item{trainer}{an example extra parameter that is fairly common}
 
@@ -20,7 +25,8 @@ a smorgasbord of checks that any epipredict-based forecaster should do:
 \item rewrite an empty extra sources list from an empty string
 \item validate the outcome and predictors as present,
 \item make sure the trainer is a \code{regression} model from \code{parsnip}
-\item adjust the trainer's quantiles based on those in args_list if it's a quantile trainer
+\item adjust the trainer's quantiles based on those in args_list if it's a
+quantile trainer
 \item remake the lags to match the numebr of predictors
 }
 }

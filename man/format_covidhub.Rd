@@ -4,7 +4,17 @@
 \alias{format_covidhub}
 \title{format for the COVID-19 Forecast Hub}
 \usage{
-format_covidhub(pred, true_forecast_date, levels)
+format_covidhub(pred, true_forecast_date, target_end_date, levels)
+}
+\arguments{
+\item{pred}{the output as produced by epipredict}
+
+\item{true_forecast_date}{the actual date from which the model is
+making the forecast, rather than the last day of available data}
+
+\item{target_end_date}{the date of the prediction}
+
+\item{levels}{the quantile levels}
 }
 \description{
 expects the pred to have the columns geo_value, .pred, .pred_distn,

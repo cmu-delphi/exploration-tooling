@@ -11,7 +11,7 @@
 #' Evaluates the performance of a forecaster, through the following steps:
 #' \enumerate{
 #'   \item Takes a prediction card (as created by
-#'   [get_predictions()]).
+#'   `get_predictions`).
 #'   \item Computes various user-specified error measures.
 #' }
 #' The result is a "score card" data frame, where each row corresponds to
@@ -22,7 +22,7 @@
 #' @param predictions_cards tibble of quantile forecasts, which contains at
 #'   least `quantile` and `value` columns, as well as any other prediction task
 #'   identifiers. For covid data, a predictions card may be created by the
-#'   function get_predictions(), downloaded with get_covidhub_predictions()
+#'   function `get_predictions`, downloaded with `get_covidhub_predictions`
 #'   or created manually.
 #' @param err_measures Named list of one or more functions, where each function
 #'   takes a data frame with three columns `quantile`, `value` and `actual`

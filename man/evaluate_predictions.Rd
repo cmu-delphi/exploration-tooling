@@ -17,7 +17,7 @@ evaluate_predictions(
 \item{predictions_cards}{tibble of quantile forecasts, which contains at
 least \code{quantile} and \code{value} columns, as well as any other prediction task
 identifiers. For covid data, a predictions card may be created by the
-function \code{\link[=get_predictions]{get_predictions()}}, downloaded with \code{\link[=get_covidhub_predictions]{get_covidhub_predictions()}}
+function \code{get_predictions}, downloaded with \code{get_covidhub_predictions}
 or created manually.}
 
 \item{truth_data}{truth data (observed). This should be a data frame that
@@ -41,7 +41,7 @@ for the truth (named \code{actual}).
 Evaluates the performance of a forecaster, through the following steps:
 \enumerate{
 \item Takes a prediction card (as created by
-\code{\link[=get_predictions]{get_predictions()}}).
+\code{get_predictions}).
 \item Computes various user-specified error measures.
 }
 The result is a "score card" data frame, where each row corresponds to

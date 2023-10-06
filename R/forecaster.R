@@ -5,9 +5,12 @@
 #' 2. rewrite an empty extra sources list from an empty string
 #' 3. validate the outcome and predictors as present,
 #' 4. make sure the trainer is a `regression` model from `parsnip`
-#' 5. adjust the trainer's quantiles based on those in args_list if it's a quantile trainer
+#' 5. adjust the trainer's quantiles based on those in args_list if it's a
+#'    quantile trainer
 #' 6. remake the lags to match the numebr of predictors
 #' @inheritParams scaled_pop
+#' @param predictors the full list of predictors including the outcome. can
+#'   include empty strings
 #' @param args_list the args list created by [`epipredict::arx_args_list`]
 #' @export
 perform_sanity_checks <- function(epi_data,
@@ -65,7 +68,7 @@ arx_preprocess <- function(rec, outcome, predictors, args_list) {
 #' add the default layers for arx_forecaster
 #' @description
 #' add the default layers for arx_forecaster
-#' @param frost an [`epipredict::frosting`]
+#' @param postproc an [`epipredict::frosting`]
 #' @param trainer the trainer used (e.g. linear_reg() or quantile_reg())
 #' @param args_list an [`epipredict::arx_args_list`]
 #' @param forecast_date the date from which the forecast was made. defaults to
@@ -102,6 +105,14 @@ arx_postprocess <- function(postproc,
 }
 
 #' helper function to run a epipredict model and reformat to hub format
+#' @description
+#' helper function to run a epipredict model and reformat to hub format
+#' @param preproc the preprocessing steps
+#' @param postproc the postprocessing frosting
+#' @param trainer the parsnip trainer
+#' @param epi_data the actual epi_df to train on
+#' @export
+#' @import epipredict recipes
 run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
   workflow <- epi_workflow(preproc, trainer) %>%
     fit(epi_data) %>%
@@ -120,21 +131,22 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
 #' prediction.
 #' as far as batchtools is concerned, the scoring function is a particular
 #'   parameter of the forecaster (or Algorithm, as they call it).
-#' @param data as per batchtools
-#' @param job as per batchtools
-#' @param instance as per batchtools
+#' @param data the epi_df object
+#' @param outcome the name of the target column
+#' @param extra_sources any extra columns used for prediction that aren't
+#'   the target
 #' @param forecaster a function that does the actual forecasting for a given
-#'   day. See `exampleSpec.R` for an example function and its documentation for
-#'   the general parameter requirements.
-#' @param slide_training a required parameter that governs the window size that
-#'   epix_slide hands off to epipredict. Note that
-#' @param slide_training_pad a required parameter that determines how much extra
-#'   to hand-off to guarantee that at least `slide_training` examples are passed
-#'   on (e.g. b/c of missing data).
-#' @param trainer should be given as a string, which will be converted to a
-#'   function.
-#' @param ahead a necessary parameter to specify an experiment
-#' @param ... any extra parameters the user has defined for forecaster.
+#'   day. See `exampleSpec.R` for an example function and its documentation
+#'   for the general parameter requirements.
+#' @param slide_training a required parameter that governs how much data to
+#'   exclude before starting the evaluation.
+#' @param n_training_pad a required parameter that determines how many extra
+#'   samples for epix_slide to hand to the forecaster to guarantee that at
+#'   least `ntraining` examples are available to the forecaster.
+#' @param forecaster_args the list of arguments to the forecaster; it must
+#'   contain `ahead`
+#' @param forecaster_args_names a bit of a hack around targets, it contains
+#'   the names of the `forecaster_args`.
 #' @import rlang epipredict dplyr
 #' @importFrom epiprocess epix_slide
 #' @export
@@ -142,21 +154,27 @@ forecaster_pred <- function(data,
                             outcome,
                             extra_sources = "",
                             forecaster = scaled_pop,
-                            slide_training = Inf,
-                            slide_training_pad = 20L,
-                            n_training = 32,
-                            n_training_pad = 0,
+                            slide_training = 0,
+                            n_training_pad = 5,
                             forecaster_args = list(),
                             forecaster_args_names = list()) {
   archive <- data
   if (length(forecaster_args) > 0) {
     names(forecaster_args) <- forecaster_args_names
   }
-  # restrict the dataset to areas where training is possible
-  if (slide_training < Inf) {
-    start_date <- min(archive$DT$time_value) + slide_training + slide_training_pad
+  if (!is.numeric(forecaster_args$n_training)) {
+    n_training <- forecaster_args$n_training
+    net_slide_training <- max(slide_training, n_training) + n_training_pad
   } else {
-    start_date <- min(archive$DT$time_value) + slide_training_pad
+    n_training <- Inf
+    net_slide_training <- slide_training + n_training_pad
+  }
+  # restrict the dataset to areas where training is possible
+  start_date <- min(archive$DT$time_value) + net_slide_training
+  if (slide_training < Inf) {
+    start_date <- min(archive$DT$time_value) + slide_training + n_training_pad
+  } else {
+    start_date <- min(archive$DT$time_value) + n_training_pad
   }
   end_date <- max(archive$DT$time_value) - forecaster_args$ahead
   valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = 1)

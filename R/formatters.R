@@ -4,6 +4,10 @@
 #' `(geo_value, forecast_date, target_end_date, quantile, value)`
 #' in that particular order. It does not include the point estimate as a
 #'   separate row.
+#' @param pred the output as produced by epipredict
+#' @param true_forecast_date the actual date from which the model is
+#'   making the forecast, rather than the last day of available data
+#' @param target_end_date the date of the prediction
 #' @import dplyr epipredict
 #' @importFrom magrittr %>% %<>%
 #' @export
@@ -25,8 +29,13 @@ format_storage <- function(pred, true_forecast_date, target_end_date) {
 #'   forecast_date, and target_date
 #' It does not assume that the forecast_date is accurate
 #' The end result
+#' @param pred the output as produced by epipredict
+#' @param true_forecast_date the actual date from which the model is
+#'   making the forecast, rather than the last day of available data
+#' @param target_end_date the date of the prediction
+#' @param levels the quantile levels
 #' @import dplyr
-format_covidhub <- function(pred, true_forecast_date, levels, quantiles) {
+format_covidhub <- function(pred, true_forecast_date, target_end_date, levels) {
   pred %<>%
     group_by(forecast_date, geo_value, target_date) %>%
     rename(target_end_date = target_date) %>%

@@ -6,6 +6,15 @@
 \usage{
 run_workflow_and_format(preproc, postproc, trainer, epi_data)
 }
+\arguments{
+\item{preproc}{the preprocessing steps}
+
+\item{postproc}{the postprocessing frosting}
+
+\item{trainer}{the parsnip trainer}
+
+\item{epi_data}{the actual epi_df to train on}
+}
 \description{
 helper function to run a epipredict model and reformat to hub format
 }

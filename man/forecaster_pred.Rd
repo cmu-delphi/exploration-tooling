@@ -9,38 +9,36 @@ forecaster_pred(
   outcome,
   extra_sources = "",
   forecaster = scaled_pop,
-  slide_training = Inf,
-  slide_training_pad = 20L,
-  n_training = 32,
-  n_training_pad = 0,
+  slide_training = 0,
+  n_training_pad = 5,
   forecaster_args = list(),
   forecaster_args_names = list()
 )
 }
 \arguments{
-\item{data}{as per batchtools}
+\item{data}{the epi_df object}
+
+\item{outcome}{the name of the target column}
+
+\item{extra_sources}{any extra columns used for prediction that aren't
+the target}
 
 \item{forecaster}{a function that does the actual forecasting for a given
-day. See \code{exampleSpec.R} for an example function and its documentation for
-the general parameter requirements.}
+day. See \code{exampleSpec.R} for an example function and its documentation
+for the general parameter requirements.}
 
-\item{slide_training}{a required parameter that governs the window size that
-epix_slide hands off to epipredict. Note that}
+\item{slide_training}{a required parameter that governs how much data to
+exclude before starting the evaluation.}
 
-\item{slide_training_pad}{a required parameter that determines how much extra
-to hand-off to guarantee that at least \code{slide_training} examples are passed
-on (e.g. b/c of missing data).}
+\item{n_training_pad}{a required parameter that determines how many extra
+samples for epix_slide to hand to the forecaster to guarantee that at
+least \code{ntraining} examples are available to the forecaster.}
 
-\item{job}{as per batchtools}
+\item{forecaster_args}{the list of arguments to the forecaster; it must
+contain \code{ahead}}
 
-\item{instance}{as per batchtools}
-
-\item{trainer}{should be given as a string, which will be converted to a
-function.}
-
-\item{ahead}{a necessary parameter to specify an experiment}
-
-\item{...}{any extra parameters the user has defined for forecaster.}
+\item{forecaster_args_names}{a bit of a hack around targets, it contains
+the names of the \code{forecaster_args}.}
 }
 \description{
 a wrapper that turns a forecaster, parameters, data
