@@ -1,4 +1,6 @@
 #' the quantile levels used by the covidhub repository
+#' @param type either standard or inc_case, with inc_case being a small subset of the standard
+#' @export
 covidhub_probs <- function(type = c("standard", "inc_case")) {
   type <- match.arg(type)
   switch(type,
@@ -12,6 +14,8 @@ covidhub_probs <- function(type = c("standard", "inc_case")) {
 #' @description
 #' feed a character represenation of the column contents through md5 and reencoding in base64 to get short unique hashes
 #' make sure that there are no columns with `NA`'s
+#' @param df the df to add a column to. everything should be convertable to a string
+#' @param name_length the number of base64 characters to keep from the md5 encoding
 #' @import openssl
 #' @export
 add_id <- function(df, name_length = 5) {

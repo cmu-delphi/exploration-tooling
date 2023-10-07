@@ -13,6 +13,8 @@ arx_postprocess(
 )
 }
 \arguments{
+\item{postproc}{an \code{\link[epipredict:frosting]{epipredict::frosting}}}
+
 \item{trainer}{the trainer used (e.g. linear_reg() or quantile_reg())}
 
 \item{args_list}{an \code{\link[epipredict:arx_args_list]{epipredict::arx_args_list}}}
@@ -24,8 +26,6 @@ time_value present in the data}
 \item{target_date}{the date about which the forecast was made. defaults to
 the default of \code{layer_add_target_date}, which is either
 \code{forecast_date+ahead}, or the \verb{max time_value + ahead}}
-
-\item{frost}{an \code{\link[epipredict:frosting]{epipredict::frosting}}}
 }
 \description{
 add the default layers for arx_forecaster

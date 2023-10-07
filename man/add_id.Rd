@@ -6,6 +6,11 @@
 \usage{
 add_id(df, name_length = 5)
 }
+\arguments{
+\item{df}{the df to add a column to. everything should be convertable to a string}
+
+\item{name_length}{the number of base64 characters to keep from the md5 encoding}
+}
 \description{
 feed a character represenation of the column contents through md5 and reencoding in base64 to get short unique hashes
 make sure that there are no columns with \code{NA}'s

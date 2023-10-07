@@ -4,6 +4,22 @@
 # Choose how to execute the pipeline below.
 # See https://books.ropensci.org/targets/hpc.html
 # to learn about your options.
+readline_wrapper <- function(msg = "which project would you like to run?
+1. covid_hosp_explore
+2. flu_hosp_explore
+3. covid_hosp_prod
+4. flu_hosp_prod
+5. forecaster_testing
+input: ") {
+  if (interactive()) {
+    txt <- readline(msg)
+  } else {
+    cat(msg)
+    txt <- readLines("stdin", n = 1)
+  }
+  return(txt)
+}
+userin <- readline_wrapper()
 
 # renv::init()
 renv::restore()
@@ -13,6 +29,12 @@ suppressMessages({
   library(shiny)
 })
 
+if (userin == "1") TAR_PROJECT <- "covid_hosp_explore"
+if (userin == "2") TAR_PROJECT <- "flu_hosp_explore"
+if (userin == "3") TAR_PROJECT <- "covid_hosp_prod"
+if (userin == "4") TAR_PROJECT <- "flu_hosp_prod"
+if (userin == "5") TAR_PROJECT <- "forecaster_testing"
+Sys.setenv(TAR_PROJECT = TAR_PROJECT)
 
 tar_manifest()
 tar_make()

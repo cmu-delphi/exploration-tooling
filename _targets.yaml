@@ -1,0 +1,20 @@
+covid_hosp_explore:
+  script: covid_hosp_explore.R
+  store: covid_hosp_explore
+  use_crew: yes
+flu_hosp_explore:
+  script: flu_hosp_explore.R
+  store: flu_hosp_explore
+  use_crew: yes
+flu_hosp_prod:
+  script: flu_hosp_prod.R
+  store: flu_hosp_prod
+  use_crew: yes
+covid_hosp_prod:
+  script: covid_hosp_prod.R
+  store: covid_hosp_prod
+  use_crew: yes
+forecaster_testing:
+  script: forecaster_testing.R
+  store: forecaster_testing
+  use_crew: no

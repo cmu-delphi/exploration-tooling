@@ -6,6 +6,9 @@
 \usage{
 covidhub_probs(type = c("standard", "inc_case"))
 }
+\arguments{
+\item{type}{either standard or inc_case, with inc_case being a small subset of the standard}
+}
 \description{
 the quantile levels used by the covidhub repository
 }

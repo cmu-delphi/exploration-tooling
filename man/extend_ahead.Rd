@@ -6,6 +6,11 @@
 \usage{
 extend_ahead(epi_data, ahead)
 }
+\arguments{
+\item{epi_data}{the dataset}
+
+\item{ahead}{how many units (depending on the dataset, normally days or weeks) to predict ahead of the \code{forecast_date}}
+}
 \description{
 instead of filling in new values, this just extends how far into the future
 the model is predicting. For example, if the last data is on the 3rd, the

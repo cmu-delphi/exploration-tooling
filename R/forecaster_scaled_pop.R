@@ -13,14 +13,14 @@
 #' 2. then define any post-epipredict steps (same)
 #' 3. then create the forecaster as a function, which must have the following
 #' arguments:
-#' @param epi_df the actual data used
+#' @param epi_data the actual data used
 #' @param outcome the name of the target variable
 #' @param extra_sources the name of any extra columns to use. This list could be
 #'   empty
 #' @param ahead (this is relative to the `as_of` field of the `epi_df`, which is
 #'   likely *not* the same as the `ahead` used by epipredict, which is relative
 #'   to the max time value of the `epi_df`. how to handle this is a modelling
-#'   question left up to each forecaster; see [latency_adjusting.R] for the
+#'   question left up to each forecaster; see latency_adjusting.R for the
 #'   existing examples)
 #' @param pop_scaling an example extra parameter unique to this forecaster
 #' @param trainer an example extra parameter that is fairly common
@@ -32,10 +32,15 @@
 #'   should be ones that will store well in a data.table; if you need more
 #'   complicated parameters, it is better to store them in separate files, and
 #'   use the filename as the parameter.
-#' @seealso some utilities for making forecasters: [format_storage], [perform_sanity_checks]
-#' @import magrittr recipes epipredict
+#' @param levels The quantile levels to predict. Defaults to those required by
+#'   covidhub.
+#' @seealso some utilities for making forecasters: [format_storage],
+#'   [perform_sanity_checks]
+#' @import recipes epipredict
+#' @importFrom magrittr %>% %<>%
 #' @importFrom epipredict epi_recipe step_population_scaling
 #' @importFrom tibble tibble
+#' @importFrom lubridate Date
 #' @export
 scaled_pop <- function(epi_data,
                        outcome,

@@ -6,6 +6,11 @@
 \usage{
 locf_latency(epi_data, ahead)
 }
+\arguments{
+\item{epi_data}{the dataset}
+
+\item{ahead}{how many units (depending on the dataset, normally days or weeks) to predict ahead of the \code{forecast_date}}
+}
 \description{
 instead of modifying \code{ahead}, interpolate \code{epi_data} to contain last
 observation carried forward
