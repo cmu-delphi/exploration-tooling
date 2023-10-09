@@ -39,7 +39,7 @@ load_forecast_data_raw <- function(forecaster) {
     # rename(wis = wis_count_scale, ae = ae_count_scale) %>%
     mutate(
       ahead = as.integer(target_end_date - forecast_date),
-      forecaster = forecaster
+      forecaster = names(forecaster_options[forecaster_options == forecaster])
     ) %>%
     {
       .
