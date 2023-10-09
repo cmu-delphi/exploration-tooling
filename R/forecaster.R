@@ -162,8 +162,8 @@ forecaster_pred <- function(data,
   if (length(forecaster_args) > 0) {
     names(forecaster_args) <- forecaster_args_names
   }
-  if (!is.numeric(forecaster_args$n_training)) {
-    n_training <- forecaster_args$n_training
+  if (!is.numeric(forecaster_args$n_training) && !is.null(forecaster_args$n_training)) {
+    n_training <- as.numeric(forecaster_args$n_training)
     net_slide_training <- max(slide_training, n_training) + n_training_pad
   } else {
     n_training <- Inf
@@ -178,7 +178,12 @@ forecaster_pred <- function(data,
   }
   end_date <- max(archive$DT$time_value) - forecaster_args$ahead
   valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = 1)
+
   # first generate the forecasts
+  before <- n_training + n_training_pad - 1
+  ## TODO epix_slide doesn't support infinite `before`
+  ## https://github.com/cmu-delphi/epiprocess/issues/219
+  if (before == Inf) before <- 365L * 10000
   res <- epix_slide(archive,
     function(data, gk, rtv, ...) {
       do.call(
@@ -193,7 +198,7 @@ forecaster_pred <- function(data,
         )
       )
     },
-    before = n_training + n_training_pad - 1,
+    before = before,
     ref_time_values = valid_predict_dates,
   )
   res %<>% select(-time_value)
