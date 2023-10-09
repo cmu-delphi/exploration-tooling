@@ -4,14 +4,14 @@
 \alias{add_id}
 \title{add a unique id based on the column contents}
 \usage{
-add_id(df, name_length = 5)
+add_id(df, n_adj = 2)
 }
 \arguments{
 \item{df}{the df to add a column to. everything should be convertable to a string}
 
-\item{name_length}{the number of base64 characters to keep from the md5 encoding}
+\item{n_adj}{the number of adjectives to use; default of 2.}
 }
 \description{
-feed a character represenation of the column contents through md5 and reencoding in base64 to get short unique hashes
-make sure that there are no columns with \code{NA}'s
+create a string of \code{n_adj} that is a hash of the parameters
+and append the \code{ahead} at the end.
 }

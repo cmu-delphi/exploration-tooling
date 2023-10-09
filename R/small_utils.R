@@ -12,17 +12,24 @@ covidhub_probs <- function(type = c("standard", "inc_case")) {
 
 #' add a unique id based on the column contents
 #' @description
-#' feed a character represenation of the column contents through md5 and reencoding in base64 to get short unique hashes
-#' make sure that there are no columns with `NA`'s
+#' create a string of `n_adj` that is a hash of the parameters
+#' and append the `ahead` at the end.
 #' @param df the df to add a column to. everything should be convertable to a string
-#' @param name_length the number of base64 characters to keep from the md5 encoding
-#' @import openssl
+#' @param n_adj the number of adjectives to use; default of 2.
+#' @import openssl dplyr
+#' @importFrom cli hash_animal
 #' @export
-add_id <- function(df, name_length = 5) {
-  df %<>%
+add_id <- function(df, n_adj = 2) {
+  stringified <- df %>%
+    select(-ahead) %>%
     rowwise() %>%
-    mutate(id = md5(paste(across(everything()), collapse = ""))) %>% # make a full md5 hash
-    mutate(id = openssl::base64_encode((id))) %>%
-    mutate(id = substr(id, 1, name_length)) # only keep first  `name_length` characters
+    mutate(id = paste(across(everything()), collapse = ""), .keep="none") %>%
+    mutate(id = hash_animal(id, n_adj = n_adj)$words) %>%
+    mutate(id = paste(id[1:n_adj], sep="", collapse = " "))
+  df %<>%
+    mutate(id = stringified) %>%
+    rowwise() %>%
+    mutate(id = paste(id, ahead, collapse = " ")) %>%
+    ungroup()
   return(df)
 }
