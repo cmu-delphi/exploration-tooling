@@ -55,104 +55,128 @@ param_grid <- bind_rows(map(grids, add_id)) %>% relocate(id, .after = last_col()
 
 forecaster_param_grids <- make_target_param_grid(param_grid)
 
-data <- list(
+big_example <- tar_read(joined_archive_data_2022)
+big_example$DT
+tribble(~geo_value, ~time_value, ~version, ~a, ~b, )
+synth_mean <- 25
+synth_sd <- 2
+set.seed(12345)
+simple_dates <- seq(as.Date("2012-01-01"), by = "day", length.out = 50)
+# flatline data in a single state with no versioning confusion
+constant <- as_epi_archive(tibble(
+  geo_value = "g1",
+  time_value = simple_dates,
+  version = simple_dates,
+  a = synth_mean
+))
+
+forecaster_pred(
+  data = constant,
+  outcome = "hhs",
+  extra_sources = "",
+  forecaster = forecaster_param_grids$forecaster[[1]],
+  slide_training = Inf,
+  slide_training_pad = 30L,
+  forecaster_args = forecaster_param_grids$params[[1]],
+  forecaster_args_names = forecaster_param_grids$param_namess[[1]]
+)
+
+# flatline data in a single state, but with white noise
+white_noise <- as_epi_archive(tibble(
+  geo_value = "g1",
+  time_value = simple_dates,
+  version = simple_dates,
+  a = rnorm(length(simple_dates), mean = synth_mean, sd = synth_sd)
+))
+# flatline data in a single state, but with poisson noise
+poisson_noise <- as_epi_archive(tibble(
+  geo_value = "g1",
+  time_value = simple_dates,
+  version = simple_dates,
+  a = rpois(length(simple_dates), synth_mean)
+))
+x1 <- as_epi_archive(
+  data.table::as.data.table(
+    tibble::tribble(
+      ~geo_value, ~time_value, ~version, ~x_value,
+      "g1", simple_dates, simple_dates, 15,
+    ) %>%
+      tidyr::unchop(c(version, x_value)) %>%
+      dplyr::mutate(dplyr::across(c(x_value), ~ dplyr::if_else(grepl("NA", .x), NA_character_, .x)))
+  )
+)
+# a missing state (the last version is at the very end)
+missing_state <- as_epi_archive(rbind(
+  constant$DT,
+  tibble(
+    geo_value = "g2",
+    time_value = simple_dates,
+    version = max(simple_dates) + 3,
+    a = synth_mean
+  )
+))
+# side data has randomly NA values that don't get updated
+missing_side_data <- as_epi_archive(mutate(
+  constant$DT,
+  b = sample(c(synth_mean / 5, NA),
+    nrow(constant$DT),
+    replace = TRUE
+  )
+))
+# constant, but version is delayed
+delayed <- as_epi_archive(tibble(
+  geo_value = "g1",
+  time_value = simple_dates,
+  version = 5 + simple_dates,
+  a = synth_mean
+))
+
+data_grid <- tibble(ex_dataset = list(constant, white_noise, poisson_noise, missing_state, missing_side_data, delayed))
+expand_grid(forecaster_param_grids, data_grid)
+data <- tar_map(
+  values = forecaster_param_grids,
+  names = id,
+  unlist = FALSE,
   tar_target(
-    name = hhs_evaluation_data,
+    name = test_missing_state,
     command = {
-      epidatr::pub_covidcast(
-        source = "hhs",
-        signals = "confirmed_admissions_covid_1d",
-        geo_type = "state",
-        time_type = "day",
-        geo_values = "*",
-        time_values = epirange(from = "2020-01-01", to = "2024-01-01"),
-      ) %>%
-        rename(
-          actual = value,
-          target_end_date = time_value
-        )
+      missing_state
     }
   ),
   tar_target(
-    name = hhs_archive_data_2022,
+    name = test_missing_side_data,
     command = {
-      epidatr::pub_covidcast(
-        source = "hhs",
-        signals = "confirmed_admissions_covid_1d",
-        geo_type = "state",
-        time_type = "day",
-        geo_values = "*",
-        time_values = epirange(from = "20220101", to = "20220401"),
-        issues = "*",
-        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
-      )
+      missing_side_data
     }
   ),
   tar_target(
-    name = chng_archive_data_2022,
+    name = test_delayed,
     command = {
-      epidatr::pub_covidcast(
-        source = "chng",
-        signals = "smoothed_adj_outpatient_covid",
-        geo_type = "state",
-        time_type = "day",
-        geo_values = "*",
-        time_values = epirange(from = "20220101", to = "20220401"),
-        issues = "*",
-        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
-      )
+      delayed
     }
   ),
   tar_target(
-    name = joined_archive_data_2022,
+    name = test_poisson_noise,
     command = {
-      hhs_archive_data_2022 %<>%
-        select(geo_value, time_value, value, issue) %>%
-        rename("hhs" := value) %>%
-        rename(version = issue) %>%
-        as_epi_archive(
-          geo_type = "state",
-          time_type = "day",
-          compactify = TRUE
-        )
-      chng_archive_data_2022 %<>%
-        select(geo_value, time_value, value, issue) %>%
-        rename("chng" := value) %>%
-        rename(version = issue) %>%
-        as_epi_archive(
-          geo_type = "state",
-          time_type = "day",
-          compactify = TRUE
-        )
-      epix_merge(hhs_archive_data_2022, chng_archive_data_2022, sync = "locf")
+      poisson_noise
     }
   ),
   tar_target(
-    name = hhs_latest_data_2022,
+    name = test_poisson_noise,
     command = {
-      epidatr::pub_covidcast(
-        source = "hhs",
-        signals = "confirmed_admissions_covid_1d",
-        geo_type = "state",
-        time_type = "day",
-        geo_values = "*",
-        time_values = epirange(from = "20220101", to = "20220401"),
-        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
-      )
+      poisson_noise
     }
   ),
   tar_target(
-    name = chng_latest_data_2022,
+    name = test_white_noise,
     command = {
-      epidatr::pub_covidcast(
-        source = "chng",
-        signals = "smoothed_adj_outpatient_covid",
-        geo_type = "state",
-        time_type = "day",
-        geo_values = "*",
-        time_values = epirange(from = "20220101", to = "20220401"),
-        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
-      )
+      white_noise
+    }
+  ),
+  tar_target(
+    name = test_constant,
+    command = {
+      constant
     }
   )
 )
@@ -190,4 +214,12 @@ forecasts_and_scores <- tar_map(
       )
     }
   )
+)
+
+list(
+  data,
+  forecasters,
+  forecasts_and_scores,
+  ensemble_forecast,
+  notebooks
 )
