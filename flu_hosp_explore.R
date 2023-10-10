@@ -55,7 +55,9 @@ grids <- list(
 # expand_grid instead
 param_grid <- bind_rows(map(grids, add_id)) %>% relocate(id, .after = last_col())
 
-forecaster_param_grids <- make_target_param_grid(param_grid)
+forecaster_param_grids <- make_target_param_grid(param_grid) %>%
+  ## TODO This forecaster is hanging. Filter it out for now.
+  filter(id != "necessary endless 5")
 
 # not actually used downstream, this is for lookup during plotting and human evaluation
 forecasters <- list(
