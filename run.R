@@ -54,4 +54,13 @@ forecaster_options <- setNames(
   paste0("score_", gsub(" ", ".", forecaster_options)),
   forecaster_options
 )
+
+# Add ensembles
+ensemble_options <- tar_read(ensembles)[["a"]]
+ensemble_options <- setNames(
+  paste0("ensemble_score_", ensemble_options),
+  paste0("ensemble score ", ensemble_options)
+)
+
+forecaster_options <- c(ensemble_options, forecaster_options)
 runApp(here::here("app.R"), port=3838)

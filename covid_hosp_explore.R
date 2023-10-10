@@ -70,11 +70,22 @@ forecasts_and_scores <- tar_map(
   )
 )
 
+ensemble_keys <- list(a = c(300, 15))
+# not actually used downstream, this is for lookup during plotting and human evaluation
+ensembles <- list(
+  tar_target(
+    name = ensembles,
+    command = {
+      ensemble_keys
+    }
+  )
+)
+
 # The combine approach below is taken from the manual:
 #   https://books.ropensci.org/targets/static.html#combine
 # The key is that the map above has unlist = FALSE.
 ensemble_forecast <- tar_map(
-  values = list(a = c(300, 15)),
+  values = ensemble_keys,
   tar_combine(
     name = ensemble_forecast,
     # TODO: Needs a lookup table to select the right forecasters
@@ -124,6 +135,7 @@ list(
   data,
   forecasters,
   forecasts_and_scores,
+  ensembles,
   ensemble_forecast,
   notebooks
 )
