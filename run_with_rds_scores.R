@@ -38,7 +38,8 @@ parser <- add_argument(
   help="path to RDS score file"
 )
 parser <- add_argument(
-  parser, arg="--cache_path", default = "cache",
+  parser, arg="--cache_path",
+  default = paste0(gsub("-", "", Sys.Date(), fixed=TRUE), "_cache"),
   help="path to dir in which to store by-forecaster scores"
 )
 args = parse_args(parser)
