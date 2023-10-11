@@ -32,10 +32,14 @@ suppressPackageStartupMessages({
   library(dplyr)
 })
 
-parser <- arg_parser(description='Run shiny app with a specified RDS score file')
+parser <- arg_parser(description="Run shiny app with a specified RDS score file")
 parser <- add_argument(
   parser, arg="score_path",
   help="path to RDS score file"
+)
+parser <- add_argument(
+  parser, arg="--cache_path", default = "cache",
+  help="path to dir in which to store by-forecaster scores"
 )
 args = parse_args(parser)
 
@@ -49,10 +53,11 @@ EXTERNAL_DATA <- TRUE
 scores <- readRDS(args$score_path)
 forecaster_options <- unique(scores$forecaster)
 
-# Save score for each forecaster separately to local cache dir.
-OUTPUT_DIR <- "cache"
+# Create local dir in which to store by-forecaster scores
+OUTPUT_DIR <- args$cache_path
 if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR)
 
+# Save score for each forecaster separately to local cache dir.
 invisible(lapply(group_split(scores, forecaster), function(one_forecaster) {
   forecaster <- one_forecaster$forecaster[1L]
   saveRDS(one_forecaster, file.path(OUTPUT_DIR, paste0(forecaster, ".RDS")))
