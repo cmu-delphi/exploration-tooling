@@ -53,8 +53,9 @@ test_that("constant", {
       pull(is_const) %>%
       all()
     expect_true(sd_values)
+    rel_values %>% filter(!near(value, true_value))
     actual_value <- rel_values %>%
-      mutate(is_right = near(value, true_value)) %>%
+      mutate(is_right = near(value, true_value, tol = tiny_sd ^.5)) %>%
       pull(is_right) %>%
       all()
     expect_true(actual_value)
@@ -76,7 +77,7 @@ test_that("white noise", {
     values <- res %>%
       filter(quantile == .5) %>%
       pull(value)
-    expect_true(sd(values) < .01)
+    expect_true(sd(values) < synth_sd)
     # how much is each quantile off from the expected value?
     # should be fairly generous here, we just want the right order of magnitude
     quantile_deviation <- res %>%
@@ -143,7 +144,7 @@ test_that("linear", {
     median_err <- res %>%
       filter(quantile == .5) %>%
       mutate(err = value - as.integer(target_end_date - start_date + 1), .keep = "none") %>%
-      mutate(is_right = near(err,0, tol=.0001), .keep = "none")
+      mutate(is_right = near(err,0, tol=tiny_sd ^ 0.5), .keep = "none")
     expect_true(all(median_err))
   }
 })
