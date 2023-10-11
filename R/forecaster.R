@@ -229,7 +229,7 @@ forecaster_pred <- function(data,
 
   # append the truth data
   true_value <- archive$as_of(archive$versions_end) %>%
-    select(geo_value, time_value, outcome) %>%
+    select(geo_value, time_value, !!outcome) %>%
     rename(true_value = !!outcome)
   res %<>%
     inner_join(true_value,
