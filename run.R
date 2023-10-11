@@ -5,11 +5,11 @@
 # See https://books.ropensci.org/targets/hpc.html
 # to learn about your options.
 readline_wrapper <- function(msg = "which project would you like to run?
-1. covid_hosp_explore
-2. flu_hosp_explore
-3. covid_hosp_prod
-4. flu_hosp_prod
-5. forecaster_testing
+1: covid_hosp_explore
+2: flu_hosp_explore
+3: covid_hosp_prod
+4: flu_hosp_prod
+5: forecaster_testing
 input: ") {
   if (interactive()) {
     txt <- readline(msg)
@@ -29,11 +29,16 @@ suppressMessages({
   library(shiny)
 })
 
-if (userin == "1") TAR_PROJECT <- "covid_hosp_explore"
-if (userin == "2") TAR_PROJECT <- "flu_hosp_explore"
-if (userin == "3") TAR_PROJECT <- "covid_hosp_prod"
-if (userin == "4") TAR_PROJECT <- "flu_hosp_prod"
-if (userin == "5") TAR_PROJECT <- "forecaster_testing"
+TAR_PROJECT <- switch(
+  as.character(userin),
+  "1" = "covid_hosp_explore",
+  "2" = "flu_hosp_explore",
+  "3" = "covid_hosp_prod",
+  "4" = "flu_hosp_prod",
+  "5" = "forecaster_testing",
+  # else
+  stop("selection `", userin, "` is invalid")
+)
 Sys.setenv(TAR_PROJECT = TAR_PROJECT)
 
 # targets needs the output dir to already exist.
