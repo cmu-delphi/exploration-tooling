@@ -53,6 +53,7 @@ tar_make()
 
 # Prevent functions defined in /R dir from being loaded unnecessarily
 options(shiny.autoload.r=FALSE)
+EXTERNAL_DATA <- FALSE
 ## TODO: Alternately, create and save an object in `_targets.R`
 ## that lists all objs of interest and `tar_read` that in.
 forecaster_options <- tar_objects(names=contains("score"))

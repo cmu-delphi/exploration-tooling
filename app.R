@@ -25,25 +25,28 @@ cache <- getShinyOption("cache")
 # Load a single score file of `targets` output. Do some scaling and renaming
 # of error scores. Calculate `ahead`s.
 load_forecast_data_raw <- function(forecaster) {
-  inject(tar_read(!!forecaster)) %>%
-    ## TODO Only display raw error scores for now. We'd want to make sure we
-    ## have scores available both raw and normalized by population, but that
-    ## depends on the units our forecasts use, and if all models are
-    ## population-normalized or just some.
-    # left_join(POPULATION_DF, by = "geo_value") %>%
-    # mutate(across(c(wis, ae), list(
-    #   "count_scale" = function(x) x / 100e3 * population,
-    #   "per_100k" = identity
-    # ))) %>%
-    # select(-wis, -ae) %>%
-    # rename(wis = wis_count_scale, ae = ae_count_scale) %>%
-    mutate(
-      ahead = as.integer(target_end_date - forecast_date),
-      forecaster = forecaster
-    ) %>%
-    {
-      .
-    }
+  switch(EXTERNAL_DATA,
+         "TRUE" = readRDS(file.path(OUTPUT_DIR, paste0(forecaster, ".RDS"))),
+         "FALSE" = inject(tar_read(!!forecaster)) %>%
+           ## TODO Only display raw error scores for now. We'd want to make sure we
+           ## have scores available both raw and normalized by population, but that
+           ## depends on the units our forecasts use, and if all models are
+           ## population-normalized or just some.
+           # left_join(POPULATION_DF, by = "geo_value") %>%
+           # mutate(across(c(wis, ae), list(
+           #   "count_scale" = function(x) x / 100e3 * population,
+           #   "per_100k" = identity
+           # ))) %>%
+           # select(-wis, -ae) %>%
+           # rename(wis = wis_count_scale, ae = ae_count_scale) %>%
+         mutate(
+           ahead = as.integer(target_end_date - forecast_date),
+           forecaster = forecaster
+         ) %>%
+           {
+             .
+           }
+  )
 }
 
 # Have loading function use the cache.
@@ -166,7 +169,9 @@ shinyApp(
           ),
           na.rm = TRUE
         )) %>>%
-        # Use scatterplot or lines depending on the x var
+        # Use scatterplot or lines depending on the x var. Also, if the range
+        # of obs by forecaster is too wide, plot using points instead of
+        # lines.
         {
           if (input$x_var %in% c(input$facet_vars, "geo_value", "forecaster", "ahead") || range(plot.df[["n"]]) %>>% {
             .[[2L]] > 1.2 * .[[1L]]
