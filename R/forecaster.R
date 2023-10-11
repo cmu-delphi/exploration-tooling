@@ -98,7 +98,6 @@ arx_postprocess <- function(postproc,
                             target_date = NULL) {
   postproc %<>% layer_predict()
   if (inherits(trainer, "quantile_reg")) {
-
     postproc %<>% layer_quantile_distn(levels = args_list$levels) %>% layer_point_from_distn()
   } else {
     postproc %<>% layer_residual_quantiles(
@@ -174,6 +173,14 @@ forecaster_pred <- function(data,
   if (length(forecaster_args) > 0) {
     names(forecaster_args) <- forecaster_args_names
   }
+  if (is.null(forecaster_args$ahead)) {
+    cli::cli_abort(
+      c(
+        "exploration-tooling error: forecaster_pred needs some value for ahead."
+      ),
+      class = "explorationToolingError"
+    )
+  }
   if (!is.numeric(forecaster_args$n_training) && !is.null(forecaster_args$n_training)) {
     n_training <- as.numeric(forecaster_args$n_training)
     net_slide_training <- max(slide_training, n_training) + n_training_pad
@@ -183,11 +190,6 @@ forecaster_pred <- function(data,
   }
   # restrict the dataset to areas where training is possible
   start_date <- min(archive$DT$time_value) + net_slide_training
-  if (slide_training < Inf) {
-    start_date <- min(archive$DT$time_value) + slide_training + n_training_pad
-  } else {
-    start_date <- min(archive$DT$time_value) + n_training_pad
-  }
   end_date <- max(archive$DT$time_value) - forecaster_args$ahead
   valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = 1)
 
