@@ -7,6 +7,14 @@
 confirm_insufficient_data(epi_data, ahead, args_input, buffer = 9)
 }
 \arguments{
+\item{epi_data}{the input data}
+
+\item{ahead}{the effective ahead; may be infinite if there isn't enough data.}
+
+\item{args_input}{the input as supplied to \code{forecaster_pred}; lags is the
+important argument, which may or may not be defined, with the default
+coming from \code{arx_args_list}}
+
 \item{buffer}{how many training data to insist on having (e.g. if \code{buffer=1},
 this trains on one sample; the default is set so that \code{linear_reg} isn't
 rank deficient)}
