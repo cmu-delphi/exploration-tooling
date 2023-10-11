@@ -67,6 +67,16 @@ shinyApp(
             choices = forecaster_options,
             multiple = TRUE
           ),
+          selectInput("baseline",
+            "Baseline:",
+            choices = forecaster_options,
+            multiple = FALSE
+          ),
+          checkboxInput(
+            "scale_by_baseline",
+            "Scale by baseline",
+            value = FALSE,
+          ),
           radioButtons(
             "selected_metric",
             "Metric:",
