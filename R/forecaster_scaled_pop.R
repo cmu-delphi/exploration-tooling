@@ -59,11 +59,8 @@ scaled_pop <- function(epi_data,
   epi_data <- epidataAhead[[1]]
   effective_ahead <- epidataAhead[[2]]
   args_input <- list(...)
-  args_input[["ahead"]] <- effective_ahead
-  args_input[["levels"]] <- levels
-  args_list <- do.call(arx_args_list, args_input)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
-  if (confirm_insufficient_data(epi_data, effective_ahead, args_list)) {
+  if (confirm_insufficient_data(epi_data, effective_ahead, args_input)) {
     null_result <- tibble(
       geo_value = character(),
       forecast_date = Date(),
@@ -73,6 +70,9 @@ scaled_pop <- function(epi_data,
     )
     return(null_result)
   }
+  args_input[["ahead"]] <- effective_ahead
+  args_input[["levels"]] <- levels
+  args_list <- do.call(arx_args_list, args_input)
   # if you want to ignore extra_sources, setting predictors is the way to do it
   predictors <- c(outcome, extra_sources)
   argsPredictorsTrainer <- perform_sanity_checks(epi_data, outcome, predictors, trainer, args_list)

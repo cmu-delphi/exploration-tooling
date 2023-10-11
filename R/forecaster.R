@@ -45,11 +45,16 @@ perform_sanity_checks <- function(epi_data,
 #' epipredict is a little bit fragile about having enough data to train; we want to be able to return a null result rather than error out; this check say to return a null
 #' @param buffer how many training data to insist on having (e.g. if `buffer=1`, this trains on one sample; the default is set so that `linear_reg` isn't rank deficient)
 #' @export
-confirm_insufficient_data <- function(epi_data, ahead, args_list, buffer = 9) {
-  lags_aheads_enough <- as.integer(max(epi_data$time_value) - min(epi_data$time_value)) <=
-    max(args_list$lags) + ahead + 9
+confirm_insufficient_data <- function(epi_data, ahead, args_input, buffer = 9) {
+  if (!is.null(args_input$lags)) {
+    lag_max <- max(args_input$lags)
+  } else {
+    lag_max <- 14
+  }
   return(
-    is.infinite(ahead) || lags_aheads_enough
+    is.infinite(ahead) ||
+      as.integer(max(epi_data$time_value) - min(epi_data$time_value)) <=
+        lag_max + ahead + 9
   )
 }
 # TODO replace with `step_arx_forecaster`
