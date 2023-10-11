@@ -88,12 +88,10 @@ shinyApp(
             choices = c("forecaster", "ahead", "geo_value"),
             multiple = TRUE
           ),
-          radioButtons("facets_share_scale",
-            "Share y scale between subplots:",
-            c(
-              "Yes" = "fixed",
-              "No" = "free_y"
-            )
+          checkboxInput(
+            "facets_share_scale",
+            "Share y scale between subplots",
+            value = TRUE,
           ),
           sliderInput("selected_forecast_date_range",
             "Forecast date range:",
@@ -180,7 +178,9 @@ shinyApp(
         `+`(if (length(input$facet_vars) == 0L) {
           theme()
         } else if (length(input$facet_vars) == 1L) {
-          facet_wrap(input$facet_vars, scales = input$facets_share_scale)
+          facet_wrap(input$facet_vars, scales = switch(
+            input$facets_share_scale, "TRUE" = "fixed", "FALSE" = "free_y"
+          ))
         } else {
           facet_grid(as.formula(paste0(input$facet_vars[[1L]], " ~ ", paste(collapse = " + ", input$facet_vars[-1L]))), scales = input$facets_share_scale)
         }) %>>%
