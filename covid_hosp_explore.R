@@ -71,7 +71,6 @@ forecasts_and_scores <- tar_map(
 )
 
 ensemble_keys <- list(a = c(300, 15))
-# not actually used downstream, this is for lookup during plotting and human evaluation
 ensembles <- list(
   tar_target(
     name = ensembles,
