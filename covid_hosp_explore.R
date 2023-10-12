@@ -121,21 +121,11 @@ ensemble_forecast <- tar_map(
     }
   )
 )
-notebooks <- list(
-  tar_render(
-    name = report,
-    path = "extras/report.Rmd",
-    params = list(
-      exclude_geos = c("as", "gu", "mp", "vi")
-    )
-  )
-)
 
 list(
   data,
   forecasters,
   forecasts_and_scores,
   ensembles,
-  ensemble_forecast,
-  notebooks
+  ensemble_forecast
 )
