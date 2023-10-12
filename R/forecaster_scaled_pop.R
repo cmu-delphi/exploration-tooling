@@ -45,7 +45,7 @@
 scaled_pop <- function(epi_data,
                        outcome,
                        extra_sources = "",
-                       ahead=1,
+                       ahead = 1,
                        pop_scaling = TRUE,
                        trainer = parsnip::linear_reg(),
                        levels = covidhub_probs(),

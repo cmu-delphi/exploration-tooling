@@ -18,7 +18,7 @@ format_storage <- function(pred, true_forecast_date, target_end_date) {
       .dstn = nested_quantiles(.pred_distn)
     ) %>%
     unnest(.dstn) %>%
-    select(-.pred_distn, -.pred, -time_value) %>%
+    select(-any_of(c(".pred_distn", ".pred", "time_value"))) %>%
     rename(quantile = tau, value = q, target_end_date = target_date) %>%
     relocate(geo_value, forecast_date, target_end_date, quantile, value)
 }

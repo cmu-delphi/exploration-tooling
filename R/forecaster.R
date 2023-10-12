@@ -123,8 +123,7 @@ arx_postprocess <- function(postproc,
     postproc %<>% layer_threshold(dplyr::starts_with(".pred"))
   }
 
-  postproc %<>% layer_naomit(dplyr::starts_with(".pred"))
-  postproc %<>% layer_add_forecast_date(forecast_date = forecast_date) %>%
+  postproc %<>% layer_naomit(dplyr::starts_with(".pred")) %>%
     layer_add_target_date(target_date = target_date)
   return(postproc)
 }
