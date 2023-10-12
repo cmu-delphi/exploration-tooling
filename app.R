@@ -153,14 +153,20 @@ shinyApp(
       # Normalize by baseline scores. This is not relevant for coverage, which is compared
       # to the nominal confidence level.
       if (input$scale_by_baseline && input$selected_metric != "ic80") {
-        # Load selected baseline
+        # These merge keys are overkill; this should be fully specified by
+        # c("forecast_date", "target_end_date", "geo_value")
         merge_keys <- c("forecast_date", "target_end_date", "ahead", "issue", "geo_value")
+        # Load selected baseline
         baseline_scores <- load_forecast_data(input$baseline)[, c(merge_keys, input$selected_metric)]
 
         baseline_scores$score_baseline <- baseline_scores[[input$selected_metric]]
         baseline_scores[[input$selected_metric]] <- NULL
 
-        # Add on reference scores from baseline forecaster
+        # Add on reference scores from baseline forecaster.
+        # Note that this drops any scores where there isn't a corresponding
+        # baseline value. If a forecaster and a baseline cover
+        # non-overlapping dates or use different aheads, the forecaster will
+        # not be shown.
         input_df <- inner_join(
           input_df, baseline_scores,
           by = merge_keys, suffix = c("", "")
