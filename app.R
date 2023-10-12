@@ -172,11 +172,7 @@ shinyApp(
 
       x_tick_angle <- list(tickangle = -30)
       facet_x_tick_angles <- setNames(rep(list(x_tick_angle), 10), paste0("xaxis", 1:10))
-      scale_type <- switch(
-        input$facets_share_scale,
-        "TRUE" = "fixed",
-        "FALSE" = "free_y"
-      )
+      scale_type <- ifelse(input$facets_share_scale, "fixed", "free_y" )
 
       input_df %>>%
         # Aggregate scores over all geos
