@@ -70,11 +70,21 @@ forecasts_and_scores <- tar_map(
   )
 )
 
+ensemble_keys <- list(a = c(300, 15))
+ensembles <- list(
+  tar_target(
+    name = ensembles,
+    command = {
+      ensemble_keys
+    }
+  )
+)
+
 # The combine approach below is taken from the manual:
 #   https://books.ropensci.org/targets/static.html#combine
 # The key is that the map above has unlist = FALSE.
 ensemble_forecast <- tar_map(
-  values = list(a = c(300, 15)),
+  values = ensemble_keys,
   tar_combine(
     name = ensemble_forecast,
     # TODO: Needs a lookup table to select the right forecasters
@@ -110,20 +120,11 @@ ensemble_forecast <- tar_map(
     }
   )
 )
-notebooks <- list(
-  tar_render(
-    name = report,
-    path = "extras/report.Rmd",
-    params = list(
-      exclude_geos = c("as", "gu", "mp", "vi")
-    )
-  )
-)
 
 list(
   data,
   forecasters,
   forecasts_and_scores,
-  ensemble_forecast,
-  notebooks
+  ensembles,
+  ensemble_forecast
 )

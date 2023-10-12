@@ -17,11 +17,11 @@ library(targets)
 source("extras/plotting.R")
 
 flu_forecasts <- bind_rows(
-  tar_read("forecast_ZWNiZ"),
-  tar_read("forecast_M2RjZ"),
-  tar_read("forecast_YzhkZ"),
+  tar_read("forecast_cheap.managerial.1"),
+  tar_read("forecast_clearcut.antiromantic.1"),
+  tar_read("forecast_honorary.salmonoid.5"),
   .id = "forecaster"
-) %>% filter(forecaster == "ZWNiZ")
+) %>% filter(forecaster == "cheap managerial 1")
 ```
 
 ## Trajectory plots
