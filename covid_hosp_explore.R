@@ -51,11 +51,8 @@ forecasts_and_scores_separate_aheads <- tar_map(
         n_training_pad = 30L,
         forecaster_args = params,
         forecaster_args_names = param_names
-      ) %>%
-        group_by(parent_id) %>%
-        tar_group()
-    },
-    iteration = "group"
+      )
+    }
   ),
   tar_target(
     name = score_by_ahead,
@@ -68,25 +65,46 @@ forecasts_and_scores_separate_aheads <- tar_map(
           ae = absolute_error,
           ic80 = interval_coverage(0.8)
         )
-      ) %>%
-        group_by(parent_id) %>%
-        tar_group()
-    },
-    iteration = "group"
+      )
+    }
   )
 )
 
-forecasts_and_scores <- list(
-  tar_combine(
-    forecast,
-    pattern = map(forecast_by_ahead),
-    iteration = "vector"
+forecasts_and_scores <- tar_map(
+  values = forecaster_parent_id_map,
+  names = parent_id,
+  tar_target(
+    name = forecast,
+    command = {
+      bind_rows(forecast_component_ids) %>%
+        mutate(parent_forecaster = parent_id)
+    }
   ),
-  tar_combine(
-    score,
-    pattern = map(score_by_ahead),
-    iteration = "vector"
+  tar_target(
+    name = score,
+    command = {
+      bind_rows(score_component_ids) %>%
+        mutate(parent_forecaster = parent_id)
+    }
   )
+  # tar_target(
+  #   name = score,
+  #   command = {
+  #     bind_rows(!!!component_ids) %>%
+  #       mutate(parent_forecaster = parent_id)
+  #   }
+  # )
+  #,
+  # tar_combine(
+  #   name = score,
+  #   list(
+  #     forecasts_and_scores_separate_aheads[["score_by_ahead"]][filter(param_grid, parent_id == value)[["rownum"]]]
+  #   ),
+  #   command = {
+  #     bind_rows(!!!.x) %>%
+  #       mutate(parent_forecaster = name)
+  #   }
+  # )
 )
 
 ensemble_keys <- list(a = c(300, 15))
