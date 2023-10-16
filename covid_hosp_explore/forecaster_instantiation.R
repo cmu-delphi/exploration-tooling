@@ -30,7 +30,7 @@ forecaster_parent_id_map <- param_grid %>%
     score_component_ids = list(syms(paste0("score_by_ahead_", gsub(" ", ".", id, fixed = TRUE))))
   )
 
-forecaster_param_grids <- make_target_param_grid(select(param_grid, -parent_id))
+forecaster_param_grids <- make_target_param_grid(param_grid)
 
 # not actually used downstream, this is for lookup during plotting and human evaluation
 forecasters <- list(
