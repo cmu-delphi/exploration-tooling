@@ -20,9 +20,17 @@ grids <- list(
 # bind them together and give static ids; if you add a new field to a given
 # expand_grid, everything will get a new id, so it's better to add a new
 # expand_grid instead
-param_grid <- bind_rows(map(grids, add_id)) %>% relocate(id, .after = last_col())
+param_grid <- bind_rows(map(grids, add_id)) %>%
+  relocate(parent_id, id, .after = last_col())
 
-forecaster_param_grids <- make_target_param_grid(param_grid)
+forecaster_parent_id_map <- param_grid %>%
+  group_by(parent_id) %>%
+  summarize(
+    forecast_component_ids = list(syms(paste0("forecast_by_ahead_", gsub(" ", ".", id, fixed = TRUE)))),
+    score_component_ids = list(syms(paste0("score_by_ahead_", gsub(" ", ".", id, fixed = TRUE))))
+  )
+
+forecaster_param_grids <- make_target_param_grid(select(param_grid, -parent_id))
 
 # not actually used downstream, this is for lookup during plotting and human evaluation
 forecasters <- list(
