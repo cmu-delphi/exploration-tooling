@@ -35,13 +35,13 @@ tar_option_set(
 source("covid_hosp_explore/forecaster_instantiation.R")
 source("covid_hosp_explore/data_targets.R")
 
-forecasts_and_scores_separate_aheads <- tar_map(
+forecasts_and_scores_by_ahead <- tar_map(
   values = forecaster_param_grids,
   names = id,
   unlist = FALSE,
-  tar_target(
-    name = forecast_by_ahead,
-    command = {
+  tar_target_raw(
+    name = ONE_AHEAD_FORECAST_NAME,
+    command = expression(
       forecaster_pred(
         data = joined_archive_data_2022,
         outcome = "hhs",
@@ -52,11 +52,11 @@ forecasts_and_scores_separate_aheads <- tar_map(
         forecaster_args = params,
         forecaster_args_names = param_names
       )
-    }
+    )
   ),
-  tar_target(
-    name = score_by_ahead,
-    command = {
+  tar_target_raw(
+    name = ONE_AHEAD_SCORE_NAME,
+    command = expression(
       run_evaluation_measure(
         data = forecast_by_ahead,
         evaluation_data = hhs_evaluation_data,
@@ -66,7 +66,7 @@ forecasts_and_scores_separate_aheads <- tar_map(
           ic80 = interval_coverage(0.8)
         )
       )
-    }
+    )
   )
 )
 
@@ -87,24 +87,6 @@ forecasts_and_scores <- tar_map(
         mutate(parent_forecaster = parent_id)
     }
   )
-  # tar_target(
-  #   name = score,
-  #   command = {
-  #     bind_rows(!!!component_ids) %>%
-  #       mutate(parent_forecaster = parent_id)
-  #   }
-  # )
-  #,
-  # tar_combine(
-  #   name = score,
-  #   list(
-  #     forecasts_and_scores_separate_aheads[["score_by_ahead"]][filter(param_grid, parent_id == value)[["rownum"]]]
-  #   ),
-  #   command = {
-  #     bind_rows(!!!.x) %>%
-  #       mutate(parent_forecaster = name)
-  #   }
-  # )
 )
 
 ensemble_keys <- list(a = c(300, 15))
@@ -126,8 +108,8 @@ ensemble_forecast <- tar_map(
     name = ensemble_forecast,
     # TODO: Needs a lookup table to select the right forecasters
     list(
-      forecasts_and_scores_separate_aheads[["forecast_by_ahead"]][[1]],
-      forecasts_and_scores_separate_aheads[["forecast_by_ahead"]][[2]]
+      forecasts_and_scores_by_ahead[["forecast_by_ahead"]][[1]],
+      forecasts_and_scores_by_ahead[["forecast_by_ahead"]][[2]]
     ),
     command = {
       bind_rows(!!!.x, .id = "forecaster") %>%
@@ -161,7 +143,7 @@ ensemble_forecast <- tar_map(
 list(
   data,
   forecasters,
-  forecasts_and_scores_separate_aheads,
+  forecasts_and_scores_by_ahead,
   forecasts_and_scores,
   ensembles,
   ensemble_forecast

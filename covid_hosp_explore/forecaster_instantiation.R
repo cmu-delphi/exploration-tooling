@@ -23,11 +23,13 @@ grids <- list(
 param_grid <- bind_rows(map(grids, add_id)) %>%
   relocate(parent_id, id, .after = last_col())
 
+ONE_AHEAD_FORECAST_NAME <- "forecast_by_ahead"
+ONE_AHEAD_SCORE_NAME <- "score_by_ahead"
 forecaster_parent_id_map <- param_grid %>%
   group_by(parent_id) %>%
   summarize(
-    forecast_component_ids = list(syms(paste0("forecast_by_ahead_", gsub(" ", ".", id, fixed = TRUE)))),
-    score_component_ids = list(syms(paste0("score_by_ahead_", gsub(" ", ".", id, fixed = TRUE))))
+    forecast_component_ids = list(syms(paste0(ONE_AHEAD_FORECAST_NAME, "_", gsub(" ", ".", id, fixed = TRUE)))),
+    score_component_ids = list(syms(paste0(ONE_AHEAD_SCORE_NAME, "_", gsub(" ", ".", id, fixed = TRUE))))
   )
 
 forecaster_param_grids <- make_target_param_grid(select(param_grid, -parent_id))
