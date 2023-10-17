@@ -73,40 +73,30 @@ forecasts_and_scores_by_ahead <- tar_map(
   )
 )
 
-forecasts_and_scores <- list(
-  tar_combine(
-    name = forecast_combine,
-    forecasts_and_scores_by_ahead[["forecast_by_ahead"]],
-    command = {
-      bind_rows(!!!.x) %>%
-        group_by(parent_id) %>%
-        targets::tar_group()
-    },
-    iteration = "group"
-  ),
-  tar_combine(
-    name = score_combine,
-    forecasts_and_scores_by_ahead[["score_by_ahead"]],
-    command = {
-      bind_rows(!!!.x) %>%
-        group_by(parent_id) %>%
-        targets::tar_group()
-    },
-    iteration = "group"
-  ),
+forecasts_and_scores <- tar_map(
+  values = forecaster_parent_id_map,
+  names = parent_id,
   tar_target(
     name = forecast,
     command = {
-      forecast_combine
-    },
-    pattern = map(forecast_combine)
+      bind_rows(
+        forecasts_and_scores_by_ahead[startsWith(
+          names(forecasts_and_scores_by_ahead),
+          paste0("forecast_by_ahead_", gsub(" ", ".", parent_id))
+        )]
+      )
+    }
   ),
   tar_target(
     name = score,
     command = {
-      score_combine
-    },
-    pattern = map(score_combine)
+      bind_rows(
+        forecasts_and_scores_by_ahead[startsWith(
+          names(forecasts_and_scores_by_ahead),
+          paste0("score_by_ahead_", gsub(" ", ".", parent_id))
+        )]
+      )
+    }
   )
 )
 

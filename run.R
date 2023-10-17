@@ -46,7 +46,7 @@ store_dir <- tar_path_store()
 if (!dir.exists(store_dir)) dir.create(store_dir)
 
 tar_manifest()
-tar_make()
+tar_make()#callr_function = NULL)
 # tar_make_clustermq(workers = 2) # nolint
 # tar_make_future(workers = 2) # nolint
 
