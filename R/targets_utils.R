@@ -15,6 +15,7 @@ make_target_param_grid <- function(param_grid) {
   tibble(
     forecaster = rlang::syms(param_grid$forecaster),
     id = param_grid$id,
+    parent_id = param_grid$parent_id,
     params = list_of_params,
     param_names = list_names
   )
@@ -25,7 +26,7 @@ make_target_param_grid <- function(param_grid) {
 #' @importFrom purrr transpose
 #' @import dplyr
 lists_of_real_values <- function(param_grid) {
-  full_lists <- transpose(param_grid %>% select(-forecaster, -id))
+  full_lists <- transpose(param_grid %>% select(-forecaster, -id, -parent_id))
   filter_nonvalues <- function(x) {
     Filter(Negate(function(a) is.null(a) && is.na(a)), x)
   }

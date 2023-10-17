@@ -38,7 +38,7 @@ source("covid_hosp_explore/data_targets.R")
 forecasts_and_scores_separate_aheads <- tar_map(
   values = forecaster_param_grids,
   names = id,
-  unlist = FALSE,
+  unlist = TRUE,
   tar_target(
     name = forecast_by_ahead,
     command = {
@@ -52,10 +52,9 @@ forecasts_and_scores_separate_aheads <- tar_map(
         forecaster_args = params,
         forecaster_args_names = param_names
       ) %>%
-        group_by(parent_id) %>%
-        tar_group()
+        mutate(parent_id = parent_id)
     },
-    iteration = "group"
+    iteration = "vector"
   ),
   tar_target(
     name = score_by_ahead,
@@ -68,83 +67,104 @@ forecasts_and_scores_separate_aheads <- tar_map(
           ae = absolute_error,
           ic80 = interval_coverage(0.8)
         )
-      ) %>%
+      )
+    },
+    iteration = "vector"
+  )
+)
+
+# forecasts_and_scores_separate_aheads[startsWith(names(forecasts_and_scores_separate_aheads), paste0("forecast_by_ahead_", gsub(" ", ".", parent_id)))]
+forecasts_and_scores <- list(
+  tar_target(
+    name = forecast_raw,
+    command = {
+      forecasts_and_scores_separate_aheads[["forecast_by_ahead"]] %>%
         group_by(parent_id) %>%
-        tar_group()
+        targets::tar_group()
     },
     iteration = "group"
-  )
-)
-
-forecasts_and_scores <- list(
-  tar_combine(
-    forecast,
-    pattern = map(forecast_by_ahead),
-    iteration = "vector"
-  ),
-  tar_combine(
-    score,
-    pattern = map(score_by_ahead),
-    iteration = "vector"
-  )
-)
-
-ensemble_keys <- list(a = c(300, 15))
-ensembles <- list(
-  tar_target(
-    name = ensembles,
-    command = {
-      ensemble_keys
-    }
-  )
-)
-
-# The combine approach below is taken from the manual:
-#   https://books.ropensci.org/targets/static.html#combine
-# The key is that the map above has unlist = FALSE.
-ensemble_forecast <- tar_map(
-  values = ensemble_keys,
-  tar_combine(
-    name = ensemble_forecast,
-    # TODO: Needs a lookup table to select the right forecasters
-    list(
-      forecasts_and_scores_separate_aheads[["forecast_by_ahead"]][[1]],
-      forecasts_and_scores_separate_aheads[["forecast_by_ahead"]][[2]]
-    ),
-    command = {
-      bind_rows(!!!.x, .id = "forecaster") %>%
-        pivot_wider(
-          names_prefix = "forecaster",
-          names_from = forecaster,
-          values_from = value
-        ) %>%
-        mutate(
-          value = a + rowMeans(across(starts_with("forecaster")))
-        ) %>%
-        select(-starts_with("forecaster"))
-    }
   ),
   tar_target(
-    name = ensemble_score,
+    name = score_raw,
     command = {
-      run_evaluation_measure(
-        data = ensemble_forecast,
-        evaluation_data = hhs_evaluation_data,
-        measures = list(
-          wis = weighted_interval_score,
-          ae = absolute_error,
-          ic80 = interval_coverage(0.8)
-        )
-      )
-    }
+      forecasts_and_scores_separate_aheads[["score_by_ahead"]] %>%
+        group_by(parent_id) %>%
+        targets::tar_group()
+    },
+    iteration = "group"
+  ),
+  tar_target(
+    name = forecast,
+    command = {
+      forecast_raw
+    },
+    pattern = map(forecast_raw)
+  ),
+  tar_target(
+    name = score,
+    command = {
+      score_raw
+    },
+    pattern = map(score_raw)
   )
 )
+
+# ensemble_keys <- list(a = c(300, 15))
+# ensembles <- list(
+#   tar_target(
+#     name = ensembles,
+#     command = {
+#       ensemble_keys
+#     }
+#   )
+# )
+
+# # The combine approach below is taken from the manual:
+# #   https://books.ropensci.org/targets/static.html#combine
+# # The key is that the map above has unlist = FALSE.
+# ensemble_forecast <- tar_map(
+#   values = ensemble_keys,
+#   tar_combine(
+#     name = ensemble_forecast,
+#     # TODO: Needs a lookup table to select the right forecasters
+#     list(
+#       forecasts_and_scores_separate_aheads[["forecast_by_ahead"]][[1]],
+#       forecasts_and_scores_separate_aheads[["forecast_by_ahead"]][[2]]
+#     ),
+#     command = {
+#       bind_rows(!!!.x, .id = "forecaster") %>%
+#         pivot_wider(
+#           names_prefix = "forecaster",
+#           names_from = forecaster,
+#           values_from = value
+#         ) %>%
+#         mutate(
+#           value = a + rowMeans(across(starts_with("forecaster")))
+#         ) %>%
+#         select(-starts_with("forecaster"))
+#     }
+#   ),
+#   tar_target(
+#     name = ensemble_score,
+#     command = {
+#       run_evaluation_measure(
+#         data = ensemble_forecast,
+#         evaluation_data = hhs_evaluation_data,
+#         measures = list(
+#           wis = weighted_interval_score,
+#           ae = absolute_error,
+#           ic80 = interval_coverage(0.8)
+#         )
+#       )
+#     }
+#   )
+# )
 
 list(
   data,
   forecasters,
   forecasts_and_scores_separate_aheads,
-  forecasts_and_scores,
-  ensembles,
-  ensemble_forecast
+  forecasts_and_scores
+  # ensembles,
+  # ensemble_forecast
 )
