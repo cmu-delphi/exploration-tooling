@@ -25,6 +25,7 @@ cache <- getShinyOption("cache")
 # Load a single score file of `targets` output. Do some scaling and renaming
 # of error scores. Calculate `ahead`s.
 load_forecast_data_raw <- function(forecaster) {
+  browser()
   inject(tar_read(!!forecaster)) %>%
     ## TODO Only display raw error scores for now. We'd want to make sure we
     ## have scores available both raw and normalized by population, but that
