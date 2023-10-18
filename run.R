@@ -53,7 +53,7 @@ tar_make()
 
 # Prevent functions defined in /R dir from being loaded unnecessarily
 options(shiny.autoload.r=FALSE)
-forecaster_options <- tar_read(forecasters)[["id"]]
+forecaster_options <- unique(tar_read(forecasters)[["parent_id"]])
 # Map forecaster names to score files
 forecaster_options <- setNames(
   paste0("score_", gsub(" ", ".", forecaster_options)),
