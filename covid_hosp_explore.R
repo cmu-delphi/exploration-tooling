@@ -35,13 +35,13 @@ tar_option_set(
 source("covid_hosp_explore/forecaster_instantiation.R")
 source("covid_hosp_explore/data_targets.R")
 
-forecasts_and_scores <- tar_map(
+forecasts_and_scores_by_ahead <- tar_map(
   values = forecaster_param_grids,
   names = id,
   unlist = FALSE,
-  tar_target(
-    name = forecast,
-    command = {
+  tar_target_raw(
+    name = ONE_AHEAD_FORECAST_NAME,
+    command = expression(
       forecaster_pred(
         data = joined_archive_data_2022,
         outcome = "hhs",
@@ -52,13 +52,13 @@ forecasts_and_scores <- tar_map(
         forecaster_args = params,
         forecaster_args_names = param_names
       )
-    }
+    )
   ),
-  tar_target(
-    name = score,
-    command = {
+  tar_target_raw(
+    name = ONE_AHEAD_SCORE_NAME,
+    command = expression(
       run_evaluation_measure(
-        data = forecast,
+        data = forecast_by_ahead,
         evaluation_data = hhs_evaluation_data,
         measure = list(
           wis = weighted_interval_score,
@@ -66,6 +66,35 @@ forecasts_and_scores <- tar_map(
           ic80 = interval_coverage(0.8)
         )
       )
+    )
+  )
+)
+
+forecasts_and_scores <- tar_map(
+  values = forecaster_parent_id_map,
+  names = parent_id,
+  tar_target(
+    name = forecast,
+    command = {
+      bind_rows(forecast_component_ids) %>%
+        mutate(parent_forecaster = parent_id)
+    }
+  ),
+  tar_target(
+    name = score,
+    command = {
+      bind_rows(score_component_ids) %>%
+        mutate(parent_forecaster = parent_id)
+    }
+  )
+)
+
+ensemble_keys <- list(a = c(300, 15))
+ensembles <- list(
+  tar_target(
+    name = ensembles,
+    command = {
+      ensemble_keys
     }
   )
 )
@@ -74,13 +103,13 @@ forecasts_and_scores <- tar_map(
 #   https://books.ropensci.org/targets/static.html#combine
 # The key is that the map above has unlist = FALSE.
 ensemble_forecast <- tar_map(
-  values = list(a = c(300, 15)),
+  values = ensemble_keys,
   tar_combine(
     name = ensemble_forecast,
     # TODO: Needs a lookup table to select the right forecasters
     list(
-      forecasts_and_scores[["forecast"]][[1]],
-      forecasts_and_scores[["forecast"]][[2]]
+      forecasts_and_scores_by_ahead[["forecast_by_ahead"]][[1]],
+      forecasts_and_scores_by_ahead[["forecast_by_ahead"]][[2]]
     ),
     command = {
       bind_rows(!!!.x, .id = "forecaster") %>%
@@ -110,20 +139,12 @@ ensemble_forecast <- tar_map(
     }
   )
 )
-notebooks <- list(
-  tar_render(
-    name = report,
-    path = "extras/report.Rmd",
-    params = list(
-      exclude_geos = c("as", "gu", "mp", "vi")
-    )
-  )
-)
 
 list(
   data,
   forecasters,
+  forecasts_and_scores_by_ahead,
   forecasts_and_scores,
-  ensemble_forecast,
-  notebooks
+  ensembles,
+  ensemble_forecast
 )

@@ -41,7 +41,7 @@ load_forecast_data_raw <- function(forecaster) {
            # rename(wis = wis_count_scale, ae = ae_count_scale) %>%
          mutate(
            ahead = as.integer(target_end_date - forecast_date),
-           forecaster = forecaster
+           forecaster = names(forecaster_options[forecaster_options == forecaster])
          ) %>%
            {
              .
@@ -70,9 +70,19 @@ shinyApp(
             choices = forecaster_options,
             multiple = TRUE
           ),
+          selectInput("baseline",
+            "Baseline forecaster:",
+            choices = forecaster_options,
+            multiple = FALSE
+          ),
+          checkboxInput(
+            "scale_by_baseline",
+            "Scale by baseline forecaster",
+            value = FALSE,
+          ),
           radioButtons(
             "selected_metric",
-            "Metric:",
+            "Error metric:",
             c(
               "Mean WIS" = "wis",
               # "Mean WIS per 100k" = "wis_per_100k",
@@ -91,12 +101,10 @@ shinyApp(
             choices = c("forecaster", "ahead", "geo_value"),
             multiple = TRUE
           ),
-          radioButtons("facets_share_scale",
-            "Share y scale between subplots:",
-            c(
-              "Yes" = "fixed",
-              "No" = "free_y"
-            )
+          checkboxInput(
+            "facets_share_scale",
+            "Share y scale between subplots",
+            value = TRUE,
           ),
           sliderInput("selected_forecast_date_range",
             "Forecast date range:",
@@ -128,9 +136,10 @@ shinyApp(
   },
   server = function(input, output, session) {
     filtered_scorecards_reactive <- reactive({
-      if (length(input$selected_forecasters) == 0) { return(data.frame()) }
+      agg_forecasters <- unique(c(input$selected_forecasters, input$baseline))
+      if (length(agg_forecasters) == 0) { return(data.frame()) }
 
-      processed_evaluations_internal <- lapply(input$selected_forecasters, function(forecaster) {
+      processed_evaluations_internal <- lapply(agg_forecasters, function(forecaster) {
           load_forecast_data(forecaster) %>>%
           filter(
             .data$forecast_date %>>% between(.env$input$selected_forecast_date_range[[1L]], .env$input$selected_forecast_date_range[[2L]]),
@@ -144,8 +153,35 @@ shinyApp(
       input_df <- filtered_scorecards_reactive()
       if (nrow(input_df) == 0) { return() }
 
+      # Normalize by baseline scores. This is not relevant for coverage, which is compared
+      # to the nominal confidence level.
+      if (input$scale_by_baseline && input$selected_metric != "ic80") {
+        # These merge keys are overkill; this should be fully specified by
+        # c("forecast_date", "target_end_date", "geo_value")
+        merge_keys <- c("forecast_date", "target_end_date", "ahead", "issue", "geo_value")
+        # Load selected baseline
+        baseline_scores <- load_forecast_data(input$baseline)[, c(merge_keys, input$selected_metric)]
+
+        baseline_scores$score_baseline <- baseline_scores[[input$selected_metric]]
+        baseline_scores[[input$selected_metric]] <- NULL
+
+        # Add on reference scores from baseline forecaster.
+        # Note that this drops any scores where there isn't a corresponding
+        # baseline value. If a forecaster and a baseline cover
+        # non-overlapping dates or use different aheads, the forecaster will
+        # not be shown.
+        input_df <- inner_join(
+          input_df, baseline_scores,
+          by = merge_keys, suffix = c("", "")
+        )
+        # Scale score by baseline forecaster
+        input_df[[input$selected_metric]] <- input_df[[input$selected_metric]] / input_df$score_baseline
+      }
+
+
       x_tick_angle <- list(tickangle = -30)
       facet_x_tick_angles <- setNames(rep(list(x_tick_angle), 10), paste0("xaxis", 1:10))
+      scale_type <- ifelse(input$facets_share_scale, "fixed", "free_y" )
 
       input_df %>>%
         # Aggregate scores over all geos
@@ -185,9 +221,9 @@ shinyApp(
         `+`(if (length(input$facet_vars) == 0L) {
           theme()
         } else if (length(input$facet_vars) == 1L) {
-          facet_wrap(input$facet_vars, scales = input$facets_share_scale)
+          facet_wrap(input$facet_vars, scales = scale_type)
         } else {
-          facet_grid(as.formula(paste0(input$facet_vars[[1L]], " ~ ", paste(collapse = " + ", input$facet_vars[-1L]))), scales = input$facets_share_scale)
+          facet_grid(as.formula(paste0(input$facet_vars[[1L]], " ~ ", paste(collapse = " + ", input$facet_vars[-1L]))), scales = scale_type)
         }) %>>%
         ggplotly() %>>%
         {inject(layout(., hovermode = "x unified", legend = list(orientation = "h", title = list(text = "forecaster")), xaxis = x_tick_angle, !!!facet_x_tick_angles))}

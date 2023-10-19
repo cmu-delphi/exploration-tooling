@@ -27,9 +27,9 @@ add_id <- function(df, n_adj = 2) {
     mutate(id = hash_animal(id, n_adj = n_adj)$words) %>%
     mutate(id = paste(id[1:n_adj], sep="", collapse = " "))
   df %<>%
-    mutate(id = stringified) %>%
+    mutate(parent_id = stringified$id) %>%
     rowwise() %>%
-    mutate(id = paste(id, ahead, collapse = " ")) %>%
+    mutate(id = paste(parent_id, ahead, collapse = " ")) %>%
     ungroup()
   return(df)
 }

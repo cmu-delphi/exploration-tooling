@@ -55,7 +55,9 @@ grids <- list(
 # expand_grid instead
 param_grid <- bind_rows(map(grids, add_id)) %>% relocate(id, .after = last_col())
 
-forecaster_param_grids <- make_target_param_grid(param_grid)
+forecaster_param_grids <- make_target_param_grid(param_grid) %>%
+  ## TODO This forecaster is hanging. Filter it out for now.
+  filter(id != "necessary endless 5")
 
 # not actually used downstream, this is for lookup during plotting and human evaluation
 forecasters <- list(
@@ -207,11 +209,21 @@ forecasts_and_scores <- tar_map(
   )
 )
 
+ensemble_keys <- list(a = c(300, 15))
+ensembles <- list(
+  tar_target(
+    name = ensembles,
+    command = {
+      ensemble_keys
+    }
+  )
+)
+
 # The combine approach below is taken from the manual:
 #   https://books.ropensci.org/targets/static.html#combine
 # The key is that the map above has unlist = FALSE.
 ensemble_forecast <- tar_map(
-  values = list(a = c(300, 15)),
+  values = ensemble_keys,
   tar_combine(
     name = ensemble_forecast,
     # TODO: Needs a lookup table to select the right forecasters
@@ -247,20 +259,11 @@ ensemble_forecast <- tar_map(
     }
   )
 )
-notebooks <- list(
-  tar_render(
-    name = report,
-    path = "extras/report.Rmd",
-    params = list(
-      exclude_geos = c("as", "gu", "mp", "vi")
-    )
-  )
-)
 
 list(
-  data
-  ## forecasters,
-  ## forecasts_and_scores,
-  ## ensemble_forecast,
-  ## notebooks
+  data,
+  forecasters,
+  forecasts_and_scores,
+  ensembles,
+  ensemble_forecast
 )
