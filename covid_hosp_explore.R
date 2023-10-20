@@ -36,6 +36,7 @@ tar_option_set(
 # where the forecasters and parameters are joined; see either the variable param_grid or `tar_read(forecasters)`
 source("covid_hosp_explore/forecaster_instantiation.R")
 source("covid_hosp_explore/data_targets.R")
+source("covid_hosp_explore/dynamic_constants.R")
 
 forecasts_and_scores_by_ahead <- tar_map(
   values = forecaster_param_grids,
@@ -92,13 +93,11 @@ forecasts_and_scores <- tar_map(
 )
 
 ensemble_keys <- list(a = c(300, 15))
-ensembles <- list(
-  tar_target(
-    name = ensembles,
-    command = {
-      ensemble_keys
-    }
-  )
+ensembles <- tar_target(
+  name = ensembles,
+  command = {
+    ensemble_keys
+  }
 )
 
 # The combine approach below is taken from the manual:
@@ -142,11 +141,58 @@ ensemble_forecast <- tar_map(
   )
 )
 
+if (LOAD_EXTERNAL_SCORES) {
+  external_names_and_scores <- list(
+    tar_target(
+      name = external_scores_df,
+      command = {
+        readRDS(external_scores_path)
+      }
+    ),
+    tar_target(
+      name = external_names,
+      command = {
+        external_scores_df %>%
+          group_by(forecaster) %>%
+          group_keys() %>%
+          pull(forecaster)
+      }
+    ),
+    tar_target(
+      name = group_dfs,
+      command = {
+        df_list <- external_scores_df %>%
+        group_by(forecaster) %>%
+        group_split()
+
+        names(df_list) <- external_names
+        df_list
+      }
+    ),
+    tar_target(
+      name = external_scores,
+      pattern = map(external_names),
+      command = {
+       group_dfs[[external_names]]
+      }
+    )
+  )
+} else {
+  external_names_and_scores <- tar_target(
+    name = external_names,
+    command = {
+      c()
+    }
+  )
+}
+
+
 list(
   data,
   forecasters,
   forecasts_and_scores_by_ahead,
   forecasts_and_scores,
   ensembles,
-  ensemble_forecast
+  ensemble_forecast,
+  external_names_and_scores
 )
