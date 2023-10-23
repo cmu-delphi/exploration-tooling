@@ -35,15 +35,6 @@ Therefore we recommend developing serially, but running exploration in parallel.
 See [this diagram](https://excalidraw.com/#room=85f8bfeb397ddf29f110,q8nOcBql7ACvhgCyjXu98g).
 Double diamond objects represent plates (to evoke [plate notation](https://en.wikipedia.org/wiki/Plate_notation), but don't take the comparison too literally), which are used to represent multiple objects of the same type (e.g. different forecasters).
 
--   [hubutils](https://infectious-disease-modeling-hubs.github.io/hubUtils/index.html)
-    -   sort of a different direction focused more on aggregating results from several places. I think the output format is something I should target; file format of parquet
--   [epiforecasts](https://github.com/epiforecasts)
-    -   another group, they have a scoring utils package
--   [scoringutils](https://epiforecasts.io/scoringutils/)
-    -   it does not. For quantile models, they expect ‘true_value’, ‘prediction’, ‘quantile’
-    -   hubverse expects 'output_type' 'output_type_id' and 'value'
-    -   easy enough to map between them though
-
 ## Notes on Forecaster Types
 
 ### Basic
