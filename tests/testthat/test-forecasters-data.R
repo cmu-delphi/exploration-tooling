@@ -137,7 +137,6 @@ test_that("delayed state", {
 
 test_that("linear", {
   set.seed(12347)
-  side_delay <- rpois(length(simple_dates), 0.5)
   start_date <- min(simple_dates)
   linear <- as_epi_archive(
     tibble(
