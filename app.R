@@ -1,4 +1,4 @@
-suppressMessages({
+suppressPackageStartupMessages({
   library(pipeR)
   library(plotly)
   library(shiny)

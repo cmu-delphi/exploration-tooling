@@ -1,17 +1,19 @@
-library(targets)
-library(tarchetypes) # Load other packages as needed.
+suppressPackageStartupMessages({
+  library(targets)
+  library(tarchetypes) # Load other packages as needed.
 
-library(crew)
-library(dplyr)
-library(epipredict)
-library(epieval)
-library(lubridate)
-library(parsnip)
-library(purrr)
-library(tibble)
-library(tidyr)
-library(rlang)
-library(epidatr)
+  library(crew)
+  library(dplyr)
+  library(epipredict)
+  library(epieval)
+  library(lubridate)
+  library(parsnip)
+  library(purrr)
+  library(tibble)
+  library(tidyr)
+  library(rlang)
+  library(epidatr)
+})
 
 tar_option_set(
   packages = c(

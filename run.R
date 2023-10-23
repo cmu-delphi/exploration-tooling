@@ -24,7 +24,7 @@ userin <- readline_wrapper()
 # renv::init()
 renv::restore()
 
-suppressMessages({
+suppressPackageStartupMessages({
   library(targets)
   library(shiny)
 })
