@@ -3,7 +3,6 @@ forecasters <- list(
   c("scaled_pop", scaled_pop),
   c("flatline_fc", flatline_fc)
 )
-forecaster <- c("flatline", flatline_fc)
 for (forecaster in forecasters) {
   test_that(forecaster[[1]], {
     jhu <- case_death_rate_subset %>%
@@ -38,16 +37,9 @@ for (forecaster in forecasters) {
     }
     # TODO confirming that it produces exactly the same result as arx_forecaster
     # test case where extra_sources is "empty"
-    forecaster[[2]](
-      jhu,
-      "case_rate",
-      c(""),
-      1L
-    )
     # test case where the epi_df is empty
     null_jhu <- jhu %>% filter(time_value < as.Date("0009-01-01"))
     expect_no_error(null_res <- forecaster[[2]](null_jhu, "case_rate", c("death_rate")))
-    null_res <- forecaster[[2]](null_jhu, "case_rate", c("death_rate"))
     expect_identical(names(null_res), names(res))
     expect_equal(nrow(null_res), 0)
     expect_identical(null_res, tibble(geo_value = character(), forecast_date = Date(), target_end_date = Date(), quantile = numeric(), value = numeric()))

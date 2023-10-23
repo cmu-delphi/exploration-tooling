@@ -58,12 +58,12 @@ confirm_insufficient_data <- function(epi_data, ahead, args_input, buffer = 9) {
   if (!is.null(args_input$lags)) {
     lag_max <- max(args_input$lags)
   } else {
-    lag_max <- 14
+    lag_max <- 14 # default value of 2 weeks
   }
   return(
     is.infinite(ahead) ||
       as.integer(max(epi_data$time_value) - min(epi_data$time_value)) <=
-        lag_max + ahead + 9
+        lag_max + ahead + buffer
   )
 }
 # TODO replace with `step_arx_forecaster`

@@ -44,7 +44,6 @@ test_that("constant", {
       a = 4 * synth_mean + approx_zero
     )
   ))
-  different_constants
   for (ii in 1:nrow(forecasters)) {
     res <- get_pred(different_constants, ii)
 
@@ -125,8 +124,6 @@ test_that("delayed state", {
     counts_al <- counts %>%
       filter(geo_value == "al") %>%
       pull(n)
-    counts_al
-    counts_ca
     res %>% filter(geo_value == "ca" & quantile == .5)
     # flatline is more aggressive about forecasting
     if (identical(forecasters$forecaster[[ii]], flatline_fc)) {
@@ -142,7 +139,6 @@ test_that("delayed state", {
 test_that("linear", {
   set.seed(12347)
   side_delay <- rpois(length(simple_dates), 0.5)
-  side_delay
   start_date <- min(simple_dates)
   linear <- as_epi_archive(
     tibble(
