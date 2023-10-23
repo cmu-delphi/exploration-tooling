@@ -17,7 +17,7 @@ constant <- as_epi_archive(tibble(
   version = simple_dates,
   a = synth_mean + approx_zero
 ))
-ii <- 3
+
 # wrap a call that is made quite frequently
 # n_training_pad is set to avoid warnings from the trainer
 get_pred <- function(dataset,
