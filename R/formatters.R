@@ -19,7 +19,7 @@ format_storage <- function(pred, true_forecast_date, target_end_date) {
     ) %>%
     unnest(.dstn) %>%
     select(-any_of(c(".pred_distn", ".pred", "time_value"))) %>%
-    rename(quantile = tau, value = q, target_end_date = target_date) %>%
+    rename(quantile = quantile_levels, value = values, target_end_date = target_date) %>%
     relocate(geo_value, forecast_date, target_end_date, quantile, value)
 }
 
@@ -33,13 +33,13 @@ format_storage <- function(pred, true_forecast_date, target_end_date) {
 #' @param true_forecast_date the actual date from which the model is
 #'   making the forecast, rather than the last day of available data
 #' @param target_end_date the date of the prediction
-#' @param levels the quantile levels
+#' @param quantile_levels the quantile levels
 #' @import dplyr
-format_covidhub <- function(pred, true_forecast_date, target_end_date, levels) {
+format_covidhub <- function(pred, true_forecast_date, target_end_date, quantile_levels) {
   pred %<>%
     group_by(forecast_date, geo_value, target_date) %>%
     rename(target_end_date = target_date) %>%
-    reframe(quantile = levels, value = quantile(.pred_distn, levels)[[1]])
+    reframe(quantile = quantile_levels, value = quantile(.pred_distn, quantile_levels)[[1]])
   forecasts$ahead <- ahead
   forecasts %<>%
     group_by(forecast_date, geo_value, target_date) %>%

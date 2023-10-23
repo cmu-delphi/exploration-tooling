@@ -28,13 +28,13 @@ perform_sanity_checks <- function(epi_data,
   if (!is.null(trainer) && !epipredict:::is_regression(trainer)) {
     cli::cli_abort("{trainer} must be a `{parsnip}` model of mode 'regression'.")
   } else if (inherits(trainer, "quantile_reg")) {
-    # add all levels to the trainer and update args list
-    tau <- sort(epipredict:::compare_quantile_args(
-      args_list$levels,
-      rlang::eval_tidy(trainer$args$tau)
+    # add all quantile_levels to the trainer and update args list
+    quantile_levels <- sort(epipredict:::compare_quantile_args(
+      args_list$quantile_levels,
+      rlang::eval_tidy(trainer$args$quantile_levels)
     ))
-    args_list$levels <- tau
-    trainer$args$tau <- rlang::enquo(tau)
+    args_list$quantile_levels <- quantile_levels
+    trainer$args$quantile_levels <- rlang::enquo(quantile_levels)
   }
   args_list$lags <- epipredict:::arx_lags_validator(predictors, args_list$lags)
   return(list(args_list, predictors, trainer))
@@ -112,10 +112,10 @@ arx_postprocess <- function(postproc,
                             target_date = NULL) {
   postproc %<>% layer_predict()
   if (inherits(trainer, "quantile_reg")) {
-    postproc %<>% layer_quantile_distn(levels = args_list$levels) %>% layer_point_from_distn()
+    postproc %<>% layer_quantile_distn(quantile_levels = args_list$quantile_levels) %>% layer_point_from_distn()
   } else {
     postproc %<>% layer_residual_quantiles(
-      probs = args_list$levels, symmetrize = args_list$symmetrize,
+      quantile_levels = args_list$quantile_levels, symmetrize = args_list$symmetrize,
       by_key = args_list$quantile_by_key
     )
   }

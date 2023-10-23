@@ -32,7 +32,7 @@
 #'   should be ones that will store well in a data.table; if you need more
 #'   complicated parameters, it is better to store them in separate files, and
 #'   use the filename as the parameter.
-#' @param levels The quantile levels to predict. Defaults to those required by
+#' @param quantile_levels The quantile levels to predict. Defaults to those required by
 #'   covidhub.
 #' @seealso some utilities for making forecasters: [format_storage],
 #'   [perform_sanity_checks]
@@ -48,7 +48,7 @@ scaled_pop <- function(epi_data,
                        ahead = 1,
                        pop_scaling = TRUE,
                        trainer = parsnip::linear_reg(),
-                       levels = covidhub_probs(),
+                       quantile_levels = covidhub_probs(),
                        ...) {
   # perform any preprocessing not supported by epipredict
   # one that every forecaster will need to handle: how to manage max(time_value)
@@ -71,7 +71,7 @@ scaled_pop <- function(epi_data,
     return(null_result)
   }
   args_input[["ahead"]] <- effective_ahead
-  args_input[["levels"]] <- levels
+  args_input[["quantile_levels"]] <- quantile_levels
   args_list <- do.call(arx_args_list, args_input)
   # if you want to ignore extra_sources, setting predictors is the way to do it
   predictors <- c(outcome, extra_sources)

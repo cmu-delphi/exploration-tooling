@@ -47,7 +47,7 @@ for (forecaster in forecasters) {
 }
 
 # unique tests
-test_that("flateline_fc same across aheads", {
+test_that("flatline_fc same across aheads", {
   jhu <- case_death_rate_subset %>%
     dplyr::filter(time_value >= as.Date("2021-12-01"))
   attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3

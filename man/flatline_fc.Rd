@@ -10,7 +10,7 @@ flatline_fc(
   extra_sources = "",
   ahead = 1,
   trainer = parsnip::linear_reg(),
-  levels = covidhub_probs(),
+  quantile_levels = covidhub_probs(),
   ...
 )
 }
@@ -30,7 +30,7 @@ existing examples)}
 
 \item{trainer}{an example extra parameter that is fairly common}
 
-\item{levels}{The quantile levels to predict. Defaults to those required by
+\item{quantile_levels}{The quantile levels to predict. Defaults to those required by
 covidhub.}
 
 \item{...}{it can also have any number of other parameters. In this case, the

@@ -10,7 +10,7 @@ flatline_fc <- function(epi_data,
                         extra_sources = "",
                         ahead = 1,
                         trainer = parsnip::linear_reg(),
-                        levels = covidhub_probs(),
+                        quantile_levels = covidhub_probs(),
                         ...) {
   # perform any preprocessing not supported by epipredict
   # one that every forecaster will need to handle: how to manage max(time_value)
@@ -33,7 +33,7 @@ flatline_fc <- function(epi_data,
     return(null_result)
   }
   args_input[["ahead"]] <- effective_ahead
-  args_input[["levels"]] <- levels
+  args_input[["quantile_levels"]] <- quantile_levels
   args_list <- do.call(flatline_args_list, args_input)
   # if you want to ignore extra_sources, setting predictors is the way to do it
   predictors <- c(outcome, extra_sources)
