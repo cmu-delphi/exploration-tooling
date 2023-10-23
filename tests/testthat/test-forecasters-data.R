@@ -51,11 +51,10 @@ test_that("constant", {
       group_by(geo_value) %>%
       filter(quantile == .5)
     sd_values <- rel_values %>%
-      summarise(is_const = sd(value) < 0.001) %>%
+      summarise(is_const = sd(value) < 2*tiny_sd) %>%
       pull(is_const) %>%
       all()
     expect_true(sd_values)
-    rel_values %>% filter(!near(value, true_value))
     actual_value <- rel_values %>%
       mutate(is_right = near(value, true_value, tol = tiny_sd ^.5)) %>%
       pull(is_right) %>%
@@ -93,7 +92,7 @@ test_that("white noise", {
       select(-true_value, -value) %>%
       group_by(quantile) %>%
       summarize(err = abs(mean(diff_from_exp)))
-    expect_true(all(quantile_deviation$err < length(unique(res$target_end_date))))
+    expect_true(all(quantile_deviation$err < 2*synth_sd))
   }
 })
 

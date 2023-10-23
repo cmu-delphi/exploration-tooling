@@ -45,3 +45,21 @@ for (forecaster in forecasters) {
     expect_identical(null_res, tibble(geo_value = character(), forecast_date = Date(), target_end_date = Date(), quantile = numeric(), value = numeric()))
   })
 }
+
+# unique tests
+test_that("flateline_fc same across aheads", {
+  jhu <- case_death_rate_subset %>%
+    dplyr::filter(time_value >= as.Date("2021-12-01"))
+  attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
+  resM2 <- flatline_fc(jhu, "case_rate", c("death_rate"), -2L) %>%
+    filter(quantile == 0.5) %>%
+    select(-target_end_date)
+  resM1 <- flatline_fc(jhu, "case_rate", c("death_rate"), -1L) %>%
+    filter(quantile == 0.5) %>%
+    select(-target_end_date)
+  res1 <- flatline_fc(jhu, "case_rate", c("death_rate"), 1L) %>%
+    filter(quantile == 0.5) %>%
+    select(-target_end_date)
+  expect_equal(resM2, resM1)
+  expect_equal(resM2, res1)
+})
