@@ -51,12 +51,12 @@ test_that("constant", {
       group_by(geo_value) %>%
       filter(quantile == .5)
     sd_values <- rel_values %>%
-      summarise(is_const = sd(value) < 2*tiny_sd) %>%
+      summarise(is_const = sd(value) < 2 * tiny_sd) %>%
       pull(is_const) %>%
       all()
     expect_true(sd_values)
     actual_value <- rel_values %>%
-      mutate(is_right = near(value, true_value, tol = tiny_sd ^.5)) %>%
+      mutate(is_right = near(value, true_value, tol = tiny_sd^.5)) %>%
       pull(is_right) %>%
       all()
     expect_true(actual_value)
@@ -80,7 +80,7 @@ test_that("white noise", {
       pull(value)
 
     # shouldn't expect the sample sd to actually match the true sd exactly, so giving it some leeway
-    expect_true(sd(values) < 2*synth_sd)
+    expect_true(sd(values) < 2 * synth_sd)
     # how much is each quantile off from the expected value?
     # should be fairly generous here, we just want the right order of magnitude
     quantile_deviation <- res %>%
@@ -92,7 +92,7 @@ test_that("white noise", {
       select(-true_value, -value) %>%
       group_by(quantile) %>%
       summarize(err = abs(mean(diff_from_exp)))
-    expect_true(all(quantile_deviation$err < 2*synth_sd))
+    expect_true(all(quantile_deviation$err < 2 * synth_sd))
   }
 })
 
@@ -109,7 +109,6 @@ test_that("delayed state", {
       a = synth_mean + approx_zero
     )
   ))
-  missing_state$DT %>% filter(geo_value == "ca")
   for (ii in seq_len(nrow(forecasters))) {
     expect_no_error(res <- get_pred(missing_state, ii))
     expect_equal(length(unique(res$geo_value)), 2)
@@ -147,15 +146,15 @@ test_that("linear", {
     )
   )
   for (ii in seq_len(nrow(forecasters))) {
-    #flatline will definitely fail this, so it's exempt
+    # flatline will definitely fail this, so it's exempt
     if (!identical(forecasters$forecaster[[ii]], flatline_fc)) {
-    res <- get_pred(linear, ii)
-    # make sure that the median is on the sloped line
-    median_err <- res %>%
-      filter(quantile == .5) %>%
-      mutate(err = value - as.integer(target_end_date - start_date + 1), .keep = "none") %>%
-      mutate(is_right = near(err,0, tol=tiny_sd ^ 0.5), .keep = "none")
-    expect_true(all(median_err))
+      res <- get_pred(linear, ii)
+      # make sure that the median is on the sloped line
+      median_err <- res %>%
+        filter(quantile == .5) %>%
+        mutate(err = value - as.integer(target_end_date - start_date + 1), .keep = "none") %>%
+        mutate(is_right = near(err, 0, tol = tiny_sd^0.5), .keep = "none")
+      expect_true(all(median_err))
     }
   }
 })
