@@ -164,8 +164,11 @@ if (LOAD_EXTERNAL_SCORES) {
     tar_target(
       name = external_scores_df,
       command = {
-        readRDS(external_scores_path)
-      }
+        readRDS(external_scores_path) %>%
+        group_by(forecaster) %>%
+        targets::tar_group()
+      },
+      iteration = "group"
     ),
     tar_target(
       name = external_names,
@@ -177,21 +180,10 @@ if (LOAD_EXTERNAL_SCORES) {
       }
     ),
     tar_target(
-      name = group_dfs,
-      command = {
-        df_list <- external_scores_df %>%
-        group_by(forecaster) %>%
-        group_split()
-
-        names(df_list) <- external_names
-        df_list
-      }
-    ),
-    tar_target(
       name = external_scores,
-      pattern = map(external_names),
+      pattern = map(external_scores_df),
       command = {
-       group_dfs[[external_names]]
+        external_scores_df
       },
       # This step causes the pipeline to exit with an error, apparently due to
       # running out of memory. Run this in series on a non-parallel `crew`
