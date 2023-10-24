@@ -14,7 +14,3 @@ covid_hosp_prod:
   script: covid_hosp_prod.R
   store: covid_hosp_prod
   use_crew: yes
-forecaster_testing:
-  script: forecaster_testing.R
-  store: forecaster_testing
-  use_crew: no

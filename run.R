@@ -9,7 +9,6 @@ readline_wrapper <- function(msg = "which project would you like to run?
 2: flu_hosp_explore
 3: covid_hosp_prod
 4: flu_hosp_prod
-5: forecaster_testing
 input: ") {
   if (interactive()) {
     txt <- readline(msg)
@@ -35,7 +34,6 @@ TAR_PROJECT <- switch(
   "2" = "flu_hosp_explore",
   "3" = "covid_hosp_prod",
   "4" = "flu_hosp_prod",
-  "5" = "forecaster_testing",
   # else
   stop("selection `", userin, "` is invalid")
 )
