@@ -14,6 +14,19 @@ suppressPackageStartupMessages({
   library(rlang)
 })
 
+# The external scores processing causes the pipeline to exit with an error,
+# apparently due to running out of memory. Set up a non-parallel `crew`
+# controller to avoid.
+# https://books.ropensci.org/targets/crew.html#heterogeneous-workers
+main_controller <- crew_controller_local(
+    name = "main_controller",
+    workers = parallel::detectCores() - 5
+  )
+serial_controller <- crew_controller_local(
+    name = "serial_controller",
+    workers = 1L
+  )
+
 tar_option_set(
   packages = c(
     "assertthat",
@@ -29,7 +42,12 @@ tar_option_set(
   ), # packages that your targets need to run
   imports = c("epieval", "parsnip"),
   format = "qs", # Optionally set the default storage format. qs is fast.
-  controller = crew::crew_controller_local(workers = parallel::detectCores() - 5),
+  controller = crew_controller_group(main_controller, serial_controller),
+  # Set default crew controller.
+  # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
+  resources = tar_resources(
+      crew = tar_resources_crew(controller = "main_controller")
+    )
   )
 # Run the R scripts in the R/ folder with your custom functions:
 # tar_source()
@@ -174,7 +192,14 @@ if (LOAD_EXTERNAL_SCORES) {
       pattern = map(external_names),
       command = {
        group_dfs[[external_names]]
-      }
+      },
+      # This step causes the pipeline to exit with an error, apparently due to
+      # running out of memory. Run this in series on a non-parallel `crew`
+      # controller to avoid.
+      # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
+      resources = tar_resources(
+        crew = tar_resources_crew(controller = "serial_controller")
+      )
     )
   )
 } else {
