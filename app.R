@@ -39,11 +39,13 @@ load_forecast_data_raw <- function(forecaster) {
     # rename(wis = wis_count_scale, ae = ae_count_scale) %>%
     mutate(
       ahead = as.integer(target_end_date - forecast_date),
-      forecaster = names(forecaster_options[forecaster_options == forecaster])
-    ) %>%
-    {
-      .
-    }
+      forecaster = gsub(
+        EXTERNAL_PREFIX,
+        "",
+        names(forecaster_options[forecaster_options == .env$forecaster]),
+        fixed = TRUE
+      )
+    )
 }
 
 # Have loading function use the cache.

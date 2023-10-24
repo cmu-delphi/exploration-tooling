@@ -4,6 +4,7 @@
 # Choose how to execute the pipeline below.
 # See https://books.ropensci.org/targets/hpc.html
 # to learn about your options.
+
 readline_wrapper <- function(msg = "which project would you like to run?
 1: covid_hosp_explore
 2: flu_hosp_explore
@@ -51,19 +52,6 @@ if (external_scores_path == "") {
   LOAD_EXTERNAL_SCORES <- FALSE
 } else {
   LOAD_EXTERNAL_SCORES <- TRUE
-
-# scores <- readRDS(external_scores_path)
-# external_forecaster_options <- unique(scores$forecaster)
-#
-# # Create local dir in which to store by-forecaster scores
-# OUTPUT_DIR <- "cache"
-# if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR)
-#
-# # Save score for each forecaster separately to local cache dir.
-# invisible(lapply(group_split(scores, forecaster), function(one_forecaster) {
-#   forecaster <- one_forecaster$forecaster[1L]
-#   saveRDS(one_forecaster, file.path(OUTPUT_DIR, paste0(forecaster, ".RDS")))
-# }))
 }
 
 # Dynamically define the external files constants for access within the `targets` session.
@@ -88,17 +76,35 @@ options(shiny.autoload.r=FALSE)
 forecaster_options <- unique(tar_read(forecasters)[["parent_id"]])
 # Map forecaster names to score files
 forecaster_options <- setNames(
+  # File names
   paste0("score_", gsub(" ", ".", forecaster_options)),
+  # Display names
   forecaster_options
 )
 
 # Add ensembles
 ensemble_options <- tar_read(ensembles)[["a"]]
 ensemble_options <- setNames(
+  # File names
   paste0("ensemble_score_", ensemble_options),
+  # Display names
   paste0("ensemble score ", ensemble_options)
 )
 
-forecaster_options <- c(ensemble_options, forecaster_options)
+external_options <- tar_read(external_names)
+EXTERNAL_PREFIX <- "[external] "
+external_options <- setNames(
+  # File names
+  # Get names of all branches of `external_scores` target by index. The way these
+  # were specified, `external_names` provides the order of the branches.
+  tar_branch_names(external_scores, seq_along(external_options)),
+  # Display names
+  paste0(
+    EXTERNAL_PREFIX,
+    gsub(" forecaster", "", gsub("_", " ", external_options, fixed = TRUE), fixed = TRUE)
+  )
+)
 
-# runApp(here::here("app.R"), port=3838)
+forecaster_options <- c(ensemble_options, forecaster_options, external_options)
+
+runApp(here::here("app.R"), port=3838)
