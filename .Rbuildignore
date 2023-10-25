@@ -1,2 +1,6 @@
 ^renv$
 ^renv\.lock$
+^LICENSE\.md$
+^.lintr$
+^.renvignore$
+^.github$

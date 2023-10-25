@@ -28,18 +28,44 @@ perform_sanity_checks <- function(epi_data,
   if (!is.null(trainer) && !epipredict:::is_regression(trainer)) {
     cli::cli_abort("{trainer} must be a `{parsnip}` model of mode 'regression'.")
   } else if (inherits(trainer, "quantile_reg")) {
-    # add all levels to the trainer and update args list
-    tau <- sort(epipredict:::compare_quantile_args(
-      args_list$levels,
-      rlang::eval_tidy(trainer$args$tau)
+    # add all quantile_levels to the trainer and update args list
+    quantile_levels <- sort(epipredict:::compare_quantile_args(
+      args_list$quantile_levels,
+      rlang::eval_tidy(trainer$args$quantile_levels)
     ))
-    args_list$levels <- tau
-    trainer$args$tau <- rlang::enquo(tau)
+    args_list$quantile_levels <- quantile_levels
+    trainer$args$quantile_levels <- rlang::enquo(quantile_levels)
   }
   args_list$lags <- epipredict:::arx_lags_validator(predictors, args_list$lags)
   return(list(args_list, predictors, trainer))
 }
 
+#' confirm that there's enough data to run this model
+#' @description
+#' epipredict is a little bit fragile about having enough data to train; we want
+#'   to be able to return a null result rather than error out; this check say to
+#'   return a null
+#' @param epi_data the input data
+#' @param buffer how many training data to insist on having (e.g. if `buffer=1`,
+#'   this trains on one sample; the default is set so that `linear_reg` isn't
+#'   rank deficient)
+#' @param ahead the effective ahead; may be infinite if there isn't enough data.
+#' @param args_input the input as supplied to `forecaster_pred`; lags is the
+#'   important argument, which may or may not be defined, with the default
+#'   coming from `arx_args_list`
+#' @export
+confirm_insufficient_data <- function(epi_data, ahead, args_input, buffer = 9) {
+  if (!is.null(args_input$lags)) {
+    lag_max <- max(args_input$lags)
+  } else {
+    lag_max <- 14 # default value of 2 weeks
+  }
+  return(
+    is.infinite(ahead) ||
+      as.integer(max(epi_data$time_value) - min(epi_data$time_value)) <=
+        lag_max + ahead + buffer
+  )
+}
 # TODO replace with `step_arx_forecaster`
 #' add the default steps for arx_forecaster
 #' @description
@@ -86,11 +112,10 @@ arx_postprocess <- function(postproc,
                             target_date = NULL) {
   postproc %<>% layer_predict()
   if (inherits(trainer, "quantile_reg")) {
-
-    postproc %<>% layer_quantile_distn(levels = args_list$levels) %>% layer_point_from_distn()
+    postproc %<>% layer_quantile_distn(quantile_levels = args_list$quantile_levels) %>% layer_point_from_distn()
   } else {
     postproc %<>% layer_residual_quantiles(
-      probs = args_list$levels, symmetrize = args_list$symmetrize,
+      quantile_levels = args_list$quantile_levels, symmetrize = args_list$symmetrize,
       by_key = args_list$quantile_by_key
     )
   }
@@ -98,8 +123,7 @@ arx_postprocess <- function(postproc,
     postproc %<>% layer_threshold(dplyr::starts_with(".pred"))
   }
 
-  postproc %<>% layer_naomit(dplyr::starts_with(".pred"))
-  postproc %<>% layer_add_forecast_date(forecast_date = forecast_date) %>%
+  postproc %<>% layer_naomit(dplyr::starts_with(".pred")) %>%
     layer_add_target_date(target_date = target_date)
   return(postproc)
 }
@@ -162,6 +186,14 @@ forecaster_pred <- function(data,
   if (length(forecaster_args) > 0) {
     names(forecaster_args) <- forecaster_args_names
   }
+  if (is.null(forecaster_args$ahead)) {
+    cli::cli_abort(
+      c(
+        "exploration-tooling error: forecaster_pred needs some value for ahead."
+      ),
+      class = "explorationToolingError"
+    )
+  }
   if (!is.numeric(forecaster_args$n_training) && !is.null(forecaster_args$n_training)) {
     n_training <- as.numeric(forecaster_args$n_training)
     net_slide_training <- max(slide_training, n_training) + n_training_pad
@@ -171,11 +203,6 @@ forecaster_pred <- function(data,
   }
   # restrict the dataset to areas where training is possible
   start_date <- min(archive$DT$time_value) + net_slide_training
-  if (slide_training < Inf) {
-    start_date <- min(archive$DT$time_value) + slide_training + n_training_pad
-  } else {
-    start_date <- min(archive$DT$time_value) + n_training_pad
-  }
   end_date <- max(archive$DT$time_value) - forecaster_args$ahead
   valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = 1)
 
@@ -206,7 +233,7 @@ forecaster_pred <- function(data,
 
   # append the truth data
   true_value <- archive$as_of(archive$versions_end) %>%
-    select(geo_value, time_value, outcome) %>%
+    select(geo_value, time_value, !!outcome) %>%
     rename(true_value = !!outcome)
   res %<>%
     inner_join(true_value,

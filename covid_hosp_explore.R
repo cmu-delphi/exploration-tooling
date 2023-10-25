@@ -49,6 +49,7 @@ tar_option_set(
       crew = tar_resources_crew(controller = "main_controller")
     )
   )
+
 # Run the R scripts in the R/ folder with your custom functions:
 # tar_source()
 # where the forecasters and parameters are joined; see either the variable param_grid or `tar_read(forecasters)`
