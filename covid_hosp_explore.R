@@ -168,7 +168,8 @@ if (LOAD_EXTERNAL_SCORES) {
         group_by(forecaster) %>%
         targets::tar_group()
       },
-      iteration = "group"
+      iteration = "group",
+      garbage_collection = TRUE
     ),
     tar_target(
       name = external_names,
@@ -178,7 +179,6 @@ if (LOAD_EXTERNAL_SCORES) {
           group_keys() %>%
           pull(forecaster)
       },
-      memory = "transient",
       garbage_collection = TRUE
     ),
     tar_target(
