@@ -32,7 +32,7 @@
 #'   should be ones that will store well in a data.table; if you need more
 #'   complicated parameters, it is better to store them in separate files, and
 #'   use the filename as the parameter.
-#' @param levels The quantile levels to predict. Defaults to those required by
+#' @param quantile_levels The quantile levels to predict. Defaults to those required by
 #'   covidhub.
 #' @seealso some utilities for making forecasters: [format_storage],
 #'   [perform_sanity_checks]
@@ -45,10 +45,10 @@
 scaled_pop <- function(epi_data,
                        outcome,
                        extra_sources = "",
-                       ahead=1,
+                       ahead = 1,
                        pop_scaling = TRUE,
                        trainer = parsnip::linear_reg(),
-                       levels = covidhub_probs(),
+                       quantile_levels = covidhub_probs(),
                        ...) {
   # perform any preprocessing not supported by epipredict
   # one that every forecaster will need to handle: how to manage max(time_value)
@@ -58,9 +58,9 @@ scaled_pop <- function(epi_data,
   # this next part is basically unavoidable boilerplate you'll want to copy
   epi_data <- epidataAhead[[1]]
   effective_ahead <- epidataAhead[[2]]
-  # edge case where there is no data; eventually epipredict will handle this
-  if (is.infinite(effective_ahead)) {
-    effective_ahead <- 0
+  args_input <- list(...)
+  # edge case where there is no data or less data than the lags; eventually epipredict will handle this
+  if (confirm_insufficient_data(epi_data, effective_ahead, args_input)) {
     null_result <- tibble(
       geo_value = character(),
       forecast_date = Date(),
@@ -70,9 +70,8 @@ scaled_pop <- function(epi_data,
     )
     return(null_result)
   }
-  args_input <- list(...)
   args_input[["ahead"]] <- effective_ahead
-  args_input[["levels"]] <- levels
+  args_input[["quantile_levels"]] <- quantile_levels
   args_list <- do.call(arx_args_list, args_input)
   # if you want to ignore extra_sources, setting predictors is the way to do it
   predictors <- c(outcome, extra_sources)
