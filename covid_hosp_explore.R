@@ -84,7 +84,7 @@ forecasts_and_scores_by_ahead <- tar_map(
         measure = list(
           wis = weighted_interval_score,
           ae = absolute_error,
-          ic80 = interval_coverage(0.8)
+          cov_80 = interval_coverage(0.8)
         )
       )
     )
@@ -152,7 +152,7 @@ ensemble_forecast <- tar_map(
         measures = list(
           wis = weighted_interval_score,
           ae = absolute_error,
-          ic80 = interval_coverage(0.8)
+          cov_80 = interval_coverage(0.8)
         )
       )
     }

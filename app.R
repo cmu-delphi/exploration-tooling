@@ -87,7 +87,7 @@ shinyApp(
               # "Mean WIS per 100k" = "wis_per_100k",
               "Mean AE" = "ae",
               # "Mean AE per 100k" = "ae_per_100k",
-              "80%PI Coverage" = "ic80"
+              "80%PI Coverage" = "cov_80"
             )
           ),
           selectInput("x_var",
@@ -154,7 +154,7 @@ shinyApp(
 
       # Normalize by baseline scores. This is not relevant for coverage, which is compared
       # to the nominal confidence level.
-      if (input$scale_by_baseline && input$selected_metric != "ic80") {
+      if (input$scale_by_baseline && input$selected_metric != "cov_80") {
         # These merge keys are overkill; this should be fully specified by
         # c("forecast_date", "target_end_date", "geo_value")
         merge_keys <- c("forecast_date", "target_end_date", "ahead", "issue", "geo_value")
@@ -197,7 +197,7 @@ shinyApp(
         `+`(geom_hline(
           linetype = "dashed",
           yintercept = switch(input$selected_metric,
-            ic80 = 0.80,
+            cov_80 = 0.80,
             # Avoid https://github.com/plotly/plotly.R/issues/1947 by using NA
             # default and na.rm=TRUE rather than numeric(0L) default
             NA_real_
