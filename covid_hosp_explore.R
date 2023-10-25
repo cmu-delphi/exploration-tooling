@@ -177,7 +177,9 @@ if (LOAD_EXTERNAL_SCORES) {
           group_by(forecaster) %>%
           group_keys() %>%
           pull(forecaster)
-      }
+      },
+      memory = "transient",
+      garbage_collection = TRUE
     ),
     tar_target(
       name = external_scores,
@@ -191,7 +193,9 @@ if (LOAD_EXTERNAL_SCORES) {
       # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
       resources = tar_resources(
         crew = tar_resources_crew(controller = "serial_controller")
-      )
+      ),
+      memory = "transient",
+      garbage_collection = TRUE
     )
   )
 } else {
