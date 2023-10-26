@@ -1,16 +1,31 @@
-library(targets)
-library(tarchetypes) # Load other packages as needed.
+suppressPackageStartupMessages({
+  library(targets)
+  library(tarchetypes) # Load other packages as needed.
 
-library(crew)
-library(dplyr)
-library(epipredict)
-library(epieval)
-library(lubridate)
-library(parsnip)
-library(purrr)
-library(tibble)
-library(tidyr)
-library(rlang)
+  library(crew)
+  library(dplyr)
+  library(epipredict)
+  library(epieval)
+  library(lubridate)
+  library(parsnip)
+  library(purrr)
+  library(tibble)
+  library(tidyr)
+  library(rlang)
+})
+
+# The external scores processing causes the pipeline to exit with an error,
+# apparently due to running out of memory. Set up a non-parallel `crew`
+# controller to avoid.
+# https://books.ropensci.org/targets/crew.html#heterogeneous-workers
+main_controller <- crew_controller_local(
+    name = "main_controller",
+    workers = parallel::detectCores() - 5
+  )
+serial_controller <- crew_controller_local(
+    name = "serial_controller",
+    workers = 1L
+  )
 
 tar_option_set(
   packages = c(
@@ -27,13 +42,20 @@ tar_option_set(
   ), # packages that your targets need to run
   imports = c("epieval", "parsnip"),
   format = "qs", # Optionally set the default storage format. qs is fast.
-  controller = crew::crew_controller_local(workers = parallel::detectCores() - 5),
-)
+  controller = crew_controller_group(main_controller, serial_controller),
+  # Set default crew controller.
+  # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
+  resources = tar_resources(
+      crew = tar_resources_crew(controller = "main_controller")
+    )
+  )
+
 # Run the R scripts in the R/ folder with your custom functions:
 # tar_source()
 # where the forecasters and parameters are joined; see either the variable param_grid or `tar_read(forecasters)`
 source("covid_hosp_explore/forecaster_instantiation.R")
 source("covid_hosp_explore/data_targets.R")
+source("covid_hosp_explore/dynamic_constants.R")
 
 forecasts_and_scores_by_ahead <- tar_map(
   values = forecaster_param_grids,
@@ -63,7 +85,7 @@ forecasts_and_scores_by_ahead <- tar_map(
         measure = list(
           wis = weighted_interval_score,
           ae = absolute_error,
-          ic80 = interval_coverage(0.8)
+          cov_80 = interval_coverage(0.8)
         )
       )
     )
@@ -90,13 +112,11 @@ forecasts_and_scores <- tar_map(
 )
 
 ensemble_keys <- list(a = c(300, 15))
-ensembles <- list(
-  tar_target(
-    name = ensembles,
-    command = {
-      ensemble_keys
-    }
-  )
+ensembles <- tar_target(
+  name = ensembles,
+  command = {
+    ensemble_keys
+  }
 )
 
 # The combine approach below is taken from the manual:
@@ -133,12 +153,61 @@ ensemble_forecast <- tar_map(
         measures = list(
           wis = weighted_interval_score,
           ae = absolute_error,
-          ic80 = interval_coverage(0.8)
+          cov_80 = interval_coverage(0.8)
         )
       )
     }
   )
 )
+
+if (LOAD_EXTERNAL_SCORES) {
+  external_names_and_scores <- list(
+    tar_target(
+      name = external_scores_df,
+      command = {
+        readRDS(external_scores_path) %>%
+        group_by(forecaster) %>%
+        targets::tar_group()
+      },
+      iteration = "group",
+      garbage_collection = TRUE
+    ),
+    tar_target(
+      name = external_names,
+      command = {
+        external_scores_df %>%
+          group_by(forecaster) %>%
+          group_keys() %>%
+          pull(forecaster)
+      },
+      garbage_collection = TRUE
+    ),
+    tar_target(
+      name = external_scores,
+      pattern = map(external_scores_df),
+      command = {
+        external_scores_df
+      },
+      # This step causes the pipeline to exit with an error, apparently due to
+      # running out of memory. Run this in series on a non-parallel `crew`
+      # controller to avoid.
+      # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
+      resources = tar_resources(
+        crew = tar_resources_crew(controller = "serial_controller")
+      ),
+      memory = "transient",
+      garbage_collection = TRUE
+    )
+  )
+} else {
+  external_names_and_scores <- tar_target(
+    name = external_names,
+    command = {
+      c()
+    }
+  )
+}
+
 
 list(
   data,
@@ -146,5 +215,6 @@ list(
   forecasts_and_scores_by_ahead,
   forecasts_and_scores,
   ensembles,
-  ensemble_forecast
+  ensemble_forecast,
+  external_names_and_scores
 )

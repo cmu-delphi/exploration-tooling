@@ -1,17 +1,19 @@
-library(targets)
-library(tarchetypes) # Load other packages as needed.
+suppressPackageStartupMessages({
+  library(targets)
+  library(tarchetypes) # Load other packages as needed.
 
-library(crew)
-library(dplyr)
-library(epipredict)
-library(epieval)
-library(lubridate)
-library(parsnip)
-library(purrr)
-library(tibble)
-library(tidyr)
-library(rlang)
-library(epidatr)
+  library(crew)
+  library(dplyr)
+  library(epipredict)
+  library(epieval)
+  library(lubridate)
+  library(parsnip)
+  library(purrr)
+  library(tibble)
+  library(tidyr)
+  library(rlang)
+  library(epidatr)
+})
 
 tar_option_set(
   packages = c(
@@ -202,7 +204,7 @@ forecasts_and_scores <- tar_map(
         measure = list(
           wis = weighted_interval_score,
           ae = absolute_error,
-          ic80 = interval_coverage(0.8)
+          cov_80 = interval_coverage(0.8)
         )
       )
     }
@@ -253,7 +255,7 @@ ensemble_forecast <- tar_map(
         measures = list(
           wis = weighted_interval_score,
           ae = absolute_error,
-          ic80 = interval_coverage(0.8)
+          cov_80 = interval_coverage(0.8)
         )
       )
     }
