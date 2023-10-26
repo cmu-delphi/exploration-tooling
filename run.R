@@ -1,9 +1,29 @@
 #!/usr/bin/env Rscript
 
-# This is a helper script to run the pipeline.
-# Choose how to execute the pipeline below.
-# See https://books.ropensci.org/targets/hpc.html
-# to learn about your options.
+# This is a helper script to run the pipeline. Choose how to execute the
+# pipeline below. See https://books.ropensci.org/targets/hpc.html to learn
+# about your options.
+#
+# Forecasters not run in `targets` can be included for comparison by providing
+# the path to a score file.
+#
+#   # Example fetching external scores from the forecasting bucket
+#   library(aws.s3)
+#
+#   Sys.setenv(
+#     AWS_ACCESS_KEY_ID = "",
+#     AWS_SECRET_ACCESS_KEY = ""
+#   )
+#
+#   s3b <- get_bucket("forecasting-team-data")
+#
+#   # Load object
+#   scorecards <- s3readRDS(
+#     object = "2023/exploration-scorecards-2023-10-04.RDS",
+#     bucket = s3b
+#   )
+#   # Save to disk
+#   saveRDS(scorecards, "exploration-scorecards-2023-10-04.RDS")
 
 readline_wrapper <- function(msg = "which project would you like to run?
 1: covid_hosp_explore
