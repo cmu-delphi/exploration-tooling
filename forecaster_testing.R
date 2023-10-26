@@ -209,7 +209,7 @@ forecasts_and_scores <- tar_map(
         measure = list(
           wis = weighted_interval_score,
           ae = absolute_error,
-          ic80 = interval_coverage(0.8)
+          cov_80 = interval_coverage(0.8)
         )
       )
     }
