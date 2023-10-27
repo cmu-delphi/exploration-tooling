@@ -8,7 +8,7 @@ data <- list(
         geo_type = "state",
         time_type = "day",
         geo_values = "*",
-        time_values = epirange(from = "2020-01-01", to = "2024-01-01"),
+        time_values = epirange(from = "20200101", to = "20240101"),
       ) %>%
         rename(
           actual = value,
@@ -71,6 +71,7 @@ data <- list(
     }
   ),
   tar_target(
+    # TODO: This is almost identical to hhs_evaluation_data. Can we combine them?
     name = hhs_latest_data_2022,
     command = {
       epidatr::pub_covidcast(

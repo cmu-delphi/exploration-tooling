@@ -2,10 +2,11 @@ Package: epieval
 Title: Evaluating Timeseries Forecasting on Archival Data
 Version: 0.1.0
 Date: 2023-09-28
-Authors@R: 
+Authors@R:
     c(
     person("David", "Weber", email = "davidweb@andrew.cmu.edu", role = c("ctb", "cre")),
-    person("Dmitry", "Shemetov", email = "dshemeto@andrew.cmu.edu", role = c("aut"))
+    person("Dmitry", "Shemetov", email = "dshemeto@andrew.cmu.edu", role = c("aut")),
+    person("Nat", "DeFries", email = "ndefries@andrew.cmu.edu", role = c("aut")),
     )
 Description: Given a timeseries and accompanying auxillary timeseries, evaluate a collection of forecasters implementable with epipredict using several metrics on historical data. Assuming the source of your timeseries provides versioned data, the evaluation at any given timepoint will only use data that was available at that point.
 License: MIT + file LICENSE
