@@ -42,16 +42,12 @@ input: ") {
 project_selection <- readline_wrapper()
 external_scores_path <- readline_wrapper("path to RDS file containing external forecast scores, if desired:")
 
-# renv::init()
-renv::restore()
-
 suppressPackageStartupMessages({
   library(targets)
   library(shiny)
 })
 
-TAR_PROJECT <- switch(
-  as.character(project_selection),
+TAR_PROJECT <- switch(as.character(project_selection),
   "1" = "covid_hosp_explore",
   "2" = "flu_hosp_explore",
   "3" = "covid_hosp_prod",
@@ -89,7 +85,7 @@ tar_make()
 
 
 # Prevent functions defined in /R dir from being loaded unnecessarily
-options(shiny.autoload.r=FALSE)
+options(shiny.autoload.r = FALSE)
 
 forecaster_options <- unique(tar_read(forecasters)[["parent_id"]])
 # Map forecaster names to score files
@@ -129,4 +125,4 @@ if (!is.null(external_options) && length(external_options) > 0) {
 
 forecaster_options <- c(ensemble_options, forecaster_options, external_options)
 
-runApp(here::here("app.R"), port=3838)
+runApp(here::here("app.R"), port = 3838)
