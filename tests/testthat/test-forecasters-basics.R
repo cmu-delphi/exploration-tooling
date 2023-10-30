@@ -120,3 +120,69 @@ test_that("flatline_fc same across aheads", {
   expect_equal(resM2, resM1)
   expect_equal(resM2, res1)
 })
+
+test_that(ensemble[[1]], {
+  jhu <- case_death_rate_subset %>%
+    dplyr::filter(time_value >= as.Date("2021-12-01"))
+  # the as_of for this is wildly far in the future
+  attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
+  # create some forecasts to ensemble
+  meta_res <- list(
+    scaled_pop(jhu, "case_rate", c("death_rate"), -2L),
+    scaled_pop(jhu, "case_rate", c("death_rate"), -2L, lags = c(0, 1, 2, 3, 5, 7, 11, 13, 17)),
+    scaled_pop(jhu, "case_rate", c("death_rate"), -2L, pop_scaling = FALSE),
+    flatline_fc(jhu, "case_rate", ahead = -2L)
+  )
+  ave_ens <- average_ensemble(jhu, meta_res, "case_rate")
+  # target date correct
+  expect_true(all(
+    ave_ens$target_end_date ==
+      as.Date("2022-01-01")
+  ))
+  expect_equal(
+    names(ave_ens),
+    c("geo_value", "forecast_date", "target_end_date", "quantile", "value")
+  )
+  expect_true(all(
+    ave_ens$target_end_date ==
+      as.Date("2022-01-01")
+  ))
+  # make sure that key direction doesn't matter when generating ensembles
+  ave_ens_reversed <- average_ensemble(jhu, meta_res, "case_rate")
+  expect_true(all_equal(ave_ens_reversed, ave_ens))
+  # make sure it produces the expected median of a random row
+  sampled_rows_all <- purrr::map_vec(
+    meta_res,
+    ~ filter(.x, geo_value == "ca" & forecast_date == "2022-01-03" & quantile == .3)
+  )
+  sampled_row_by_hand <- sampled_rows_all %>%
+    summarize(value = median(value), .by=c("geo_value", "forecast_date", "target_end_date", "quantile"))
+  sampled_row_by_function <- ave_ens %>% filter(geo_value == "ca" & forecast_date == "2022-01-03" & quantile == .3)
+  expect_equal(sampled_row_by_function, sampled_row_by_hand)
+
+  mean_ens <- average_ensemble(jhu, meta_res, "case_rate", average_type = mean)
+  are_equal <- mean_ens %>% full_join(ave_ens,
+              by = join_by(geo_value, forecast_date, target_end_date, quantile)) %>%
+    mutate(eq = value.x != value.y) %>%
+    pull(eq)
+  # expect the mean and median to be generally not equal
+  expect_true(mean(are_equal) > 0.9)
+  # any ensemble specific tests
+  # test case where extra_sources is "empty"
+  # test case where the epi_df is empty
+  null_jhu <- jhu %>% filter(time_value < as.Date("0009-01-01"))
+  expect_no_error(null_ave_ens <- average_ensemble(null_jhu, meta_res, "case_rate"))
+  # average_ensemble doesn't actually depend on the input data
+  expect_true(all_equal(ave_ens, null_ave_ens))
+
+  # carry on as if nothing was missing if one of the forecasters is missing entries
+  one_partially_missing <- list2(meta_res[[1]][1:900, 1:5], !!!meta_res[2:4])
+  expect_no_error(partial_ave_ens <- average_ensemble(jhu, one_partially_missing))
+  # the entries that are present for all of them are the same
+  left_join(partial_ave_ens, ave_ens, by = c("geo_value", "forecast_date", "target_end_date", "quantile")) %>%
+    summarize(all.equal(value.x,value.y))
+  left_join(partial_ave_ens, ave_ens, by = c("geo_value", "forecast_date", "target_end_date", "quantile")) %>%
+    mutate(eq = value.x == value.y) %>% pull(eq)
+  expect_true(all_equal(partial_ave_ens[1:900, 1:5], ave_ens[1:900, 1:5]))
+  expect_identical(names(null_ave_ens), names(ave_ens))
+})
