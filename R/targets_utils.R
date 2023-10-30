@@ -19,6 +19,31 @@ make_target_param_grid <- function(param_grid) {
     param_names = list_names
   )
 }
+#' convert a list of forecasters
+#' @description
+#' the required format for targets is a little jank; this takes a human legible tibble and makes it targets legible.
+#' Currently only `forecaster` and `trainer` can be symbols.
+#' @param param_grid the tibble of parameters. Must have forecaster and trainer, everything else is optional
+#' @export
+#' @importFrom rlang syms
+#' @importFrom purrr map
+#' @import dplyr
+make_target_ensemble_grid <- function(param_grid) {
+  param_grid$ensemble_params <- map(param_grid$ensemble_params, sym_subset)
+  param_grid %<>%
+    mutate(ensemble = syms(ensemble)) %>%
+    mutate(ensemble_params_names = list(names(ensemble_params))) %>%
+    select(-forecasters) %>%
+    relocate(id, .before = everything())
+  return(param_grid)
+}
+#' function to map
+#' @importFrom purrr imap
+#' @keywords internal
+#' @param sym_names a list of the parameter names that should be turned into symbols
+sym_subset <- function(param_list, sym_names = list("average_type")) {
+  imap(param_list, \(x, y) if (y %in% sym_names) sym(x) else x)
+}
 
 #' helper function for `make_target_param_grid`
 #' @keywords internal
