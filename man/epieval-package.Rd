@@ -14,6 +14,7 @@ Given a timeseries and accompanying auxillary timeseries, evaluate a collection 
 Authors:
 \itemize{
   \item Dmitry Shemetov \email{dshemeto@andrew.cmu.edu}
+  \item Nat DeFries \email{ndefries@andrew.cmu.edu}
 }
 
 }
