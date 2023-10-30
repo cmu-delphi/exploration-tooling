@@ -18,14 +18,14 @@ suppressPackageStartupMessages({
 # apparently due to running out of memory. Set up a non-parallel `crew`
 # controller to avoid.
 # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
-main_controller <- crew_controller_local(
-    name = "main_controller",
-    workers = parallel::detectCores() - 5
-  )
-serial_controller <- crew_controller_local(
-    name = "serial_controller",
-    workers = 1L
-  )
+## main_controller <- crew_controller_local(
+##     name = "main_controller",
+##     workers = parallel::detectCores() - 5
+##   )
+## serial_controller <- crew_controller_local(
+##     name = "serial_controller",
+##     workers = 1L
+##   )
 
 tar_option_set(
   packages = c(
@@ -42,12 +42,12 @@ tar_option_set(
   ), # packages that your targets need to run
   imports = c("epieval", "parsnip"),
   format = "qs", # Optionally set the default storage format. qs is fast.
-  controller = crew_controller_group(main_controller, serial_controller),
+  ## controller = crew_controller_group(main_controller, serial_controller),
   # Set default crew controller.
   # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
-  resources = tar_resources(
-      crew = tar_resources_crew(controller = "main_controller")
-    )
+  ## resources = tar_resources(
+  ##     crew = tar_resources_crew(controller = "main_controller")
+  ##   )
   )
 
 # Run the R scripts in the R/ folder with your custom functions:
@@ -69,7 +69,6 @@ forecasts_and_scores_by_ahead <- tar_map(
         outcome = "hhs",
         extra_sources = "",
         forecaster = forecaster,
-        slide_training = Inf,
         n_training_pad = 30L,
         forecaster_args = params,
         forecaster_args_names = param_names
