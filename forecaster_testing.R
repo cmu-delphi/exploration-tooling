@@ -75,7 +75,6 @@ forecaster_pred(
   outcome = "hhs",
   extra_sources = "",
   forecaster = forecaster_param_grids$forecaster[[1]],
-  slide_training = Inf,
   slide_training_pad = 30L,
   forecaster_args = forecaster_param_grids$params[[1]],
   forecaster_args_names = forecaster_param_grids$param_namess[[1]]
@@ -193,7 +192,6 @@ forecasts_and_scores <- tar_map(
         outcome = "hhs",
         extra_sources = "",
         forecaster = forecaster,
-        slide_training = Inf,
         n_training_pad = 30L,
         forecaster_args = params,
         forecaster_args_names = param_names

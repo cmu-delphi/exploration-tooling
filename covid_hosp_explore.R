@@ -69,7 +69,6 @@ forecasts_and_scores_by_ahead <- tar_map(
         outcome = "hhs",
         extra_sources = "",
         forecaster = forecaster,
-        slide_training = Inf,
         n_training_pad = 30L,
         forecaster_args = params,
         forecaster_args_names = param_names
