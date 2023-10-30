@@ -1,5 +1,5 @@
 test_that("perform_sanity_checks", {
-  epi_data <- case_death_rate_subset
+  epi_data <- epipredict::case_death_rate_subset
   # don't need to test validate_forecaster_inputs as that's inherited
   # testing args_list inheritance
   ex_args <- arx_args_list()

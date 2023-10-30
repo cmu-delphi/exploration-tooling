@@ -40,6 +40,7 @@
 #'
 #' @importFrom rlang quo .data
 #' @importFrom assertthat assert_that
+#' @importFrom dplyr group_by summarize inner_join left_join mutate relocate across
 #' @export
 evaluate_predictions <- function(
     predictions_cards,
@@ -84,7 +85,7 @@ evaluate_predictions <- function(
   }
   class(score_card) <- c("score_cards", class(score_card))
   attributes(score_card) <- c(attributes(score_card),
-    as_of = lubridate::as_date(Sys.Date())
+    as_of = Sys.Date()
   )
   score_card <- collapse_cards(score_card)
   score_card <- score_card %>%
@@ -103,7 +104,9 @@ evaluate_predictions <- function(
 #' @return cards of the same class but with only one row for each
 #'   geo_value/forecast_date/ahead/forecaster (the point estimate)
 #'
+#' @importFrom assertthat assert_that
 #' @importFrom tidyr pivot_wider
+#' @importFrom dplyr filter mutate relocate select
 #'
 #' @export
 collapse_cards <- function(cards) {

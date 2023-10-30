@@ -4,6 +4,7 @@
 #' does not support `lags` as a parameter, but otherwise has the same parameters as `arx_forecaster`
 #' @inheritParams scaled_pop
 #' @importFrom rlang sym
+#' @importFrom epipredict flatline_forecaster flatline_args_list
 #' @export
 flatline_fc <- function(epi_data,
                         outcome,
@@ -25,8 +26,8 @@ flatline_fc <- function(epi_data,
   if (confirm_insufficient_data(epi_data, effective_ahead, args_input)) {
     null_result <- tibble(
       geo_value = character(),
-      forecast_date = Date(),
-      target_end_date = Date(),
+      forecast_date = lubridate::Date(),
+      target_end_date = lubridate::Date(),
       quantile = numeric(),
       value = numeric()
     )

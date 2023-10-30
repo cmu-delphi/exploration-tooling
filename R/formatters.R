@@ -8,8 +8,9 @@
 #' @param true_forecast_date the actual date from which the model is
 #'   making the forecast, rather than the last day of available data
 #' @param target_end_date the date of the prediction
-#' @import dplyr epipredict
-#' @importFrom magrittr %>% %<>%
+#' @importFrom epipredict nested_quantiles
+#' @importFrom dplyr mutate select rename relocate any_of
+#' @importFrom tidyr unnest
 #' @export
 format_storage <- function(pred, true_forecast_date, target_end_date) {
   pred %>%
@@ -34,14 +35,14 @@ format_storage <- function(pred, true_forecast_date, target_end_date) {
 #'   making the forecast, rather than the last day of available data
 #' @param target_end_date the date of the prediction
 #' @param quantile_levels the quantile levels
-#' @import dplyr
+#' @importFrom dplyr group_by rename reframe mutate
 format_covidhub <- function(pred, true_forecast_date, target_end_date, quantile_levels) {
-  pred %<>%
+  pred <- pred %>%
     group_by(forecast_date, geo_value, target_date) %>%
     rename(target_end_date = target_date) %>%
     reframe(quantile = quantile_levels, value = quantile(.pred_distn, quantile_levels)[[1]])
   forecasts$ahead <- ahead
-  forecasts %<>%
+  forecasts <- forecasts %>%
     group_by(forecast_date, geo_value, target_date) %>%
     mutate(forecast_date = target_date - ahead) %>%
     rename(target_end_date = target_date) %>%
