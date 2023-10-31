@@ -84,45 +84,48 @@ tar_make()
 # tar_make_future(workers = 2) # nolint
 
 
-# Prevent functions defined in /R dir from being loaded unnecessarily
-options(shiny.autoload.r = FALSE)
+use_shiny <- readline_wrapper("Would you like to run the shiny app? (y/[N]): ")
+if (use_shiny == "y") {
+  # Prevent functions defined in /R dir from being loaded unnecessarily
+  options(shiny.autoload.r = FALSE)
 
-forecaster_options <- unique(tar_read(forecasters)[["parent_id"]])
-# Map forecaster names to score files
-forecaster_options <- setNames(
-  # File names
-  paste0("score_", gsub(" ", ".", forecaster_options)),
-  # Display names
-  forecaster_options
-)
-
-# Add ensembles
-ensemble_options <- tar_read(ensembles)[["a"]]
-ensemble_options <- setNames(
-  # File names
-  paste0("ensemble_score_", ensemble_options),
-  # Display names
-  paste0("ensemble score ", ensemble_options)
-)
-
-external_options <- tar_read(external_names)
-EXTERNAL_PREFIX <- "[external] "
-if (!is.null(external_options) && length(external_options) > 0) {
-  external_options <- setNames(
+  forecaster_options <- unique(tar_read(forecasters)[["parent_id"]])
+  # Map forecaster names to score files
+  forecaster_options <- setNames(
     # File names
-    # Get names of all branches of `external_scores` target by index. The way these
-    # were specified, `external_names` provides the order of the branches.
-    tar_branch_names(external_scores, seq_along(external_options)),
+    paste0("score_", gsub(" ", ".", forecaster_options)),
     # Display names
-    paste0(
-      EXTERNAL_PREFIX,
-      gsub(" forecaster", "", gsub("_", " ", external_options, fixed = TRUE), fixed = TRUE)
-    )
+    forecaster_options
   )
-} else {
-  external_options <- character(0)
+
+  # Add ensembles
+  ensemble_options <- tar_read(ensembles)[["a"]]
+  ensemble_options <- setNames(
+    # File names
+    paste0("ensemble_score_", ensemble_options),
+    # Display names
+    paste0("ensemble score ", ensemble_options)
+  )
+
+  external_options <- tar_read(external_names)
+  EXTERNAL_PREFIX <- "[external] "
+  if (!is.null(external_options) && length(external_options) > 0) {
+    external_options <- setNames(
+      # File names
+      # Get names of all branches of `external_scores` target by index. The way these
+      # were specified, `external_names` provides the order of the branches.
+      tar_branch_names(external_scores, seq_along(external_options)),
+      # Display names
+      paste0(
+        EXTERNAL_PREFIX,
+        gsub(" forecaster", "", gsub("_", " ", external_options, fixed = TRUE), fixed = TRUE)
+      )
+    )
+  } else {
+    external_options <- character(0)
+  }
+
+  forecaster_options <- c(ensemble_options, forecaster_options, external_options)
+
+  runApp(here::here("app.R"), port = 3838)
 }
-
-forecaster_options <- c(ensemble_options, forecaster_options, external_options)
-
-runApp(here::here("app.R"), port = 3838)
