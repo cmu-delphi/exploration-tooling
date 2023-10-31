@@ -1,4 +1,4 @@
-data <- list(
+data_targets <- list(
   tar_target(
     name = hhs_evaluation_data,
     command = {
@@ -8,7 +8,7 @@ data <- list(
         geo_type = "state",
         time_type = "day",
         geo_values = "*",
-        time_values = epirange(from = "20200101", to = "20240101"),
+        time_values = epidatr::epirange(from = "20200101", to = "20240101"),
       ) %>%
         rename(
           actual = value,
@@ -25,9 +25,9 @@ data <- list(
         geo_type = "state",
         time_type = "day",
         geo_values = "*",
-        time_values = epirange(from = "20220101", to = "20220401"),
+        time_values = epidatr::epirange(from = "20220101", to = "20220401"),
         issues = "*",
-        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
+        fetch_args = fetch_args_list(return_empty = TRUE, timeout_seconds = 100)
       )
     }
   ),
@@ -40,9 +40,9 @@ data <- list(
         geo_type = "state",
         time_type = "day",
         geo_values = "*",
-        time_values = epirange(from = "20220101", to = "20220401"),
+        time_values = epidatr::epirange(from = "20220101", to = "20220401"),
         issues = "*",
-        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
+        fetch_args = fetch_args_list(return_empty = TRUE, timeout_seconds = 100)
       )
     }
   ),
@@ -80,8 +80,8 @@ data <- list(
         geo_type = "state",
         time_type = "day",
         geo_values = "*",
-        time_values = epirange(from = "20220101", to = "20220401"),
-        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
+        time_values = epidatr::epirange(from = "20220101", to = "20220401"),
+        fetch_args = fetch_args_list(return_empty = TRUE, timeout_seconds = 100)
       )
     }
   ),
@@ -94,8 +94,8 @@ data <- list(
         geo_type = "state",
         time_type = "day",
         geo_values = "*",
-        time_values = epirange(from = "20220101", to = "20220401"),
-        fetch_params = fetch_params_list(return_empty = TRUE, timeout_seconds = 100)
+        time_values = epidatr::epirange(from = "20220101", to = "20220401"),
+        fetch_args = fetch_args_list(return_empty = TRUE, timeout_seconds = 100)
       )
     }
   )

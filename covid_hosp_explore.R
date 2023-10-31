@@ -112,7 +112,7 @@ forecasts_and_scores <- tar_map(
 )
 
 ensemble_keys <- list(a = c(300, 15))
-ensembles <- tar_target(
+ensemble_targets <- tar_target(
   name = ensembles,
   command = {
     ensemble_keys
@@ -200,21 +200,29 @@ if (LOAD_EXTERNAL_SCORES) {
     )
   )
 } else {
-  external_names_and_scores <- tar_target(
-    name = external_names,
-    command = {
-      c()
-    }
+  external_names_and_scores <- list(
+    tar_target(
+      name = external_names,
+      command = {
+        c()
+      }
+    ),
+    tar_target(
+      name = external_scores,
+      command = {
+        data.frame()
+      }
+    )
   )
 }
 
 
 list(
-  data,
-  forecasters,
+  data_targets,
+  forecaster_targets,
   forecasts_and_scores_by_ahead,
   forecasts_and_scores,
-  ensembles,
+  ensemble_targets,
   ensemble_forecast,
   external_names_and_scores
 )
