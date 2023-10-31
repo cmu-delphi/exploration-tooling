@@ -11,7 +11,7 @@ data_targets <- list(
     command = {
       epidatr::pub_covidcast(
         source = "hhs",
-        signals = "confirmed_admissions_covid_1d",
+        signals = "confirmed_admissions_influenza_1d_prop_7dav",
         geo_type = geo_type,
         time_type = time_type,
         geo_values = geo_values,
@@ -25,7 +25,7 @@ data_targets <- list(
     command = {
       epidatr::pub_covidcast(
         source = "chng",
-        signals = "smoothed_adj_outpatient_covid",
+        signals = "smoothed_adj_outpatient_flu",
         geo_type = geo_type,
         time_type = time_type,
         geo_values = geo_values,
@@ -63,12 +63,12 @@ data_targets <- list(
     command = {
       epidatr::pub_covidcast(
         source = "hhs",
-        signals = "confirmed_admissions_covid_1d",
+        signals = "confirmed_admissions_influenza_1d_prop_7dav",
         geo_type = geo_type,
         time_type = time_type,
         geo_values = geo_values,
         time_values = time_values,
-        issues = "*",
+        issues = issues,
         fetch_args = fetch_args
       )
     }
@@ -78,12 +78,12 @@ data_targets <- list(
     command = {
       epidatr::pub_covidcast(
         source = "chng",
-        signals = "smoothed_adj_outpatient_covid",
+        signals = "smoothed_adj_outpatient_flu",
         geo_type = geo_type,
         time_type = time_type,
         geo_values = geo_values,
         time_values = time_values,
-        issues = "*",
+        issues = issues,
         fetch_args = fetch_args
       )
     }
@@ -96,8 +96,8 @@ data_targets <- list(
         rename("hhs" := value) %>%
         rename(version = issue) %>%
         as_epi_archive(
-          geo_type = "state",
-          time_type = "day",
+          geo_type = geo_type,
+          time_type = time_type,
           compactify = TRUE
         )
       chng_archive_data_2022 %<>%
@@ -105,8 +105,8 @@ data_targets <- list(
         rename("chng" := value) %>%
         rename(version = issue) %>%
         as_epi_archive(
-          geo_type = "state",
-          time_type = "day",
+          geo_type = geo_type,
+          time_type = time_type,
           compactify = TRUE
         )
       epix_merge(hhs_archive_data_2022, chng_archive_data_2022, sync = "locf")
