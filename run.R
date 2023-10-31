@@ -111,17 +111,21 @@ ensemble_options <- setNames(
 
 external_options <- tar_read(external_names)
 EXTERNAL_PREFIX <- "[external] "
-external_options <- setNames(
-  # File names
-  # Get names of all branches of `external_scores` target by index. The way these
-  # were specified, `external_names` provides the order of the branches.
-  tar_branch_names(external_scores, seq_along(external_options)),
-  # Display names
-  paste0(
-    EXTERNAL_PREFIX,
-    gsub(" forecaster", "", gsub("_", " ", external_options, fixed = TRUE), fixed = TRUE)
+if (!is.null(external_options) && length(external_options) > 0) {
+  external_options <- setNames(
+    # File names
+    # Get names of all branches of `external_scores` target by index. The way these
+    # were specified, `external_names` provides the order of the branches.
+    tar_branch_names(external_scores, seq_along(external_options)),
+    # Display names
+    paste0(
+      EXTERNAL_PREFIX,
+      gsub(" forecaster", "", gsub("_", " ", external_options, fixed = TRUE), fixed = TRUE)
+    )
   )
-)
+} else {
+  external_options <- character(0)
+}
 
 forecaster_options <- c(ensemble_options, forecaster_options, external_options)
 
