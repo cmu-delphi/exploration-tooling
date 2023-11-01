@@ -84,7 +84,7 @@ scaled_pop <- function(epi_data,
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {
-    preproc <- preproc %>% step_population_scaling(
+    preproc %<>% step_population_scaling(
       all_numeric(),
       df = epipredict::state_census,
       df_pop_col = "pop",
@@ -93,14 +93,14 @@ scaled_pop <- function(epi_data,
       by = c("geo_value" = "abbr")
     )
   }
-  preproc <- preproc %>% arx_preprocess(outcome, predictors, args_list)
+  preproc %<>% arx_preprocess(outcome, predictors, args_list)
 
   # postprocessing supported by epipredict
   postproc <- frosting()
-  postproc <- postproc %>% arx_postprocess(trainer, args_list)
+  postproc %<>% arx_postprocess(trainer, args_list)
   postproc
   if (pop_scaling) {
-    postproc <- postproc %>% layer_population_scaling(
+    postproc %<>% layer_population_scaling(
       .pred, .pred_distn,
       df = epipredict::state_census,
       df_pop_col = "pop",

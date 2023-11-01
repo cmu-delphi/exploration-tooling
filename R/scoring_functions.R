@@ -88,10 +88,10 @@ evaluate_predictions <- function(
     as_of = Sys.Date()
   )
   score_card <- collapse_cards(score_card)
-  score_card <- score_card %>%
+  score_card %<>%
     select(-.data$quantile, -.data$value)
 
-  score_card <- score_card %>%
+  score_card %<>%
     relocate(attr(err_measures, "names"), .after = last_col())
   return(score_card)
 }
@@ -117,14 +117,14 @@ collapse_cards <- function(cards) {
       "predictions_cards or score_cards classes."
     )
   )
-  cards <- cards %>%
+  cards %<>%
     filter(abs(.data$quantile - 0.5) < 1e-8 | is.na(.data$quantile)) %>%
     mutate(quantile = ifelse(is.na(.data$quantile), "p", "m"))
   if (n_distinct(cards$quantile) == 1) {
-    cards <- cards %>%
+    cards %<>%
       mutate(quantile = ifelse(.data$quantile == "p", NA, 0.5))
   } else {
-    cards <- cards %>%
+    cards %<>%
       pivot_wider(names_from = .data$quantile, values_from = .data$value) %>%
       mutate(
         quantile = ifelse(is.na(.data$p), 0.5, NA),
@@ -133,7 +133,7 @@ collapse_cards <- function(cards) {
       select(-.data$p, -.data$m)
   }
   if ("geo_value" %in% colnames(cards)) {
-    cards <- cards %>%
+    cards %<>%
       relocate(.data$quantile:.data$value, .after = .data$geo_value)
   }
   class(cards) <- c(cls, class(cards))

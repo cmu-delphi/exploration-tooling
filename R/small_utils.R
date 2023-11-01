@@ -28,7 +28,7 @@ add_id <- function(df, n_adj = 2) {
     mutate(id = paste(across(everything()), sep = "", collapse = ""), .keep = "none") %>%
     mutate(id = hash_animal(id, n_adj = n_adj)$words) %>%
     mutate(id = paste(id[1:n_adj], sep = "", collapse = "."))
-  df <- df %>%
+  df %<>%
     ungroup() %>%
     mutate(parent_id = stringified$id) %>%
     rowwise() %>%
@@ -81,7 +81,7 @@ id_ahead_ensemble_grid <- function(ensemble_grid, aheads, n_adj = 2) {
     tibble(ahead = aheads)
   )
 
-  ensemble_grid <- ensemble_grid %>%
+  ensemble_grid %<>%
     add_id(., n_adj = 2) %>%
     rowwise() %>%
     mutate(forecaster_ids = list(map2_vec(forecasters, ahead, single_id, n_adj = 2)))

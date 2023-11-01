@@ -37,12 +37,12 @@ format_storage <- function(pred, true_forecast_date, target_end_date) {
 #' @param quantile_levels the quantile levels
 #' @importFrom dplyr group_by rename reframe mutate
 format_covidhub <- function(pred, true_forecast_date, target_end_date, quantile_levels) {
-  pred <- pred %>%
+  pred %<>%
     group_by(forecast_date, geo_value, target_date) %>%
     rename(target_end_date = target_date) %>%
     reframe(quantile = quantile_levels, value = quantile(.pred_distn, quantile_levels)[[1]])
   forecasts$ahead <- ahead
-  forecasts <- forecasts %>%
+  forecasts %<>%
     group_by(forecast_date, geo_value, target_date) %>%
     mutate(forecast_date = target_date - ahead) %>%
     rename(target_end_date = target_date) %>%
