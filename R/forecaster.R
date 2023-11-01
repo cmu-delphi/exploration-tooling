@@ -82,7 +82,7 @@ arx_preprocess <- function(rec, outcome, predictors, args_list) {
   lags <- args_list$lags
   for (l in seq_along(lags)) {
     p <- predictors[l]
-    rec <- rec %>% step_epi_lag(!!p, lag = lags[[l]])
+    rec %<>% step_epi_lag(!!p, lag = lags[[l]])
   }
   rec %<>%
     step_epi_ahead(!!outcome, ahead = args_list$ahead) %>%
