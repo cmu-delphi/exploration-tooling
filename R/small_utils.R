@@ -16,7 +16,6 @@ covidhub_probs <- function(type = c("standard", "inc_case")) {
 #' and append the `ahead` at the end.
 #' @param df the df to add a column to. everything should be convertable to a string
 #' @param n_adj the number of adjectives to use; default of 2.
-#' @importFrom dplyr select rowwise mutate across everything ungroup
 #' @importFrom cli hash_animal
 #' @export
 add_id <- function(df, n_adj = 2) {
@@ -72,8 +71,6 @@ lookup_ids <- function() {
 #' @inheritParams add_id
 #' @importFrom tidyr expand_grid
 #' @importFrom tibble tibble
-#' @importFrom purrr map2_vec
-#' @importFrom dplyr rowwise mutate
 #' @export
 id_ahead_ensemble_grid <- function(ensemble_grid, aheads, n_adj = 2) {
   ensemble_grid <- expand_grid(

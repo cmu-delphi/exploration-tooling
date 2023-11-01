@@ -84,7 +84,7 @@ arx_preprocess <- function(rec, outcome, predictors, args_list) {
     p <- predictors[l]
     rec <- rec %>% step_epi_lag(!!p, lag = lags[[l]])
   }
-  rec <- rec %>%
+  rec %<>%
     step_epi_ahead(!!outcome, ahead = args_list$ahead) %>%
     step_epi_naomit() %>%
     step_training_window(n_recent = args_list$n_training)
@@ -112,22 +112,22 @@ arx_postprocess <- function(postproc,
                             args_list,
                             forecast_date = NULL,
                             target_date = NULL) {
-  postproc <- postproc %>% layer_predict()
+  postproc %<>% layer_predict()
   if (inherits(trainer, "quantile_reg")) {
-    postproc <- postproc %>%
+    postproc %<>%
       layer_quantile_distn(quantile_levels = args_list$quantile_levels) %>%
       layer_point_from_distn()
   } else {
-    postproc <- postproc %>% layer_residual_quantiles(
+    postproc %<>% layer_residual_quantiles(
       quantile_levels = args_list$quantile_levels, symmetrize = args_list$symmetrize,
       by_key = args_list$quantile_by_key
     )
   }
   if (args_list$nonneg) {
-    postproc <- postproc %>% layer_threshold(dplyr::starts_with(".pred"))
+    postproc %<>% layer_threshold(dplyr::starts_with(".pred"))
   }
 
-  postproc <- postproc %>%
+  postproc %<>%
     layer_naomit(dplyr::starts_with(".pred")) %>%
     layer_add_target_date(target_date = target_date)
   return(postproc)
@@ -177,7 +177,6 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
 #' @param forecaster_args_names a bit of a hack around targets, it contains
 #'   the names of the `forecaster_args`.
 #' @importFrom epiprocess epix_slide
-#' @importFrom dplyr select rename inner_join join_by
 #' @importFrom cli cli_abort
 #' @importFrom rlang !!
 #' @export
@@ -235,14 +234,14 @@ forecaster_pred <- function(data,
     before = before,
     ref_time_values = valid_predict_dates,
   )
-  res <- res %>% select(-time_value)
+  res %<>% select(-time_value)
   names(res) <- sub("^slide_value_", "", names(res))
 
   # append the truth data
   true_value <- archive$as_of(archive$versions_end) %>%
     select(geo_value, time_value, !!outcome) %>%
     rename(true_value = !!outcome)
-  res <- res %>%
+  res %<>%
     inner_join(true_value,
       by = join_by(geo_value, target_end_date == time_value)
     )

@@ -9,7 +9,6 @@
 #'   making the forecast, rather than the last day of available data
 #' @param target_end_date the date of the prediction
 #' @importFrom epipredict nested_quantiles
-#' @importFrom dplyr mutate select rename relocate any_of
 #' @importFrom tidyr unnest
 #' @export
 format_storage <- function(pred, true_forecast_date, target_end_date) {
@@ -35,7 +34,6 @@ format_storage <- function(pred, true_forecast_date, target_end_date) {
 #'   making the forecast, rather than the last day of available data
 #' @param target_end_date the date of the prediction
 #' @param quantile_levels the quantile levels
-#' @importFrom dplyr group_by rename reframe mutate
 format_covidhub <- function(pred, true_forecast_date, target_end_date, quantile_levels) {
   pred %<>%
     group_by(forecast_date, geo_value, target_date) %>%

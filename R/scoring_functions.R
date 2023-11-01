@@ -40,7 +40,6 @@
 #'
 #' @importFrom rlang quo .data
 #' @importFrom assertthat assert_that
-#' @importFrom dplyr group_by summarize inner_join left_join mutate relocate across
 #' @export
 evaluate_predictions <- function(
     predictions_cards,
@@ -106,7 +105,6 @@ evaluate_predictions <- function(
 #'
 #' @importFrom assertthat assert_that
 #' @importFrom tidyr pivot_wider
-#' @importFrom dplyr filter mutate relocate select
 #'
 #' @export
 collapse_cards <- function(cards) {
