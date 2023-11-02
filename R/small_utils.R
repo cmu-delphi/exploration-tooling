@@ -16,7 +16,6 @@ covidhub_probs <- function(type = c("standard", "inc_case")) {
 #' and append the `ahead` at the end.
 #' @param df the df to add a column to. everything should be convertable to a string
 #' @param n_adj the number of adjectives to use; default of 2.
-#' @import openssl dplyr
 #' @importFrom cli hash_animal
 #' @export
 add_id <- function(df, n_adj = 2) {
@@ -29,13 +28,14 @@ add_id <- function(df, n_adj = 2) {
     mutate(id = hash_animal(id, n_adj = n_adj)$words) %>%
     mutate(id = paste(id[1:n_adj], sep = "", collapse = "."))
   df %<>%
-    ungroup %>%
+    ungroup() %>%
     mutate(parent_id = stringified$id) %>%
     rowwise() %>%
     mutate(id = paste(parent_id, ahead, sep = ".", collapse = " ")) %>%
     ungroup()
   return(df)
 }
+
 
 #' generate an id from a simple list of parameters
 #' @param param_list the list of parameters. must include `ahead` if `ahead = NULL`
@@ -55,6 +55,8 @@ single_id <- function(param_list, ahead = NULL, n_adj = 2) {
   }
   return(full_name)
 }
+
+
 #' given target name(s), lookup the corresponding parameters
 #' @export
 lookup_ids <- function() {
@@ -67,6 +69,8 @@ lookup_ids <- function() {
 #' @param ensemble_grid the list of ensembles,
 #' @param aheads the aheads to add
 #' @inheritParams add_id
+#' @importFrom tidyr expand_grid
+#' @importFrom tibble tibble
 #' @export
 id_ahead_ensemble_grid <- function(ensemble_grid, aheads, n_adj = 2) {
   ensemble_grid <- expand_grid(

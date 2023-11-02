@@ -47,12 +47,12 @@ get_points_df <- function(predictions_cards) {
         is.na(.data$quantile)
     )
   if (any(is.na(points_df$quantile))) {
-    points_df <- points_df %>%
+    points_df %<>%
       pivot_wider(names_from = "quantile", values_from = "value") %>%
       mutate(value = if_else(!is.na(.data$`NA`), .data$`NA`, .data$`0.5`)) %>%
       select(-.data$`0.5`, -.data$`NA`)
   } else {
-    points_df <- points_df %>%
+    points_df %<>%
       select(-.data$quantile)
   }
 
@@ -102,7 +102,7 @@ plot_state_forecasters <- function(
     return(NULL)
   }
 
-  predictions_cards <- predictions_cards %>%
+  predictions_cards %<>%
     filter(!geo_value %in% exclude_geos)
 
   td1 <- tar_read("hhs_latest_data_2022") %>%
@@ -123,11 +123,11 @@ plot_state_forecasters <- function(
   td2_max <- td2_max %>%
     left_join(td1_max, by = "geo_value", suffix = c(".2", ".1")) %>%
     mutate(max_ratio = max_value.1 / max_value.2)
-  td2 <- td2 %>%
+  td2 %<>%
     left_join(td2_max, by = "geo_value") %>%
     mutate(scaled_value = value * max_ratio)
-  td1 <- td1 %>% mutate(forecaster = "hhs hosp truth")
-  td2 <- td2 %>% mutate(forecaster = "chng smoothed_adj_outpatient_flu current, scaled")
+  td1 %<>% mutate(forecaster = "hhs hosp truth")
+  td2 %<>% mutate(forecaster = "chng smoothed_adj_outpatient_flu current, scaled")
 
   # Setup plot
   g <- ggplot(td1, mapping = aes(
@@ -164,7 +164,7 @@ plot_nation_forecasters <- function(
     return(NULL)
   }
 
-  predictions_cards <- predictions_cards %>%
+  predictions_cards %<>%
     filter(!geo_value %in% exclude_geos) %>%
     group_by(forecaster, forecast_date, quantile, target_end_date) %>%
     summarize(value = sum(value)) %>%
@@ -194,7 +194,7 @@ plot_nation_forecasters <- function(
   td2.max <- td2 %>%
     summarize(max_value = max(value)) %>%
     pull(max_value)
-  td2 <- td2 %>%
+  td2 %<>%
     mutate(scaled_value = value * td1.max / td2.max)
 
   # Setup plot

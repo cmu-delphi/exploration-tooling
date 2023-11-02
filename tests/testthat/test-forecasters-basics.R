@@ -1,3 +1,4 @@
+library(dplyr)
 # TODO better way to do this than copypasta
 forecasters <- list(
   c("scaled_pop", scaled_pop),
@@ -5,7 +6,7 @@ forecasters <- list(
 )
 for (forecaster in forecasters) {
   test_that(forecaster[[1]], {
-    jhu <- case_death_rate_subset %>%
+    jhu <- epipredict::case_death_rate_subset %>%
       dplyr::filter(time_value >= as.Date("2021-12-01"))
     # the as_of for this is wildly far in the future
     attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
@@ -42,13 +43,13 @@ for (forecaster in forecasters) {
     expect_no_error(null_res <- forecaster[[2]](null_jhu, "case_rate", c("death_rate")))
     expect_identical(names(null_res), names(res))
     expect_equal(nrow(null_res), 0)
-    expect_identical(null_res, tibble(geo_value = character(), forecast_date = Date(), target_end_date = Date(), quantile = numeric(), value = numeric()))
+    expect_identical(null_res, tibble(geo_value = character(), forecast_date = lubridate::Date(), target_end_date = lubridate::Date(), quantile = numeric(), value = numeric()))
   })
 }
 
 # unique tests
 test_that("flatline_fc same across aheads", {
-  jhu <- case_death_rate_subset %>%
+  jhu <- epipredict::case_death_rate_subset %>%
     dplyr::filter(time_value >= as.Date("2021-12-01"))
   attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
   resM2 <- flatline_fc(jhu, "case_rate", c("death_rate"), -2L) %>%

@@ -36,11 +36,9 @@
 #'   covidhub.
 #' @seealso some utilities for making forecasters: [format_storage],
 #'   [perform_sanity_checks]
-#' @import recipes epipredict
-#' @importFrom magrittr %>% %<>%
-#' @importFrom epipredict epi_recipe step_population_scaling
+#' @importFrom epipredict epi_recipe step_population_scaling frosting arx_args_list layer_population_scaling
 #' @importFrom tibble tibble
-#' @importFrom lubridate Date
+#' @importFrom recipes all_numeric
 #' @export
 scaled_pop <- function(epi_data,
                        outcome,
@@ -63,8 +61,8 @@ scaled_pop <- function(epi_data,
   if (confirm_insufficient_data(epi_data, effective_ahead, args_input)) {
     null_result <- tibble(
       geo_value = character(),
-      forecast_date = Date(),
-      target_end_date = Date(),
+      forecast_date = lubridate::Date(),
+      target_end_date = lubridate::Date(),
       quantile = numeric(),
       value = numeric()
     )
@@ -88,7 +86,7 @@ scaled_pop <- function(epi_data,
   if (pop_scaling) {
     preproc %<>% step_population_scaling(
       all_numeric(),
-      df = state_census,
+      df = epipredict::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
       rate_rescaling = 1e5,
@@ -104,7 +102,7 @@ scaled_pop <- function(epi_data,
   if (pop_scaling) {
     postproc %<>% layer_population_scaling(
       .pred, .pred_distn,
-      df = state_census,
+      df = epipredict::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
       rate_rescaling = 1e5,

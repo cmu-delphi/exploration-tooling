@@ -2,60 +2,39 @@ Package: epieval
 Title: Evaluating Timeseries Forecasting on Archival Data
 Version: 0.1.0
 Date: 2023-09-28
-Authors@R: 
+Authors@R:
     c(
     person("David", "Weber", email = "davidweb@andrew.cmu.edu", role = c("ctb", "cre")),
-    person("Dmitry", "Shemetov", email = "dshemeto@andrew.cmu.edu", role = c("aut"))
+    person("Dmitry", "Shemetov", email = "dshemeto@andrew.cmu.edu", role = c("aut")),
+    person("Nat", "DeFries", email = "ndefries@andrew.cmu.edu", role = c("aut"))
     )
 Description: Given a timeseries and accompanying auxillary timeseries, evaluate a collection of forecasters implementable with epipredict using several metrics on historical data. Assuming the source of your timeseries provides versioned data, the evaluation at any given timepoint will only use data that was available at that point.
 License: MIT + file LICENSE
 Depends:
-    epiprocess (>= 0.6.0),
-    epipredict,
     R (>= 3.5.0)
 Imports:
     assertthat,
     aws.s3,
     cli,
-    distributional,
     dplyr,
     epidatr,
     epipredict,
-    fs,
-    generics,
-    glue,
-    hardhat (>= 1.3.0),
+    epiprocess,
     here,
     lubridate,
     magrittr,
-    methods,
-    openssl,
     parsnip (>= 1.0.0),
     purrr,
-    quantreg,
     recipes (>= 1.0.4),
     rlang,
-    smoothqr,
-    stats,
-    targets,
     tibble,
-    tidyr,
-    tidyselect,
-    usethis,
-    vctrs,
-    workflows (>= 1.0.0)
+    tidyr
 Suggests:
-    covidcast,
-    data.table,
     ggplot2,
     knitr,
-    pipeR,
     plotly,
-    poissonreg,
     rmarkdown,
-    shiny,
     testthat (>= 3.0.0),
-    xgboost
 VignetteBuilder:
     knitr
 Remotes:

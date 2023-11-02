@@ -1,5 +1,8 @@
+library(dplyr)
+
+
 # if you're adding a forecaster, add it to the list to be tested
-forecasters <- tribble(
+forecasters <- tibble::tribble(
   ~forecaster, ~extra_params, ~extra_params_names, ~fc_name,
   scaled_pop, list(1, TRUE), list("ahead", "pop_scaling"), "scaled_pop",
   scaled_pop, list(1, FALSE), list("ahead", "pop_scaling"), "scaled_pop",
@@ -11,7 +14,7 @@ tiny_sd <- 1.0e-5
 simple_dates <- seq(as.Date("2012-01-01"), by = "day", length.out = 40)
 approx_zero <- rnorm(length(simple_dates), sd = tiny_sd)
 # technically white noise, but with a variance that is miniscule
-constant <- as_epi_archive(tibble(
+constant <- epiprocess::as_epi_archive(tibble(
   geo_value = "al",
   time_value = simple_dates,
   version = simple_dates,
@@ -36,7 +39,7 @@ get_pred <- function(dataset,
 
 # a dataset that has a constant value
 # (technically a mean 25 sd 1e-5, since otherwise linear regression gets annoyed)
-different_constants <- as_epi_archive(rbind(
+different_constants <- epiprocess::as_epi_archive(rbind(
   constant$DT,
   tibble(
     geo_value = "ca",
@@ -72,7 +75,7 @@ for (ii in 1:nrow(forecasters)) {
 
 # a dataset that is mean 25, with a standard deviation of 2
 set.seed(12345)
-white_noise <- as_epi_archive(tibble(
+white_noise <- epiprocess::as_epi_archive(tibble(
   geo_value = "al",
   time_value = simple_dates,
   version = simple_dates,
@@ -108,7 +111,7 @@ for (ii in 1:nrow(forecasters)) {
 # we check that the undelayed is predicted, while the delayed is predicted whenever there's data a the lags (this could use work, its not that precise)
 set.seed(12345)
 state_delay <- rpois(length(simple_dates), 0.5)
-missing_state <- as_epi_archive(rbind(
+missing_state <- epiprocess::as_epi_archive(rbind(
   constant$DT,
   tibble(
     geo_value = "ca",
@@ -148,7 +151,7 @@ for (ii in seq_len(nrow(forecasters))) {
 # a dataset that increases linearly at a rate of 1/day, plus the same noise as in the constant case (mean 0 sd 1e-5)
 set.seed(12347)
 start_date <- min(simple_dates)
-linear <- as_epi_archive(
+linear <- epiprocess::as_epi_archive(
   tibble(
     geo_value = "al",
     time_value = simple_dates,

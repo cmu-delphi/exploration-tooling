@@ -35,7 +35,7 @@ forecaster_parent_id_map <- param_grid %>%
 forecaster_param_grids <- make_target_param_grid(select(param_grid, -parent_id))
 
 # not actually used downstream, this is for lookup during plotting and human evaluation
-forecasters <- list(
+forecaster_targets <- list(
   tar_target(
     name = forecasters,
     command = {

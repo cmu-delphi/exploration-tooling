@@ -19,13 +19,13 @@ suppressPackageStartupMessages({
 # controller to avoid.
 # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
 main_controller <- crew_controller_local(
-    name = "main_controller",
-    workers = parallel::detectCores() - 5
-  )
+  name = "main_controller",
+  workers = parallel::detectCores() - 5
+)
 serial_controller <- crew_controller_local(
-    name = "serial_controller",
-    workers = 1L
-  )
+  name = "serial_controller",
+  workers = 1L
+)
 
 tar_option_set(
   packages = c(
@@ -46,15 +46,16 @@ tar_option_set(
   # Set default crew controller.
   # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
   resources = tar_resources(
-      crew = tar_resources_crew(controller = "main_controller")
-    )
+    crew = tar_resources_crew(controller = "main_controller")
   )
+)
 
 # Run the R scripts in the R/ folder with your custom functions:
 # tar_source()
 # where the forecasters and parameters are joined; see either the variable param_grid or `tar_read(forecasters)`
 source("covid_hosp_explore/forecaster_instantiation.R")
 source("covid_hosp_explore/data_targets.R")
+# Auto-generated in run.R
 source("covid_hosp_explore/dynamic_constants.R")
 
 forecasts_and_scores_by_ahead <- tar_map(
@@ -111,7 +112,7 @@ forecasts_and_scores <- tar_map(
 )
 
 ensemble_keys <- list(a = c(300, 15))
-ensembles <- tar_target(
+ensemble_targets <- tar_target(
   name = ensembles,
   command = {
     ensemble_keys
@@ -165,8 +166,8 @@ if (LOAD_EXTERNAL_SCORES) {
       name = external_scores_df,
       command = {
         readRDS(external_scores_path) %>%
-        group_by(forecaster) %>%
-        targets::tar_group()
+          group_by(forecaster) %>%
+          targets::tar_group()
       },
       iteration = "group",
       garbage_collection = TRUE
@@ -199,21 +200,29 @@ if (LOAD_EXTERNAL_SCORES) {
     )
   )
 } else {
-  external_names_and_scores <- tar_target(
-    name = external_names,
-    command = {
-      c()
-    }
+  external_names_and_scores <- list(
+    tar_target(
+      name = external_names,
+      command = {
+        c()
+      }
+    ),
+    tar_target(
+      name = external_scores,
+      command = {
+        data.frame()
+      }
+    )
   )
 }
 
 
 list(
-  data,
-  forecasters,
+  data_targets,
+  forecaster_targets,
   forecasts_and_scores_by_ahead,
   forecasts_and_scores,
-  ensembles,
+  ensemble_targets,
   ensemble_forecast,
   external_names_and_scores
 )

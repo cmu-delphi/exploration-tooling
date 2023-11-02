@@ -75,6 +75,7 @@ confirm_insufficient_data <- function(epi_data, ahead, args_input, buffer = 9) {
 #' @param predictors a character vector of the columns used as predictors
 #' @param args_list an [`epipredict::arx_args_list`]
 #' @seealso [arx_postprocess] for the layer equivalent
+#' @importFrom epipredict step_epi_lag step_epi_ahead step_epi_naomit step_training_window
 #' @export
 arx_preprocess <- function(rec, outcome, predictors, args_list) {
   # input already validated
@@ -104,6 +105,7 @@ arx_preprocess <- function(rec, outcome, predictors, args_list) {
 #'   the default of `layer_add_target_date`, which is either
 #'   `forecast_date+ahead`, or the `max time_value + ahead`
 #' @seealso [arx_preprocess] for the step equivalent
+#' @importFrom epipredict layer_predict layer_quantile_distn layer_point_from_distn layer_residual_quantiles layer_threshold layer_naomit layer_add_target_date
 #' @export
 arx_postprocess <- function(postproc,
                             trainer,
@@ -112,7 +114,9 @@ arx_postprocess <- function(postproc,
                             target_date = NULL) {
   postproc %<>% layer_predict()
   if (inherits(trainer, "quantile_reg")) {
-    postproc %<>% layer_quantile_distn(quantile_levels = args_list$quantile_levels) %>% layer_point_from_distn()
+    postproc %<>%
+      layer_quantile_distn(quantile_levels = args_list$quantile_levels) %>%
+      layer_point_from_distn()
   } else {
     postproc %<>% layer_residual_quantiles(
       quantile_levels = args_list$quantile_levels, symmetrize = args_list$symmetrize,
@@ -123,7 +127,8 @@ arx_postprocess <- function(postproc,
     postproc %<>% layer_threshold(dplyr::starts_with(".pred"))
   }
 
-  postproc %<>% layer_naomit(dplyr::starts_with(".pred")) %>%
+  postproc %<>%
+    layer_naomit(dplyr::starts_with(".pred")) %>%
     layer_add_target_date(target_date = target_date)
   return(postproc)
 }
@@ -136,7 +141,7 @@ arx_postprocess <- function(postproc,
 #' @param trainer the parsnip trainer
 #' @param epi_data the actual epi_df to train on
 #' @export
-#' @import epipredict recipes
+#' @importFrom epipredict epi_workflow fit add_frosting get_test_data
 run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
   workflow <- epi_workflow(preproc, trainer) %>%
     fit(epi_data) %>%
@@ -171,8 +176,9 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
 #'   contain `ahead`
 #' @param forecaster_args_names a bit of a hack around targets, it contains
 #'   the names of the `forecaster_args`.
-#' @import rlang epipredict dplyr
 #' @importFrom epiprocess epix_slide
+#' @importFrom cli cli_abort
+#' @importFrom rlang !!
 #' @export
 forecaster_pred <- function(data,
                             outcome,
@@ -187,7 +193,7 @@ forecaster_pred <- function(data,
     names(forecaster_args) <- forecaster_args_names
   }
   if (is.null(forecaster_args$ahead)) {
-    cli::cli_abort(
+    cli_abort(
       c(
         "exploration-tooling error: forecaster_pred needs some value for ahead."
       ),

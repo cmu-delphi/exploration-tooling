@@ -84,13 +84,13 @@ evaluate_predictions <- function(
   }
   class(score_card) <- c("score_cards", class(score_card))
   attributes(score_card) <- c(attributes(score_card),
-    as_of = lubridate::as_date(Sys.Date())
+    as_of = Sys.Date()
   )
   score_card <- collapse_cards(score_card)
-  score_card <- score_card %>%
+  score_card %<>%
     select(-.data$quantile, -.data$value)
 
-  score_card <- score_card %>%
+  score_card %<>%
     relocate(attr(err_measures, "names"), .after = last_col())
   return(score_card)
 }
@@ -103,6 +103,7 @@ evaluate_predictions <- function(
 #' @return cards of the same class but with only one row for each
 #'   geo_value/forecast_date/ahead/forecaster (the point estimate)
 #'
+#' @importFrom assertthat assert_that
 #' @importFrom tidyr pivot_wider
 #'
 #' @export
@@ -114,14 +115,14 @@ collapse_cards <- function(cards) {
       "predictions_cards or score_cards classes."
     )
   )
-  cards <- cards %>%
+  cards %<>%
     filter(abs(.data$quantile - 0.5) < 1e-8 | is.na(.data$quantile)) %>%
     mutate(quantile = ifelse(is.na(.data$quantile), "p", "m"))
   if (n_distinct(cards$quantile) == 1) {
-    cards <- cards %>%
+    cards %<>%
       mutate(quantile = ifelse(.data$quantile == "p", NA, 0.5))
   } else {
-    cards <- cards %>%
+    cards %<>%
       pivot_wider(names_from = .data$quantile, values_from = .data$value) %>%
       mutate(
         quantile = ifelse(is.na(.data$p), 0.5, NA),
@@ -130,7 +131,7 @@ collapse_cards <- function(cards) {
       select(-.data$p, -.data$m)
   }
   if ("geo_value" %in% colnames(cards)) {
-    cards <- cards %>%
+    cards %<>%
       relocate(.data$quantile:.data$value, .after = .data$geo_value)
   }
   class(cards) <- c(cls, class(cards))
@@ -420,4 +421,41 @@ is_symmetric <- function(x, tol = 1e-8) {
 
 find_quantile_match <- function(quantiles, val_to_match, tol = 1e-8) {
   return(abs(quantiles - val_to_match) < tol & !is.na(quantiles))
+}
+
+#' import prediction cards generated elsewhere
+#' @description
+#' load an externally generated RDS to be evaluated
+#' @param predictions_filename the filename to be read as an RDS
+#' @param forecaster_name the name to assign the forecaster
+#' @export
+read_external_predictions_data <- function(predictions_filename, forecaster_name = NULL) {
+  prediction_cards <- readRDS(predictions_filename)
+  if (is.null(forecaster_name)) {
+    return(prediction_cards)
+  }
+  prediction_cards %>%
+    filter(forecast_date >= "2023-06-01") %>%
+    filter(forecaster == forecaster_name)
+}
+
+#' evaluate_predictions wrapper
+#' @description
+#' run the measures on `data`, with truth data `evaluation_data`
+#' @param data a prediction card to be scored
+#' @param evaluation_data the true values
+#' @param measures a set of scores to be used
+#' @export
+run_evaluation_measure <- function(data, evaluation_data, measures) {
+  data %>%
+    evaluate_predictions(
+      evaluation_data,
+      err_measures = measures,
+      grp_vars = c(
+        "signal",
+        "geo_value",
+        "forecast_date",
+        "target_end_date"
+      )
+    )
 }
