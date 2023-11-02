@@ -12,6 +12,7 @@ suppressPackageStartupMessages({
   library(tibble)
   library(tidyr)
   library(rlang)
+  library(epidatr)
 })
 
 # The external scores processing causes the pipeline to exit with an error,
@@ -167,7 +168,7 @@ if (LOAD_EXTERNAL_SCORES) {
       command = {
         readRDS(external_scores_path) %>%
           group_by(forecaster) %>%
-          targets::tar_group()
+          tar_group()
       },
       iteration = "group",
       garbage_collection = TRUE
