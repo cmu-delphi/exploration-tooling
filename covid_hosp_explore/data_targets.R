@@ -2,7 +2,7 @@ data_targets <- local({
   geo_type <- "state"
   time_type <- "day"
   geo_values <- "*"
-  time_values <- epidatr::epirange(from = "2020-01-01", to = "2024-01-01")
+  time_values <- epirange(from = "2020-01-01", to = "2024-01-01")
   fetch_args <- fetch_args_list(return_empty = TRUE, timeout_seconds = 200)
   issues <- "*"
 
@@ -10,7 +10,7 @@ data_targets <- local({
     tar_target(
       name = hhs_latest_data,
       command = {
-        epidatr::pub_covidcast(
+        pub_covidcast(
           source = "hhs",
           signals = "confirmed_admissions_covid_1d",
           geo_type = geo_type,
@@ -24,7 +24,7 @@ data_targets <- local({
     tar_target(
       name = chng_latest_data,
       command = {
-        epidatr::pub_covidcast(
+        pub_covidcast(
           source = "chng",
           signals = "smoothed_adj_outpatient_covid",
           geo_type = geo_type,
@@ -62,7 +62,7 @@ data_targets <- local({
     tar_target(
       name = hhs_archive_data_2022,
       command = {
-        epidatr::pub_covidcast(
+        pub_covidcast(
           source = "hhs",
           signals = "confirmed_admissions_covid_1d",
           geo_type = geo_type,
@@ -77,7 +77,7 @@ data_targets <- local({
     tar_target(
       name = chng_archive_data_2022,
       command = {
-        epidatr::pub_covidcast(
+        pub_covidcast(
           source = "chng",
           signals = "smoothed_adj_outpatient_covid",
           geo_type = geo_type,

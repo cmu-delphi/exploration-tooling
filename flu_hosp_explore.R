@@ -31,7 +31,7 @@ tar_option_set(
   imports = c("epieval", "parsnip"),
   format = "qs", # Optionally set the default storage format. qs is fast.
   controller = crew::crew_controller_local(workers = parallel::detectCores() - 5),
-  )
+)
 # Run the R scripts in the R/ folder with your custom functions:
 # tar_source()
 linreg <- parsnip::linear_reg()
