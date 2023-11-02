@@ -27,7 +27,7 @@ make_target_param_grid <- function(param_grid) {
 lists_of_real_values <- function(param_grid) {
   full_lists <- transpose(param_grid %>% select(-forecaster, -id))
   filter_nonvalues <- function(x) {
-    Filter(Negate(function(a) is.null(a) && is.na(a)), x)
+    Filter(Negate(function(a) is.null(a) || is.na(a)), x)
   }
   purrr::map(full_lists, filter_nonvalues)
 }
