@@ -12,6 +12,3 @@ test_that("target param generation works", {
   )
   expect_equal(lists_of_real_values(ex_frame), list_version)
 })
-param_grid$pop_scaling
-NA
-lists_of_real_values(param_grid)
