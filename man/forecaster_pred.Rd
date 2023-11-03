@@ -12,7 +12,8 @@ forecaster_pred(
   slide_training = 0,
   n_training_pad = 5,
   forecaster_args = list(),
-  forecaster_args_names = list()
+  forecaster_args_names = list(),
+  date_range_step_size = 1L
 )
 }
 \arguments{

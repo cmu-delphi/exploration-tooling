@@ -23,7 +23,7 @@ flatline_fc <- function(epi_data,
   effective_ahead <- epidataAhead[[2]]
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
-  if (confirm_insufficient_data(epi_data, effective_ahead, args_input)) {
+  if (!confirm_sufficient_data(epi_data, effective_ahead, args_input)) {
     null_result <- tibble(
       geo_value = character(),
       forecast_date = lubridate::Date(),

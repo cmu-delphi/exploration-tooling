@@ -42,6 +42,8 @@ input: ") {
 project_selection <- readline_wrapper()
 external_scores_path <- readline_wrapper("path to RDS file containing external forecast scores, if desired:")
 
+debug_mode <- readline_wrapper("Would you like to run debug mode? (y/[N]): ")
+
 suppressPackageStartupMessages({
   library(targets)
   library(shiny)
@@ -79,7 +81,11 @@ tar_helper(
 )
 
 tar_manifest()
-tar_make()
+if (debug_mode == "y") {
+  tar_make(callr_function = NULL)
+} else {
+  tar_make()
+}
 # tar_make_clustermq(workers = 2) # nolint
 # tar_make_future(workers = 2) # nolint
 

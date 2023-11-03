@@ -72,7 +72,8 @@ forecasts_and_scores_by_ahead <- tar_map(
         forecaster = forecaster,
         n_training_pad = 30L,
         forecaster_args = params,
-        forecaster_args_names = param_names
+        forecaster_args_names = param_names,
+        date_range_step_size = 7L
       )
     )
   ),

@@ -1,7 +1,7 @@
 geo_type <- "state"
 time_type <- "day"
 geo_values <- "*"
-time_values <- epidatr::epirange(from = "2020-01-01", to = "2024-01-01")
+time_values <- epidatr::epirange(from = "2022-01-01", to = "2024-01-01")
 fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 200)
 issues <- "*"
 
@@ -76,6 +76,7 @@ data_targets <- list(
   tar_target(
     name = chng_archive_data_2022,
     command = {
+      # TODO: Filter out unused columns like missing, direction, etc.
       epidatr::pub_covidcast(
         source = "chng",
         signals = "smoothed_adj_outpatient_flu",
@@ -109,7 +110,10 @@ data_targets <- list(
           time_type = time_type,
           compactify = TRUE
         )
-      epix_merge(hhs_archive_data_2022, chng_archive_data_2022, sync = "locf")
+      epix_merge(hhs_archive_data_2022, chng_archive_data_2022, sync = "locf")$DT %>%
+        filter(!is.na(hhs) & !is.na(chng)) %>%
+        filter(!geo_value %in% c("as", "pr", "vi", "gu", "mp")) %>%
+        epiprocess::as_epi_archive()
     }
   )
 )

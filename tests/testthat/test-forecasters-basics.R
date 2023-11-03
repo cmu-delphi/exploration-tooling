@@ -26,7 +26,7 @@ for (forecaster in forecasters) {
         "case_rate",
         c("death_rate"),
         -2L,
-        pop_scaling = FALSE
+        pop_scaling = FALSE,
       )
       expect_false(res_unscaled %>%
         full_join(res,
