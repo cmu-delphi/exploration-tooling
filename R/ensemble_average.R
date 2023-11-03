@@ -1,6 +1,18 @@
 #' an ensemble model that averages each quantile separately
+#' @description
+#' The simplest calss of ensembing models, it takes in a list of quantile
+#'   forecasts and averages them on a per-quantile basis. By default the average
+#'   used is the median, but it can accept any vectorized function.
 #' @inheritParams scaled_pop
-#' @param other_forecasts a list of other
+#' @param other_forecasts a list of quantile forecasts to aggregate. They should
+#'   be tibbles with columns `(geo_value, forecast_date, target_end_date,
+#'   quantile, value)`, preferably in that order.
+#' @param ensemble_args any arguments unique to this particular ensembler should
+#'   be included in a list like this (unfortunate targets issues). The arguments
+#'   for `average_ensemble` in particular are `average_type` and `join_columns`
+#' @param ensemble_args_names an argument purely for use in targets. You
+#'   probably shouldn't worry about it. In a target, it should probably be
+#'   `ensemble_args_names = names(ensemble_args)`
 #' @importFrom rlang %||%
 #' @export
 average_ensemble <- function(epi_data,
