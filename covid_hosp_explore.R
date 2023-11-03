@@ -21,6 +21,9 @@ make_unique_grids <- function() {
     )
   )
 }
+make_unique_ensemble_grid <- function() {
+  list()
+}
 
 # TODO: Find a way to clean all this stuff about param grids up.
 param_grid <- append(
@@ -64,7 +67,8 @@ data_targets <- make_data_targets()
 date_step <- 1L
 forecasts_and_scores_by_ahead <- make_forecasts_and_scores_by_ahead()
 forecasts_and_scores <- make_forecasts_and_scores()
-ensemble_targets <- make_ensemble_targets()
+ensemble_targets <- make_ensemble_targets_by_ahead()
+ensemble_targets <- make_ensemble_targets_and_scores()
 external_names_and_scores <- make_external_names_and_scores()
 
 
@@ -72,6 +76,9 @@ list(
   data_targets,
   forecaster_params_grid_target,
   forecasts_and_scores_by_ahead,
+  forecaster_list,
+  ensemble_list,
+  ensembles_and_scores_by_ahead,
   forecasts_and_scores,
   ensemble_targets,
   external_names_and_scores

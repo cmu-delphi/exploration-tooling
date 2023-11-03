@@ -1,6 +1,6 @@
 Package: epieval
 Title: Evaluating Timeseries Forecasting on Archival Data
-Version: 0.1.0
+Version: 0.2.0
 Date: 2023-09-28
 Authors@R:
     c(

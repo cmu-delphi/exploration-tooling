@@ -263,8 +263,53 @@ make_forecasts_and_scores <- function() {
 
 #' Make ensemble targets
 #' @export
-make_ensemble_targets <- function() {
-  list()
+make_ensemble_targets_by_ahead <- function() {
+  ensembles_and_scores_by_ahead <- list()
+  for (i_ensemble in 1:nrow(target_ensemble_grid)) {
+    passed_on_variables <- list(
+      ensemble = target_ensemble_grid[[i_ensemble, "ensemble"]][[1]],
+      models_to_ensemble =
+        syms(paste(ONE_AHEAD_FORECAST_NAME, target_ensemble_grid[[i_ensemble, "forecaster_ids"]][[1]], sep = "_")),
+      ensemble_params =
+        target_ensemble_grid[[i_ensemble, "ensemble_params"]][[1]],
+      ensemble_params_names =
+        target_ensemble_grid[[i_ensemble, "ensemble_params_names"]]
+    )
+
+    ensembles_and_scores_by_ahead[[i_ensemble]] <- tar_target_raw(
+      name = paste(ONE_AHEAD_ENSEMBLE_NAME, target_ensemble_grid[[i_ensemble, "id"]], sep = "_"),
+      command = substitute(
+        ensemble(joined_archive_data_2022,
+          models_to_ensemble,
+          "hhs",
+          extra_sources = "chng",
+          ensemble_params,
+          ensemble_params_names
+        ),
+        env = passed_on_variables
+      )
+    )
+  }
+}
+make_ensemble_targets_by_ahead <- function() {
+  ensembles_and_scores <- tar_map(
+    values = ensemble_parent_id_map,
+    names = parent_id,
+    tar_target(
+      name = ensemble,
+      command = {
+        bind_rows(ensemble_component_ids) %>%
+          mutate(parent_ensemble = parent_id)
+      }
+    ),
+    tar_target(
+      name = score,
+      command = {
+        bind_rows(score_component_ids) %>%
+          mutate(parent_ensemble = parent_id)
+      }
+    )
+  )
 }
 
 
