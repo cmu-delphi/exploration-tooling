@@ -28,7 +28,7 @@ for (forecaster in forecasters) {
     attributes(jhu)$metadata$as_of <- NULL
     expect_no_error(res <- forecaster[[2]](jhu, "case_rate", c("death_rate"), 2L))
     expect_equal(res$target_end_date %>% unique, max(jhu$time_value)+2)
-    }
+    })
 
   test_that(paste(forecaster[[1]], "handles last second NA's"), {
     # if the last entries are NA, we should still predict
