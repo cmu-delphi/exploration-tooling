@@ -62,13 +62,10 @@ confirm_sufficient_data <- function(epi_data, ahead, args_input, buffer = 15) {
   } else {
     lag_max <- 14 # default value of 2 weeks
   }
-
   return(
     !is.infinite(ahead) &&
       epi_data %>%
-        # TODO: This isn't generalizable to other signals.
-        filter(!is.na(hhs) & !is.na(chng)) %>%
-        # TODO: Quitting forecasting because of one geo_value is bad.
+        drop_na() %>%
         group_by(geo_value) %>%
         summarise(has_enough_data = n_distinct(time_value) >= lag_max + ahead + buffer) %>%
         pull(has_enough_data) %>%
@@ -159,7 +156,11 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
   latest <- get_test_data(recipe = preproc, x = epi_data)
   pred <- predict(workflow, latest)
   # the forecast_date may currently be the max time_value
-  true_forecast_date <- attributes(epi_data)$metadata$as_of
+  as_of <- attributes(epi_data)$metadata$as_of
+  if (is.null(as_of)) {
+    as_of <- max(epi_data$time_value)
+  }
+  true_forecast_date <- as_of
   return(format_storage(pred, true_forecast_date))
 }
 
