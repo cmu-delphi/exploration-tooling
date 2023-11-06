@@ -73,7 +73,7 @@ scaled_pop <- function(epi_data,
   args_list <- do.call(arx_args_list, args_input)
   # if you want to ignore extra_sources, setting predictors is the way to do it
   predictors <- c(outcome, extra_sources)
-  # TODO: Partial match quantile_level coming from here
+  # TODO: Partial match quantile_level coming from here (on Dmitry's machine)
   argsPredictorsTrainer <- perform_sanity_checks(epi_data, outcome, predictors, trainer, args_list)
   args_list <- argsPredictorsTrainer[[1]]
   predictors <- argsPredictorsTrainer[[2]]

@@ -45,23 +45,26 @@ perform_sanity_checks <- function(epi_data,
 #' epipredict is a little bit fragile about having enough data to train; we want
 #'   to be able to return a null result rather than error out.
 #' @param epi_data the input data
-#' @param buffer how many training data to insist on having (e.g. if `buffer=1`,
-#'   this trains on one sample; the default is set so that `linear_reg` isn't
-#'   rank deficient)
 #' @param ahead the effective ahead; may be infinite if there isn't enough data.
 #' @param args_input the input as supplied to `forecaster_pred`; lags is the
 #'   important argument, which may or may not be defined, with the default
 #'   coming from `arx_args_list`
-#'
-#' # TODO: Buffer should probably be 2 * n(lags) * n(predictors).
+#' @param buffer how many training data to insist on having (e.g. if `buffer=1`,
+#'   this trains on one sample; the default is set so that `linear_reg` isn't
+#'   rank deficient)
 #'
 #' @export
-confirm_sufficient_data <- function(epi_data, ahead, args_input, buffer = 15) {
+confirm_sufficient_data <- function(epi_data, ahead, args_input, buffer = 20) {
   if (!is.null(args_input$lags)) {
     lag_max <- max(args_input$lags)
   } else {
     lag_max <- 14 # default value of 2 weeks
   }
+
+  # TODO: Buffer should probably be 2 * n(lags) * n(predictors). But honestly,
+  # this needs to be fixed in epipredict itself, see
+  # https://github.com/cmu-delphi/epipredict/issues/106.
+
   return(
     !is.infinite(ahead) &&
       epi_data %>%
@@ -233,6 +236,7 @@ forecaster_pred <- function(data,
     function(data, gk, rtv, ...) {
       # TODO: Can we get rid of this tryCatch and instead hook it up to targets
       #       error handling or something else?
+      #       https://github.com/cmu-delphi/exploration-tooling/issues/41
       tryCatch(
         {
           do.call(
@@ -259,6 +263,7 @@ forecaster_pred <- function(data,
               e = e
             )
             saveRDS(dump_vars, "forecaster_pred_error.rds")
+            e
           }
         }
       )

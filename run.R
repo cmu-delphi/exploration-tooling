@@ -25,12 +25,13 @@
 #   # Save to disk
 #   saveRDS(scorecards, "exploration-scorecards-2023-10-04.RDS")
 
-readline_wrapper <- function(msg = "which project would you like to run?
-1: covid_hosp_explore
-2: flu_hosp_explore
-3: covid_hosp_prod
-4: flu_hosp_prod
-input: ") {
+print("Reading environment variables (TAR_PROJECT, EXTERNAL_SCORES_PATH, DEBUG_MODE, USE_SHINY)...")
+tar_project <- Sys.getenv("TAR_PROJECT", "")
+external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
+debug_mode <- Sys.getenv("DEBUG_MODE", "")
+use_shiny <- Sys.getenv("USE_SHINY", "")
+
+readline_wrapper <- function(msg) {
   if (interactive()) {
     txt <- readline(msg)
   } else {
@@ -39,46 +40,61 @@ input: ") {
   }
   return(txt)
 }
-project_selection <- readline_wrapper()
-external_scores_path <- readline_wrapper("path to RDS file containing external forecast scores, if desired:")
+if (tar_project == "") {
+  project_selection <- readline_wrapper("Which project would you like to run?
+1: covid_hosp_explore
+2: flu_hosp_explore
+3: covid_hosp_prod
+4: flu_hosp_prod
+Input: ")
+  tar_project <- switch(as.character(project_selection),
+    "1" = "covid_hosp_explore",
+    "2" = "flu_hosp_explore",
+    "3" = "covid_hosp_prod",
+    "4" = "flu_hosp_prod",
+    # else
+    stop("selection `", project_selection, "` is invalid")
+  )
+} else {
+  cat("Using project ", tar_project, "\n")
+}
+Sys.setenv(TAR_PROJECT = tar_project)
 
-debug_mode <- readline_wrapper("Would you like to run debug mode? (y/[N]): ")
+
+if (external_scores_path == "") {
+  external_scores_path <- readline_wrapper("Path to RDS file containing external forecast scores, if desired:")
+} else {
+  cat("Using external scores from ", external_scores_path, "\n")
+}
+Sys.setenv(EXTERNAL_SCORES_PATH = external_scores_path)
+
+if (debug_mode == "") {
+  debug_mode <- readline_wrapper("Would you like to run debug mode? (y/[N]): ")
+} else {
+  cat("Debug mode: ", debug_mode, "\n")
+  if (as.logical(debug_mode)) {
+    debug_mode <- "y"
+  }
+}
+
+if (use_shiny == "") {
+  use_shiny <- readline_wrapper("Would you like to run the shiny app? (y/[N]): ")
+} else {
+  cat("Use shiny: ", use_shiny, "\n")
+  if (as.logical(use_shiny)) {
+    use_shiny <- "y"
+  }
+}
+
 
 suppressPackageStartupMessages({
   library(targets)
   library(shiny)
 })
 
-TAR_PROJECT <- switch(as.character(project_selection),
-  "1" = "covid_hosp_explore",
-  "2" = "flu_hosp_explore",
-  "3" = "covid_hosp_prod",
-  "4" = "flu_hosp_prod",
-  # else
-  stop("selection `", project_selection, "` is invalid")
-)
-Sys.setenv(TAR_PROJECT = TAR_PROJECT)
-
 # targets needs the output dir to already exist.
 store_dir <- tar_path_store()
 if (!dir.exists(store_dir)) dir.create(store_dir)
-
-# Load external scores file, if provided
-if (external_scores_path == "") {
-  LOAD_EXTERNAL_SCORES <- FALSE
-} else {
-  LOAD_EXTERNAL_SCORES <- TRUE
-}
-
-# Dynamically define the external files constants for access within the `targets` session.
-# https://stackoverflow.com/questions/72096149/how-to-pass-values-into-targets-r-or-use-dynamic-variables
-tar_helper(
-  here::here(file.path(store_dir, "dynamic_constants.R")),
-  {
-    LOAD_EXTERNAL_SCORES <- !!LOAD_EXTERNAL_SCORES
-    external_scores_path <- !!external_scores_path
-  }
-)
 
 tar_manifest()
 if (debug_mode == "y") {
@@ -89,8 +105,6 @@ if (debug_mode == "y") {
 # tar_make_clustermq(workers = 2) # nolint
 # tar_make_future(workers = 2) # nolint
 
-
-use_shiny <- readline_wrapper("Would you like to run the shiny app? (y/[N]): ")
 if (use_shiny == "y") {
   # Prevent functions defined in /R dir from being loaded unnecessarily
   options(shiny.autoload.r = FALSE)
