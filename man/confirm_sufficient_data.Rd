@@ -4,7 +4,7 @@
 \alias{confirm_sufficient_data}
 \title{confirm that there's enough data to run this model}
 \usage{
-confirm_sufficient_data(epi_data, ahead, args_input, buffer = 20)
+confirm_sufficient_data(epi_data, ahead, args_input, buffer = 9)
 }
 \arguments{
 \item{epi_data}{the input data}

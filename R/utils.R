@@ -84,3 +84,20 @@ id_ahead_ensemble_grid <- function(ensemble_grid, aheads, n_adj = 2) {
     mutate(forecaster_ids = list(map2_vec(forecasters, ahead, single_id, n_adj = 2)))
   return(ensemble_grid)
 }
+
+
+#' temporary patch that pulls `NA`'s out of an epi_df
+#' @description
+#' just delete rows that have NA's in them. eventually epipredict should directly handle this so we don't have to
+#' @param epi_data the epi_df to be fixed
+#' @importFrom tidyr drop_na
+#' @importFrom epiprocess as_epi_df
+#' @export
+clear_lastminute_nas <- function(epi_data) {
+  meta_data <- attr(epi_data, "metadata")
+  epi_data %<>%
+    drop_na() %>%
+    as_epi_df()
+  attr(epi_data, "metadata") <- meta_data
+  return(epi_data)
+}

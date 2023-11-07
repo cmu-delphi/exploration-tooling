@@ -52,9 +52,9 @@ perform_sanity_checks <- function(epi_data,
 #' @param buffer how many training data to insist on having (e.g. if `buffer=1`,
 #'   this trains on one sample; the default is set so that `linear_reg` isn't
 #'   rank deficient)
-#'
+#' @importFrom tidyr drop_na
 #' @export
-confirm_sufficient_data <- function(epi_data, ahead, args_input, buffer = 20) {
+confirm_sufficient_data <- function(epi_data, ahead, args_input, buffer = 9) {
   if (!is.null(args_input$lags)) {
     lag_max <- max(args_input$lags)
   } else {

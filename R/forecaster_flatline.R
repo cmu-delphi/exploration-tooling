@@ -14,6 +14,8 @@ flatline_fc <- function(epi_data,
                         quantile_levels = covidhub_probs(),
                         ...) {
   # perform any preprocessing not supported by epipredict
+  # this is a temp fix until a real fix gets put into epipredict
+  epi_data <- clear_lastminute_nas(epi_data)
   # one that every forecaster will need to handle: how to manage max(time_value)
   # that's older than the `as_of` date
   epidataAhead <- extend_ahead(epi_data, ahead)
@@ -48,6 +50,9 @@ flatline_fc <- function(epi_data,
   # since this is just the flatline, we don't need much of anything
   res <- flatline_forecaster(epi_data, outcome = outcome, args_list = args_list)
   true_forecast_date <- attributes(epi_data)$metadata$as_of
+  if (is.null(true_forecast_date)) {
+    true_forecast_date <- max(epi_data$time_value)
+  }
   pred <- format_storage(res$predictions, true_forecast_date)
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration
