@@ -11,11 +11,6 @@ Relies on the following globals:
 \itemize{
 \item \code{hhs_signal}
 \item \code{chng_signal}
-\item \code{geo_type}
-\item \code{time_type}
-\item \code{geo_values}
-\item \code{time_values}
-\item \code{issues}
 \item \code{fetch_args}
 }
 }
