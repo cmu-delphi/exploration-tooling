@@ -4,3 +4,4 @@
 tmp/
 extras/**.html
 *.pdf
+.Renviron

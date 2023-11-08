@@ -49,6 +49,8 @@ scaled_pop <- function(epi_data,
                        quantile_levels = covidhub_probs(),
                        ...) {
   # perform any preprocessing not supported by epipredict
+  # this is a temp fix until a real fix gets put into epipredict
+  epi_data <- clear_lastminute_nas(epi_data)
   # one that every forecaster will need to handle: how to manage max(time_value)
   # that's older than the `as_of` date
   epidataAhead <- extend_ahead(epi_data, ahead)
@@ -58,7 +60,7 @@ scaled_pop <- function(epi_data,
   effective_ahead <- epidataAhead[[2]]
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
-  if (confirm_insufficient_data(epi_data, effective_ahead, args_input)) {
+  if (!confirm_sufficient_data(epi_data, effective_ahead, args_input)) {
     null_result <- tibble(
       geo_value = character(),
       forecast_date = lubridate::Date(),
@@ -73,6 +75,7 @@ scaled_pop <- function(epi_data,
   args_list <- do.call(arx_args_list, args_input)
   # if you want to ignore extra_sources, setting predictors is the way to do it
   predictors <- c(outcome, extra_sources)
+  # TODO: Partial match quantile_level coming from here (on Dmitry's machine)
   argsPredictorsTrainer <- perform_sanity_checks(epi_data, outcome, predictors, trainer, args_list)
   args_list <- argsPredictorsTrainer[[1]]
   predictors <- argsPredictorsTrainer[[2]]
@@ -98,7 +101,6 @@ scaled_pop <- function(epi_data,
   # postprocessing supported by epipredict
   postproc <- frosting()
   postproc %<>% arx_postprocess(trainer, args_list)
-  postproc
   if (pop_scaling) {
     postproc %<>% layer_population_scaling(
       .pred, .pred_distn,

@@ -43,29 +43,39 @@ perform_sanity_checks <- function(epi_data,
 #' confirm that there's enough data to run this model
 #' @description
 #' epipredict is a little bit fragile about having enough data to train; we want
-#'   to be able to return a null result rather than error out; this check say to
-#'   return a null
+#'   to be able to return a null result rather than error out.
 #' @param epi_data the input data
-#' @param buffer how many training data to insist on having (e.g. if `buffer=1`,
-#'   this trains on one sample; the default is set so that `linear_reg` isn't
-#'   rank deficient)
 #' @param ahead the effective ahead; may be infinite if there isn't enough data.
 #' @param args_input the input as supplied to `forecaster_pred`; lags is the
 #'   important argument, which may or may not be defined, with the default
 #'   coming from `arx_args_list`
+#' @param buffer how many training data to insist on having (e.g. if `buffer=1`,
+#'   this trains on one sample; the default is set so that `linear_reg` isn't
+#'   rank deficient)
+#' @importFrom tidyr drop_na
 #' @export
-confirm_insufficient_data <- function(epi_data, ahead, args_input, buffer = 9) {
+confirm_sufficient_data <- function(epi_data, ahead, args_input, buffer = 9) {
   if (!is.null(args_input$lags)) {
     lag_max <- max(args_input$lags)
   } else {
     lag_max <- 14 # default value of 2 weeks
   }
+
+  # TODO: Buffer should probably be 2 * n(lags) * n(predictors). But honestly,
+  # this needs to be fixed in epipredict itself, see
+  # https://github.com/cmu-delphi/epipredict/issues/106.
+
   return(
-    is.infinite(ahead) ||
-      as.integer(max(epi_data$time_value) - min(epi_data$time_value)) <=
-        lag_max + ahead + buffer
+    !is.infinite(ahead) &&
+      epi_data %>%
+        drop_na() %>%
+        group_by(geo_value) %>%
+        summarise(has_enough_data = n_distinct(time_value) >= lag_max + ahead + buffer) %>%
+        pull(has_enough_data) %>%
+        any()
   )
 }
+
 # TODO replace with `step_arx_forecaster`
 #' add the default steps for arx_forecaster
 #' @description
@@ -149,7 +159,11 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
   latest <- get_test_data(recipe = preproc, x = epi_data)
   pred <- predict(workflow, latest)
   # the forecast_date may currently be the max time_value
-  true_forecast_date <- attributes(epi_data)$metadata$as_of
+  as_of <- attributes(epi_data)$metadata$as_of
+  if (is.null(as_of)) {
+    as_of <- max(epi_data$time_value)
+  }
+  true_forecast_date <- as_of
   return(format_storage(pred, true_forecast_date))
 }
 
@@ -176,6 +190,8 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
 #'   contain `ahead`
 #' @param forecaster_args_names a bit of a hack around targets, it contains
 #'   the names of the `forecaster_args`.
+#' @param date_range_step_size the step size (in days) to use when generating
+#'   the forecast dates.
 #' @importFrom epiprocess epix_slide
 #' @importFrom cli cli_abort
 #' @importFrom rlang !!
@@ -187,7 +203,8 @@ forecaster_pred <- function(data,
                             slide_training = 0,
                             n_training_pad = 5,
                             forecaster_args = list(),
-                            forecaster_args_names = list()) {
+                            forecaster_args_names = list(),
+                            date_range_step_size = 1L) {
   archive <- data
   if (length(forecaster_args) > 0) {
     names(forecaster_args) <- forecaster_args_names
@@ -210,25 +227,47 @@ forecaster_pred <- function(data,
   # restrict the dataset to areas where training is possible
   start_date <- min(archive$DT$time_value) + net_slide_training
   end_date <- max(archive$DT$time_value) - forecaster_args$ahead
-  valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = 1)
+  valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = date_range_step_size)
 
   # first generate the forecasts
   before <- n_training + n_training_pad - 1
-  ## TODO epix_slide doesn't support infinite `before`
+  ## TODO: epix_slide doesn't support infinite `before`
   ## https://github.com/cmu-delphi/epiprocess/issues/219
   if (before == Inf) before <- 365L * 10000
   res <- epix_slide(archive,
     function(data, gk, rtv, ...) {
-      do.call(
-        forecaster,
-        append(
-          list(
-            epi_data = data,
-            outcome = outcome,
-            extra_sources = extra_sources
-          ),
-          forecaster_args
-        )
+      # TODO: Can we get rid of this tryCatch and instead hook it up to targets
+      #       error handling or something else?
+      #       https://github.com/cmu-delphi/exploration-tooling/issues/41
+      tryCatch(
+        {
+          do.call(
+            forecaster,
+            append(
+              list(
+                epi_data = data,
+                outcome = outcome,
+                extra_sources = extra_sources
+              ),
+              forecaster_args
+            )
+          )
+        },
+        error = function(e) {
+          if (interactive()) {
+            browser()
+          } else {
+            dump_vars <- list(
+              data = data,
+              rtv = rtv,
+              forecaster = forecaster,
+              forecaster_args = forecaster_args,
+              e = e
+            )
+            saveRDS(dump_vars, "forecaster_pred_error.rds")
+            e
+          }
+        }
       )
     },
     before = before,

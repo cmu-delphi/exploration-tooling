@@ -11,10 +11,13 @@
 extend_ahead <- function(epi_data, ahead) {
   time_values <- epi_data$time_value
   if (length(time_values) > 0) {
+    as_of <- attributes(epi_data)$metadata$as_of
+    max_time <- max(time_values)
+    if (is.null(as_of)) {
+      as_of <- max_time
+    }
     effective_ahead <- as.integer(
-      as.Date(attributes(epi_data)$metadata$as_of) -
-        max(time_values) +
-        ahead
+      as.Date(as_of) - max_time + ahead
     )
   } else {
     effective_ahead <- Inf

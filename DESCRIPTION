@@ -27,6 +27,7 @@ Imports:
     purrr,
     recipes (>= 1.0.4),
     rlang,
+    targets,
     tibble,
     tidyr
 Suggests:

@@ -12,7 +12,8 @@ forecaster_pred(
   slide_training = 0,
   n_training_pad = 5,
   forecaster_args = list(),
-  forecaster_args_names = list()
+  forecaster_args_names = list(),
+  date_range_step_size = 1L
 )
 }
 \arguments{
@@ -39,6 +40,9 @@ contain \code{ahead}}
 
 \item{forecaster_args_names}{a bit of a hack around targets, it contains
 the names of the \code{forecaster_args}.}
+
+\item{date_range_step_size}{the step size (in days) to use when generating
+the forecast dates.}
 }
 \description{
 a wrapper that turns a forecaster, parameters, data
