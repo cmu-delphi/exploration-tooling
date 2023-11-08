@@ -171,6 +171,10 @@ make_shared_grids <- function() {
 }
 
 #' Make forecasts and scores by ahead targets
+#' @description
+#' globals this depends on:
+#' Relies on the following globals:
+#' - `date_step`
 #' @export
 make_forecasts_and_scores_by_ahead <- function() {
   tar_map(
@@ -188,7 +192,7 @@ make_forecasts_and_scores_by_ahead <- function() {
           n_training_pad = 30L,
           forecaster_args = params,
           forecaster_args_names = param_names,
-          date_range_step_size = 7L
+          date_range_step_size = date_step
         )
       )
     ),

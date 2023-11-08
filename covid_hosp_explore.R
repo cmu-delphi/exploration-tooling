@@ -59,6 +59,9 @@ fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 20
 data_targets <- make_data_targets()
 
 
+# These globals are needed by the function below (and they need to persist
+# during the actual targets run, since the commands are frozen as expressions).
+date_step <- 1L
 forecasts_and_scores_by_ahead <- make_forecasts_and_scores_by_ahead()
 forecasts_and_scores <- make_forecasts_and_scores()
 ensemble_targets <- make_ensemble_targets()
