@@ -247,6 +247,7 @@ make_ensemble_targets <- function() {
 
 
 #' Make external names and scores targets
+#' @importFrom targets tar_target tar_group
 #' @export
 make_external_names_and_scores <- function() {
   external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
@@ -257,7 +258,7 @@ make_external_names_and_scores <- function() {
         command = {
           readRDS(external_scores_path) %>%
             group_by(forecaster) %>%
-            targets::tar_group()
+            tar_group()
         },
         iteration = "group",
         garbage_collection = TRUE

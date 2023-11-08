@@ -190,6 +190,8 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
 #'   contain `ahead`
 #' @param forecaster_args_names a bit of a hack around targets, it contains
 #'   the names of the `forecaster_args`.
+#' @param date_range_step_size the step size (in days) to use when generating
+#'   the forecast dates.
 #' @importFrom epiprocess epix_slide
 #' @importFrom cli cli_abort
 #' @importFrom rlang !!
