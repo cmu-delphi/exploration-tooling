@@ -56,7 +56,7 @@ Input: ")
     stop("selection `", project_selection, "` is invalid")
   )
 } else {
-  cat("Using project ", tar_project, "\n")
+  cat("Using project: ", tar_project, "\n")
 }
 Sys.setenv(TAR_PROJECT = tar_project)
 

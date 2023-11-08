@@ -6,7 +6,7 @@
 #' @export
 #' @importFrom rlang syms
 make_target_param_grid <- function(param_grid) {
-  param_grid %>%
+  param_grid %<>%
     select(-any_of("parent_id")) %>%
     mutate(forecaster = syms(forecaster)) %>%
     mutate(trainer = syms(trainer))
@@ -25,7 +25,7 @@ make_target_param_grid <- function(param_grid) {
 lists_of_real_values <- function(param_grid) {
   full_lists <- transpose(param_grid %>% select(-forecaster, -id))
   filter_nonvalues <- function(x) {
-    Filter(Negate(function(a) is.null(a) || is.na(a)), x)
+    Filter(function(a) !all(is.null(a)) && !all(is.na(a)), x)
   }
   map(full_lists, filter_nonvalues)
 }
@@ -35,11 +35,6 @@ lists_of_real_values <- function(param_grid) {
 #' Relies on the following globals:
 #' - `hhs_signal`
 #' - `chng_signal`
-#' - `geo_type`
-#' - `time_type`
-#' - `geo_values`
-#' - `time_values`
-#' - `issues`
 #' - `fetch_args`
 #'
 #' @export
@@ -51,10 +46,10 @@ make_data_targets <- function() {
         epidatr::pub_covidcast(
           source = "hhs",
           signals = hhs_signal,
-          geo_type = geo_type,
-          time_type = time_type,
-          geo_values = geo_values,
-          time_values = time_values,
+          geo_type = "state",
+          time_type = "day",
+          geo_values = "*",
+          time_values = epirange(from = "2020-01-01", to = "2024-01-01"),
           fetch_args = fetch_args
         )
       }
@@ -65,10 +60,10 @@ make_data_targets <- function() {
         epidatr::pub_covidcast(
           source = "chng",
           signals = chng_signal,
-          geo_type = geo_type,
-          time_type = time_type,
-          geo_values = geo_values,
-          time_values = time_values,
+          geo_type = "state",
+          time_type = "day",
+          geo_values = "*",
+          time_values = epirange(from = "2020-01-01", to = "2024-01-01"),
           fetch_args = fetch_args
         )
       }
@@ -86,15 +81,13 @@ make_data_targets <- function() {
     tar_target(
       name = hhs_latest_data_2022,
       command = {
-        hhs_latest_data %>%
-          filter(time_value >= "2022-01-01")
+        hhs_latest_data # %>% filter(time_value >= "2022-01-01", time_value < "2022-04-01")
       }
     ),
     tar_target(
       name = chng_latest_data_2022,
       command = {
-        chng_latest_data %>%
-          filter(time_value >= "2022-01-01")
+        chng_latest_data # %>% filter(time_value >= "2022-01-01", time_value < "2022-04-01")
       }
     ),
     tar_target(
@@ -103,11 +96,11 @@ make_data_targets <- function() {
         epidatr::pub_covidcast(
           source = "hhs",
           signals = hhs_signal,
-          geo_type = geo_type,
-          time_type = time_type,
-          geo_values = geo_values,
-          time_values = time_values,
-          issues = issues,
+          geo_type = "state",
+          time_type = "day",
+          geo_values = "*",
+          time_values = epirange(from = "20220101", to = "20220401"),
+          issues = "*",
           fetch_args = fetch_args
         )
       }
@@ -118,11 +111,11 @@ make_data_targets <- function() {
         epidatr::pub_covidcast(
           source = "chng",
           signals = chng_signal,
-          geo_type = geo_type,
-          time_type = time_type,
-          geo_values = geo_values,
-          time_values = time_values,
-          issues = issues,
+          geo_type = "state",
+          time_type = "day",
+          geo_values = "*",
+          time_values = epirange(from = "20220101", to = "20220401"),
+          issues = "*",
           fetch_args = fetch_args
         )
       }
@@ -135,8 +128,8 @@ make_data_targets <- function() {
           rename("hhs" := value) %>%
           rename(version = issue) %>%
           as_epi_archive(
-            geo_type = geo_type,
-            time_type = time_type,
+            geo_type = "state",
+            time_type = "day",
             compactify = TRUE
           )
         chng_archive_data_2022 %<>%
@@ -144,8 +137,8 @@ make_data_targets <- function() {
           rename("chng" := value) %>%
           rename(version = issue) %>%
           as_epi_archive(
-            geo_type = geo_type,
-            time_type = time_type,
+            geo_type = "state",
+            time_type = "day",
             compactify = TRUE
           )
         epix_merge(hhs_archive_data_2022, chng_archive_data_2022, sync = "locf")$DT %>%
