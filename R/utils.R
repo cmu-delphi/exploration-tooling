@@ -36,6 +36,75 @@ add_id <- function(df, n_adj = 2) {
   return(df)
 }
 
+#' look up forecasters by name
+#' @description
+#' given a (partial) forecaster name, look up all forecasters in the given project which contain part of that name.
+#' @param forecaster_name a part of the adj.adj.1 name used to identify the forecaster.
+#' @param param_grid the tibble containing the mapping between
+#' @param project the project to be used; by default, the environmental variable is used
+#' @importFrom targets tar_read
+#' @export
+forecaster_lookup <- function(forecaster_name, param_grid = NULL, project = NULL) {
+  forecaster_name <- strip_underscored(forecaster_name)
+  if (is.null(project)) {
+    project <- tar_config_get("store")
+  }
+  if (is.null(param_grid)) {
+    param_grid <- tar_read(forecaster_params_grid, store = project)
+  }
+  param_grid %>% filter(grepl(forecaster_name, id))
+}
+
+strip_underscored <- function(x) {
+  g <- gregexpr("_", x, fixed = TRUE)
+  last_underscore <- g[[1]][[length(g[[1]])]]
+  substr(x[[1]], start = last_underscore + 1, stop = nchar(x))
+}
+
+#' list forecasters used in the given ensemble table not found in the given forecaster grid
+#' @description
+#' list forecasters used in the given ensemble table not found in the given forecaster grid
+#'
+#' @param ensemble_grid the grid of ensembles used
+#' @param param_grid the grid of forecasters used that we're checking for presence
+#' @param project the project to be used; by default, the environmental variable is used
+#' @export
+ensemble_missing_forecasters <- function(ensemble_grid = NULL, param_grid = NULL, project = NULL) {
+  if (is.null(project)) {
+    project <- tar_config_get("store")
+  }
+  if (is.null(ensemble_grid)) {
+    ensemble_grid <- tar_read(ensemble_forecasters, store = project)
+  }
+  used_forecasters <- unlist(ensemble_grid$forecaster_ids) %>% unique()
+  is_present <- map_vec(used_forecasters, \(given_forecaster) nrow(forecaster_lookup(given_forecaster, param_grid, project)) > 0)
+  absent_forecasters <- used_forecasters[!is_present]
+  return(absent_forecasters)
+}
+
+#' given an ensemble and a list of forecasters used in some of those ensembles, return the ones that use them
+#' @inheritParams ensemble_missing_forecasters
+#' @export
+ensemble_missing_forecasters_details <- function(ensemble_grid = NULL, param_grid = NULL, project = NULL) {
+  absent_forecasters <- ensemble_missing_forecasters(ensemble_grid, param_grid, project)
+  grid_with_missing <- ensemble_grid %>%
+    rowwise() %>%
+    mutate(
+      missing_forecasters = list(map(
+        absent_forecasters,
+        # extract a list of the subforecasters with associated id, with only the missing ones having non-empty lists
+        function(absent_fc) {
+          is_missing <- grepl(absent_fc, forecaster_ids)
+          params_only <- forecasters[is_missing]
+          mapply(c, params_only, id = forecaster_ids[is_missing])
+        }
+      ))
+    )
+  flat_missing <- unlist(grid_with_missing$missing_forecasters, recursive = FALSE)
+  unique_missing <- flat_missing[map_vec(flat_missing, \(x) length(x) > 0)] %>% unique()
+  return(unique_missing)
+}
+
 
 #' generate an id from a simple list of parameters
 #' @param param_list the list of parameters. must include `ahead` if `ahead = NULL`

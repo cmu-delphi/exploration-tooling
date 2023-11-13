@@ -320,8 +320,11 @@ make_ensemble_targets_by_ahead <- function() {
       )
     )
   }
+  return(c(ensembles_by_ahead, ensemble_scores_by_ahead))
 }
-make_ensemble_targets_by_ahead <- function() {
+#' Make ensemble targets
+#' @export
+make_ensemble_targets_and_scores <- function() {
   ensembles_and_scores <- tar_map(
     values = ensemble_parent_id_map,
     names = parent_id,
