@@ -14,7 +14,18 @@ make install
 make run
 ```
 
-## Directory Layout
+## Development
+
+### Sample `.Renviron` Settings
+
+```sh
+EPIDATR_USE_CACHE=true
+DEBUG_MODE=true
+USE_SHINY=false
+TAR_PROJECT=covid_hosp_explore
+```
+
+### Directory Layout
 
 -   `run.R` and `Makefile`: the main entrypoint for all pipelines
 -   `R/`: R package code to be reused
@@ -26,12 +37,12 @@ make run
 -   `flu_hosp_prod/` and `flu_hosp_prod.R`: a `targets` project for predicting flu hospitalizations
 -   `forecaster_testing/` and `forecaster_testing.R`: a `targets` project for testing forecasters
 
-## Tricky Gotchas
+### Parallelization Gotchas
 
 When running a pipeline with parallelization, make sure to install the package via `renv::install(".")` and not just via `devtools::load_all()`.
 It is safest to develop with parallelism disabled.
 
-## Pipeline Design
+### Pipeline Design
 
 See [this diagram](https://excalidraw.com/#json=AmMzzAKxSF5rz1dvuDJxj,0b53_5Ro6xwm13uQXrIGMQ).
 Double diamond objects represent "plates" (to evoke [plate notation](https://en.wikipedia.org/wiki/Plate_notation), but don't take the comparison too literally), which are used to represent multiple objects of the same type (e.g. different forecasters).
