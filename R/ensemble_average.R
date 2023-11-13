@@ -9,18 +9,19 @@
 #'   quantile, value)`, preferably in that order.
 #' @param ensemble_args any arguments unique to this particular ensembler should
 #'   be included in a list like this (unfortunate targets issues). The arguments
-#'   for `average_ensemble` in particular are `average_type` and `join_columns`
+#'   for `ensemble_average` in particular are `average_type` and `join_columns`
 #' @param ensemble_args_names an argument purely for use in targets. You
 #'   probably shouldn't worry about it. In a target, it should probably be
 #'   `ensemble_args_names = names(ensemble_args)`
 #' @importFrom rlang %||%
 #' @export
-average_ensemble <- function(epi_data,
+ensemble_average <- function(epi_data,
                              other_forecasts,
                              outcome,
                              extra_sources = "",
                              ensemble_args = list(),
                              ensemble_args_names = NULL) {
+  browser()
   # unique parameters must be buried in ensemble_args so that the generic function signature is stable
   # their names are separated for obscure target related reasons
   if (!is.null(ensemble_args_names)) {
@@ -34,15 +35,3 @@ average_ensemble <- function(epi_data,
     summarize(value = average_type(value)) %>%
     ungroup()
 }
-## ii <- 1
-## browser()
-## # group_by followed
-## for (ii in seq_along(other_forecasts)) {
-##   other_forecasts[[ii]] %<>% rename_with(~ paste(.x, ii, sep = "."), value)
-## }
-## other_forecasts
-## full_forecasts <- reduce(other_forecasts, function(x, y) full_join(x, y, by = join_columns))
-## full_forecasts %>% mutate(
-##   value = rowMeans(across(starts_with("value")))
-## ) %>% glimpse
-## rowMeans

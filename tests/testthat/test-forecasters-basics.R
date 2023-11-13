@@ -121,7 +121,7 @@ test_that("flatline_fc same across aheads", {
   expect_equal(resM2, res1)
 })
 
-test_that("average_ensemble", {
+test_that("ensemble_average", {
   jhu <- epipredict::case_death_rate_subset %>%
     dplyr::filter(time_value >= as.Date("2021-12-01"))
   # the as_of for this is wildly far in the future
@@ -133,7 +133,7 @@ test_that("average_ensemble", {
     scaled_pop(jhu, "case_rate", c("death_rate"), -2L, pop_scaling = FALSE),
     flatline_fc(jhu, "case_rate", ahead = -2L)
   )
-  ave_ens <- average_ensemble(jhu, meta_res, "case_rate")
+  ave_ens <- ensemble_average(jhu, meta_res, "case_rate")
   # target date correct
   expect_true(all(
     ave_ens$target_end_date ==
@@ -148,7 +148,7 @@ test_that("average_ensemble", {
       as.Date("2022-01-01")
   ))
   # make sure that key direction doesn't matter when generating ensembles
-  ave_ens_reversed <- average_ensemble(jhu, meta_res, "case_rate")
+  ave_ens_reversed <- ensemble_average(jhu, meta_res, "case_rate")
   expect_true(all.equal(ave_ens_reversed, ave_ens))
   # make sure it produces the expected median of a random row
   sampled_rows_all <- purrr::map_vec(
@@ -160,7 +160,7 @@ test_that("average_ensemble", {
   sampled_row_by_function <- ave_ens %>% filter(geo_value == "ca" & forecast_date == "2022-01-03" & quantile == .3)
   expect_equal(sampled_row_by_function, sampled_row_by_hand)
 
-  mean_ens <- average_ensemble(jhu, meta_res, "case_rate", ensemble_args = list(average_type = mean))
+  mean_ens <- ensemble_average(jhu, meta_res, "case_rate", ensemble_args = list(average_type = mean))
   are_equal <- mean_ens %>%
     full_join(ave_ens,
       by = join_by(geo_value, forecast_date, target_end_date, quantile)
@@ -173,13 +173,13 @@ test_that("average_ensemble", {
   # test case where extra_sources is "empty"
   # test case where the epi_df is empty
   null_jhu <- jhu %>% filter(time_value < as.Date("0009-01-01"))
-  expect_no_error(null_ave_ens <- average_ensemble(null_jhu, meta_res, "case_rate"))
-  # average_ensemble doesn't actually depend on the input data
+  expect_no_error(null_ave_ens <- ensemble_average(null_jhu, meta_res, "case_rate"))
+  # ensemble_average doesn't actually depend on the input data
   expect_true(all.equal(ave_ens, null_ave_ens))
 
   # carry on as if nothing was missing if one of the forecasters is missing entries
   one_partially_missing <- rlang::list2(meta_res[[1]][1:900, 1:5], !!!meta_res[2:4])
-  expect_no_error(partial_ave_ens <- average_ensemble(jhu, one_partially_missing))
+  expect_no_error(partial_ave_ens <- ensemble_average(jhu, one_partially_missing))
   # the entries that are present for all of them are the same
   left_join(partial_ave_ens, ave_ens, by = c("geo_value", "forecast_date", "target_end_date", "quantile")) %>%
     summarize(all.equal(value.x, value.y))

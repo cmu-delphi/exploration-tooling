@@ -1,34 +1,24 @@
 ex_forecaster <-list(
       forecaster = "scaled_pop",
       trainer = "linreg",
-      pop_scaling = TRUE,
+      pop_scaling = FALSE,
       lags = c(0, 3, 5, 7, 14)
     )
 # ensembles don't lend themselves to expand grid (inherently needs a list for sub-forecasters)
 ensemble_grid <- tribble(
   ~ensemble, ~forecasters, ~ensemble_params,
   # mean forecaster
-  "average_ensemble", list(
+  "ensemble_average", list(
     ex_forecaster,
     list(forecaster = "flatline_fc")
   ),
   list(average_type = "mean"),
   # median forecaster
-  "average_ensemble", list(
+  "ensemble_average", list(
     ex_forecaster,
     list(forecaster = "flatline_fc")
   ),
   list(average_type = "median"),
-  # median forecaster averaging a pop scaled and not pop scaled
-  "average_ensemble", list(
-    ex_forecaster,
-    list(
-      forecaster = "scaled_pop",
-      trainer = "linreg",
-      pop_scaling = FALSE
-    )
-  ),
-  list(average_type = "median")
 )
 # add aheads and ids (both forecasters and ensemble)
 ensemble_grid <- id_ahead_ensemble_grid(ensemble_grid, 1:4)

@@ -7,5 +7,9 @@
 make_forecasts_and_scores_by_ahead()
 }
 \description{
-Make forecasts and scores by ahead targets
+globals this depends on:
+Relies on the following globals:
+\itemize{
+\item \code{date_step}
+}
 }

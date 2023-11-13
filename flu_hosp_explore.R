@@ -7,6 +7,9 @@ source("extras/targets-common.R")
 make_unique_grids <- function() {
   list()
 }
+make_unique_ensemble_grid <- function() {
+  list()
+}
 
 # TODO: Find a way to clean all this stuff about param grids up.
 param_grid <- append(
@@ -16,6 +19,9 @@ param_grid <- append(
   map(add_id) %>%
   bind_rows() %>%
   relocate(parent_id, id, .after = last_col())
+if (length(param_grid$id %>% unique) < length(param_grid$id)) {
+  abort("there are non-unique forecasters")
+}
 forecaster_parent_id_map <- param_grid %>%
   group_by(parent_id) %>%
   summarize(
@@ -36,6 +42,37 @@ forecaster_params_grid_target <- list(
   )
 )
 
+# moving on to the ensemble
+AHEADS <- 1:4
+ensemble_grid <- append(
+  make_shared_ensembles(),
+  make_unique_ensemble_grid()
+) %>% id_ahead_ensemble_grid(AHEADS)
+# bind them together and give static ids
+target_ensemble_grid <- make_target_ensemble_grid(ensemble_grid)
+ensemble_parent_id_map <- ensemble_grid %>%
+  group_by(parent_id) %>%
+  summarize(
+    ensemble_component_ids = list(syms(paste0(ONE_AHEAD_ENSEMBLE_NAME, "_", gsub(" ", ".", id, fixed = TRUE)))),
+    score_component_ids = list(syms(paste0(ONE_AHEAD_SCORE_NAME, "_", gsub(" ", ".", id, fixed = TRUE))))
+  )
+# check that every ensemble dependent is actually included
+missing_forecasters <- ensemble_missing_forecasters_details(ensemble_grid, param_grid)
+if (length(missing_forecasters) > 0) {
+  print("missing forecasters:")
+  print(glue::glue("{missing_forecasters}"))
+  rlang::abort(c("ensemble missing forecasters"))
+}
+# not actually used downstream, this is for lookup during plotting and human evaluation
+ensembles_params_grid_target <- list(
+  tar_target(
+    name = ensemble_forecasters,
+    command = {
+      ensemble_grid
+    }
+  )
+)
+
 # These globals are needed by the function below (and they need to persist
 # during the actual targets run, since the commands are frozen as expressions).
 hhs_signal <- "confirmed_admissions_influenza_1d_prop_7dav"
@@ -49,7 +86,10 @@ data_targets <- make_data_targets()
 date_step <- 7L
 forecasts_and_scores_by_ahead <- make_forecasts_and_scores_by_ahead()
 forecasts_and_scores <- make_forecasts_and_scores()
-ensemble_targets <- make_ensemble_targets()
+# ensembles
+ensemble_and_scores_by_ahead <- make_ensemble_targets_by_ahead()
+ensemble_and_scores <- make_ensemble_targets_and_scores()
+# other sources
 external_names_and_scores <- make_external_names_and_scores()
 
 
@@ -58,6 +98,8 @@ list(
   forecaster_params_grid_target,
   forecasts_and_scores_by_ahead,
   forecasts_and_scores,
-  ensemble_targets,
+  ensembles_params_grid_target,
+  ensembles_and_scores_by_ahead,
+  ensembles_and_scores,
   external_names_and_scores
 )

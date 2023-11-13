@@ -6,10 +6,8 @@
 #' @export
 #' @importFrom rlang syms
 make_target_param_grid <- function(param_grid) {
-  param_grid %<>%
-    select(-any_of("parent_id")) %>%
-    mutate(forecaster = syms(forecaster)) %>%
-    mutate(trainer = syms(trainer))
+  not_na <- !is.na(param_grid$trainer)
+  param_grid$trainer[not_na] <- syms(param_grid$trainer[not_na])
   list_of_params <- lists_of_real_values(param_grid)
   list_names <- map(list_of_params, names)
   tibble(
@@ -175,7 +173,7 @@ make_data_targets <- function() {
   )
 }
 
-#' Make common targets for forecasting experiments
+#' Make list of common forecasters for forecasting experiments across projects
 #' @export
 make_shared_grids <- function() {
   list(
@@ -188,10 +186,40 @@ make_shared_grids <- function() {
     tidyr::expand_grid(
       forecaster = "scaled_pop",
       trainer = c("linreg", "quantreg"),
-      ahead = 5:7,
+      ahead = 1:7,
       lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14)),
       pop_scaling = c(FALSE)
+    ),
+    tidyr::expand_grid(
+      forecaster = "flatline_fc",
+      ahead = 1:7
     )
+  )
+}
+#' Make list of common ensembles for forecasting experiments across projects
+#' @export
+make_shared_ensembles <- function() {
+  ex_forecaster <- list(
+    forecaster = "scaled_pop",
+    trainer = "linreg",
+    pop_scaling = FALSE,
+    lags = c(0, 3, 5, 7, 14)
+  )
+  # ensembles don't lend themselves to expand grid (inherently needs a list for sub-forecasters)
+  tribble(
+    ~ensemble, ~forecasters, ~ensemble_params,
+    # mean forecaster
+    "ensemble_average", list(
+      ex_forecaster,
+      list(forecaster = "flatline_fc")
+    ),
+    list(average_type = "mean"),
+    # median forecaster
+    "ensemble_average", list(
+      ex_forecaster,
+      list(forecaster = "flatline_fc")
+    ),
+    list(average_type = "median"),
   )
 }
 
@@ -264,22 +292,24 @@ make_forecasts_and_scores <- function() {
 #' Make ensemble targets
 #' @export
 make_ensemble_targets_by_ahead <- function() {
-  ensembles_and_scores_by_ahead <- list()
+  ensembles_by_ahead <- list()
+  ensemble_scores_by_ahead <- list()
   for (i_ensemble in 1:nrow(target_ensemble_grid)) {
     passed_on_variables <- list(
-      ensemble = target_ensemble_grid[[i_ensemble, "ensemble"]][[1]],
+      ensemble = ,
       models_to_ensemble =
-        syms(paste(ONE_AHEAD_FORECAST_NAME, target_ensemble_grid[[i_ensemble, "forecaster_ids"]][[1]], sep = "_")),
+        map(paste(ONE_AHEAD_FORECAST_NAME, target_ensemble_grid[[i_ensemble, "forecaster_ids"]][[1]], sep = "_"), as.symbol),
       ensemble_params =
         target_ensemble_grid[[i_ensemble, "ensemble_params"]][[1]],
       ensemble_params_names =
-        target_ensemble_grid[[i_ensemble, "ensemble_params_names"]]
+        target_ensemble_grid[[i_ensemble, "ensemble_params_names"]],
+      archive = sym("joined_archive_data_2022")
     )
 
-    ensembles_and_scores_by_ahead[[i_ensemble]] <- tar_target_raw(
-      name = paste(ONE_AHEAD_ENSEMBLE_NAME, target_ensemble_grid[[i_ensemble, "id"]], sep = "_"),
+    ensembles_by_ahead[[i_ensemble]] <- tar_target_raw(
+      name = paste(!!ONE_AHEAD_ENSEMBLE_NAME, !!(target_ensemble_grid[[i_ensemble, "id"]]), sep = "_"),
       command = substitute(
-        ensemble(joined_archive_data_2022,
+        !!(target_ensemble_grid[[i_ensemble, "ensemble"]][[1]])(archive,
           models_to_ensemble,
           "hhs",
           extra_sources = "chng",
