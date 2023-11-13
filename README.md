@@ -10,20 +10,24 @@ The repo is also structured as an R package, which means that it is easy to shar
 # Install renv and R dependencies.
 make install
 
-# Run the pipeline wrapper run.R.
-make run
-```
-
-## Development
-
-### Sample `.Renviron` Settings
-
-```sh
+# Set your .Renviron settings.
 EPIDATR_USE_CACHE=true
 DEBUG_MODE=true
 USE_SHINY=false
 TAR_PROJECT=covid_hosp_explore
+EXTERNAL_SCORES_PATH=
+
+# Run the pipeline wrapper run.R.
+make run
 ```
+
+-   `EPIDATR_USE_CACHE` controls whether `epidatr` functions use the cache.
+-   `DEBUG_MODE` controls whether `targets::tar_make` is run with the `callr_function=NULL`, which allows for debugging.
+-   `USE_SHINY` controls whether we start a Shiny server after producing the targets.
+-   `TAR_PROJECT` controls which `targets` project is run by `run.R`.
+-   `EXTERNAL_SCORES_PATH` controls where external scores are loaded from. If not set, external scores are not used.
+
+## Development
 
 ### Directory Layout
 

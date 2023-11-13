@@ -26,65 +26,15 @@
 #   saveRDS(scorecards, "exploration-scorecards-2023-10-04.RDS")
 
 print("Reading environment variables (TAR_PROJECT, EXTERNAL_SCORES_PATH, DEBUG_MODE, USE_SHINY)...")
-tar_project <- Sys.getenv("TAR_PROJECT", "")
+tar_project <- Sys.getenv("TAR_PROJECT", "covid_hosp_explore")
 external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
-debug_mode <- Sys.getenv("DEBUG_MODE", "")
-use_shiny <- Sys.getenv("USE_SHINY", "")
+debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
+use_shiny <- as.logical(Sys.getenv("USE_SHINY", FALSE))
 
-readline_wrapper <- function(msg) {
-  if (interactive()) {
-    txt <- readline(msg)
-  } else {
-    cat(msg)
-    txt <- readLines("stdin", n = 1)
-  }
-  return(txt)
-}
-if (tar_project == "") {
-  project_selection <- readline_wrapper("Which project would you like to run?
-1: covid_hosp_explore
-2: flu_hosp_explore
-3: covid_hosp_prod
-4: flu_hosp_prod
-Input: ")
-  tar_project <- switch(as.character(project_selection),
-    "1" = "covid_hosp_explore",
-    "2" = "flu_hosp_explore",
-    "3" = "covid_hosp_prod",
-    "4" = "flu_hosp_prod",
-    # else
-    stop("selection `", project_selection, "` is invalid")
-  )
-} else {
-  cat("Using project: ", tar_project, "\n")
-}
-Sys.setenv(TAR_PROJECT = tar_project)
-
-
-if (external_scores_path == "") {
-  external_scores_path <- readline_wrapper("Path to RDS file containing external forecast scores, if desired:")
-} else {
-  cat("Using external scores from ", external_scores_path, "\n")
-}
-Sys.setenv(EXTERNAL_SCORES_PATH = external_scores_path)
-
-if (debug_mode == "") {
-  debug_mode <- readline_wrapper("Would you like to run debug mode? (y/[N]): ")
-} else {
-  cat("Debug mode: ", debug_mode, "\n")
-  if (as.logical(debug_mode)) {
-    debug_mode <- "y"
-  }
-}
-
-if (use_shiny == "") {
-  use_shiny <- readline_wrapper("Would you like to run the shiny app? (y/[N]): ")
-} else {
-  cat("Use shiny: ", use_shiny, "\n")
-  if (as.logical(use_shiny)) {
-    use_shiny <- "y"
-  }
-}
+cat("Using project: ", tar_project, "\n")
+if (external_scores_path != "") cat("Using external scores from ", external_scores_path, "\n")
+if (debug_mode) cat("Debug mode is on.")
+if (use_shiny) cat("Running shiny server after results.")
 
 
 suppressPackageStartupMessages({
@@ -97,7 +47,7 @@ store_dir <- tar_path_store()
 if (!dir.exists(store_dir)) dir.create(store_dir)
 
 tar_manifest()
-if (debug_mode == "y") {
+if (debug_mode) {
   tar_make(callr_function = NULL)
 } else {
   tar_make()
@@ -105,7 +55,7 @@ if (debug_mode == "y") {
 # tar_make_clustermq(workers = 2) # nolint
 # tar_make_future(workers = 2) # nolint
 
-if (use_shiny == "y") {
+if (use_shiny) {
   # Prevent functions defined in /R dir from being loaded unnecessarily
   options(shiny.autoload.r = FALSE)
 
