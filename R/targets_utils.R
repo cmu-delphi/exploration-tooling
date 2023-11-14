@@ -8,6 +8,9 @@
 make_target_param_grid <- function(param_grid) {
   not_na <- !is.na(param_grid$trainer)
   param_grid$trainer[not_na] <- syms(param_grid$trainer[not_na])
+  param_grid %<>%
+    select(-any_of("parent_id")) %>%
+    mutate(forecaster = syms(forecaster))
   list_of_params <- lists_of_real_values(param_grid)
   list_names <- map(list_of_params, names)
   tibble(
@@ -26,13 +29,14 @@ make_target_param_grid <- function(param_grid) {
 #' @importFrom rlang syms
 #' @importFrom purrr map
 #' @import dplyr
-make_target_ensemble_grid <- function(param_grid) {
+make_target_ensemble_grid <- function(param_grid, ONE_AHEAD_FORECAST_NAME = "forecast_by_ahead") {
   param_grid$ensemble_params <- map(param_grid$ensemble_params, sym_subset)
   param_grid %<>%
     mutate(ensemble = syms(ensemble)) %>%
     mutate(ensemble_params_names = list(names(ensemble_params))) %>%
     select(-forecasters) %>%
-    relocate(id, .before = everything())
+    relocate(id, .before = everything()) %>%
+    mutate(forecaster_ids = list(syms(paste(ONE_AHEAD_FORECAST_NAME, forecaster_ids, sep = "_"))))
   return(param_grid)
 }
 #' function to map
@@ -289,39 +293,6 @@ make_forecasts_and_scores <- function() {
   )
 }
 
-#' Make ensemble targets
-#' @export
-make_ensemble_targets_by_ahead <- function() {
-  ensembles_by_ahead <- list()
-  ensemble_scores_by_ahead <- list()
-  for (i_ensemble in 1:nrow(target_ensemble_grid)) {
-    passed_on_variables <- list(
-      ensemble = ,
-      models_to_ensemble =
-        map(paste(ONE_AHEAD_FORECAST_NAME, target_ensemble_grid[[i_ensemble, "forecaster_ids"]][[1]], sep = "_"), as.symbol),
-      ensemble_params =
-        target_ensemble_grid[[i_ensemble, "ensemble_params"]][[1]],
-      ensemble_params_names =
-        target_ensemble_grid[[i_ensemble, "ensemble_params_names"]],
-      archive = sym("joined_archive_data_2022")
-    )
-
-    ensembles_by_ahead[[i_ensemble]] <- tar_target_raw(
-      name = paste(!!ONE_AHEAD_ENSEMBLE_NAME, !!(target_ensemble_grid[[i_ensemble, "id"]]), sep = "_"),
-      command = substitute(
-        !!(target_ensemble_grid[[i_ensemble, "ensemble"]][[1]])(archive,
-          models_to_ensemble,
-          "hhs",
-          extra_sources = "chng",
-          ensemble_params,
-          ensemble_params_names
-        ),
-        env = passed_on_variables
-      )
-    )
-  }
-  return(c(ensembles_by_ahead, ensemble_scores_by_ahead))
-}
 #' Make ensemble targets
 #' @export
 make_ensemble_targets_and_scores <- function() {

@@ -4,7 +4,10 @@
 \alias{make_target_ensemble_grid}
 \title{convert a list of forecasters}
 \usage{
-make_target_ensemble_grid(param_grid)
+make_target_ensemble_grid(
+  param_grid,
+  ONE_AHEAD_FORECAST_NAME = "forecast_by_ahead"
+)
 }
 \arguments{
 \item{param_grid}{the tibble of parameters. Must have forecaster and trainer, everything else is optional}

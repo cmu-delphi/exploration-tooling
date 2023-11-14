@@ -21,7 +21,6 @@ ensemble_average <- function(epi_data,
                              extra_sources = "",
                              ensemble_args = list(),
                              ensemble_args_names = NULL) {
-  browser()
   # unique parameters must be buried in ensemble_args so that the generic function signature is stable
   # their names are separated for obscure target related reasons
   if (!is.null(ensemble_args_names)) {
