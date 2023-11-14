@@ -50,7 +50,12 @@ different_constants <- epiprocess::as_epi_archive(rbind(
 ))
 for (ii in 1:nrow(forecasters)) {
   test_that(paste(forecasters$fc_name[[ii]], " predicts a constant median for constant data"), {
-    res <- get_pred(different_constants, ii)
+    if (forecasters$fc_name[[ii]] == "scaled_pop") {
+      suppressWarnings(expect_warning(res <- get_pred(different_constants, ii), regexp = "prediction from rank-deficient fit"))
+    } else {
+      res <- get_pred(different_constants, ii)
+    }
+
 
     # only looking at the median, because the rest of the quantiles are going to be pretty weird on an actually constant input
     rel_values <- res %>%

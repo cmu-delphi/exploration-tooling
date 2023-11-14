@@ -14,5 +14,7 @@ id_ahead_ensemble_grid(ensemble_grid, aheads, n_adj = 2)
 \item{n_adj}{the number of adjectives to use; default of 2.}
 }
 \description{
-minor utility
+First, do an expand grid to do a full combination of ensemble_grid x aheads.
+Then add a column containing lists of ids of the dependent forecasters
+based on their parameters.
 }
