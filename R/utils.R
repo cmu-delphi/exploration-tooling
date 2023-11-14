@@ -42,7 +42,7 @@ add_id <- function(df, n_adj = 2) {
 #' @param forecaster_name a part of the adj.adj.1 name used to identify the forecaster.
 #' @param param_grid the tibble containing the mapping between
 #' @param project the project to be used; by default, the environmental variable is used
-#' @importFrom targets tar_read
+#' @importFrom targets tar_read tar_config_get
 #' @export
 forecaster_lookup <- function(forecaster_name, param_grid = NULL, project = NULL) {
   forecaster_name <- strip_underscored(forecaster_name)
