@@ -6,7 +6,7 @@
 \usage{
 ensemble_average(
   epi_data,
-  other_forecasts,
+  forecasts,
   outcome,
   extra_sources = "",
   ensemble_args = list(),
@@ -14,14 +14,15 @@ ensemble_average(
 )
 }
 \arguments{
-\item{epi_data}{the actual data used}
+\item{epi_data}{unused for this forecaster, but potentially an ensemble may
+want the underlying data.}
 
-\item{other_forecasts}{a list of quantile forecasts to aggregate. They should
+\item{forecasts}{a list of quantile forecasts to aggregate. They should
 be tibbles with columns \verb{(geo_value, forecast_date, target_end_date, quantile, value)}, preferably in that order.}
 
-\item{outcome}{the name of the target variable}
+\item{outcome}{The name of the target variable.}
 
-\item{extra_sources}{the name of any extra columns to use. This list could be
+\item{extra_sources}{The name of any extra columns to use. This list could be
 empty}
 
 \item{ensemble_args}{any arguments unique to this particular ensembler should
@@ -33,7 +34,7 @@ probably shouldn't worry about it. In a target, it should probably be
 \code{ensemble_args_names = names(ensemble_args)}}
 }
 \description{
-The simplest calss of ensembing models, it takes in a list of quantile
+The simplest class of ensembing models, it takes in a list of quantile
 forecasts and averages them on a per-quantile basis. By default the average
 used is the median, but it can accept any vectorized function.
 }

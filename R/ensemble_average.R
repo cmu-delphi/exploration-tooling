@@ -1,10 +1,14 @@
 #' an ensemble model that averages each quantile separately
 #' @description
-#' The simplest calss of ensembing models, it takes in a list of quantile
+#' The simplest class of ensembing models, it takes in a list of quantile
 #'   forecasts and averages them on a per-quantile basis. By default the average
 #'   used is the median, but it can accept any vectorized function.
-#' @inheritParams scaled_pop
-#' @param other_forecasts a list of quantile forecasts to aggregate. They should
+#' @param epi_data unused for this forecaster, but potentially an ensemble may
+#'   want the underlying data.
+#' @param outcome The name of the target variable.
+#' @param extra_sources The name of any extra columns to use. This list could be
+#'   empty
+#' @param forecasts a list of quantile forecasts to aggregate. They should
 #'   be tibbles with columns `(geo_value, forecast_date, target_end_date,
 #'   quantile, value)`, preferably in that order.
 #' @param ensemble_args any arguments unique to this particular ensembler should
@@ -16,7 +20,7 @@
 #' @importFrom rlang %||%
 #' @export
 ensemble_average <- function(epi_data,
-                             other_forecasts,
+                             forecasts,
                              outcome,
                              extra_sources = "",
                              ensemble_args = list(),
@@ -29,7 +33,7 @@ ensemble_average <- function(epi_data,
   average_type <- ensemble_args$average_type %||% median
   join_columns <- ensemble_args$join_columns %||% c("geo_value", "forecast_date", "target_end_date", "quantile")
   # begin actual analysis
-  bind_rows(!!!other_forecasts, .id = "forecaster") %>%
+  bind_rows(!!!forecasts, .id = "forecaster") %>%
     group_by(across(all_of(join_columns))) %>%
     summarize(value = average_type(value)) %>%
     ungroup()

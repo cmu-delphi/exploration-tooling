@@ -25,9 +25,11 @@ make_unique_grids <- function() {
 make_unique_ensemble_grid <- function() {
   # median forecaster averaging a pop scaled and not pop scaled
   tribble(
-    ~ensemble, ~forecasters, ~ensemble_params,
+    ~ensemble, ~ensemble_params, ~forecasters,
     # mean forecaster
-    "ensemble_average", list(
+    "ensemble_average",
+    list(average_type = "mean"),
+    list(
       list(
         forecaster = "scaled_pop",
         trainer = "linreg",
@@ -36,21 +38,21 @@ make_unique_ensemble_grid <- function() {
       ),
       list(forecaster = "flatline_fc")
     ),
-    list(average_type = "mean"),
     # median forecaster
-    "ensemble_average", list(
+    "ensemble_average",
+    list(
+      forecaster = "scaled_pop",
+      trainer = "linreg",
+      pop_scaling = FALSE,
+      lags = c(0, 3, 5, 7, 14)
+    ),
+    list(
       list(
         forecaster = "scaled_pop",
         trainer = "linreg",
         pop_scaling = TRUE,
         lags = c(0, 3, 5, 7, 14)
       ),
-      list(
-        forecaster = "scaled_pop",
-        trainer = "linreg",
-        pop_scaling = FALSE,
-        lags = c(0, 3, 5, 7, 14)
-      )
     ),
     list(average_type = "median"),
   )

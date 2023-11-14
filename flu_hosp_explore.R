@@ -8,7 +8,9 @@ make_unique_grids <- function() {
   list()
 }
 make_unique_ensemble_grid <- function() {
-  list()
+  tribble(
+    ~ensemble, ~ensemble_params, ~forecasters,
+  )
 }
 
 # TODO: Find a way to clean all this stuff about param grids up.
@@ -19,7 +21,7 @@ param_grid <- append(
   map(add_id) %>%
   bind_rows() %>%
   relocate(parent_id, id, .after = last_col())
-if (length(param_grid$id %>% unique) < length(param_grid$id)) {
+if (length(param_grid$id %>% unique()) < length(param_grid$id)) {
   abort("there are non-unique forecasters")
 }
 forecaster_parent_id_map <- param_grid %>%

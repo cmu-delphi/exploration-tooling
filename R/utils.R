@@ -114,7 +114,7 @@ ensemble_missing_forecasters_details <- function(ensemble_grid = NULL, param_gri
 single_id <- function(param_list, ahead = NULL, n_adj = 2) {
   full_hash <- param_list[names(param_list) != "ahead"] %>%
     .[order(names(.))] %>% # put in alphabetical order
-    lapply(function (x) if (length(x)>1) list(x) else x) %>% # the tibble version needs vectors to actually be lists, so this is a conversion to make sure the strings are identical
+    lapply(function(x) if (length(x) > 1) list(x) else x) %>% # the tibble version needs vectors to actually be lists, so this is a conversion to make sure the strings are identical
     paste(collapse = "") %>%
     hash_animal(n_adj = n_adj)
   single_string <- full_hash$words[[1]][1:n_adj] %>% paste(sep = ".", collapse = ".")
@@ -128,7 +128,9 @@ single_id <- function(param_list, ahead = NULL, n_adj = 2) {
 
 #' add aheads, forecaster_ids, and ids to a list of ensemble models
 #' @description
-#' minor utility
+#' First, do an expand grid to do a full combination of ensemble_grid x aheads.
+#'   Then add a column containing lists of ids of the dependent forecasters
+#'   based on their parameters.
 #' @param ensemble_grid the list of ensembles,
 #' @param aheads the aheads to add
 #' @inheritParams add_id
@@ -145,7 +147,7 @@ id_ahead_ensemble_grid <- function(ensemble_grid, aheads, n_adj = 2) {
     add_id(., n_adj = 2) %>%
     rowwise() %>%
     mutate(forecaster_ids = list(map2_vec(forecasters, ahead, single_id, n_adj = 2)))
-  if (length(ensemble_grid$id %>% unique) < length(ensemble_grid$id)) {
+  if (length(ensemble_grid$id %>% unique()) < length(ensemble_grid$id)) {
     abort("ensemble grid has non-unique forecasters")
   }
   return(ensemble_grid)

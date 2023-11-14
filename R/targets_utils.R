@@ -27,8 +27,6 @@ make_target_param_grid <- function(param_grid) {
 #' @param param_grid the tibble of parameters. Must have forecaster and trainer, everything else is optional
 #' @export
 #' @importFrom rlang syms
-#' @importFrom purrr map
-#' @import dplyr
 make_target_ensemble_grid <- function(param_grid, ONE_AHEAD_FORECAST_NAME = "forecast_by_ahead") {
   param_grid$ensemble_params <- map(param_grid$ensemble_params, sym_subset)
   param_grid %<>%
@@ -40,7 +38,6 @@ make_target_ensemble_grid <- function(param_grid, ONE_AHEAD_FORECAST_NAME = "for
   return(param_grid)
 }
 #' function to map
-#' @importFrom purrr imap
 #' @keywords internal
 #' @param sym_names a list of the parameter names that should be turned into symbols
 sym_subset <- function(param_list, sym_names = list("average_type")) {
@@ -211,19 +208,21 @@ make_shared_ensembles <- function() {
   )
   # ensembles don't lend themselves to expand grid (inherently needs a list for sub-forecasters)
   tribble(
-    ~ensemble, ~forecasters, ~ensemble_params,
+    ~ensemble, ~ensemble_params, ~forecasters,
     # mean forecaster
-    "ensemble_average", list(
-      ex_forecaster,
-      list(forecaster = "flatline_fc")
-    ),
+    "ensemble_average",
     list(average_type = "mean"),
-    # median forecaster
-    "ensemble_average", list(
+    list(
       ex_forecaster,
       list(forecaster = "flatline_fc")
     ),
+    # median forecaster
+    "ensemble_average",
     list(average_type = "median"),
+    list(
+      ex_forecaster,
+      list(forecaster = "flatline_fc")
+    ),
   )
 }
 
