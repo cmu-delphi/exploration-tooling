@@ -12,7 +12,7 @@ make_target_ensemble_grid(
 \arguments{
 \item{param_grid}{the tibble of parameters. Must have forecaster and trainer, everything else is optional}
 
-\item{ONE_AHEAD_FORECAST_NAME}{the extra bit of name that is shared by all}
+\item{ONE_AHEAD_FORECASTER_NAME}{the extra bit of name that is shared by all}
 }
 \description{
 the required format for targets is a little jank; this takes a human legible tibble and makes it targets legible.

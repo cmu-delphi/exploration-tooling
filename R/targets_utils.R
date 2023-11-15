@@ -25,7 +25,7 @@ make_target_param_grid <- function(param_grid) {
 #' the required format for targets is a little jank; this takes a human legible tibble and makes it targets legible.
 #' Currently only `forecaster` and `trainer` can be symbols.
 #' @param param_grid the tibble of parameters. Must have forecaster and trainer, everything else is optional
-#' @param ONE_AHEAD_FORECAST_NAME the extra bit of name that is shared by all
+#' @param ONE_AHEAD_FORECASTER_NAME the extra bit of name that is shared by all
 #' @export
 #' @importFrom rlang syms
 make_target_ensemble_grid <- function(param_grid, ONE_AHEAD_FORECASTER_NAME = "forecast_by_ahead") {
