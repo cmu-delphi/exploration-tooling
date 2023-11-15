@@ -6,11 +6,13 @@
 \usage{
 make_target_ensemble_grid(
   param_grid,
-  ONE_AHEAD_FORECAST_NAME = "forecast_by_ahead"
+  ONE_AHEAD_ENSEMBLE_NAME = "ensemble_by_ahead"
 )
 }
 \arguments{
 \item{param_grid}{the tibble of parameters. Must have forecaster and trainer, everything else is optional}
+
+\item{ONE_AHEAD_FORECAST_NAME}{the extra bit of name that is shared by all}
 }
 \description{
 the required format for targets is a little jank; this takes a human legible tibble and makes it targets legible.
