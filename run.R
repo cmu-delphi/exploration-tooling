@@ -119,7 +119,7 @@ if (use_shiny == "y") {
   )
 
   # Add ensembles
-  ensemble_options <- tar_read(ensemble_forecasters)[["parent_id"]]
+  ensemble_options <- unique(tar_read(ensemble_forecasters)[["parent_id"]])
   ensemble_options <- setNames(
     # File names
     paste0("ensemble_score_", ensemble_options),
@@ -127,7 +127,7 @@ if (use_shiny == "y") {
     paste0("ensemble.", ensemble_options)
   )
 
-  external_options <- tar_read(external_names)
+  external_options <- unique(tar_read(external_names))
   EXTERNAL_PREFIX <- "[external] "
   if (!is.null(external_options) && length(external_options) > 0) {
     external_options <- setNames(
