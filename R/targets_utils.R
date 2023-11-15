@@ -28,14 +28,14 @@ make_target_param_grid <- function(param_grid) {
 #' @param ONE_AHEAD_FORECAST_NAME the extra bit of name that is shared by all
 #' @export
 #' @importFrom rlang syms
-make_target_ensemble_grid <- function(param_grid, ONE_AHEAD_ENSEMBLE_NAME = "ensemble_by_ahead") {
+make_target_ensemble_grid <- function(param_grid, ONE_AHEAD_FORECASTER_NAME = "forecast_by_ahead") {
   param_grid$ensemble_params <- map(param_grid$ensemble_params, sym_subset)
   param_grid %<>%
     mutate(ensemble = syms(ensemble)) %>%
     mutate(ensemble_params_names = list(names(ensemble_params))) %>%
     select(-forecasters) %>%
     relocate(id, .before = everything()) %>%
-    mutate(forecaster_ids = list(syms(paste(ONE_AHEAD_ENSEMBLE_NAME, forecaster_ids, sep = "_"))))
+    mutate(forecaster_ids = list(syms(paste(ONE_AHEAD_FORECASTER_NAME, forecaster_ids, sep = "_"))))
   return(param_grid)
 }
 #' function to map
@@ -307,7 +307,7 @@ make_ensemble_targets_and_scores <- function() {
       }
     ),
     tar_target(
-      name = score,
+      name = ensemble_score,
       command = {
         bind_rows(score_component_ids) %>%
           mutate(parent_ensemble = parent_id)

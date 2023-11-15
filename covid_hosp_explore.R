@@ -40,12 +40,7 @@ make_unique_ensemble_grid <- function() {
     ),
     # median forecaster
     "ensemble_average",
-    list(
-      forecaster = "scaled_pop",
-      trainer = "linreg",
-      pop_scaling = FALSE,
-      lags = c(0, 3, 5, 7, 14)
-    ),
+    list(average_type = "median"),
     list(
       list(
         forecaster = "scaled_pop",
@@ -53,8 +48,13 @@ make_unique_ensemble_grid <- function() {
         pop_scaling = TRUE,
         lags = c(0, 3, 5, 7, 14)
       ),
+      list(
+        forecaster = "scaled_pop",
+        trainer = "linreg",
+        pop_scaling = FALSE,
+        lags = c(0, 3, 5, 7, 14)
+      )
     ),
-    list(average_type = "median"),
   )
 }
 
@@ -155,7 +155,7 @@ ensembles_and_scores_by_ahead <- tar_map(
     priority = .9999
   ),
   tar_target(
-    name = ONE_AHEAD_SCORE_NAME,
+    name = score_by_ahead,
     command = {
       run_evaluation_measure(
         data = ensemble_by_ahead,
@@ -169,113 +169,7 @@ ensembles_and_scores_by_ahead <- tar_map(
     }
   )
 )
-## env <- list(ensemble_forecast_name = as.symbol(paste(ONE_AHEAD_ENSEMBLE_NAME,
-##   target_ensemble_grid[[i_ensemble, "id"]],
-##   sep = "_"
-## )))
-
-## make_ensemble_targets_by_ahead <- function() {
-##   ensembles_by_ahead <- list()
-##   ensemble_scores_by_ahead <- list()
-##   for (i_ensemble in 1:nrow(target_ensemble_grid)) {
-##     ensemble <- target_ensemble_grid[[i_ensemble, "ensemble"]][[1]]
-##     models_to_ensemble <-
-##       map(paste(ONE_AHEAD_FORECAST_NAME, target_ensemble_grid[[i_ensemble, "forecaster_ids"]][[1]], sep = "_"), as.symbol)
-##     ensemble_params <-
-##       target_ensemble_grid[[i_ensemble, "ensemble_params"]][[1]]
-##     ensemble_params_names <-
-##       target_ensemble_grid[[i_ensemble, "ensemble_params_names"]]
-##     archive <- sym("joined_archive_data_2022")
-##     ensemble_id <- (target_ensemble_grid[[i_ensemble, "id"]])
-
-##     ## passed_on_variables <- list(
-##     ##   ensemble = target_ensemble_grid[[i_ensemble, "ensemble"]][[1]],
-##     ##   models_to_ensemble =
-##     ##     map(paste(ONE_AHEAD_FORECAST_NAME, target_ensemble_grid[[i_ensemble, "forecaster_ids"]][[1]], sep = "_"), sym),
-##     ##   ensemble_params =
-##     ##     target_ensemble_grid[[i_ensemble, "ensemble_params"]][[1]],
-##     ##   ensemble_params_names =
-##     ##     target_ensemble_grid[[i_ensemble, "ensemble_params_names"]],
-##     ##   archive = sym("joined_archive_data_2022")
-##     ## )
-
-##     ## (ensembles_by_ahead[[i_ensemble]] <- tar_combine_raw(
-##     ## name = "DO THE NEEDFUL",
-##     ## !!models_to_ensemble,
-##     ## command = {
-##     ##   browser()
-##     ##   !!!.x
-##     ## }
-##     ## ))
-
-##     ensembles_by_ahead[[i_ensemble]] <- tar_target_raw(
-##       name = paste(ONE_AHEAD_ENSEMBLE_NAME, ensemble_id, sep = "_"),
-##       command = eval(
-##         substitute(
-##           ensemble(archive,
-##             models_to_ensemble,
-##             "hhs",
-##             extra_sources = "chng",
-##             ensemble_params,
-##             ensemble_params_names
-##           )
-##         ),
-##         env = passed_on_variables
-##       ),
-##       priority = .9999
-##     )
-##     ##     ensemble_name <- target_ensemble_grid[[i_ensemble, "id"]]
-##     ##     list_of_dependent_forecasters  <- target_ensemble_grid[[i_ensemble, "ensemble"]][[1]]
-##     ##     ensembles_by_ahead[[i_ensemble]] <- tar_target(
-##     ##       name = paste(!!ONE_AHEAD_ENSEMBLE_NAME, !!ensemble_name, sep = "_"),
-##     ##       command = {
-##     ##         !!()(archive,
-##     ## list_of_dependent_forecasters,
-##     ##           models_to_ensemble,
-##     ##           "hhs",
-##     ##           extra_sources = "chng",
-##     ##           !!(target_ensemble_grid[[i_ensemble, "ensemble_params"]][[1]]),
-##     ##           !!(target_ensemble_grid[[i_ensemble, "ensemble_params"]][[1]])
-##     ##         )
-##     ##       }
-##     ##     )
-
-##     ## ensembles_by_ahead[[i_ensemble]] <- tar_target_raw(
-##     ##   name = paste(!!ONE_AHEAD_ENSEMBLE_NAME, !!(target_ensemble_grid[[i_ensemble, "id"]]), sep = "_"),
-##     ##   command = substitute(
-##     ##     ensemble(archive,
-##     ##       models_to_ensemble,
-##     ##       "hhs",
-##     ##       extra_sources = "chng",
-##     ##       ensemble_params,
-##     ##       ensemble_params_names
-##     ##     ),
-##     ##     env = passed_on_variables
-##     ##   )
-##     ## )
-##     ## ensemble_scores_by_ahead[[i_ensemble]] <- tar_target_raw(
-##     ##   name = paste(ONE_AHEAD_SCORE_NAME, target_ensemble_grid[[i_ensemble, "id"]], sep = "_"),
-##     ##   command = substitute(
-##     ##     run_evaluation_measure(
-##     ##       data = ensemble_forecast_name,
-##     ##       evaluation_data = hhs_evaluation_data,
-##     ##       measure = list(
-##     ##         wis = weighted_interval_score,
-##     ##         ae = absolute_error,
-##     ##         cov_80 = interval_coverage(0.8)
-##     ##       )
-##     ##     ),
-##     ##     env = list(ensemble_forecast_name = as.symbol(paste(ONE_AHEAD_ENSEMBLE_NAME,
-##     ##       target_ensemble_grid[[i_ensemble, "id"]],
-##     ##       sep = "_"
-##     ##     )))
-##     ##   )
-##     ## )
-##   }
-##   return(c(ensembles_by_ahead, ensemble_scores_by_ahead))
-## }
-# ensembles_and_scores_by_ahead <- make_ensemble_targets_by_ahead()
-# ensembles_and_scores <- make_ensemble_targets_and_scores()
+ensembles_and_scores <- make_ensemble_targets_and_scores()
 # other sources
 external_names_and_scores <- make_external_names_and_scores()
 
@@ -286,6 +180,6 @@ list(
   forecasts_and_scores,
   ensembles_params_grid_target,
   ensembles_and_scores_by_ahead,
-  # ensembles_and_scores,
+  ensembles_and_scores,
   external_names_and_scores
 )

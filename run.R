@@ -119,12 +119,12 @@ if (use_shiny == "y") {
   )
 
   # Add ensembles
-  ensemble_options <- tar_read(ensembles)[["a"]]
+  ensemble_options <- tar_read(ensemble_forecasters)[["parent_id"]]
   ensemble_options <- setNames(
     # File names
     paste0("ensemble_score_", ensemble_options),
     # Display names
-    paste0("ensemble score ", ensemble_options)
+    paste0("ensemble.", ensemble_options)
   )
 
   external_options <- tar_read(external_names)
