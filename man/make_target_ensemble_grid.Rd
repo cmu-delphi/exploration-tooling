@@ -6,7 +6,7 @@
 \usage{
 make_target_ensemble_grid(
   param_grid,
-  ONE_AHEAD_ENSEMBLE_NAME = "ensemble_by_ahead"
+  ONE_AHEAD_FORECASTER_NAME = "forecast_by_ahead"
 )
 }
 \arguments{
