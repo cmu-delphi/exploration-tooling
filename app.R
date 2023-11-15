@@ -136,7 +136,11 @@ shinyApp(
   server = function(input, output, session) {
     filtered_scorecards_reactive <- reactive({
       agg_forecasters <- unique(c(input$selected_forecasters, input$baseline))
-      if (length(agg_forecasters) == 0) { return(data.frame()) }
+      if (length(agg_forecasters) == 0 ||
+          all(agg_forecasters == "" | is.null(agg_forecasters) | is.na(agg_forecasters))
+      ) {
+        return(data.frame())
+      }
 
       processed_evaluations_internal <- lapply(agg_forecasters, function(forecaster) {
           load_forecast_data(forecaster) %>>%
