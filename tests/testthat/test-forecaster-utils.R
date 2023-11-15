@@ -13,10 +13,10 @@ test_that("perform_sanity_checks", {
 })
 
 test_that("id generation works", {
-  simple_ex <- list(tribble(
+  simple_ex <- list(dplyr::tribble(
     ~forecaster, ~trainer, ~ahead, ~pop_scaling, ~lags,
     "scaled_pop", "linreg", 1, TRUE, c(1,2)
-  ), tribble(
+  ), dplyr::tribble(
     ~forecaster, ~ahead, ~pop_scaling, ~trainer, ~lags,
     "scaled_pop", 1, TRUE, "linreg", c(1,2)
   ))
@@ -27,10 +27,10 @@ test_that("id generation works", {
   list_ahead_ex <- list(forecaster = "scaled_pop", trainer = "linreg", ahead = 1, pop_scaling = TRUE, lags = c(1,2))
   expect_equal(single_id(list_ahead_ex), same_ids[[1]]$id)
   # order shouldn't matter for the list either
-  list_ahead_scrambled <- list(trainer = "linreg", ahead = 1, pop_scaling = TRUE, forecaster = "scaled_pop")
+  list_ahead_scrambled <- list(lags = c(1,2), trainer = "linreg", ahead = 1, pop_scaling = TRUE, forecaster = "scaled_pop")
   expect_equal(single_id(list_ahead_scrambled), single_id(list_ahead_ex))
   # the list version returns the same whether ahead is included
-  list_ex <- list(forecaster = "scaled_pop", trainer = "linreg", pop_scaling = TRUE)
+  list_ex <- list(forecaster = "scaled_pop", trainer = "linreg", pop_scaling = TRUE, lags = c(1,2))
   expect_equal(single_id(list_ahead_ex), single_id(list_ex, 1))
 })
 

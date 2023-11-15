@@ -12,13 +12,12 @@ synth_mean <- 25
 synth_sd <- 2
 tiny_sd <- 1.0e-5
 simple_dates <- seq(as.Date("2012-01-01"), by = "day", length.out = 40)
-approx_zero <- rnorm(length(simple_dates), sd = tiny_sd)
 # technically white noise, but with a variance that is miniscule
 constant <- epiprocess::as_epi_archive(tibble(
   geo_value = "al",
   time_value = simple_dates,
   version = simple_dates,
-  a = synth_mean + approx_zero
+  a = synth_mean
 ))
 
 # wrap a call that is made quite frequently
@@ -45,7 +44,7 @@ different_constants <- epiprocess::as_epi_archive(rbind(
     geo_value = "ca",
     time_value = simple_dates,
     version = simple_dates,
-    a = 4 * synth_mean + approx_zero
+    a = 4 * synth_mean
   )
 ))
 for (ii in 1:nrow(forecasters)) {
@@ -122,12 +121,16 @@ missing_state <- epiprocess::as_epi_archive(rbind(
     geo_value = "ca",
     time_value = simple_dates,
     version = simple_dates + state_delay,
-    a = synth_mean + approx_zero
+    a = synth_mean
   )
 ))
 for (ii in seq_len(nrow(forecasters))) {
   test_that(paste(forecasters$fc_name[[ii]], "predicts well in the presence of only one state with variably delayed data"), {
-    expect_no_error(res <- get_pred(missing_state, ii))
+    if (forecasters$fc_name[[ii]] == "scaled_pop") {
+      suppressWarnings(expect_warning(res <- get_pred(missing_state, ii), regexp = "prediction from rank-deficient fit"))
+    } else {
+      res <- get_pred(missing_state, ii)
+    }
     expect_equal(length(unique(res$geo_value)), 2)
     counts <- res %>%
       filter(quantile == 0.5 & !is.na(value)) %>%
@@ -161,14 +164,18 @@ linear <- epiprocess::as_epi_archive(
     geo_value = "al",
     time_value = simple_dates,
     version = simple_dates,
-    a = seq_len(length(simple_dates)) + approx_zero
+    a = seq_len(length(simple_dates))
   )
 )
 for (ii in seq_len(nrow(forecasters))) {
   test_that(paste(forecasters$fc_name[[ii]], "predicts a linear increasing slope correctly"), {
     # flatline will definitely fail this, so it's exempt
     if (!identical(forecasters$forecaster[[ii]], flatline_fc)) {
-      expect_no_error(res <- get_pred(linear, ii))
+      if (forecasters$fc_name[[ii]] == "scaled_pop") {
+        suppressWarnings(expect_warning(res <- get_pred(linear, ii), regexp = "prediction from rank-deficient fit"))
+      } else {
+        res <- get_pred(linear, ii)
+      }
       # make sure that the median is on the sloped line
       median_err <- res %>%
         filter(quantile == .5) %>%
