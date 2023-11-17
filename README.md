@@ -29,7 +29,7 @@ make run
 -   `TAR_PROJECT` controls which `targets` project is run by `run.R`.
 -   `EXTERNAL_SCORES_PATH` controls where external scores are loaded from. If not set, external scores are not used.
 -   `USE_AWS_S3` controls whether we use AWS S3 to store the cache.
--   `AWS_S3_PREFIX` controls the prefix for the AWS S3 bucket.
+-   `AWS_S3_PREFIX` controls the prefix to use in the AWS S3 bucket (a prefix is a pseudo-directory in a bucket).
 
 ## Development
 
