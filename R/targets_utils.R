@@ -6,10 +6,11 @@
 #' @export
 #' @importFrom rlang syms
 make_target_param_grid <- function(param_grid) {
+  not_na <- !is.na(param_grid$trainer)
+  param_grid$trainer[not_na] <- syms(param_grid$trainer[not_na])
   param_grid %<>%
     select(-any_of("parent_id")) %>%
-    mutate(forecaster = syms(forecaster)) %>%
-    mutate(trainer = syms(trainer))
+    mutate(forecaster = syms(forecaster))
   list_of_params <- lists_of_real_values(param_grid)
   list_names <- map(list_of_params, names)
   tibble(
@@ -18,6 +19,30 @@ make_target_param_grid <- function(param_grid) {
     params = list_of_params,
     param_names = list_names
   )
+}
+#' convert a list of forecasters
+#' @description
+#' the required format for targets is a little jank; this takes a human legible tibble and makes it targets legible.
+#' Currently only `forecaster` and `trainer` can be symbols.
+#' @param param_grid the tibble of parameters. Must have forecaster and trainer, everything else is optional
+#' @param ONE_AHEAD_FORECASTER_NAME the extra bit of name that is shared by all
+#' @export
+#' @importFrom rlang syms
+make_target_ensemble_grid <- function(param_grid, ONE_AHEAD_FORECASTER_NAME = "forecast_by_ahead") {
+  param_grid$ensemble_params <- map(param_grid$ensemble_params, sym_subset)
+  param_grid %<>%
+    mutate(ensemble = syms(ensemble)) %>%
+    mutate(ensemble_params_names = list(names(ensemble_params))) %>%
+    select(-forecasters) %>%
+    relocate(id, .before = everything()) %>%
+    mutate(forecaster_ids = list(syms(paste(ONE_AHEAD_FORECASTER_NAME, forecaster_ids, sep = "_"))))
+  return(param_grid)
+}
+#' function to map
+#' @keywords internal
+#' @param sym_names a list of the parameter names that should be turned into symbols
+sym_subset <- function(param_list, sym_names = list("average_type")) {
+  imap(param_list, \(x, y) if (y %in% sym_names) sym(x) else x)
 }
 
 #' helper function for `make_target_param_grid`
@@ -150,7 +175,7 @@ make_data_targets <- function() {
   )
 }
 
-#' Make common targets for forecasting experiments
+#' Make list of common forecasters for forecasting experiments across projects
 #' @export
 make_shared_grids <- function() {
   list(
@@ -163,10 +188,42 @@ make_shared_grids <- function() {
     tidyr::expand_grid(
       forecaster = "scaled_pop",
       trainer = c("linreg", "quantreg"),
-      ahead = 5:7,
+      ahead = 1:7,
       lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14)),
       pop_scaling = c(FALSE)
+    ),
+    tidyr::expand_grid(
+      forecaster = "flatline_fc",
+      ahead = 1:7
     )
+  )
+}
+#' Make list of common ensembles for forecasting experiments across projects
+#' @export
+make_shared_ensembles <- function() {
+  ex_forecaster <- list(
+    forecaster = "scaled_pop",
+    trainer = "linreg",
+    pop_scaling = FALSE,
+    lags = c(0, 3, 5, 7, 14)
+  )
+  # ensembles don't lend themselves to expand grid (inherently needs a list for sub-forecasters)
+  tribble(
+    ~ensemble, ~ensemble_params, ~forecasters,
+    # mean forecaster
+    "ensemble_average",
+    list(average_type = "mean"),
+    list(
+      ex_forecaster,
+      list(forecaster = "flatline_fc")
+    ),
+    # median forecaster
+    "ensemble_average",
+    list(average_type = "median"),
+    list(
+      ex_forecaster,
+      list(forecaster = "flatline_fc")
+    ),
   )
 }
 
@@ -238,8 +295,25 @@ make_forecasts_and_scores <- function() {
 
 #' Make ensemble targets
 #' @export
-make_ensemble_targets <- function() {
-  list()
+make_ensemble_targets_and_scores <- function() {
+  ensembles_and_scores <- tar_map(
+    values = ensemble_parent_id_map,
+    names = parent_id,
+    tar_target(
+      name = ensemble,
+      command = {
+        bind_rows(ensemble_component_ids) %>%
+          mutate(parent_ensemble = parent_id)
+      }
+    ),
+    tar_target(
+      name = ensemble_score,
+      command = {
+        bind_rows(score_component_ids) %>%
+          mutate(parent_ensemble = parent_id)
+      }
+    )
+  )
 }
 
 

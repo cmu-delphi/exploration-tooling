@@ -5,3 +5,7 @@ tmp/
 extras/**.html
 *.pdf
 .Renviron
+.renvignore
+nohup.out
+run.Rout
+tmp.R
