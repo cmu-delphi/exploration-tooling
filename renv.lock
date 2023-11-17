@@ -799,7 +799,7 @@
       "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epidatr",
       "RemoteRef": "dev",
-      "RemoteSha": "ee952c518ac0cf7cc25083b6c54a0b284d2c3448",
+      "RemoteSha": "83e986b90ff48a972a2de972c184ec06bcce2113",
       "Requirements": [
         "MMWRweek",
         "R",
@@ -816,7 +816,7 @@
         "tibble",
         "xml2"
       ],
-      "Hash": "c628a40210a598e5c165e4a31c7d781b"
+      "Hash": "a0cd96909bf0dc5d470f5ed08fb81ff7"
     },
     "epipredict": {
       "Package": "epipredict",
@@ -1772,6 +1772,35 @@
       ],
       "Hash": "cbb49c720a5e4bf1fe36a870b07d1a0c"
     },
+    "paws.common": {
+      "Package": "paws.common",
+      "Version": "0.6.4",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "Rcpp",
+        "base64enc",
+        "curl",
+        "digest",
+        "httr",
+        "jsonlite",
+        "methods",
+        "stats",
+        "utils",
+        "xml2"
+      ],
+      "Hash": "fcc0e7509d0c9da0874b5d3a7d8ea904"
+    },
+    "paws.storage": {
+      "Package": "paws.storage",
+      "Version": "0.4.0",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "paws.common"
+      ],
+      "Hash": "8aea3bee1ea38991f23aea27583b93ef"
+    },
     "pillar": {
       "Package": "pillar",
       "Version": "1.9.0",
@@ -2216,14 +2245,14 @@
     },
     "rlang": {
       "Package": "rlang",
-      "Version": "1.1.1",
+      "Version": "1.1.2",
       "Source": "Repository",
-      "Repository": "CRAN",
+      "Repository": "RSPM",
       "Requirements": [
         "R",
         "utils"
       ],
-      "Hash": "a85c767b55f0bf9b7ad16c6d7baee5bb"
+      "Hash": "50a6dbdc522936ca35afc5e2082ea91b"
     },
     "rmarkdown": {
       "Package": "rmarkdown",

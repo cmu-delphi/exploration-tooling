@@ -10,6 +10,7 @@
 #   # Example fetching external scores from the forecasting bucket
 #   library(aws.s3)
 #
+#   # We recommend setting these in your user config files such as ~/.zprofile.
 #   Sys.setenv(
 #     AWS_ACCESS_KEY_ID = "",
 #     AWS_SECRET_ACCESS_KEY = ""
@@ -25,17 +26,23 @@
 #   # Save to disk
 #   saveRDS(scorecards, "exploration-scorecards-2023-10-04.RDS")
 
-print("Reading environment variables (TAR_PROJECT, EXTERNAL_SCORES_PATH, DEBUG_MODE, USE_SHINY)...")
 tar_project <- Sys.getenv("TAR_PROJECT", "covid_hosp_explore")
 external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
 debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
 use_shiny <- as.logical(Sys.getenv("USE_SHINY", FALSE))
-
-cat("Using project: ", tar_project, "\n")
-if (external_scores_path != "") cat("Using external scores from ", external_scores_path, "\n")
-if (debug_mode) cat("Debug mode is on.")
-if (use_shiny) cat("Running shiny server after results.")
-
+use_aws_s3 <- as.logical(Sys.getenv("USE_AWS_S3", FALSE))
+aws_s3_prefix <- Sys.getenv("AWS_S3_PREFIX", "exploration")
+cli::cli_inform(
+  c(
+    "i" = "Reading environment variables...",
+    "*" = "TAR_PROJECT = {tar_project}",
+    "*" = "EXTERNAL_SCORES_PATH = {external_scores_path}",
+    "*" = "DEBUG_MODE = {debug_mode}",
+    "*" = "USE_SHINY = {use_shiny}",
+    "*" = "USE_AWS_S3 = {use_aws_s3}",
+    "*" = "AWS_S3_PREFIX = {aws_s3_prefix}"
+  )
+)
 
 suppressPackageStartupMessages({
   library(targets)
@@ -45,6 +52,18 @@ suppressPackageStartupMessages({
 # targets needs the output dir to already exist.
 store_dir <- tar_path_store()
 if (!dir.exists(store_dir)) dir.create(store_dir)
+
+if (use_aws_s3) {
+  tar_option_set(
+    repository = "aws",
+    resources = tar_resources(
+      aws = tar_resources_aws(
+        bucket = "forecasting-team-data",
+        prefix = aws_s3_prefix
+      )
+    )
+  )
+}
 
 tar_manifest()
 if (debug_mode) {
