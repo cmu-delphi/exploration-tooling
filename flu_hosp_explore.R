@@ -81,6 +81,8 @@ ensembles_params_grid_target <- list(
 # during the actual targets run, since the commands are frozen as expressions).
 hhs_signal <- "confirmed_admissions_influenza_1d_prop_7dav"
 chng_signal <- "smoothed_adj_outpatient_flu"
+eval_time <- epidatr::epirange(from = "2020-01-01", to = "2024-01-01")
+training_time <- epidatr::epirange(from = "2021-01-01", to = "2023-06-01")
 fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 300)
 data_targets <- make_data_targets()
 
