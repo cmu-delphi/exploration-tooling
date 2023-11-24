@@ -124,7 +124,7 @@ make_data_targets <- function() {
           geo_type = "state",
           time_type = "day",
           geo_values = "*",
-          time_values = epirange(from = "20220101", to = "20220401"),
+          time_values = epirange(from = "2021-01-01", to = "2023-06-01"),
           issues = "*",
           fetch_args = fetch_args
         )
@@ -139,7 +139,7 @@ make_data_targets <- function() {
           geo_type = "state",
           time_type = "day",
           geo_values = "*",
-          time_values = epirange(from = "20220101", to = "20220401"),
+          time_values = epirange(from = "2021-01-01", to = "2023-06-01"),
           issues = "*",
           fetch_args = fetch_args
         )

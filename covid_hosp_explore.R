@@ -126,7 +126,7 @@ ensembles_params_grid_target <- list(
 # during the actual targets run, since the commands are frozen as expressions).
 hhs_signal <- "confirmed_admissions_covid_1d"
 chng_signal <- "smoothed_adj_outpatient_covid"
-fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 200)
+fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 400)
 data_targets <- make_data_targets()
 
 
