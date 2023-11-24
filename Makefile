@@ -1,6 +1,6 @@
 install:
-	Rscript --no-init -e "install.packages(c('renv', 'pak', 'rspm'))"
-	Rscript --no-init -e "renv::restore()"
+	Rscript --no-init-file -e "install.packages(c('renv', 'pak', 'rspm'))"
+	Rscript --no-init-file -e "renv::restore()"
 
 run:
 	Rscript run.R
