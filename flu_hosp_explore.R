@@ -40,13 +40,14 @@ forecaster_params_grid_target <- list(
     name = forecaster_params_grid,
     command = {
       param_grid
-    }
+    },
+    priority = 0.99
   )
 )
 
 # moving on to the ensemble
 AHEADS <- 1:4
-ensemble_grid <- append(
+ensemble_grid <- add_row(
   make_shared_ensembles(),
   make_unique_ensemble_grid()
 ) %>% id_ahead_ensemble_grid(AHEADS)
@@ -71,7 +72,8 @@ ensembles_params_grid_target <- list(
     name = ensemble_forecasters,
     command = {
       ensemble_grid
-    }
+    },
+    priority = 0.99
   )
 )
 
@@ -89,8 +91,40 @@ date_step <- 7L
 forecasts_and_scores_by_ahead <- make_forecasts_and_scores_by_ahead()
 forecasts_and_scores <- make_forecasts_and_scores()
 # ensembles
-ensemble_and_scores_by_ahead <- make_ensemble_targets_by_ahead()
-ensemble_and_scores <- make_ensemble_targets_and_scores()
+
+# do a tar_map or tar_target to asdf
+ensembles_and_scores_by_ahead <- tar_map(
+  values = target_ensemble_grid,
+  names = id,
+  tar_target(
+    name = ensemble_by_ahead,
+    command = {
+      ensemble(joined_archive_data_2022,
+        forecaster_ids,
+        "hhs",
+        extra_sources = "chng",
+        ensemble_params,
+        ensemble_params_names
+      )
+    },
+    priority = .9999
+  ),
+  tar_target(
+    name = score_by_ahead,
+    command = {
+      run_evaluation_measure(
+        data = ensemble_by_ahead,
+        evaluation_data = hhs_evaluation_data,
+        measure = list(
+          wis = weighted_interval_score,
+          ae = absolute_error,
+          cov_80 = interval_coverage(0.8)
+        )
+      )
+    }
+  )
+)
+ensembles_and_scores <- make_ensemble_targets_and_scores()
 # other sources
 external_names_and_scores <- make_external_names_and_scores()
 
