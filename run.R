@@ -59,7 +59,8 @@ if (use_aws_s3) {
     resources = tar_resources(
       aws = tar_resources_aws(
         bucket = "forecasting-team-data",
-        prefix = aws_s3_prefix
+        prefix = aws_s3_prefix,
+        region = "us-east-1"
       )
     )
   )
