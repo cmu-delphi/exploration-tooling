@@ -4,3 +4,6 @@ install:
 
 run:
 	Rscript run.R
+
+run-nohup:
+	nohup Rscript run.R &
