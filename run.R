@@ -32,6 +32,7 @@ debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
 use_shiny <- as.logical(Sys.getenv("USE_SHINY", FALSE))
 use_aws_s3 <- as.logical(Sys.getenv("USE_AWS_S3", FALSE))
 aws_s3_prefix <- Sys.getenv("AWS_S3_PREFIX", "exploration")
+aws_s3_prefix <- paste0(aws_s3_prefix, "/", tar_project)
 cli::cli_inform(
   c(
     "i" = "Reading environment variables...",
@@ -53,18 +54,6 @@ suppressPackageStartupMessages({
 store_dir <- tar_path_store()
 if (!dir.exists(store_dir)) dir.create(store_dir)
 
-if (use_aws_s3) {
-  tar_option_set(
-    repository = "aws",
-    resources = tar_resources(
-      aws = tar_resources_aws(
-        bucket = "forecasting-team-data",
-        prefix = aws_s3_prefix,
-        region = "us-east-1"
-      )
-    )
-  )
-}
 
 tar_manifest()
 if (debug_mode) {
