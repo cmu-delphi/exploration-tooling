@@ -12,5 +12,7 @@ Relies on the following globals:
 \item \code{hhs_signal}
 \item \code{chng_signal}
 \item \code{fetch_args}
+\item \code{eval_time}
+\item \code{traing_time}
 }
 }

@@ -61,7 +61,8 @@ lists_of_real_values <- function(param_grid) {
 #' - `hhs_signal`
 #' - `chng_signal`
 #' - `fetch_args`
-#'
+#' - `eval_time`
+#' - `traing_time`
 #' @export
 make_data_targets <- function() {
   list(
@@ -74,7 +75,7 @@ make_data_targets <- function() {
           geo_type = "state",
           time_type = "day",
           geo_values = "*",
-          time_values = epirange(from = "2020-01-01", to = "2024-01-01"),
+          time_values = eval_time,
           fetch_args = fetch_args
         )
       }
@@ -88,7 +89,7 @@ make_data_targets <- function() {
           geo_type = "state",
           time_type = "day",
           geo_values = "*",
-          time_values = epirange(from = "2020-01-01", to = "2024-01-01"),
+          time_values = eval_time,
           fetch_args = fetch_args
         )
       }
@@ -124,7 +125,7 @@ make_data_targets <- function() {
           geo_type = "state",
           time_type = "day",
           geo_values = "*",
-          time_values = epirange(from = "20220101", to = "20220401"),
+          time_values = training_time,
           issues = "*",
           fetch_args = fetch_args
         )
@@ -139,7 +140,7 @@ make_data_targets <- function() {
           geo_type = "state",
           time_type = "day",
           geo_values = "*",
-          time_values = epirange(from = "20220101", to = "20220401"),
+          time_values = training_time,
           issues = "*",
           fetch_args = fetch_args
         )

@@ -17,7 +17,7 @@ USE_SHINY=false
 TAR_PROJECT=covid_hosp_explore
 EXTERNAL_SCORES_PATH=
 USE_AWS_S3=false
-AWS_S3_PREFIX=
+AWS_S3_PREFIX=2023/exploration
 
 # Run the pipeline wrapper run.R.
 make run
