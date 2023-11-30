@@ -68,7 +68,7 @@ if (use_shiny) {
   # Prevent functions defined in /R dir from being loaded unnecessarily
   options(shiny.autoload.r = FALSE)
 
-  forecaster_options <- unique(tar_read(forecasters)[["parent_id"]])
+  forecaster_options <- unique(tar_read(forecaster_params_grid)[["parent_id"]])
   # Map forecaster names to score files
   forecaster_options <- setNames(
     # File names
