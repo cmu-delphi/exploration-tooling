@@ -223,9 +223,7 @@ shinyApp(
           ),
           na.rm = TRUE
         )) %>>%
-        # Use scatterplot or lines depending on the x var. ~~Also, if the range
-        # of obs by forecaster is too wide, plot using points instead of
-        # lines.~~ too wide a range of observations is better than too many thick points
+        # Use scatterplot or lines depending on the x var.
         {
           if (input$x_var %in% c(input$facet_vars, "geo_value", "forecaster", "ahead")) {
             . + geom_point(aes(size = n)) + expand_limits(size = 0)
@@ -245,8 +243,6 @@ shinyApp(
           inject(layout(., hovermode = "x unified", legend = list(orientation = "h", title = list(text = "forecaster")), xaxis = x_tick_angle, !!!facet_x_tick_angles))
         }
     })
-    ## output$forecaster_param_title <- renderText("forecast name -> parameters")
-
     output$forecaster_table <- renderDataTable(
       tar_read(forecaster_params_grid) %>%
         select(-id) %>%
