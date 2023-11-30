@@ -125,10 +125,22 @@ shinyApp(
             multiple = TRUE,
             selected = c("as", "gu", "mp", "vi")
           ),
+          selectInput("excluded_aheads",
+            "Exclude aheads:",
+            choices = 1:28,
+            multiple = TRUE
+          )
         ),
         mainPanel(
-          plotlyOutput("main_plot", height = "90em"),
-          width=8
+          verticalLayout(
+            plotlyOutput("main_plot", height = "90em"),
+            h2("forecaster name -> parameters"),
+            #textOutput("forecaster_param_title"),
+            dataTableOutput("forecaster_table"),
+            h2("ensemble name -> parameters"),
+            dataTableOutput("ensemble_table")
+          ),
+          width = 8
         )
       )
     )
@@ -137,24 +149,27 @@ shinyApp(
     filtered_scorecards_reactive <- reactive({
       agg_forecasters <- unique(c(input$selected_forecasters, input$baseline))
       if (length(agg_forecasters) == 0 ||
-          all(agg_forecasters == "" | is.null(agg_forecasters) | is.na(agg_forecasters))
+        all(agg_forecasters == "" | is.null(agg_forecasters) | is.na(agg_forecasters))
       ) {
         return(data.frame())
       }
 
       processed_evaluations_internal <- lapply(agg_forecasters, function(forecaster) {
-          load_forecast_data(forecaster) %>>%
+        load_forecast_data(forecaster) %>>%
           filter(
             .data$forecast_date %>>% between(.env$input$selected_forecast_date_range[[1L]], .env$input$selected_forecast_date_range[[2L]]),
             .data$target_end_date %>>% between(.env$input$selected_target_end_date_range[[1L]], .env$input$selected_target_end_date_range[[2L]]),
-            !.data$geo_value %in% c(.env$input$excluded_geo_values, "us")
+            !.data$geo_value %in% c(.env$input$excluded_geo_values, "us"),
+            !.data$ahead %in% .env$input$excluded_aheads
           )
-        }) %>%
+      }) %>%
         bind_rows()
     })
     output$main_plot <- renderPlotly({
       input_df <- filtered_scorecards_reactive()
-      if (nrow(input_df) == 0) { return() }
+      if (nrow(input_df) == 0) {
+        return()
+      }
 
       # Normalize by baseline scores. This is not relevant for coverage, which is compared
       # to the nominal confidence level.
@@ -184,7 +199,7 @@ shinyApp(
 
       x_tick_angle <- list(tickangle = -30)
       facet_x_tick_angles <- setNames(rep(list(x_tick_angle), 10), paste0("xaxis", 1:10))
-      scale_type <- ifelse(input$facets_share_scale, "fixed", "free_y" )
+      scale_type <- ifelse(input$facets_share_scale, "fixed", "free_y")
 
       input_df %>>%
         # Aggregate scores over all geos
@@ -208,13 +223,11 @@ shinyApp(
           ),
           na.rm = TRUE
         )) %>>%
-        # Use scatterplot or lines depending on the x var. Also, if the range
+        # Use scatterplot or lines depending on the x var. ~~Also, if the range
         # of obs by forecaster is too wide, plot using points instead of
-        # lines.
+        # lines.~~ too wide a range of observations is better than too many thick points
         {
-          if (input$x_var %in% c(input$facet_vars, "geo_value", "forecaster", "ahead") || range(plot.df[["n"]]) %>>% {
-            .[[2L]] > 1.2 * .[[1L]]
-          }) {
+          if (input$x_var %in% c(input$facet_vars, "geo_value", "forecaster", "ahead")) {
             . + geom_point(aes(size = n)) + expand_limits(size = 0)
           } else {
             . + geom_line()
@@ -228,9 +241,36 @@ shinyApp(
         } else {
           facet_grid(as.formula(paste0(input$facet_vars[[1L]], " ~ ", paste(collapse = " + ", input$facet_vars[-1L]))), scales = scale_type)
         }) %>>%
-        ggplotly() %>>%
-        {inject(layout(., hovermode = "x unified", legend = list(orientation = "h", title = list(text = "forecaster")), xaxis = x_tick_angle, !!!facet_x_tick_angles))}
-
+        ggplotly() %>>% {
+          inject(layout(., hovermode = "x unified", legend = list(orientation = "h", title = list(text = "forecaster")), xaxis = x_tick_angle, !!!facet_x_tick_angles))
+        }
     })
+    ## output$forecaster_param_title <- renderText("forecast name -> parameters")
+
+    output$forecaster_table <- renderDataTable(
+      tar_read(forecaster_params_grid) %>%
+        select(-id) %>%
+        mutate(across(where(is.list), map, `%||%`, c(0, 7, 14))) %>%
+        mutate(lags = paste(lags, sep = ",")) %>%
+        group_by(parent_id) %>%
+        mutate(ahead = toString(unique(ahead))) %>%
+        ungroup() %>%
+        distinct(parent_id, .keep_all = TRUE) %>%
+        rename(name = parent_id) %>%
+        select(name, everything())
+    )
+    output$ensemble_table <- renderDataTable(
+      tar_read(ensemble_forecasters) %>%
+        select(-id) %>%
+        group_by(parent_id) %>%
+        mutate(ahead = toString(unique(ahead))) %>%
+        ungroup() %>%
+        distinct(parent_id, .keep_all = TRUE) %>%
+        rename(name = parent_id) %>%
+        mutate(ensemble_params = paste(ensemble_params, sep = ",")) %>%
+        mutate(forecaster_ids = paste(forecaster_ids, sep = ",")) %>%
+        select(name, everything()) %>%
+        select(-forecasters)
+    )
   }
 )
