@@ -51,6 +51,41 @@ load_forecast_data_raw <- function(forecaster) {
 # Have loading function use the cache.
 load_forecast_data <- memoise::memoise(load_forecast_data_raw, cache = cache)
 
+#' create a data table for the shiny plot of the forecasters present
+#' @description
+prepare_forecaster_table <- function(selected_forecasters) {
+  forecasters <- tar_read(forecaster_params_grid) %>%
+    select(-id) %>%
+    mutate(across(where(is.list), map, `%||%`, c(0, 7, 14))) %>%
+    mutate(lags = paste(lags, sep = ",")) %>%
+    group_by(parent_id) %>%
+    mutate(ahead = toString(unique(ahead))) %>%
+    ungroup() %>%
+    distinct(parent_id, .keep_all = TRUE) %>%
+    rename(name = parent_id) %>%
+    select(name, everything())
+  forecasters$present <- map_vec(paste0("score_", forecasters$name), \(x) x %in% selected_forecasters)
+  return(forecasters)
+}
+
+#' create a data table for the shiny plot of the ensembles present
+#' @description
+prepare_ensemble_table <- function(selected_forecasters) {
+  forecasters <- tar_read(ensemble_forecasters) %>%
+    select(-id) %>%
+    group_by(parent_id) %>%
+    mutate(ahead = toString(unique(ahead))) %>%
+    ungroup() %>%
+    distinct(parent_id, .keep_all = TRUE) %>%
+    rename(name = parent_id) %>%
+    mutate(ensemble_params = paste(ensemble_params, sep = ",")) %>%
+    mutate(forecaster_ids = paste(forecaster_ids, sep = ",")) %>%
+    select(name, everything()) %>%
+    select(-forecasters)
+  print(selected_forecasters)
+  forecasters$present <- map_vec(paste0("ensemble_score_", forecasters$name), \(x) x %in% selected_forecasters)
+  return(forecasters)
+}
 #### Adapted from shiny-eval.R from cmu-delphi/hospitalization-forecaster
 
 shinyApp(
@@ -244,29 +279,10 @@ shinyApp(
         }
     })
     output$forecaster_table <- renderDataTable(
-      tar_read(forecaster_params_grid) %>%
-        select(-id) %>%
-        mutate(across(where(is.list), map, `%||%`, c(0, 7, 14))) %>%
-        mutate(lags = paste(lags, sep = ",")) %>%
-        group_by(parent_id) %>%
-        mutate(ahead = toString(unique(ahead))) %>%
-        ungroup() %>%
-        distinct(parent_id, .keep_all = TRUE) %>%
-        rename(name = parent_id) %>%
-        select(name, everything())
+      prepare_forecaster_table(input$selected_forecasters)
     )
     output$ensemble_table <- renderDataTable(
-      tar_read(ensemble_forecasters) %>%
-        select(-id) %>%
-        group_by(parent_id) %>%
-        mutate(ahead = toString(unique(ahead))) %>%
-        ungroup() %>%
-        distinct(parent_id, .keep_all = TRUE) %>%
-        rename(name = parent_id) %>%
-        mutate(ensemble_params = paste(ensemble_params, sep = ",")) %>%
-        mutate(forecaster_ids = paste(forecaster_ids, sep = ",")) %>%
-        select(name, everything()) %>%
-        select(-forecasters)
+      prepare_ensemble_table(input$selected_forecasters)
     )
   }
 )
