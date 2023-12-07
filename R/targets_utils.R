@@ -183,13 +183,13 @@ make_shared_grids <- function() {
     tidyr::expand_grid(
       forecaster = "scaled_pop",
       trainer = c("linreg", "quantreg"),
-      ahead = 1:4,
+      ahead = c(1:7, 14, 21, 28),
       pop_scaling = c(FALSE)
     ),
     tidyr::expand_grid(
       forecaster = "scaled_pop",
       trainer = c("linreg", "quantreg"),
-      ahead = 1:7,
+      ahead = c(1:7, 14, 21, 28),
       lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14)),
       pop_scaling = c(FALSE)
     ),
