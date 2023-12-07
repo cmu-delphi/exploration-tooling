@@ -27,7 +27,7 @@
 #' @importFrom cli cli_abort
 #' @importFrom rlang !!
 #' @export
-forecaster_pred <- function(data,
+slide_forecaster <- function(data,
                             outcome,
                             extra_sources = "",
                             forecaster = scaled_pop,
@@ -43,7 +43,7 @@ forecaster_pred <- function(data,
   if (is.null(forecaster_args$ahead)) {
     cli_abort(
       c(
-        "exploration-tooling error: forecaster_pred needs some value for ahead."
+        "exploration-tooling error: slide_forecaster needs some value for ahead."
       ),
       class = "explorationToolingError"
     )
@@ -95,7 +95,7 @@ forecaster_pred <- function(data,
               forecaster_args = forecaster_args,
               e = e
             )
-            saveRDS(dump_vars, "forecaster_pred_error.rds")
+            saveRDS(dump_vars, "slide_forecaster_error.rds")
             e
           }
         }

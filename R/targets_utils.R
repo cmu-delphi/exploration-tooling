@@ -185,7 +185,7 @@ make_forecasts_and_scores_by_ahead <- function() {
     tar_target_raw(
       name = ONE_AHEAD_FORECAST_NAME,
       command = expression(
-        forecaster_pred(
+        slide_forecaster(
           data = joined_archive_data_2022,
           outcome = "hhs",
           extra_sources = "",

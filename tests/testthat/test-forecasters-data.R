@@ -24,7 +24,7 @@ constant <- epiprocess::as_epi_archive(tibble(
 # n_training_pad is set to avoid warnings from the trainer
 get_pred <- function(dataset,
                      ii, outcome = "a", extra_sources = "") {
-  res <- forecaster_pred(
+  res <- slide_forecaster(
     data = dataset,
     outcome = outcome,
     extra_sources = extra_sources,

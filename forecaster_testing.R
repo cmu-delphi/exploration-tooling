@@ -70,7 +70,7 @@ constant <- as_epi_archive(tibble(
   a = synth_mean
 ))
 
-forecaster_pred(
+slide_forecaster(
   data = constant,
   outcome = "hhs",
   extra_sources = "",
@@ -187,7 +187,7 @@ forecasts_and_scores <- tar_map(
   tar_target(
     name = forecast,
     command = {
-      forecaster_pred(
+      slide_forecaster(
         data = joined_archive_data_2022,
         outcome = "hhs",
         extra_sources = "",

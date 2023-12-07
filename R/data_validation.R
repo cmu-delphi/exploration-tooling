@@ -46,7 +46,7 @@ perform_sanity_checks <- function(epi_data,
 #'   to be able to return a null result rather than error out.
 #' @param epi_data the input data
 #' @param ahead the effective ahead; may be infinite if there isn't enough data.
-#' @param args_input the input as supplied to `forecaster_pred`; lags is the
+#' @param args_input the input as supplied to `slide_forecaster`; lags is the
 #'   important argument, which may or may not be defined, with the default
 #'   coming from `arx_args_list`
 #' @param buffer how many training data to insist on having (e.g. if `buffer=1`,
