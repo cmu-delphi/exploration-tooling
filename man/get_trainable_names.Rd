@@ -2,7 +2,7 @@
 % Please edit documentation in R/data_transforms.R
 \name{get_trainable_names}
 \alias{get_trainable_names}
-\title{extract the non-key columns from epi_data}
+\title{extract the non-key, non-smoothed columns from epi_data}
 \usage{
 get_trainable_names(epi_data, cols)
 }
@@ -12,6 +12,6 @@ get_trainable_names(epi_data, cols)
 \item{cols}{vector of column names to use. If \code{NULL}, fill with all non-key columns}
 }
 \description{
-extract the non-key columns from epi_data
+extract the non-key, non-smoothed columns from epi_data
 }
 \keyword{internal}

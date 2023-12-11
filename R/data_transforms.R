@@ -1,6 +1,6 @@
 # various reusable transforms to apply before handing to epipredict
 
-#' extract the non-key columns from epi_data
+#' extract the non-key, non-smoothed columns from epi_data
 #' @keywords internal
 #' @param epi_data the epi_data tibble
 #' @param cols vector of column names to use. If `NULL`, fill with all non-key columns
@@ -8,6 +8,8 @@ get_trainable_names <- function(epi_data, cols) {
   if (is.null(cols)) {
     cols <- names(epi_data)
     cols <- cols[!(cols %in% c("geo_value", "time_value", attr(epi_data, "metadata")$other_keys))]
+    # exclude anything with the same naming schema as the rolling average/sd created below
+    cols <- cols[!grepl("_\\w{1,2}\\d+", cols)]
   }
   return(cols)
 }
@@ -27,7 +29,7 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
   cols_to_mean <- get_trainable_names(epi_data, cols_to_mean)
   epi_data %<>% group_by(geo_value)
   for (col in cols_to_mean) {
-    mean_name <- paste0(col, width)
+    mean_name <- paste0(col, "_m", width)
     epi_data %<>% mutate({{ mean_name }} := slider::slide_dbl(.data[[col]], mean, .before = width))
   }
   epi_data %<>% ungroup()
