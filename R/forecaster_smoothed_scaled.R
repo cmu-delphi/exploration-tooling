@@ -100,8 +100,8 @@ smoothed_scaled <- function(epi_data,
       keep_mean = keep_mean
     )
   }
-  # even
-
+  # and need to make sure we exclude the original varialbes as predictors
+  predictors <- update_predictors(epi_data, c(smooth_cols, sd_cols), predictors)
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {
