@@ -2,7 +2,7 @@
 #' add the default steps for arx_forecaster
 #' @description
 #' add the default steps for arx_forecaster
-#' @param rec an [`epipredict::epi_recipe`]
+#' @param preproc an [`epipredict::epi_recipe`]
 #' @param outcome a character of the column to be predicted
 #' @param predictors a character vector of the columns used as predictors
 #' @param args_list an [`epipredict::arx_args_list`]
