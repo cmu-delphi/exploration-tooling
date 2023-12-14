@@ -6,6 +6,9 @@
 \usage{
 cache_metadata(epi_data)
 }
+\arguments{
+\item{epi_data}{the epi_df}
+}
 \description{
 store the metadata in a easy to reapply way
 }

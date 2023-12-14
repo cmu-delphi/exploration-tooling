@@ -9,7 +9,9 @@ update_predictors(epi_data, cols_modified, predictors)
 \arguments{
 \item{epi_data}{the epi_df}
 
-\item{cols}{the list of columns}
+\item{cols_modified}{the list of columns}
+
+\item{predictors}{the initial set of predictors; any unmodified are kept, any modified are replaced}
 }
 \description{
 should only be applied after both rolling_mean and rolling_sd

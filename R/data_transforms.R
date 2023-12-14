@@ -27,7 +27,8 @@ get_nonkey_names <- function(epi_data) {
 #' @description
 #' should only be applied after both rolling_mean and rolling_sd
 #' @param epi_data the epi_df
-#' @param cols the list of columns
+#' @param cols_modified the list of columns
+#' @param predictors the initial set of predictors; any unmodified are kept, any modified are replaced
 #' @importFrom purrr map map_chr reduce
 #' @export
 update_predictors <- function(epi_data, cols_modified, predictors) {
@@ -71,6 +72,9 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
 }
 
 #' store the metadata in a easy to reapply way
+#' @description
+#' store the metadata in a easy to reapply way
+#' @param epi_data the epi_df
 #' @importFrom purrr list_modify
 cache_metadata <- function(epi_data) {
   features <- list()
