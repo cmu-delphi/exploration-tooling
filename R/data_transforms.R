@@ -113,19 +113,18 @@ rolling_sd <- function(epi_data, sd_width = 28L, mean_width = NULL, cols_to_sd =
     mean_width <- as.integer(ceiling(sd_width / 2))
   }
   cols_to_sd <- get_trainable_names(epi_data, cols_to_sd)
-  metadata <- cache_metadata(epi_data)
-  epi_data %<>% group_by(geo_value)
+  result <- epi_data
+  result %<>% group_by(geo_value)
   for (col in cols_to_sd) {
     mean_name <- paste0(col, "_m", mean_width)
     sd_name <- paste0(col, "_SD", sd_width)
-    epi_data %<>% mutate({{ mean_name }} := slider::slide_dbl(.data[[col]], mean, .before = mean_width))
-    epi_data %<>% mutate({{ sd_name }} := slider::slide2_dbl(.data[[col]], .data[[mean_name]], ~ sqrt(mean((.x - .y)^2)), .before = sd_width))
+    result %<>% mutate({{ mean_name }} := slider::slide_dbl(.data[[col]], mean, .before = mean_width))
+    result %<>% mutate({{ sd_name }} := slider::slide2_dbl(.data[[col]], .data[[mean_name]], ~ sqrt(mean((.x - .y)^2)), .before = sd_width))
     if (!keep_mean) {
       # TODO make sure the extra info sticks around
-      epi_data %<>% select(-{{ mean_name }})
+      result %<>% select(-{{ mean_name }})
     }
-    epi_data %<>%  as_epi_df(metadata$geo_type, metadata$time_type, metadata$as_of, metadata$all_others)
   }
-  epi_data %<>% ungroup()
-  return(epi_data)
+  result %<>% ungroup()
+  result %<>% dplyr_reconstruct(epi_data)
 }
