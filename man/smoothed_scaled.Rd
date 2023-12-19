@@ -38,8 +38,7 @@ existing examples)}
 
 \item{trainer}{an example extra parameter that is fairly common}
 
-\item{quantile_levels}{The quantile levels to predict. Defaults to those
-required by covidhub.}
+\item{quantile_levels}{The quantile levels to predict. Defaults to those}
 
 \item{smooth_width}{the number of days over which to do smoothing. If \code{NULL},
 then no smoothing is applied.}
@@ -55,6 +54,9 @@ used.}
 
 \item{sd_cols}{the names of the columns to smooth. If \code{NULL} its includes
 the sd of everything}
+
+\item{...}{any additional arguments as used by \link{arx_args_list}
+required by covidhub.}
 }
 \description{
 This is a variant of \code{scaled_pop}, which predicts on a smoothed version of

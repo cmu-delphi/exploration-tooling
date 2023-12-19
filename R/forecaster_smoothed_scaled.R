@@ -27,6 +27,7 @@
 #' @param sd_cols the names of the columns to smooth. If `NULL` its includes
 #'   the sd of everything
 #' @param quantile_levels The quantile levels to predict. Defaults to those
+#' @param ... any additional arguments as used by [arx_args_list]
 #'   required by covidhub.
 #' @seealso some utilities for making forecasters: [format_storage],
 #'   [perform_sanity_checks]
