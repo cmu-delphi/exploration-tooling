@@ -48,11 +48,7 @@ test_that("rolling_mean generates correct mean", {
 
 test_that("rolling_sd generates correct standard deviation", {
   rolled <- rolling_sd(epi_data,keep_mean = TRUE)
-  rolled %>% filter(geo_value == "al") %>% pull("a_m14")
-  rolled %>% filter(geo_value == "al")
-  rolled %>% filter(geo_value == "al") %>% pull("a")
-  rolled %>% filter(geo_value == "al") %>% pull("a_sd28")
-  expect_equal(names(rolled), c("geo_value", "time_value", "a", "b", "a_sd28", "b_sd28"))
+  expect_equal(names(rolled), c("geo_value", "time_value", "a", "b", "a_m14", "a_sd28", "b_m14", "b_sd28"))
   # hand specified rolling mean with a rear window of 7, noting that mean(1:14) = 7.5
   linear_roll_mean <- c(seq(from = 1, to = 7.5, by = .5), seq(from = 8.5, to = 16.5, by = 1), seq(from = 17, to = 32, by = 1))
   linear_roll_mean
