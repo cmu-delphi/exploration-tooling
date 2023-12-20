@@ -86,3 +86,8 @@ test_that("update_predictors keeps unmodified predictors", {
   expected_if_all_modified <- c("b_m14", "b_sd28")
   expect_equal(update_predictors(epi_data, NULL, predictors), expected_if_all_modified)
 })
+
+test_that("rolling_sd doesn't keep the mean columns by default", {
+  rolled <- rolling_sd(epi_data)
+  expect_equal(names(rolled), c("geo_value", "time_value", "a", "b", "a_sd28", "b_sd28"))
+})
