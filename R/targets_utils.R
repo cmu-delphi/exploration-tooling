@@ -138,7 +138,14 @@ make_shared_grids <- function() {
     ),
     tidyr::expand_grid(
       forecaster = "flatline_fc",
-      ahead = 1:7
+      ahead = c(1:7, 14, 21, 28)
+    ),
+    tidyr::expand_grid(
+      forecaster = "smoothed_scaled",
+      trainer = c("quantreg"),
+      ahead = c(1:7, 14, 21, 28),
+      lags = list(list(c(0, 3, 5, 7, 14), c(0),), c(0, 7, 14)),
+      pop_scaling = c(FALSE)
     )
   )
 }

@@ -2,7 +2,7 @@
 
 #' extract the non-key, non-smoothed columns from epi_data
 #' @keywords internal
-#' @param epi_data the epi_data tibble
+#' @param epi_data the `epi_df`
 #' @param cols vector of column names to use. If `NULL`, fill with all non-key columns
 get_trainable_names <- function(epi_data, cols) {
   if (is.null(cols)) {
@@ -20,14 +20,17 @@ get_trainable_names <- function(epi_data, cols) {
 get_nonkey_names <- function(epi_data) {
   cols <- names(epi_data)
   cols <- cols[!(cols %in% c("geo_value", "time_value", attr(epi_data, "metadata")$other_keys))]
+  return(cols)
 }
 
 
 #' update the predictors to only contain the smoothed/sd versions of cols
 #' @description
-#' should only be applied after both rolling_mean and rolling_sd
+#' modifies the list of preditors so that any which have been modified have the
+#'   modified versions included, and not the original. Should only be applied
+#'   after both rolling_mean and rolling_sd.
 #' @param epi_data the epi_df
-#' @param cols_modified the list of columns
+#' @param cols_modified the list of columns to modify. If this is `NULL`, that means we were modifying every column.
 #' @param predictors the initial set of predictors; any unmodified are kept, any modified are replaced
 #' @importFrom purrr map map_chr reduce
 #' @export
@@ -37,7 +40,7 @@ update_predictors <- function(epi_data, cols_modified, predictors) {
     other_predictors <- map(cols_modified, ~ !grepl(.x, predictors)) %>% reduce(`&`)
     other_predictors <- predictors[other_predictors]
   } else {
-    other_predictors <- c()
+    other_predictors <- character(0L)
   }
   # all the non-key names
   col_names <- get_nonkey_names(epi_data)
