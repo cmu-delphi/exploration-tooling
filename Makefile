@@ -7,3 +7,6 @@ run:
 
 run-nohup:
 	nohup Rscript run.R &
+
+sync:
+	Rscript sync.R

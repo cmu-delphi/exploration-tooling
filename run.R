@@ -26,6 +26,9 @@
 #   # Save to disk
 #   saveRDS(scorecards, "exploration-scorecards-2023-10-04.RDS")
 
+
+
+
 tar_project <- Sys.getenv("TAR_PROJECT", "covid_hosp_explore")
 external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
 debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
@@ -49,6 +52,7 @@ suppressPackageStartupMessages({
   library(targets)
   library(shiny)
 })
+
 
 # targets needs the output dir to already exist.
 store_dir <- tar_path_store()
