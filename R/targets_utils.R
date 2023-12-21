@@ -273,7 +273,7 @@ make_external_names_and_scores <- function() {
         command = {
           readRDS(external_scores_path) %>%
             group_by(forecaster) %>%
-            tar_group()
+            targets::tar_group()
         },
         iteration = "group",
         garbage_collection = TRUE

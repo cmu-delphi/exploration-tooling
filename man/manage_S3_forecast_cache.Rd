@@ -7,7 +7,7 @@
 manage_S3_forecast_cache(
   rel_cache_dir = NULL,
   bucket_name = "forecasting-team-data",
-  direction = NULL,
+  direction = "sync",
   verbose = FALSE,
   prefix = Sys.getenv("AWS_S3_PREFIX", "exploration"),
   tar_project = Sys.getenv("TAR_PROJECT", "exploration")
