@@ -29,27 +29,29 @@ get_nonkey_names <- function(epi_data) {
 #' modifies the list of preditors so that any which have been modified have the
 #'   modified versions included, and not the original. Should only be applied
 #'   after both rolling_mean and rolling_sd.
-#' @param epi_data the epi_df
-#' @param cols_modified the list of columns to modify. If this is `NULL`, that means we were modifying every column.
-#' @param predictors the initial set of predictors; any unmodified are kept, any modified are replaced
+#' @param epi_data the epi_df, only included to get the non-key column names
+#' @param cols_modified the list of columns which have been modified. If this is `NULL`, that means we were modifying every column.
+#' @param predictors the initial set of predictors; any unmodified are kept, any modified are replaced with the modified versions (e.g. "a" becoming "a_m17").
 #' @importFrom purrr map map_chr reduce
+#' @return returns an updated list of predictors, with modified columns replaced and non-modified columns left intact.
 #' @export
 update_predictors <- function(epi_data, cols_modified, predictors) {
   if (!is.null(cols_modified)) {
     # if cols_modified isn't null, make sure we include predictors that weren't modified
-    other_predictors <- map(cols_modified, ~ !grepl(.x, predictors)) %>% reduce(`&`)
-    other_predictors <- predictors[other_predictors]
+    unchanged_predictors <- map(cols_modified, ~ !grepl(.x, predictors, fixed = TRUE)) %>% reduce(`&`)
+    unchanged_predictors <- predictors[unchanged_predictors]
   } else {
-    other_predictors <- character(0L)
+    # if it's null, we've modified every predictor
+    unchanged_predictors <- character(0L)
   }
   # all the non-key names
   col_names <- get_nonkey_names(epi_data)
-  is_present <- function(x) {
-    grepl(x, col_names) & !(col_names %in% predictors)
+  is_present <- function(original_predictor) {
+    grepl(original_predictor, col_names) & !(col_names %in% predictors)
   }
   is_modified <- map(predictors, is_present) %>% reduce(`|`)
   new_predictors <- col_names[is_modified]
-  return(c(other_predictors, new_predictors))
+  return(c(unchanged_predictors, new_predictors))
 }
 
 #' get a rolling average for the named columns
