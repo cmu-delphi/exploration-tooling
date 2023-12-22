@@ -7,12 +7,17 @@
 update_predictors(epi_data, cols_modified, predictors)
 }
 \arguments{
-\item{epi_data}{the epi_df}
+\item{epi_data}{the epi_df, only included to get the non-key column names}
 
-\item{cols_modified}{the list of columns}
+\item{cols_modified}{the list of columns which have been modified. If this is \code{NULL}, that means we were modifying every column.}
 
-\item{predictors}{the initial set of predictors; any unmodified are kept, any modified are replaced}
+\item{predictors}{the initial set of predictors; any unmodified are kept, any modified are replaced with the modified versions (e.g. "a" becoming "a_m17").}
+}
+\value{
+returns an updated list of predictors, with modified columns replaced and non-modified columns left intact.
 }
 \description{
-should only be applied after both rolling_mean and rolling_sd
+modifies the list of preditors so that any which have been modified have the
+modified versions included, and not the original. Should only be applied
+after both rolling_mean and rolling_sd.
 }

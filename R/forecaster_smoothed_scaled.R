@@ -14,8 +14,17 @@
 #'   to the max time value of the `epi_df`. how to handle this is a modelling
 #'   question left up to each forecaster; see latency_adjusting.R for the
 #'   existing examples)
-#' @param pop_scaling an example extra parameter unique to this forecaster
-#' @param trainer an example extra parameter that is fairly common
+#' @param pop_scaling bool; if `TRUE`, assume all numeric columns are on the
+#'   count scale and translate them to a rate scale for model fitting.
+#'   Predictions will be translated back to count scale. Any
+#'   `layer_residual_quantiles` (for non-`"quantile_reg"` `trainer`s) will be
+#'   done on the rate scale. When specifying predictor lags, note that rate
+#'   variables will use the same names as and overwrite the count variables.
+#'   Rates here will be counts per 100k population, based on
+#'   `epipredict::state_census`.
+#' @param trainer optional; parsnip model specification to use for the core
+#'   fitting & prediction (the `spec` of the internal
+#'   [`epipredict::epi_workflow`]).  Default is `parsnip::linear_reg()`.
 #' @param smooth_width the number of days over which to do smoothing. If `NULL`,
 #'   then no smoothing is applied.
 #' @param smooth_cols the names of the columns to smooth. If `NULL` it smooths
@@ -34,57 +43,52 @@
 #' @importFrom epipredict epi_recipe step_population_scaling frosting arx_args_list layer_population_scaling
 #' @importFrom tibble tibble
 #' @importFrom recipes all_numeric
+#' @importFrom zeallot %<-%
 #' @export
 smoothed_scaled <- function(epi_data,
-                          outcome,
-                          extra_sources = "",
-                          ahead = 1,
-                          pop_scaling = TRUE,
-                          trainer = parsnip::linear_reg(),
-                          quantile_levels = covidhub_probs(),
-                          smooth_width = 7,
-                          smooth_cols = NULL,
-                          sd_width = 28,
-                          sd_mean_width = 14,
-                          sd_cols = NULL,
-                          ...) {
+                            outcome,
+                            extra_sources = "",
+                            ahead = 1,
+                            pop_scaling = TRUE,
+                            trainer = parsnip::linear_reg(),
+                            quantile_levels = covidhub_probs(),
+                            smooth_width = 7,
+                            smooth_cols = NULL,
+                            sd_width = 28,
+                            sd_mean_width = 14,
+                            sd_cols = NULL,
+                            ...) {
   # perform any preprocessing not supported by epipredict
   # this is a temp fix until a real fix gets put into epipredict
   epi_data <- clear_lastminute_nas(epi_data)
   # one that every forecaster will need to handle: how to manage max(time_value)
   # that's older than the `as_of` date
-  epidataAhead <- extend_ahead(epi_data, ahead)
+  c(epi_data, effective_ahead) %<-% extend_ahead(epi_data, ahead)
   # see latency_adjusting for other examples
-  # this next part is basically unavoidable boilerplate you'll want to copy
-  epi_data <- epidataAhead[[1]]
-  effective_ahead <- epidataAhead[[2]]
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
   if (!confirm_sufficient_data(epi_data, effective_ahead, args_input)) {
-    null_result <- tibble(
-      geo_value = character(),
-      forecast_date = lubridate::Date(),
-      target_end_date = lubridate::Date(),
-      quantile = numeric(),
-      value = numeric()
-    )
+    null_result <- epi_data[0L, c("geo_value", attr(epi_data, "metadata", exact = TRUE)[["other_keys"]])] %>%
+      mutate(
+        forecast_date = epi_data$time_value[0],
+        target_end_date = epi_data$time_value[0],
+        quantile = numeric(),
+        value = numeric()
+      )
     return(null_result)
   }
   args_input[["ahead"]] <- effective_ahead
   args_input[["quantile_levels"]] <- quantile_levels
   args_list <- do.call(arx_args_list, args_input)
-  # if you want to ignore extra_sources, setting predictors is the way to do it
+  # `extra_sources` sets which variables beyond the outcome are lagged and used as predictors
+  # any which are modified by `rolling_mean` or `rolling_sd` have their original values dropped later
   predictors <- c(outcome, extra_sources)
-  # TODO: Partial match quantile_level coming from here (on Dmitry's machine)
-  argsPredictorsTrainer <- perform_sanity_checks(epi_data, outcome, predictors, trainer, args_list)
-  args_list <- argsPredictorsTrainer[[1]]
-  predictors <- argsPredictorsTrainer[[2]]
-  trainer <- argsPredictorsTrainer[[3]]
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
   # smoothing
-  keep_mean <- (smooth_width == sd_mean_width) # do we need to do the mean separately?
+  keep_mean <- !is.null(smooth_width) && !is.null(sd_mean_width) &&
+    smooth_width == sd_mean_width # do we (not) need to do the mean separately?
   if (!is.null(smooth_width) && !keep_mean) {
     epi_data %<>% rolling_mean(
       width = smooth_width,
@@ -101,8 +105,10 @@ smoothed_scaled <- function(epi_data,
       keep_mean = keep_mean
     )
   }
-  # and need to make sure we exclude the original varialbes as predictors
+  # and need to make sure we exclude the original variables as predictors
   predictors <- update_predictors(epi_data, c(smooth_cols, sd_cols), predictors)
+  # TODO: Partial match quantile_level coming from here (on Dmitry's machine)
+  c(args_list, predictors, trainer) %<-% perform_sanity_checks(epi_data, outcome, predictors, trainer, args_list)
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {

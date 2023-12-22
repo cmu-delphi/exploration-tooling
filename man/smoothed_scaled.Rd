@@ -34,9 +34,18 @@ to the max time value of the \code{epi_df}. how to handle this is a modelling
 question left up to each forecaster; see latency_adjusting.R for the
 existing examples)}
 
-\item{pop_scaling}{an example extra parameter unique to this forecaster}
+\item{pop_scaling}{bool; if \code{TRUE}, assume all numeric columns are on the
+count scale and translate them to a rate scale for model fitting.
+Predictions will be translated back to count scale. Any
+\code{layer_residual_quantiles} (for non-\code{"quantile_reg"} \code{trainer}s) will be
+done on the rate scale. When specifying predictor lags, note that rate
+variables will use the same names as and overwrite the count variables.
+Rates here will be counts per 100k population, based on
+\code{epipredict::state_census}.}
 
-\item{trainer}{an example extra parameter that is fairly common}
+\item{trainer}{optional; parsnip model specification to use for the core
+fitting & prediction (the \code{spec} of the internal
+\code{\link[epipredict:epi_workflow]{epipredict::epi_workflow}}).  Default is \code{parsnip::linear_reg()}.}
 
 \item{quantile_levels}{The quantile levels to predict. Defaults to those}
 

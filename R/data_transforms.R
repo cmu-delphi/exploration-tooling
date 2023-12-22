@@ -71,7 +71,7 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
   epi_data %<>% group_by(geo_value)
   for (col in cols_to_mean) {
     mean_name <- paste0(col, "_m", width)
-    epi_data %<>% epi_slide(~ mean(.x[[col]]), before = width-1L, new_col_name = mean_name)
+    epi_data %<>% epi_slide(~ mean(.x[[col]], rm.na = TRUE), before = width-1L, new_col_name = mean_name)
   }
   epi_data %<>% ungroup()
   return(epi_data)
@@ -102,8 +102,8 @@ rolling_sd <- function(epi_data, sd_width = 28L, mean_width = NULL, cols_to_sd =
     result %<>% group_by(geo_value)
     mean_name <- paste0(col, "_m", mean_width)
     sd_name <- paste0(col, "_sd", sd_width)
-    result %<>% epi_slide(~ mean(.x[[col]]), before = mean_width-1L, new_col_name = mean_name)
-    result %<>% epi_slide(~ sqrt(mean((.x[[mean_name]] - .x[[col]])^2)), before = sd_width-1, new_col_name = sd_name)
+    result %<>% epi_slide(~ mean(.x[[col]], na.rm = TRUE), before = mean_width-1L, new_col_name = mean_name)
+    result %<>% epi_slide(~ sqrt(mean((.x[[mean_name]] - .x[[col]])^2, na.rm = TRUE)), before = sd_width-1, new_col_name = sd_name)
     if (!keep_mean) {
       # TODO make sure the extra info sticks around
       result %<>% select(-{{ mean_name }})

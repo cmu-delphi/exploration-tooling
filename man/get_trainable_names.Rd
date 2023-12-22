@@ -7,7 +7,7 @@
 get_trainable_names(epi_data, cols)
 }
 \arguments{
-\item{epi_data}{the epi_data tibble}
+\item{epi_data}{the \code{epi_df}}
 
 \item{cols}{vector of column names to use. If \code{NULL}, fill with all non-key columns}
 }
