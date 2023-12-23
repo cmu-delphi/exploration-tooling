@@ -7,7 +7,7 @@ forecasters <- tibble::tribble(
   scaled_pop, list(1, TRUE), list("ahead", "pop_scaling"), "scaled_pop",
   scaled_pop, list(1, FALSE), list("ahead", "pop_scaling"), "scaled_pop",
   flatline_fc, list(1), list("ahead"), "flatline_fc",
-  smoothed_scaled, list(1), list("ahead"), "smoothed_scaled"
+  smoothed_scaled, list(1, list(c(0,7,14), c(0))), list("ahead", "lags"), "smoothed_scaled"
 )
 expects_nonequal <- c("scaled_pop", "smoothed_scaled")
 synth_mean <- 25

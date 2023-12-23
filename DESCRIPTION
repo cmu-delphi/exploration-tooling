@@ -30,7 +30,8 @@ Imports:
     slider,
     targets,
     tibble,
-    tidyr
+    tidyr,
+    zeallot
 Suggests:
     ggplot2,
     knitr,

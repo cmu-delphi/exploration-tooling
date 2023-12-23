@@ -5,6 +5,8 @@
 #'   /target/ it still uses the raw value (this captures some of the noise).  It
 #'   also uses a rolling standard deviation as an auxillary signal, window of
 #'   withd `sd_width`, which by default is 28 days.
+#' If you are using `sd_width`, you should restrict the lags on the `sd` to only
+#'   include `0`, so set your lags to be e.g. `list(c(0,7,14), c(0))`.
 #' @param epi_data the actual data used
 #' @param outcome the name of the target variable
 #' @param extra_sources the name of any extra columns to use. This list could be
