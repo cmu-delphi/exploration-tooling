@@ -46,26 +46,9 @@ tar_option_set(
   # Set default crew controller.
   # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
   resources = tar_resources(
-    crew = tar_resources_crew(controller = "main_controller")
+    crew = tar_resources_crew(controller = "main_controller", seconds_timeout = 24 * 60 * 60)
   )
 )
-
-use_aws_s3 <- as.logical(Sys.getenv("USE_AWS_S3", FALSE))
-tar_project <- Sys.getenv("TAR_PROJECT", "covid_hosp_explore")
-aws_s3_prefix <- Sys.getenv("AWS_S3_PREFIX", "exploration")
-aws_s3_prefix <- paste0(aws_s3_prefix, "/", tar_project)
-if (use_aws_s3) {
-  tar_option_set(
-    repository = "aws",
-    resources = tar_resources(
-      aws = tar_resources_aws(
-        bucket = "forecasting-team-data",
-        prefix = aws_s3_prefix,
-        region = "us-east-1"
-      )
-    )
-  )
-}
 
 linreg <- parsnip::linear_reg()
 quantreg <- epipredict::quantile_reg()

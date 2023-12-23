@@ -16,11 +16,17 @@ DEBUG_MODE=true
 USE_SHINY=false
 TAR_PROJECT=covid_hosp_explore
 EXTERNAL_SCORES_PATH=
-USE_AWS_S3=false
 AWS_S3_PREFIX=2023/exploration
+
+# Pull from the bucket
+make sync
+
+# Run only the dashboard, to display results run on other machines
+make dashboard
 
 # Run the pipeline wrapper run.R.
 make run
+
 ```
 
 -   `EPIDATR_USE_CACHE` controls whether `epidatr` functions use the cache.
@@ -28,7 +34,6 @@ make run
 -   `USE_SHINY` controls whether we start a Shiny server after producing the targets.
 -   `TAR_PROJECT` controls which `targets` project is run by `run.R`.
 -   `EXTERNAL_SCORES_PATH` controls where external scores are loaded from. If not set, external scores are not used.
--   `USE_AWS_S3` controls whether we use AWS S3 to store the cache.
 -   `AWS_S3_PREFIX` controls the prefix to use in the AWS S3 bucket (a prefix is a pseudo-directory in a bucket).
 
 ## Development
