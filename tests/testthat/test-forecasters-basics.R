@@ -5,6 +5,7 @@ forecasters <- list(
   c("flatline_fc", flatline_fc),
   c("smoothed_scaled", smoothed_scaled)
 )
+forecaster <- c("scaled_pop", scaled_pop)
 for (forecaster in forecasters) {
   test_that(paste(forecaster[[1]], "gets the date and columns right"), {
     jhu <- epipredict::case_death_rate_subset %>%
