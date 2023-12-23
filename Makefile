@@ -10,3 +10,6 @@ run-nohup:
 
 sync:
 	Rscript sync.R
+
+dashboard:
+	Rscript dashboard.R

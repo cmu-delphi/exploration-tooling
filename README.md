@@ -21,8 +21,12 @@ AWS_S3_PREFIX=2023/exploration
 # Pull from the bucket
 make sync
 
+# Run only the dashboard, to display results run on other machines
+make dashboard
+
 # Run the pipeline wrapper run.R.
 make run
+
 ```
 
 -   `EPIDATR_USE_CACHE` controls whether `epidatr` functions use the cache.
