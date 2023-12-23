@@ -170,7 +170,7 @@ shinyApp(
           verticalLayout(
             plotlyOutput("main_plot", height = "90em"),
             h2("forecaster name -> parameters"),
-            #textOutput("forecaster_param_title"),
+            # textOutput("forecaster_param_title"),
             dataTableOutput("forecaster_table"),
             h2("ensemble name -> parameters"),
             dataTableOutput("ensemble_table")
@@ -261,7 +261,7 @@ shinyApp(
         # Use scatterplot or lines depending on the x var.
         {
           if (input$x_var %in% c(input$facet_vars, "geo_value", "forecaster", "ahead")) {
-            . + geom_point(aes(size = n)) + expand_limits(size = 0)
+            . + geom_point(aes(size = n / 100)) + expand_limits(size = 0)
           } else {
             . + geom_line()
           }

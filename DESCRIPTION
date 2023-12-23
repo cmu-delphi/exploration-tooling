@@ -27,9 +27,11 @@ Imports:
     purrr,
     recipes (>= 1.0.4),
     rlang,
+    slider,
     targets,
     tibble,
-    tidyr
+    tidyr,
+    zeallot
 Suggests:
     ggplot2,
     knitr,

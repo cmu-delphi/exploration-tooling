@@ -63,5 +63,5 @@ arguments:
 }
 \seealso{
 some utilities for making forecasters: \link{format_storage},
-\link{perform_sanity_checks}
+\link{sanitize_args_predictors_trainer}
 }

@@ -2,25 +2,25 @@
 #' add the default steps for arx_forecaster
 #' @description
 #' add the default steps for arx_forecaster
-#' @param rec an [`epipredict::epi_recipe`]
+#' @param preproc an [`epipredict::epi_recipe`]
 #' @param outcome a character of the column to be predicted
 #' @param predictors a character vector of the columns used as predictors
 #' @param args_list an [`epipredict::arx_args_list`]
 #' @seealso [arx_postprocess] for the layer equivalent
 #' @importFrom epipredict step_epi_lag step_epi_ahead step_epi_naomit step_training_window
 #' @export
-arx_preprocess <- function(rec, outcome, predictors, args_list) {
+arx_preprocess <- function(preproc, outcome, predictors, args_list) {
   # input already validated
   lags <- args_list$lags
   for (l in seq_along(lags)) {
     p <- predictors[l]
-    rec %<>% step_epi_lag(!!p, lag = lags[[l]])
+    preproc %<>% step_epi_lag(!!p, lag = lags[[l]])
   }
-  rec %<>%
+  preproc %<>%
     step_epi_ahead(!!outcome, ahead = args_list$ahead) %>%
     step_epi_naomit() %>%
     step_training_window(n_recent = args_list$n_training)
-  return(rec)
+  return(preproc)
 }
 
 # TODO replace with `layer_arx_forecaster`

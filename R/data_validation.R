@@ -13,7 +13,7 @@
 #'   include empty strings
 #' @param args_list the args list created by [`epipredict::arx_args_list`]
 #' @export
-perform_sanity_checks <- function(epi_data,
+sanitize_args_predictors_trainer <- function(epi_data,
                                   outcome,
                                   predictors,
                                   trainer,
@@ -56,7 +56,7 @@ perform_sanity_checks <- function(epi_data,
 #' @export
 confirm_sufficient_data <- function(epi_data, ahead, args_input, buffer = 9) {
   if (!is.null(args_input$lags)) {
-    lag_max <- max(args_input$lags)
+    lag_max <- max(unlist(args_input$lags))
   } else {
     lag_max <- 14 # default value of 2 weeks
   }

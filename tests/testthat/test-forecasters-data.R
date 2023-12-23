@@ -6,8 +6,10 @@ forecasters <- tibble::tribble(
   ~forecaster, ~extra_params, ~extra_params_names, ~fc_name,
   scaled_pop, list(1, TRUE), list("ahead", "pop_scaling"), "scaled_pop",
   scaled_pop, list(1, FALSE), list("ahead", "pop_scaling"), "scaled_pop",
-  flatline_fc, list(1), list("ahead"), "flatline_fc"
+  flatline_fc, list(1), list("ahead"), "flatline_fc",
+  smoothed_scaled, list(1, list(c(0,7,14), c(0))), list("ahead", "lags"), "smoothed_scaled"
 )
+expects_nonequal <- c("scaled_pop", "smoothed_scaled")
 synth_mean <- 25
 synth_sd <- 2
 tiny_sd <- 1.0e-5
@@ -49,7 +51,7 @@ different_constants <- epiprocess::as_epi_archive(rbind(
 ))
 for (ii in 1:nrow(forecasters)) {
   test_that(paste(forecasters$fc_name[[ii]], " predicts a constant median for constant data"), {
-    if (forecasters$fc_name[[ii]] == "scaled_pop") {
+    if (any(forecasters$fc_name[[ii]] %in% expects_nonequal)) {
       suppressWarnings(expect_warning(res <- get_pred(different_constants, ii), regexp = "prediction from rank-deficient fit"))
     } else {
       res <- get_pred(different_constants, ii)
@@ -126,7 +128,7 @@ missing_state <- epiprocess::as_epi_archive(rbind(
 ))
 for (ii in seq_len(nrow(forecasters))) {
   test_that(paste(forecasters$fc_name[[ii]], "predicts well in the presence of only one state with variably delayed data"), {
-    if (forecasters$fc_name[[ii]] == "scaled_pop") {
+    if (any(forecasters$fc_name[[ii]] %in% expects_nonequal)) {
       suppressWarnings(expect_warning(res <- get_pred(missing_state, ii), regexp = "prediction from rank-deficient fit"))
     } else {
       res <- get_pred(missing_state, ii)
@@ -171,7 +173,7 @@ for (ii in seq_len(nrow(forecasters))) {
   test_that(paste(forecasters$fc_name[[ii]], "predicts a linear increasing slope correctly"), {
     # flatline will definitely fail this, so it's exempt
     if (!identical(forecasters$forecaster[[ii]], flatline_fc)) {
-      if (forecasters$fc_name[[ii]] == "scaled_pop") {
+      if (any(forecasters$fc_name[[ii]] %in% expects_nonequal)) {
         suppressWarnings(expect_warning(res <- get_pred(linear, ii), regexp = "prediction from rank-deficient fit"))
       } else {
         res <- get_pred(linear, ii)

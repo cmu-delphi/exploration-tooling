@@ -4,10 +4,10 @@
 \alias{arx_preprocess}
 \title{add the default steps for arx_forecaster}
 \usage{
-arx_preprocess(rec, outcome, predictors, args_list)
+arx_preprocess(preproc, outcome, predictors, args_list)
 }
 \arguments{
-\item{rec}{an \code{\link[epipredict:epi_recipe]{epipredict::epi_recipe}}}
+\item{preproc}{an \code{\link[epipredict:epi_recipe]{epipredict::epi_recipe}}}
 
 \item{outcome}{a character of the column to be predicted}
 
