@@ -6,8 +6,8 @@
 #'   and `sync` to do both
 #' @param verbose Set to TRUE to print the files being synced.
 #' @param prefix specify the prefix for `s3sync`, which filters down which files
-#'   to sync to those starting with `prefix`
-#'
+#'   to sync to those starting with `prefix`.
+#' @param tar_project which targets project we're working on
 #' @importFrom aws.s3 s3sync get_bucket
 #' @importFrom here here
 #' @export

@@ -25,7 +25,9 @@ and \code{sync} to do both}
 \item{verbose}{Set to TRUE to print the files being synced.}
 
 \item{prefix}{specify the prefix for \code{s3sync}, which filters down which files
-to sync to those starting with \code{prefix}}
+to sync to those starting with \code{prefix}.}
+
+\item{tar_project}{which targets project we're working on}
 }
 \description{
 Manage S3 cache
