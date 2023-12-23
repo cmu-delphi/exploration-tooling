@@ -41,7 +41,7 @@
 #' @param ... any additional arguments as used by [arx_args_list]
 #'   required by covidhub.
 #' @seealso some utilities for making forecasters: [format_storage],
-#'   [perform_sanity_checks]
+#'   [sanitize_args_predictors_trainer]
 #' @importFrom epipredict epi_recipe step_population_scaling frosting arx_args_list layer_population_scaling
 #' @importFrom tibble tibble
 #' @importFrom recipes all_numeric
@@ -110,7 +110,7 @@ smoothed_scaled <- function(epi_data,
   # and need to make sure we exclude the original variables as predictors
   predictors <- update_predictors(epi_data, c(smooth_cols, sd_cols), predictors)
   # TODO: Partial match quantile_level coming from here (on Dmitry's machine)
-  c(args_list, predictors, trainer) %<-% perform_sanity_checks(epi_data, outcome, predictors, trainer, args_list)
+  c(args_list, predictors, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {

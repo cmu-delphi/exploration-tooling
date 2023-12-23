@@ -13,7 +13,7 @@
 #'   include empty strings
 #' @param args_list the args list created by [`epipredict::arx_args_list`]
 #' @export
-perform_sanity_checks <- function(epi_data,
+sanitize_args_predictors_trainer <- function(epi_data,
                                   outcome,
                                   predictors,
                                   trainer,

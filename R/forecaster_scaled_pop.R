@@ -35,7 +35,7 @@
 #' @param quantile_levels The quantile levels to predict. Defaults to those required by
 #'   covidhub.
 #' @seealso some utilities for making forecasters: [format_storage],
-#'   [perform_sanity_checks]
+#'   [sanitize_args_predictors_trainer]
 #' @importFrom epipredict epi_recipe step_population_scaling frosting arx_args_list layer_population_scaling
 #' @importFrom tibble tibble
 #' @importFrom recipes all_numeric
@@ -76,10 +76,7 @@ scaled_pop <- function(epi_data,
   # if you want to hardcode particular predictors in a particular forecaster
   predictors <- c(outcome, extra_sources)
   # TODO: Partial match quantile_level coming from here (on Dmitry's machine)
-  argsPredictorsTrainer <- perform_sanity_checks(epi_data, outcome, predictors, trainer, args_list)
-  args_list <- argsPredictorsTrainer[[1]]
-  predictors <- argsPredictorsTrainer[[2]]
-  trainer <- argsPredictorsTrainer[[3]]
+  c(args_list, predictors, trainer) <- sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict

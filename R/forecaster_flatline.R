@@ -40,9 +40,7 @@ flatline_fc <- function(epi_data,
   args_list <- do.call(flatline_args_list, args_input)
   # if you want to ignore extra_sources, setting predictors is the way to do it
   predictors <- c(outcome, extra_sources)
-  argsPredictorsTrainer <- perform_sanity_checks(epi_data, outcome, predictors, NULL, args_list)
-  args_list <- argsPredictorsTrainer[[1]]
-  predictors <- argsPredictorsTrainer[[2]]
+  c(args_list, predictors) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, NULL, args_list)
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict

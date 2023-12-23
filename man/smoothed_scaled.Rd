@@ -73,8 +73,10 @@ the data. Even if the target is smoothed when used as a /predictor/, as a
 /target/ it still uses the raw value (this captures some of the noise).  It
 also uses a rolling standard deviation as an auxillary signal, window of
 withd \code{sd_width}, which by default is 28 days.
+If you are using \code{sd_width}, you should restrict the lags on the \code{sd} to only
+include \code{0}, so set your lags to be e.g. \code{list(c(0,7,14), c(0))}.
 }
 \seealso{
 some utilities for making forecasters: \link{format_storage},
-\link{perform_sanity_checks}
+\link{sanitize_args_predictors_trainer}
 }
