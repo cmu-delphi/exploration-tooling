@@ -139,7 +139,7 @@ make_shared_grids <- function() {
     tidyr::expand_grid(
       forecaster = "flatline_fc",
       ahead = c(1:7, 14, 21, 28)
-    ),
+    )
   )
 }
 #' Make list of common ensembles for forecasting experiments across projects

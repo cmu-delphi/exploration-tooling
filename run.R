@@ -42,7 +42,6 @@ cli::cli_inform(
     "*" = "EXTERNAL_SCORES_PATH = {external_scores_path}",
     "*" = "DEBUG_MODE = {debug_mode}",
     "*" = "USE_SHINY = {use_shiny}",
-    "*" = "USE_AWS_S3 = {use_aws_s3}",
     "*" = "AWS_S3_PREFIX = {aws_s3_prefix}"
   )
 )
