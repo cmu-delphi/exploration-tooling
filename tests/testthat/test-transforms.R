@@ -81,19 +81,6 @@ test_that("get_trainable_names pulls out mean and sd columns", {
 })
 # TODO example with NA's, example with missing days, only one column, keep_mean
 
-test_that("update_predictors keeps unmodified predictors", {
-  epi_data["c"] <- NaN
-  epi_data["d"] <- NaN
-  epi_data["b_m14"] <- NaN
-  epi_data["b_sd28"] <- NaN
-  predictors <- c("a", "b", "c") # everything but d
-  modified <- c("b", "c") # we want to exclude b but not its modified versions
-  expected_predictors <- c("a", "b_m14", "b_sd28")
-  expect_equal(update_predictors(epi_data, modified, predictors), expected_predictors)
-  expected_if_all_modified <- c("b_m14", "b_sd28")
-  expect_equal(update_predictors(epi_data, NULL, predictors), expected_if_all_modified)
-})
-
 test_that("rolling_sd doesn't keep the mean columns by default", {
   rolled <- rolling_sd(epi_data)
   expect_equal(names(rolled), c("geo_value", "time_value", "a", "b", "a_sd28", "b_sd28"))

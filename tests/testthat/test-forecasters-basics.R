@@ -1,11 +1,11 @@
 library(dplyr)
 # TODO better way to do this than copypasta
 forecasters <- list(
-  c("scaled_pop", scaled_pop),
-  c("flatline_fc", flatline_fc),
-  c("smoothed_scaled", smoothed_scaled)
+  list("scaled_pop", scaled_pop),
+  list("flatline_fc", flatline_fc),
+  list("smoothed_scaled", smoothed_scaled, lags = list(c(0, 2, 5), c(0)))
 )
-forecaster <- c("scaled_pop", scaled_pop)
+forecaster <- forecasters[[1]]
 for (forecaster in forecasters) {
   test_that(paste(forecaster[[1]], "gets the date and columns right"), {
     jhu <- epipredict::case_death_rate_subset %>%
@@ -21,6 +21,18 @@ for (forecaster in forecasters) {
       res$target_end_date ==
         as.Date("2022-01-01")
     ))
+  })
+
+  test_that(paste(forecaster[[1]], "handles only using 1 column correctly"), {
+    jhu <- epipredict::case_death_rate_subset %>%
+      dplyr::filter(time_value >= as.Date("2021-12-01"))
+    # the as_of for this is wildly far in the future
+    attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
+    if (forecaster[[1]] == "smoothed_scaled") {
+      expect_no_error(res <- forecaster[[2]](jhu, "case_rate", "", -2L, lags = forecaster$lags))
+    } else {
+      expect_no_error(res <- forecaster[[2]](jhu, "case_rate", "", -2L))
+    }
   })
 
   test_that(paste(forecaster[[1]], "deals with no as_of"), {
@@ -63,7 +75,7 @@ for (forecaster in forecasters) {
 
   #################################
   # any forecaster specific tests
-  if (forecaster[[1]] == "scaled_pop") {
+  if (forecaster[[1]] == "scaled_pop" || forecaster[[1]] == "smoothed_scaled") {
     test_that(paste(forecaster[[1]], "scaled and unscaled don't make the same predictions"), {
       jhu <- epipredict::case_death_rate_subset %>%
         dplyr::filter(time_value >= as.Date("2021-12-01"))
@@ -84,6 +96,14 @@ for (forecaster in forecasters) {
         ) %>%
         mutate(equal = value.unscaled == value.scaled) %>%
         summarize(all(equal)) %>% pull(`all(equal)`))
+    })
+  } else if (forecaster[[1]] == "smoothed_scaled") {
+    testthat("smoothed_scaled handles variable lags correctly", {
+      jhu <- epipredict::case_death_rate_subset %>%
+        dplyr::filter(time_value >= as.Date("2021-12-01"))
+      # the as_of for this is wildly far in the future
+      attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
+      expect_no_error(res <- forecaster[[2]](jhu, "case_rate", c("death_rate"), -2L, lags = list(c(0, 3, 5, 7), c(0), c(0, 3, 5, 7), c(0))))
     })
   }
   # TODO confirming that it produces exactly the same result as arx_forecaster

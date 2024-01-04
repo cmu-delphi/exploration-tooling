@@ -63,7 +63,7 @@ smoothed_scaled <- function(epi_data,
   # perform any preprocessing not supported by epipredict
   # this is a temp fix until a real fix gets put into epipredict
   epi_data <- clear_lastminute_nas(epi_data)
-  # one that every forecaster will need to handle: how to manage max(time_value)
+  # One that every forecaster will need to handle: how to manage max(time_value)
   # that's older than the `as_of` date
   c(epi_data, effective_ahead) %<-% extend_ahead(epi_data, ahead)
   # see latency_adjusting for other examples
@@ -85,12 +85,31 @@ smoothed_scaled <- function(epi_data,
   # `extra_sources` sets which variables beyond the outcome are lagged and used as predictors
   # any which are modified by `rolling_mean` or `rolling_sd` have their original values dropped later
   predictors <- c(outcome, extra_sources)
+  predictors <- predictors[predictors != ""]
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
   # smoothing
   keep_mean <- !is.null(smooth_width) && !is.null(sd_mean_width) &&
     smooth_width == sd_mean_width # do we (not) need to do the mean separately?
+  # since we're adding columns, we need to figure out which to exclude
+  all_names <- get_nonkey_names(epi_data)
+  unused_columns <- all_names[!(all_names %in% predictors)]
+  if (is.null(smooth_cols)) {
+    smooth_cols <- predictors
+  }
+  # if we smooth it, we're not using the original version for prediction
+  unused_columns <- c(unused_columns, smooth_cols[!(smooth_cols %in% unused_columns)])
+
+  if (is.null(sd_cols)) {
+    sd_cols <- predictors
+  }
+  # same idea for sd if we're keeping the mean
+  if (keep_mean) {
+    unused_columns <- c(unused_columns, sd_cols[!(sd_cols %in% unused_columns)])
+  }
+
+
   if (!is.null(smooth_width) && !keep_mean) {
     epi_data %<>% rolling_mean(
       width = smooth_width,
@@ -108,8 +127,8 @@ smoothed_scaled <- function(epi_data,
     )
   }
   # and need to make sure we exclude the original variables as predictors
-  predictors <- update_predictors(epi_data, c(smooth_cols, sd_cols), predictors)
-  # TODO: Partial match quantile_level coming from here (on Dmitry's machine)
+  all_names <- get_nonkey_names(epi_data)
+  predictors <- all_names[!(all_names %in% unused_columns)]
   c(args_list, predictors, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
