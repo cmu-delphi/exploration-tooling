@@ -61,7 +61,7 @@ tar_manifest()
 if (debug_mode) {
   tar_make(callr_function = NULL)
 } else {
-  tar_make()
+  tar_make(error = "null")
 }
 
 if (use_shiny) {

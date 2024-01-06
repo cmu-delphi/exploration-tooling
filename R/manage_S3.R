@@ -26,6 +26,8 @@ manage_S3_forecast_cache <- function(rel_cache_dir = NULL,
 
   prefix <- paste0(prefix, "/", tar_project, "/")
   s3b <- get_bucket(bucket_name, prefix = prefix)
+  print(paste("local:", cache_path))
+  print(paste("remote:", prefix))
   if (direction == "sync") {
     if (verbose) {
       s3sync(cache_path, s3b, prefix = prefix)

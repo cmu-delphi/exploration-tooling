@@ -5,6 +5,7 @@ suppressPackageStartupMessages({
   library(ggplot2)
   library(rlang)
   library(dplyr)
+  library(purrr)
 })
 
 POPULATION_DF <-

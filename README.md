@@ -16,7 +16,7 @@ DEBUG_MODE=true
 USE_SHINY=false
 TAR_PROJECT=covid_hosp_explore
 EXTERNAL_SCORES_PATH=
-AWS_S3_PREFIX=2023/exploration
+AWS_S3_PREFIX=exploration
 
 # Pull from the bucket
 make sync
