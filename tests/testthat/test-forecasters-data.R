@@ -16,7 +16,7 @@ default_slide_forecaster <- function(dataset,
                                      ii, outcome = "a", extra_sources = "", linreg_warnings = TRUE) {
   # linear_reg really doesn't like exactly equal data, and throws a warning.
   # wrapperfun is to suppress that for forecasters using linear_reg
-  if (any(forecasters$fc_name[[ii]] %in% expects_nonequal) && linereg_warnings) {
+  if (any(forecasters$fc_name[[ii]] %in% expects_nonequal) && linreg_warnings) {
     wrapperfun <- function(x) {
       suppressWarnings(expect_warning(x,
         regexp =
