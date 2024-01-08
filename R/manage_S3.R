@@ -16,7 +16,8 @@ manage_S3_forecast_cache <- function(rel_cache_dir = NULL,
                                      direction = "sync",
                                      verbose = FALSE,
                                      prefix = Sys.getenv("AWS_S3_PREFIX", "exploration"),
-                                     tar_project = Sys.getenv("TAR_PROJECT", "exploration")) {
+                                     tar_project = Sys.getenv("TAR_PROJECT", ""),
+                                     external_scores_path = Sys.getenv("EXTERNAL_SCORES_PATH")) {
   if (is.null(rel_cache_dir)) {
     cache_path <- tar_project
   } else {
