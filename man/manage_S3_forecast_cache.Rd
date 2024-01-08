@@ -10,7 +10,8 @@ manage_S3_forecast_cache(
   direction = "sync",
   verbose = FALSE,
   prefix = Sys.getenv("AWS_S3_PREFIX", "exploration"),
-  tar_project = Sys.getenv("TAR_PROJECT", "exploration")
+  tar_project = Sys.getenv("TAR_PROJECT", ""),
+  external_scores_path = Sys.getenv("EXTERNAL_SCORES_PATH")
 )
 }
 \arguments{
