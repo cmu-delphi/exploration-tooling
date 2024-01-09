@@ -35,6 +35,9 @@ debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
 use_shiny <- as.logical(Sys.getenv("USE_SHINY", FALSE))
 aws_s3_prefix <- Sys.getenv("AWS_S3_PREFIX", "exploration")
 aws_s3_prefix <- paste0(aws_s3_prefix, "/", tar_project)
+if (external_scores_path == "") {
+  external_scores_path <- paste0(tar_project, "/", "legacy-exploration-scorecards.qs")
+}
 cli::cli_inform(
   c(
     "i" = "Reading environment variables...",
@@ -61,7 +64,7 @@ tar_manifest()
 if (debug_mode) {
   tar_make(callr_function = NULL)
 } else {
-  tar_make()
+  tar_make(error = "null")
 }
 
 if (use_shiny) {

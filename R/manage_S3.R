@@ -8,6 +8,7 @@
 #' @param prefix specify the prefix for `s3sync`, which filters down which files
 #'   to sync to those starting with `prefix`.
 #' @param tar_project which targets project we're working on
+#' @param external_scores_path the file location where the legacy scores should be saved
 #' @importFrom aws.s3 s3sync get_bucket
 #' @importFrom here here
 #' @export
@@ -16,7 +17,8 @@ manage_S3_forecast_cache <- function(rel_cache_dir = NULL,
                                      direction = "sync",
                                      verbose = FALSE,
                                      prefix = Sys.getenv("AWS_S3_PREFIX", "exploration"),
-                                     tar_project = Sys.getenv("TAR_PROJECT", "exploration")) {
+                                     tar_project = Sys.getenv("TAR_PROJECT", ""),
+                                     external_scores_path = Sys.getenv("EXTERNAL_SCORES_PATH", "legacy-exploration-scorecards.qs")) {
   if (is.null(rel_cache_dir)) {
     cache_path <- tar_project
   } else {
@@ -26,6 +28,8 @@ manage_S3_forecast_cache <- function(rel_cache_dir = NULL,
 
   prefix <- paste0(prefix, "/", tar_project, "/")
   s3b <- get_bucket(bucket_name, prefix = prefix)
+  print(paste("local:", cache_path))
+  print(paste("remote:", prefix))
   if (direction == "sync") {
     if (verbose) {
       s3sync(cache_path, s3b, prefix = prefix)
