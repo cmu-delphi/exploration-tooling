@@ -11,7 +11,8 @@ manage_S3_forecast_cache(
   verbose = FALSE,
   prefix = Sys.getenv("AWS_S3_PREFIX", "exploration"),
   tar_project = Sys.getenv("TAR_PROJECT", ""),
-  external_scores_path = Sys.getenv("EXTERNAL_SCORES_PATH")
+  external_scores_path = Sys.getenv("EXTERNAL_SCORES_PATH",
+    "legacy-exploration-scorecards.qs")
 )
 }
 \arguments{
@@ -29,6 +30,8 @@ and \code{sync} to do both}
 to sync to those starting with \code{prefix}.}
 
 \item{tar_project}{which targets project we're working on}
+
+\item{external_scores_path}{the file location where the legacy scores should be saved}
 }
 \description{
 Manage S3 cache
