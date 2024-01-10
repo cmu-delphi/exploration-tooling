@@ -16,21 +16,20 @@ expects_nonequal <- c("scaled_pop", "smoothed_scaled")
 #' @param dataset The dataset to be used for the forecast.
 #' @param ii The row of the forecasters table to be used.
 #' @param outcome The name of the target column in the dataset.
-#' @param extra_sources Any extra columns used for prediction that aren't default.
-#' @param linreg_warnings Whether to suppress warnings from linear_reg.
+#' @param extra_sources Any extra columns used for prediction that aren't
+#' default.
+#' @param expect_linreg_warnings Whether to expect and then suppress warnings
+#' from linear_reg.
 #'
 #' Notes:
 #' - n_training_pad is set to avoid warnings from the trainer.
 #' - linear_reg doesn't like exactly equal data when training and throws a
 #'   warning. wrapperfun is used to suppress that.
 default_slide_forecaster <- function(dataset,
-                                     ii, outcome = "a", extra_sources = "", linreg_warnings = TRUE) {
-  if (any(forecasters$fc_name[[ii]] %in% expects_nonequal) && linreg_warnings) {
+                                     ii, outcome = "a", extra_sources = "", expect_linreg_warnings = TRUE) {
+  if (any(forecasters$fc_name[[ii]] %in% expects_nonequal) && expect_linreg_warnings) {
     wrapperfun <- function(x) {
-      suppressWarnings(expect_warning(x,
-        regexp =
-          "prediction from rank-deficient fit"
-      ))
+      suppressWarnings(expect_warning(x, regexp = "prediction from rank-deficient fit"))
     }
   } else {
     wrapperfun <- identity
@@ -129,7 +128,7 @@ for (ii in 1:nrow(forecasters)) {
     forecasters$fc_name[[ii]],
     " predicts the median and the right quantiles for Gaussian data"
   ), {
-    expect_no_error(res <- default_slide_forecaster(white_noise, ii, linreg_warnings = FALSE))
+    expect_no_error(res <- default_slide_forecaster(white_noise, ii, expect_linreg_warnings = FALSE))
 
     # We expect the standard deviation of the forecasted median values to be
     # within two true standard deviations of the true data mean.
