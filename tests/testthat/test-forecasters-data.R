@@ -1,32 +1,40 @@
 library(dplyr)
 
-
-# if you're adding a forecaster, add it to the list to be tested
+# A list of forecasters to be tested. Add here to test new forecasters.
 forecasters <- tibble::tribble(
   ~forecaster, ~extra_params, ~extra_params_names, ~fc_name,
   scaled_pop, list(1, TRUE), list("ahead", "pop_scaling"), "scaled_pop",
   scaled_pop, list(1, FALSE), list("ahead", "pop_scaling"), "scaled_pop",
   flatline_fc, list(1), list("ahead"), "flatline_fc",
-  smoothed_scaled, list(1, list(c(0,7,14), c(0))), list("ahead", "lags"), "smoothed_scaled"
+  smoothed_scaled, list(1, list(c(0, 7, 14), c(0))), list("ahead", "lags"), "smoothed_scaled"
 )
+# Which forecasters expect the data to be non-identical?
 expects_nonequal <- c("scaled_pop", "smoothed_scaled")
-synth_mean <- 25
-synth_sd <- 2
-tiny_sd <- 1.0e-5
-simple_dates <- seq(as.Date("2012-01-01"), by = "day", length.out = 40)
-# technically white noise, but with a variance that is miniscule
-constant <- epiprocess::as_epi_archive(tibble(
-  geo_value = "al",
-  time_value = simple_dates,
-  version = simple_dates,
-  a = synth_mean
-))
 
-# wrap a call that is made quite frequently
-# n_training_pad is set to avoid warnings from the trainer
-get_pred <- function(dataset,
-                     ii, outcome = "a", extra_sources = "") {
-  res <- slide_forecaster(
+#' A wrapper for a common call to slide a forecaster over a dataset.
+#'
+#' @param dataset The dataset to be used for the forecast.
+#' @param ii The row of the forecasters table to be used.
+#' @param outcome The name of the target column in the dataset.
+#' @param extra_sources Any extra columns used for prediction that aren't
+#' default.
+#' @param expect_linreg_warnings Whether to expect and then suppress warnings
+#' from linear_reg.
+#'
+#' Notes:
+#' - n_training_pad is set to avoid warnings from the trainer.
+#' - linear_reg doesn't like exactly equal data when training and throws a
+#'   warning. wrapperfun is used to suppress that.
+default_slide_forecaster <- function(dataset,
+                                     ii, outcome = "a", extra_sources = "", expect_linreg_warnings = TRUE) {
+  if (any(forecasters$fc_name[[ii]] %in% expects_nonequal) && expect_linreg_warnings) {
+    wrapperfun <- function(x) {
+      suppressWarnings(expect_warning(x, regexp = "prediction from rank-deficient fit"))
+    }
+  } else {
+    wrapperfun <- identity
+  }
+  wrapperfun(res <- slide_forecaster(
     data = dataset,
     outcome = outcome,
     extra_sources = extra_sources,
@@ -34,13 +42,32 @@ get_pred <- function(dataset,
     forecaster = forecasters$forecaster[[ii]],
     forecaster_args = forecasters$extra_params[[ii]],
     forecaster_args_names = forecasters$extra_params_names[[ii]]
-  )
+  ))
   return(res)
 }
 
-# a dataset that has a constant value
-# (technically a mean 25 sd 1e-5, since otherwise linear regression gets annoyed)
-different_constants <- epiprocess::as_epi_archive(rbind(
+# Some arbitrary magic numbers used to generate data.
+synth_mean <- 25
+synth_sd <- 2
+tiny_sd <- 1.0e-5
+simple_dates <- seq(as.Date("2012-01-01"), by = "day", length.out = 40)
+
+# Create an archive that contains a single version for each of the 40 days in
+# `simple_dates`, for the single geo-value "al" (arbitrary choice).
+constant <- epiprocess::as_epi_archive(tibble(
+  geo_value = "al",
+  time_value = simple_dates,
+  version = simple_dates,
+  a = synth_mean
+))
+
+################################################################################
+################################ Constant data #################################
+################################################################################
+# A dataset that has the constant value `synth_mean` for all dates for "al" and
+# 4 * `synth_mean` for all dates for "ca". Meant to check for sane handling of
+# constant data.
+different_constants <- rbind(
   constant$DT,
   tibble(
     geo_value = "ca",
@@ -48,38 +75,47 @@ different_constants <- epiprocess::as_epi_archive(rbind(
     version = simple_dates,
     a = 4 * synth_mean
   )
-))
+) %>%
+  arrange(version, time_value) %>%
+  epiprocess::as_epi_archive()
+
 for (ii in 1:nrow(forecasters)) {
-  test_that(paste(forecasters$fc_name[[ii]], " predicts a constant median for constant data"), {
-    if (any(forecasters$fc_name[[ii]] %in% expects_nonequal)) {
-      suppressWarnings(expect_warning(res <- get_pred(different_constants, ii), regexp = "prediction from rank-deficient fit"))
-    } else {
-      res <- get_pred(different_constants, ii)
-    }
+  test_that(paste(
+    forecasters$fc_name[[ii]],
+    " predicts a constant median for constant data"
+  ), {
+    res <- default_slide_forecaster(different_constants, ii)
 
-
-    # only looking at the median, because the rest of the quantiles are going to be pretty weird on an actually constant input
+    # Here we compare only the median, because the rest of the quantiles are
+    # going to be pretty weird on a constant input.
     rel_values <- res %>%
       group_by(geo_value) %>%
       filter(quantile == .5)
-    # the observed sd of the median should be approximately the ~zero `tiny_sd`
-    sd_values <- rel_values %>%
-      summarise(is_const = sd(value) < 2 * tiny_sd) %>%
-      pull(is_const) %>%
-      all()
-    expect_true(sd_values)
 
-    # the observed median should be approximately the actual median, to within a small amount of noise
+    # We expect the forecaster median to be equal to the actual median plus
+    # small noise noise
     actual_value <- rel_values %>%
-      mutate(is_right = near(value, true_value, tol = tiny_sd^.5)) %>%
+      mutate(is_right = near(value, true_value)) %>%
       pull(is_right) %>%
       all()
     expect_true(actual_value)
+
+    # We expect the forecasted standard deviation of the medians to be zero up
+    # to numerical error
+    sd_values <- rel_values %>%
+      summarise(is_const = near(sd(value), 0)) %>%
+      pull(is_const) %>%
+      all()
+    expect_true(sd_values)
   })
 }
 
 
-# a dataset that is mean 25, with a standard deviation of 2
+################################################################################
+################################ White Noise ###################################
+################################################################################
+# A white noise dataset with a single geo, mean 25 and standard deviation of 2.
+# Meant to check for sane handling of a simple realistic case.
 set.seed(12345)
 white_noise <- epiprocess::as_epi_archive(tibble(
   geo_value = "al",
@@ -88,34 +124,51 @@ white_noise <- epiprocess::as_epi_archive(tibble(
   a = rnorm(length(simple_dates), mean = synth_mean, sd = synth_sd)
 ))
 for (ii in 1:nrow(forecasters)) {
-  test_that(paste(forecasters$fc_name[[ii]], " predicts the median and the right quantiles for Gaussian data"), {
-    expect_no_error(res <- get_pred(white_noise, ii))
+  test_that(paste(
+    forecasters$fc_name[[ii]],
+    " predicts the median and the right quantiles for Gaussian data"
+  ), {
+    expect_no_error(res <- default_slide_forecaster(white_noise, ii, expect_linreg_warnings = FALSE))
 
-    # shouldn't expect the sample sd to actually match the true sd exactly, so giving it some leeway
-    values <- res %>%
-      filter(quantile == .5) %>%
-      pull(value)
-    expect_true(sd(values) < 2 * synth_sd)
+    # We expect the standard deviation of the forecasted median values to be
+    # within two true standard deviations of the true data mean.
+    expect_true(
+      (res %>%
+        filter(quantile == .5) %>%
+        pull(value) %>% sd()) < 2 * synth_sd
+    )
 
-    # how much is each quantile off from the expected value?
-    # should be fairly generous here, we just want the right order of magnitude
+    # Make sure that each quantile doesn't deviate too much from the value that
+    # would be predicted by the generating Gaussian. Dmitry: this bound seems
+    # loose, is it worth improving?
     quantile_deviation <- res %>%
       mutate(
-        diff_from_exp =
-          (value - qnorm(quantile, mean = synth_mean, sd = synth_sd)) /
-            as.integer(target_end_date - forecast_date)
+        diff_from_expected = value - qnorm(quantile, mean = synth_mean, sd = synth_sd)
       ) %>%
       select(-true_value, -value) %>%
       group_by(quantile) %>%
-      summarize(err = abs(mean(diff_from_exp)))
-    expect_true(all(quantile_deviation$err < 2 * synth_sd))
+      summarize(err = abs(mean(diff_from_expected)))
+    expect_true(all(quantile_deviation$err < synth_sd))
   })
 }
 
 
-# a dataset where one state is just the constant above, but the other has data that is delayed by various amounts
-# we check that the undelayed is predicted, while the delayed is predicted whenever there's data a the lags (this could use work, its not that precise)
+################################################################################
+############################### Simple Latency #################################
+################################################################################
+# A dataset where one state is just the constant above, but the other has data
+# that is delayed by various amounts, so this functions as a check for latency
+# behavior. We check that the undelayed is predicted every day, while the
+# delayed is predicted whenever there's data at the appropriate lags (this could
+# use work, its not that precise).
+constant <- epiprocess::as_epi_archive(tibble(
+  geo_value = "al",
+  time_value = simple_dates,
+  version = simple_dates,
+  a = synth_mean
+))
 set.seed(12345)
+# delay is set to a small poisson
 state_delay <- rpois(length(simple_dates), 0.5)
 missing_state <- epiprocess::as_epi_archive(rbind(
   constant$DT,
@@ -127,13 +180,15 @@ missing_state <- epiprocess::as_epi_archive(rbind(
   )
 ))
 for (ii in seq_len(nrow(forecasters))) {
-  test_that(paste(forecasters$fc_name[[ii]], "predicts well in the presence of only one state with variably delayed data"), {
-    if (any(forecasters$fc_name[[ii]] %in% expects_nonequal)) {
-      suppressWarnings(expect_warning(res <- get_pred(missing_state, ii), regexp = "prediction from rank-deficient fit"))
-    } else {
-      res <- get_pred(missing_state, ii)
-    }
+  test_that(paste(
+    forecasters$fc_name[[ii]],
+    "predicts well in the presence of only one state with variably delayed data"
+  ), {
+    res <- default_slide_forecaster(missing_state, ii)
+
+    # some predictions exist for both states
     expect_equal(length(unique(res$geo_value)), 2)
+    # get the number of predictions by state
     counts <- res %>%
       filter(quantile == 0.5 & !is.na(value)) %>%
       group_by(geo_value) %>%
@@ -144,9 +199,9 @@ for (ii in seq_len(nrow(forecasters))) {
     counts_al <- counts %>%
       filter(geo_value == "al") %>%
       pull(n)
-    res %>% filter(geo_value == "ca" & quantile == .5)
-    # flatline is more aggressive about forecasting, so it will always have something if there's past data at all
-    if (identical(forecasters$forecaster[[ii]], flatline_fc)) {
+    # flatline is more aggressive about forecasting, so it will always have a
+    # prediction if there's past data at all
+    if (forecasters$fc_name[[ii]] == "flatline_fc") {
       expect_true(counts_al == counts_ca)
     } else {
       expect_true(counts_al > counts_ca)
@@ -155,11 +210,15 @@ for (ii in seq_len(nrow(forecasters))) {
     expect_true(sum(state_delay == 0) > counts_ca)
     # at least one day could be predicted
     expect_true(counts_ca > 0)
+    # ideally we would figure out which days actually have data available at
+    # exactly the given lag
   })
 }
 
-# a dataset that increases linearly at a rate of 1/day, plus the same noise as in the constant case (mean 0 sd 1e-5)
-set.seed(12347)
+################################################################################
+################################ Simple sloped #################################
+################################################################################
+# a dataset that increases linearly at a rate of 1/day
 start_date <- min(simple_dates)
 linear <- epiprocess::as_epi_archive(
   tibble(
@@ -170,23 +229,23 @@ linear <- epiprocess::as_epi_archive(
   )
 )
 for (ii in seq_len(nrow(forecasters))) {
-  test_that(paste(forecasters$fc_name[[ii]], "predicts a linear increasing slope correctly"), {
+  test_that(paste(
+    forecasters$fc_name[[ii]],
+    " predicts a linear increasing slope correctly"
+  ), {
     # flatline will definitely fail this, so it's exempt
-    if (!identical(forecasters$forecaster[[ii]], flatline_fc)) {
-      if (any(forecasters$fc_name[[ii]] %in% expects_nonequal)) {
-        suppressWarnings(expect_warning(res <- get_pred(linear, ii), regexp = "prediction from rank-deficient fit"))
-      } else {
-        res <- get_pred(linear, ii)
-      }
-      # make sure that the median is on the sloped line
+    if (forecasters$fc_name[[ii]] == "flatline_fc") {
+      # flatline gets a cookie for existing
+      expect_true(TRUE)
+    } else {
+      res <- default_slide_forecaster(linear, ii)
+
+      # make sure that the median is on the line
       median_err <- res %>%
         filter(quantile == .5) %>%
         mutate(err = value - as.integer(target_end_date - start_date + 1), .keep = "none") %>%
-        mutate(is_right = near(err, 0, tol = tiny_sd^0.5), .keep = "none")
+        mutate(is_right = near(err, 0), .keep = "none")
       expect_true(all(median_err))
-    } else {
-      # flatline gets a cookie for existing
-      expect_true(TRUE)
     }
   })
 }
