@@ -1,7 +1,6 @@
 library(dplyr)
 
-
-# if you're adding a forecaster, add it to the list to be tested
+# A list of forecasters to be tested. Add here to test new forecasters.
 forecasters <- tibble::tribble(
   ~forecaster, ~extra_params, ~extra_params_names, ~fc_name,
   scaled_pop, list(1, TRUE), list("ahead", "pop_scaling"), "scaled_pop",
@@ -9,13 +8,23 @@ forecasters <- tibble::tribble(
   flatline_fc, list(1), list("ahead"), "flatline_fc",
   smoothed_scaled, list(1, list(c(0, 7, 14), c(0))), list("ahead", "lags"), "smoothed_scaled"
 )
+# Which forecasters expect the data to be non-identical?
 expects_nonequal <- c("scaled_pop", "smoothed_scaled")
-# wrap a call that is made quite frequently
-# n_training_pad is set to avoid warnings from the trainer
+
+#' A wrapper for a common call to slide a forecaster over a dataset.
+#'
+#' @param dataset The dataset to be used for the forecast.
+#' @param ii The row of the forecasters table to be used.
+#' @param outcome The name of the target column in the dataset.
+#' @param extra_sources Any extra columns used for prediction that aren't default.
+#' @param linreg_warnings Whether to suppress warnings from linear_reg.
+#'
+#' Notes:
+#' - n_training_pad is set to avoid warnings from the trainer.
+#' - linear_reg doesn't like exactly equal data when training and throws a
+#'   warning. wrapperfun is used to suppress that.
 default_slide_forecaster <- function(dataset,
                                      ii, outcome = "a", extra_sources = "", linreg_warnings = TRUE) {
-  # linear_reg really doesn't like exactly equal data, and throws a warning.
-  # wrapperfun is to suppress that for forecasters using linear_reg
   if (any(forecasters$fc_name[[ii]] %in% expects_nonequal) && linreg_warnings) {
     wrapperfun <- function(x) {
       suppressWarnings(expect_warning(x,
@@ -38,13 +47,14 @@ default_slide_forecaster <- function(dataset,
   return(res)
 }
 
-# setting up some otherwise magic numbers
+# Some arbitrary magic numbers used to generate data.
 synth_mean <- 25
 synth_sd <- 2
 tiny_sd <- 1.0e-5
 simple_dates <- seq(as.Date("2012-01-01"), by = "day", length.out = 40)
-# create an archive that contains a single version for each of the 40 days in
-# `simple_dates`, for the single geo-value "al" (arbitrary choice)
+
+# Create an archive that contains a single version for each of the 40 days in
+# `simple_dates`, for the single geo-value "al" (arbitrary choice).
 constant <- epiprocess::as_epi_archive(tibble(
   geo_value = "al",
   time_value = simple_dates,
@@ -55,8 +65,9 @@ constant <- epiprocess::as_epi_archive(tibble(
 ################################################################################
 ################################ Constant data #################################
 ################################################################################
-# a dataset that has 2 different constant values at 2 different locations
-# Meant to check
+# A dataset that has the constant value `synth_mean` for all dates for "al" and
+# 4 * `synth_mean` for all dates for "ca". Meant to check for sane handling of
+# constant data.
 different_constants <- rbind(
   constant$DT,
   tibble(
@@ -68,6 +79,7 @@ different_constants <- rbind(
 ) %>%
   arrange(version, time_value) %>%
   epiprocess::as_epi_archive()
+
 for (ii in 1:nrow(forecasters)) {
   test_that(paste(
     forecasters$fc_name[[ii]],
@@ -75,23 +87,22 @@ for (ii in 1:nrow(forecasters)) {
   ), {
     res <- default_slide_forecaster(different_constants, ii)
 
-
-    # only looking at the median, because the rest of the quantiles are going to
-    # be pretty weird on an actually constant input
+    # Here we compare only the median, because the rest of the quantiles are
+    # going to be pretty weird on a constant input.
     rel_values <- res %>%
       group_by(geo_value) %>%
       filter(quantile == .5)
 
-    # the observed median should be approximately the actual median, to within a
-    # small amount of noise
+    # We expect the forecaster median to be equal to the actual median plus
+    # small noise noise
     actual_value <- rel_values %>%
       mutate(is_right = near(value, true_value)) %>%
       pull(is_right) %>%
       all()
     expect_true(actual_value)
 
-    # the observed sd of the median should be within floating point error of
-    # zero
+    # We expect the forecasted standard deviation of the medians to be zero up
+    # to numerical error
     sd_values <- rel_values %>%
       summarise(is_const = near(sd(value), 0)) %>%
       pull(is_const) %>%
@@ -104,8 +115,8 @@ for (ii in 1:nrow(forecasters)) {
 ################################################################################
 ################################ White Noise ###################################
 ################################################################################
-# A dataset that white noise with mean 25, and standard deviation of 2.
-# Meant to check for sane handling of the simplest realistic case
+# A white noise dataset with a single geo, mean 25 and standard deviation of 2.
+# Meant to check for sane handling of a simple realistic case.
 set.seed(12345)
 white_noise <- epiprocess::as_epi_archive(tibble(
   geo_value = "al",
@@ -120,23 +131,24 @@ for (ii in 1:nrow(forecasters)) {
   ), {
     expect_no_error(res <- default_slide_forecaster(white_noise, ii, linreg_warnings = FALSE))
 
-    # Make sure that the sample standard deviation of the mean is within the
-    # true standard deviation, with some leeway
-    values <- res %>%
-      filter(quantile == .5) %>%
-      pull(value)
-    expect_true(sd(values) < 2 * synth_sd)
+    # We expect the standard deviation of the forecasted median values to be
+    # within two true standard deviations of the true data mean.
+    expect_true(
+      (res %>%
+        filter(quantile == .5) %>%
+        pull(value) %>% sd()) < 2 * synth_sd
+    )
 
     # Make sure that each quantile doesn't deviate too much from the value that
-    # would be predicted by the generating gaussian.
+    # would be predicted by the generating Gaussian. Dmitry: this bound seems
+    # loose, is it worth improving?
     quantile_deviation <- res %>%
       mutate(
-        diff_from_exp =
-          value - qnorm(quantile, mean = synth_mean, sd = synth_sd)
+        diff_from_expected = value - qnorm(quantile, mean = synth_mean, sd = synth_sd)
       ) %>%
       select(-true_value, -value) %>%
       group_by(quantile) %>%
-      summarize(err = abs(mean(diff_from_exp)))
+      summarize(err = abs(mean(diff_from_expected)))
     expect_true(all(quantile_deviation$err < synth_sd))
   })
 }
@@ -146,10 +158,10 @@ for (ii in 1:nrow(forecasters)) {
 ############################### Simple Latency #################################
 ################################################################################
 # A dataset where one state is just the constant above, but the other has data
-# that is delayed by various amounts. A check for latency behavior
-# We check that the undelayed is predicted every day, while the delayed is
-# predicted whenever there's data at the appropriate lags (this could use work,
-# its not that precise)
+# that is delayed by various amounts, so this functions as a check for latency
+# behavior. We check that the undelayed is predicted every day, while the
+# delayed is predicted whenever there's data at the appropriate lags (this could
+# use work, its not that precise).
 constant <- epiprocess::as_epi_archive(tibble(
   geo_value = "al",
   time_value = simple_dates,
