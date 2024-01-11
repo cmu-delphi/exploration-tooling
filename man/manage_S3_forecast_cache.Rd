@@ -10,7 +10,8 @@ manage_S3_forecast_cache(
   direction = "sync",
   verbose = FALSE,
   prefix = Sys.getenv("AWS_S3_PREFIX", "exploration"),
-  tar_project = Sys.getenv("TAR_PROJECT", "")
+  tar_project = Sys.getenv("TAR_PROJECT", ""),
+  external_scores_path = Sys.getenv("EXTERNAL_SCORES_PATH", "")
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ and \code{sync} to do both}
 to sync to those starting with \code{prefix}.}
 
 \item{tar_project}{which targets project we're working on}
+
+\item{external_scores_path}{which external scores file to sync}
 }
 \description{
 Manage S3 cache

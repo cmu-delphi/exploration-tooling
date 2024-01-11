@@ -8,6 +8,7 @@
 #' @param prefix specify the prefix for `s3sync`, which filters down which files
 #'   to sync to those starting with `prefix`.
 #' @param tar_project which targets project we're working on
+#' @param external_scores_path which external scores file to sync
 #' @importFrom aws.s3 s3sync get_bucket
 #' @importFrom here here
 #' @export
@@ -16,7 +17,8 @@ manage_S3_forecast_cache <- function(rel_cache_dir = NULL,
                                      direction = "sync",
                                      verbose = FALSE,
                                      prefix = Sys.getenv("AWS_S3_PREFIX", "exploration"),
-                                     tar_project = Sys.getenv("TAR_PROJECT", "")) {
+                                     tar_project = Sys.getenv("TAR_PROJECT", ""),
+                                     external_scores_path = Sys.getenv("EXTERNAL_SCORES_PATH", "")) {
   if (is.null(rel_cache_dir)) {
     cache_path <- tar_project
   } else {
@@ -24,28 +26,28 @@ manage_S3_forecast_cache <- function(rel_cache_dir = NULL,
   }
   if (!dir.exists(cache_path)) dir.create(cache_path)
 
-  full_prefix <- paste0(prefix, "/", tar_project, "/")
-  s3b <- get_bucket(bucket_name, prefix = full_prefix)
+  project_prefix <- paste0(prefix, "/", tar_project, "/")
+  s3b <- get_bucket(bucket_name, prefix = project_prefix)
   print(paste("local:", cache_path))
   print(paste("remote:", prefix))
   if (direction == "sync") {
     if (verbose) {
-      s3sync(cache_path, s3b, prefix = full_prefix)
+      s3sync(cache_path, s3b, prefix = project_prefix)
     } else {
       sink("/dev/null")
-      s3sync(cache_path, s3b, prefix = full_prefix, verbose = FALSE)
+      s3sync(cache_path, s3b, prefix = project_prefix, verbose = FALSE)
       sink()
     }
   } else {
     if (verbose) {
-      s3sync(cache_path, s3b, prefix = full_prefix, direction = direction)
+      s3sync(cache_path, s3b, prefix = project_prefix, direction = direction)
     } else {
       sink("/dev/null")
-      s3sync(cache_path, s3b, prefix = full_prefix, direction = direction, verbose = FALSE)
+      s3sync(cache_path, s3b, prefix = project_prefix, direction = direction, verbose = FALSE)
       sink()
     }
   }
-  s3b_free <- get_bucket(bucket_name, prefix = prefix, max = 1)
-  aws.s3::save_object(paste0(prefix, "/", external_scores_path), s3b_free)
+  s3b <- get_bucket(bucket_name, prefix = prefix, max = 1)
+  aws.s3::save_object(paste0(prefix, "/", external_scores_path), s3b)
   return(TRUE)
 }
