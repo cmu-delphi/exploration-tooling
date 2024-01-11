@@ -186,6 +186,7 @@ ensembles_and_scores_by_ahead <- tar_map(
 )
 ensembles_and_scores <- make_ensemble_targets_and_scores()
 # other sources
+external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
 external_names_and_scores <- make_external_names_and_scores()
 
 list(

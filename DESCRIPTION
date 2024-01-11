@@ -25,6 +25,7 @@ Imports:
     magrittr,
     parsnip (>= 1.0.0),
     purrr,
+    qs,
     recipes (>= 1.0.4),
     rlang,
     slider,
