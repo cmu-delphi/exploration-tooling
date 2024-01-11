@@ -24,26 +24,28 @@ manage_S3_forecast_cache <- function(rel_cache_dir = NULL,
   }
   if (!dir.exists(cache_path)) dir.create(cache_path)
 
-  prefix <- paste0(prefix, "/", tar_project, "/")
-  s3b <- get_bucket(bucket_name, prefix = prefix)
+  full_prefix <- paste0(prefix, "/", tar_project, "/")
+  s3b <- get_bucket(bucket_name, prefix = full_prefix)
   print(paste("local:", cache_path))
   print(paste("remote:", prefix))
   if (direction == "sync") {
     if (verbose) {
-      s3sync(cache_path, s3b, prefix = prefix)
+      s3sync(cache_path, s3b, prefix = full_prefix)
     } else {
       sink("/dev/null")
-      s3sync(cache_path, s3b, prefix = prefix, verbose = FALSE)
+      s3sync(cache_path, s3b, prefix = full_prefix, verbose = FALSE)
       sink()
     }
   } else {
     if (verbose) {
-      s3sync(cache_path, s3b, prefix = prefix, direction = direction)
+      s3sync(cache_path, s3b, prefix = full_prefix, direction = direction)
     } else {
       sink("/dev/null")
-      s3sync(cache_path, s3b, prefix = prefix, direction = direction, verbose = FALSE)
+      s3sync(cache_path, s3b, prefix = full_prefix, direction = direction, verbose = FALSE)
       sink()
     }
   }
+  s3b_free <- get_bucket(bucket_name, prefix = prefix, max = 1)
+  aws.s3::save_object(paste0(prefix, "/", external_scores_path), s3b_free)
   return(TRUE)
 }

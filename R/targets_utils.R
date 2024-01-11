@@ -271,7 +271,7 @@ make_external_names_and_scores <- function() {
       tar_target(
         name = external_scores_df,
         command = {
-          readRDS(external_scores_path) %>%
+          qs::qread(external_scores_path) %>%
             group_by(forecaster) %>%
             targets::tar_group()
         },
