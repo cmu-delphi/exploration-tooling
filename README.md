@@ -15,7 +15,7 @@ EPIDATR_USE_CACHE=true
 DEBUG_MODE=true
 USE_SHINY=false
 TAR_PROJECT=covid_hosp_explore
-EXTERNAL_SCORES_PATH=
+EXTERNAL_SCORES_PATH=legacy-exploration-scorecards.qs
 AWS_S3_PREFIX=exploration
 
 # Pull from the bucket
