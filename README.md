@@ -12,6 +12,9 @@ make install
 
 # Set your .Renviron settings.
 EPIDATR_USE_CACHE=true
+# not strictly necessary, but you probably want a long cache time, since this is for the historical data
+EPIDATR_CACHE_DIR=~/.epidatr-cache
+EPIDATR_CACHE_MAX_AGE_DAYS=42
 DEBUG_MODE=true
 USE_SHINY=false
 TAR_PROJECT=covid_hosp_explore
