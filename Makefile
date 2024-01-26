@@ -3,6 +3,8 @@ install:
 	Rscript -e "renv::restore()"
 	Rscript -e 'renv::install(".")'
 
+.PHONY: all run run-nohup sync download upload dashboard
+
 run:
 	Rscript run.R
 
@@ -11,6 +13,12 @@ run-nohup:
 
 sync:
 	Rscript sync.R
+
+download:
+	Rscript sync.R download
+
+upload:
+	Rscript sync.R upload
 
 dashboard:
 	Rscript dashboard.R
