@@ -6,19 +6,22 @@ install:
 .PHONY: all run run-nohup sync download upload dashboard
 
 run:
-	Rscript run.R
+	Rscript scripts/run.R
 
 run-nohup:
-	nohup Rscript run.R &
+	nohup Rscript scripts/run.R &
 
 sync:
-	Rscript sync.R
+	Rscript scripts/sync.R
 
 download:
-	Rscript sync.R download
+	Rscript scripts/sync.R download
 
 upload:
-	Rscript sync.R upload
+	Rscript scripts/sync.R upload
 
 dashboard:
-	Rscript dashboard.R
+	Rscript scripts/dashboard.R
+
+test-forecasters:
+	Rscript scripts/test-forecasters-data.R
