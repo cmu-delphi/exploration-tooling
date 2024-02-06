@@ -14,7 +14,7 @@ library(dplyr)
 library(magrittr)
 library(targets)
 
-source("extras/plotting.R")
+source("scripts/plotting.R")
 
 flu_forecasts <- bind_rows(
   tar_read("forecast_cheap.managerial.1"),

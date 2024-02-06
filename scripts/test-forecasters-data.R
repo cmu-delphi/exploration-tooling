@@ -1,3 +1,5 @@
+devtools::load_all()
+library(testthat)
 library(dplyr)
 
 # A list of forecasters to be tested. Add here to test new forecasters.

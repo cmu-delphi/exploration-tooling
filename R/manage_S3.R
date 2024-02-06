@@ -28,7 +28,7 @@ manage_S3_forecast_cache <- function(rel_cache_dir = NULL,
 
   project_prefix <- paste0(prefix, "/", tar_project, "/")
   s3b <- get_bucket(bucket_name, prefix = project_prefix)
-  print(paste("syncing:"))
+  print(paste0(direction, "ing:"))
   print(paste("local:", cache_path))
   print(paste("remote:", prefix))
   if (direction == "sync") {
@@ -49,7 +49,7 @@ manage_S3_forecast_cache <- function(rel_cache_dir = NULL,
     }
   }
   # sync external score file if it exists
-  if (external_scores_path != "") {
+  if ((is.null(external_scores_path)) && (external_scores_path != "") && external_scores_path != " ") {
     s3b <- get_bucket(bucket_name, prefix = prefix, max = 1)
     aws.s3::save_object(paste0(prefix, "/", external_scores_path), s3b)
   }

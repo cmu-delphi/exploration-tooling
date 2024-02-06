@@ -12,6 +12,9 @@ make install
 
 # Set your .Renviron settings.
 EPIDATR_USE_CACHE=true
+# not strictly necessary, but you probably want a long cache time, since this is for the historical data
+EPIDATR_CACHE_DIR=~/.epidatr-cache
+EPIDATR_CACHE_MAX_AGE_DAYS=42
 DEBUG_MODE=true
 USE_SHINY=false
 TAR_PROJECT=covid_hosp_explore
@@ -42,7 +45,7 @@ make run
 
 -   `run.R` and `Makefile`: the main entrypoint for all pipelines
 -   `R/`: R package code to be reused
--   `extras/`: plotting, code, and misc.
+-   `scripts/`: plotting, code, and misc.
 -   `tests/`: package tests
 -   `covid_hosp_explore/` and `covid_hosp_explore.R`: a `targets` project for exploring covid hospitalization forecasters
 -   `flu_hosp_explore/` and `flu_hosp_explore.R`: a `targets` project for exploring flu hospitalization forecasters
