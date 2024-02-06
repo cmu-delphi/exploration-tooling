@@ -14,10 +14,10 @@
 #' @param args_list the args list created by [`epipredict::arx_args_list`]
 #' @export
 sanitize_args_predictors_trainer <- function(epi_data,
-                                  outcome,
-                                  predictors,
-                                  trainer,
-                                  args_list) {
+                                             outcome,
+                                             predictors,
+                                             trainer,
+                                             args_list) {
   if (!inherits(args_list, c("arx_fcast", "alist"))) {
     cli::cli_abort("args_list was not created using `arx_args_list().")
   }

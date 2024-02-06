@@ -28,14 +28,14 @@
 #' @importFrom rlang !!
 #' @export
 slide_forecaster <- function(data,
-                            outcome,
-                            extra_sources = "",
-                            forecaster = scaled_pop,
-                            slide_training = 0,
-                            n_training_pad = 5,
-                            forecaster_args = list(),
-                            forecaster_args_names = list(),
-                            date_range_step_size = 1L) {
+                             outcome,
+                             extra_sources = "",
+                             forecaster = scaled_pop,
+                             slide_training = 0,
+                             n_training_pad = 5,
+                             forecaster_args = list(),
+                             forecaster_args_names = list(),
+                             date_range_step_size = 1L) {
   archive <- data
   if (length(forecaster_args) > 0) {
     names(forecaster_args) <- forecaster_args_names

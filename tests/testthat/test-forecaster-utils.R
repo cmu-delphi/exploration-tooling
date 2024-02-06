@@ -15,22 +15,22 @@ test_that("sanitize_args_predictors_trainer", {
 test_that("id generation works", {
   simple_ex <- list(dplyr::tribble(
     ~forecaster, ~trainer, ~ahead, ~pop_scaling, ~lags,
-    "scaled_pop", "linreg", 1, TRUE, c(1,2)
+    "scaled_pop", "linreg", 1, TRUE, c(1, 2)
   ), dplyr::tribble(
     ~forecaster, ~ahead, ~pop_scaling, ~trainer, ~lags,
-    "scaled_pop", 1, TRUE, "linreg", c(1,2)
+    "scaled_pop", 1, TRUE, "linreg", c(1, 2)
   ))
   same_ids <- map(simple_ex, add_id)
   # the order shouldn't matter for the names
   expect_equal(same_ids[[1]]$id, same_ids[[2]]$id)
   # the list version and the
-  list_ahead_ex <- list(forecaster = "scaled_pop", trainer = "linreg", ahead = 1, pop_scaling = TRUE, lags = c(1,2))
+  list_ahead_ex <- list(forecaster = "scaled_pop", trainer = "linreg", ahead = 1, pop_scaling = TRUE, lags = c(1, 2))
   expect_equal(single_id(list_ahead_ex), same_ids[[1]]$id)
   # order shouldn't matter for the list either
-  list_ahead_scrambled <- list(lags = c(1,2), trainer = "linreg", ahead = 1, pop_scaling = TRUE, forecaster = "scaled_pop")
+  list_ahead_scrambled <- list(lags = c(1, 2), trainer = "linreg", ahead = 1, pop_scaling = TRUE, forecaster = "scaled_pop")
   expect_equal(single_id(list_ahead_scrambled), single_id(list_ahead_ex))
   # the list version returns the same whether ahead is included
-  list_ex <- list(forecaster = "scaled_pop", trainer = "linreg", pop_scaling = TRUE, lags = c(1,2))
+  list_ex <- list(forecaster = "scaled_pop", trainer = "linreg", pop_scaling = TRUE, lags = c(1, 2))
   expect_equal(single_id(list_ahead_ex), single_id(list_ex, 1))
 })
 
@@ -75,7 +75,7 @@ test_that("ensemble_check catches missing examples", {
     ensemble = c("present", "absent"),
     forecasters = list(list(forecaster = "scaled_pop", trainer = "linreg"), list(forecaster = "scaled_pop", trainer = "linreg")),
     ensemble_params = list(list(someThing = TRUE), list(someThing = TRUE)),
-    ahead = c(1,3),
+    ahead = c(1, 3),
     forecaster_ids = list(list("unexpected.criminological.1", "vain.intrapsychic.5"), list("unexpected.criminological.5"))
   )
   expect_identical(ensemble_missing_forecasters(ensemble_ex, param_grid_ex), "unexpected.criminological.5")
