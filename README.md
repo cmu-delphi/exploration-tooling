@@ -45,7 +45,7 @@ make run
 
 -   `run.R` and `Makefile`: the main entrypoint for all pipelines
 -   `R/`: R package code to be reused
--   `extras/`: plotting, code, and misc.
+-   `scripts/`: plotting, code, and misc.
 -   `tests/`: package tests
 -   `covid_hosp_explore/` and `covid_hosp_explore.R`: a `targets` project for exploring covid hospitalization forecasters
 -   `flu_hosp_explore/` and `flu_hosp_explore.R`: a `targets` project for exploring flu hospitalization forecasters

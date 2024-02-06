@@ -1,7 +1,7 @@
 # Run the R scripts in the R/ folder with your custom functions:
 # tar_source()
 # where the forecasters and parameters are joined; see either the variable param_grid or `tar_read(forecasters)`
-source("extras/targets-common.R")
+source("scripts/targets-common.R")
 
 # Add custom parameter combinations in the list below.
 make_unique_grids <- function() {
