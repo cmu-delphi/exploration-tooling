@@ -266,12 +266,13 @@ make_ensemble_targets_and_scores <- function() {
 #' @export
 make_external_names_and_scores <- function() {
   external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
+  project_path <- Sys.getenv("TAR_PROJECT", "")
   if (external_scores_path != "") {
     external_names_and_scores <- list(
       tar_target(
         name = external_scores_df,
         command = {
-          qs::qread(external_scores_path) %>%
+          qs::qread(paste0(project_path, "/", external_scores_path)) %>%
             group_by(forecaster) %>%
             targets::tar_group()
         },
