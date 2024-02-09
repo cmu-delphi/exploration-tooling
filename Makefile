@@ -17,8 +17,12 @@ sync:
 download:
 	Rscript scripts/sync.R download
 
+pull: download
+
 upload:
 	Rscript scripts/sync.R upload
+
+push: upload
 
 dashboard:
 	Rscript scripts/dashboard.R

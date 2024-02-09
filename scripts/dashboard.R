@@ -1,5 +1,4 @@
 tar_project <- Sys.getenv("TAR_PROJECT", "covid_hosp_explore")
-external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
 debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
 use_shiny <- as.logical(Sys.getenv("USE_SHINY", FALSE))
 use_aws_s3_only <- as.logical(Sys.getenv("USE_AWS_S3_ONLY", FALSE))
