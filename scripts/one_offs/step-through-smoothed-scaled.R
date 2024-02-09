@@ -1,3 +1,5 @@
+# this script runs exactly one smoothed_scaled forecaster at the timepoint `forecast_as_of`.
+# the goal was to have a simple point comparison with our legacy forecasters
 library(dplyr)
 library(tidyr)
 library(parallel)

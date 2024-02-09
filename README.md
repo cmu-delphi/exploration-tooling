@@ -22,13 +22,20 @@ EXTERNAL_SCORES_PATH=legacy-exploration-scorecards.qs
 AWS_S3_PREFIX=exploration
 
 # Pull from the bucket
-make sync
+make download
+# or
+make pull
 
 # Run only the dashboard, to display results run on other machines
 make dashboard
 
 # Run the pipeline wrapper run.R.
 make run
+
+# upload/push to the bucket even if the results are incomplete
+make upload
+# or
+make push
 
 ```
 
