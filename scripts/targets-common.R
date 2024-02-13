@@ -46,7 +46,11 @@ tar_option_set(
   # Set default crew controller.
   # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
   resources = tar_resources(
-    crew = tar_resources_crew(controller = "main_controller", seconds_timeout = 24 * 60 * 60)
+    crew = tar_resources_crew(
+      controller = "main_controller",
+      seconds_timeout = 7 * 24 * 60 * 60,
+      launch_max = 20
+    )
   )
 )
 
