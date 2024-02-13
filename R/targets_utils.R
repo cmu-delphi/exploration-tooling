@@ -77,16 +77,30 @@ make_data_targets <- function() {
     tar_target(
       name = chng_archive_data_2022,
       command = {
-        epidatr::pub_covidcast(
+        start_time <- as.Date(training_time$from, format = "%Y%m%d")
+        stop_time <- Sys.Date()
+        half <- floor((stop_time - start_time)/2)
+        first_half <- epidatr::pub_covidcast(
           source = "chng",
           signals = chng_signal,
           geo_type = "state",
           time_type = "day",
           geo_values = "*",
           time_values = training_time,
-          issues = "*",
+          issues = epidatr::epirange(from = start_time, to = start_time + half),
           fetch_args = fetch_args
         )
+        second_half <- epidatr::pub_covidcast(
+          source = "chng",
+          signals = chng_signal,
+          geo_type = "state",
+          time_type = "day",
+          geo_values = "*",
+          time_values = training_time,
+          issues = epidatr::epirange(from = start_time + half+1, to = stop_time),
+          fetch_args = fetch_args
+        )
+        add_row(first_half, second_half)
       }
     ),
     tar_target(
