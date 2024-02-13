@@ -1,4 +1,5 @@
 tar_project <- Sys.getenv("TAR_PROJECT", "covid_hosp_explore")
+external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
 debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
 use_shiny <- as.logical(Sys.getenv("USE_SHINY", FALSE))
 use_aws_s3_only <- as.logical(Sys.getenv("USE_AWS_S3_ONLY", FALSE))
@@ -31,7 +32,7 @@ ensemble_options <- setNames(
 
 external_options <- unique(tar_read(external_names))
 EXTERNAL_PREFIX <- "[external] "
-if (!is.null(external_options) && length(external_options) > 0) {
+if (!is.null(external_options) && length(external_options) > 0 && external_scores_path != "") {
   external_options <- setNames(
     # File names
     # Get names of all branches of `external_scores` target by index. The way these

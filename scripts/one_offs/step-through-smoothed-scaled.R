@@ -8,7 +8,7 @@ library(epidatr)
 library(epiprocess)
 devtools::load_all(export_all = FALSE)
 
-forecast_as_of <- as.Date("2021-11-29")
+forecast_as_of <- as.Date("2021-11-16")
 
 data_start_date <- as.Date("2020-08-01")
 target_geo_values <- c(tolower(state.abb), "dc", "pr", "vi") # TODO consider national-level
