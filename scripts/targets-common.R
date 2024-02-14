@@ -20,7 +20,8 @@ suppressPackageStartupMessages({
 # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
 main_controller <- crew_controller_local(
   name = "main_controller",
-  workers = parallel::detectCores() - 1L
+  workers = parallel::detectCores() - 1L,
+  launch_max = 20
 )
 serial_controller <- crew_controller_local(
   name = "serial_controller",
@@ -48,8 +49,7 @@ tar_option_set(
   resources = tar_resources(
     crew = tar_resources_crew(
       controller = "main_controller",
-      seconds_timeout = 7 * 24 * 60 * 60,
-      launch_max = 20
+      seconds_timeout = 7 * 24 * 60 * 60
     )
   )
 )
