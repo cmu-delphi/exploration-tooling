@@ -262,7 +262,7 @@ shinyApp(
         # Use scatterplot or lines depending on the x var.
         {
           if (input$x_var %in% c(input$facet_vars, "geo_value", "forecaster", "ahead")) {
-            . + geom_point(aes(size = n / 100)) + expand_limits(size = 0)
+            . + geom_point(aes(size = n / 500)) + expand_limits(size = 0) + geom_line()
           } else {
             . + geom_line()
           }
