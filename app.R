@@ -261,6 +261,9 @@ shinyApp(
         # Use scatterplot or lines depending on the x var.
         {
           if (input$x_var %in% c(input$facet_vars, "geo_value", "forecaster", "ahead")) {
+            # Fudge factors for scaling in different situations. Modify here
+            # for different scaling behavior. A higher number makes all plot
+            # points smaller.
             scale_factor_fcast <- length(input$selected_forecasters) * 2
             scale_factor_facet <- length(input$facet_vars) * 5
             scale_factor_geo <- ("geo_value" %in% input$facet_vars) * (60 - length(input$excluded_geo_values))
