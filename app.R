@@ -286,6 +286,10 @@ shinyApp(
         } else {
           facet_grid(as.formula(paste0(input$facet_vars[[1L]], " ~ ", paste(collapse = " + ", input$facet_vars[-1L]))), scales = scale_type)
         }) %>>%
+        # Make subplots close together
+        `+`(
+          theme(panel.spacing.x = unit(1, "mm"), panel.spacing.y = unit(0.5, "mm"))
+        ) %>>%
         ggplotly() %>>% {
           inject(layout(., hovermode = "x unified", legend = list(orientation = "h", title = list(text = "forecaster")), xaxis = x_tick_angle, !!!facet_x_tick_angles))
         }
