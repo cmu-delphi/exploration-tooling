@@ -83,7 +83,6 @@ prepare_ensemble_table <- function(selected_forecasters) {
     mutate(forecaster_ids = paste(forecaster_ids, sep = ",")) %>%
     select(name, everything()) %>%
     select(-forecasters)
-  print(selected_forecasters)
   forecasters$present <- map_vec(paste0("ensemble_score_", forecasters$name), \(x) x %in% selected_forecasters)
   return(forecasters)
 }
