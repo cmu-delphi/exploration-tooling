@@ -83,7 +83,6 @@ prepare_ensemble_table <- function(selected_forecasters) {
     mutate(forecaster_ids = paste(forecaster_ids, sep = ",")) %>%
     select(name, everything()) %>%
     select(-forecasters)
-  print(selected_forecasters)
   forecasters$present <- map_vec(paste0("ensemble_score_", forecasters$name), \(x) x %in% selected_forecasters)
   return(forecasters)
 }
@@ -262,7 +261,22 @@ shinyApp(
         # Use scatterplot or lines depending on the x var.
         {
           if (input$x_var %in% c(input$facet_vars, "geo_value", "forecaster", "ahead")) {
-            . + geom_point(aes(size = n / 100)) + expand_limits(size = 0)
+            # Fudge factors for scaling in different situations. Modify here
+            # for different scaling behavior. A higher number makes all plot
+            # points smaller.
+            scale_factor_fcast <- length(input$selected_forecasters) * 2
+            scale_factor_facet <- length(input$facet_vars) * 5
+            scale_factor_geo <- ("geo_value" %in% input$facet_vars) * (60 - length(input$excluded_geo_values))
+            scale_factor_geo_x <- ("geo_value" %in% input$x_var) * 10
+            scale_factor_facet_fcast <- ifelse("forecaster" %in% input$facet_vars, length(input$selected_forecasters), 0) * 5
+            scale_factor <- scale_factor_geo + scale_factor_geo_x + scale_factor_fcast + scale_factor_facet + scale_factor_facet_fcast
+
+            max_size <- 5
+            dynamic_size <- ((0.97 ^ scale_factor) + 0.2) * max_size
+
+            . + geom_point(aes(size = n)) +
+              scale_size_area(max_size = dynamic_size) +
+              expand_limits(size = 0) + geom_line()
           } else {
             . + geom_line()
           }
@@ -275,6 +289,10 @@ shinyApp(
         } else {
           facet_grid(as.formula(paste0(input$facet_vars[[1L]], " ~ ", paste(collapse = " + ", input$facet_vars[-1L]))), scales = scale_type)
         }) %>>%
+        # Make subplots close together
+        `+`(
+          theme(panel.spacing.x = unit(1, "mm"), panel.spacing.y = unit(0.5, "mm"))
+        ) %>>%
         ggplotly() %>>% {
           inject(layout(., hovermode = "x unified", legend = list(orientation = "h", title = list(text = "forecaster")), xaxis = x_tick_angle, !!!facet_x_tick_angles))
         }
