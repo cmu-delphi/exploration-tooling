@@ -57,7 +57,7 @@ load_forecast_data <- memoise::memoise(load_forecast_data_raw, cache = cache)
 prepare_forecaster_table <- function(selected_forecasters) {
   forecasters <- tar_read(forecaster_params_grid) %>%
     select(-id) %>%
-    mutate(across(where(is.list), map, `%||%`, c(0, 7, 14))) %>%
+    mutate(across(where(is.list), function(x) { map(x, `%||%`, c(0, 7, 14)) })) %>%
     mutate(lags = paste(lags, sep = ",")) %>%
     group_by(parent_id) %>%
     mutate(ahead = toString(unique(ahead))) %>%
