@@ -165,7 +165,7 @@ shinyApp(
             choices = 1:28,
             multiple = TRUE
           ),
-          actionButton("submit_exclusions", "Apply exclusions")
+          actionButton("apply_exclusions", "Apply exclusions")
         ),
         mainPanel(
           verticalLayout(
@@ -183,11 +183,11 @@ shinyApp(
   },
   server = function(input, output, session) {
     EXCLUDED_GEO_VALUES <- reactive({
-      input$submit_exclusions # Take a dependency on
+      input$apply_exclusions # Take a dependency on
       isolate(input$excluded_geo_values) # Prevent from taking a dependency on
     })
     EXCLUDED_AHEADS <- reactive({
-      input$submit_exclusions # Take a dependency on
+      input$apply_exclusions # Take a dependency on
       isolate(input$excluded_aheads) # Prevent from taking a dependency on
     })
     FILTERED_SCORECARDS_REACTIVE <- reactive({
