@@ -164,7 +164,8 @@ shinyApp(
             "Exclude aheads:",
             choices = 1:28,
             multiple = TRUE
-          )
+          ),
+          actionButton("submit_exclusions", "Apply exclusions")
         ),
         mainPanel(
           verticalLayout(
@@ -181,7 +182,15 @@ shinyApp(
     )
   },
   server = function(input, output, session) {
-    filtered_scorecards_reactive <- reactive({
+    EXCLUDED_GEO_VALUES <- reactive({
+      input$submit_exclusions # Take a dependency on
+      isolate(input$excluded_geo_values) # Prevent from taking a dependency on
+    })
+    EXCLUDED_AHEADS <- reactive({
+      input$submit_exclusions # Take a dependency on
+      isolate(input$excluded_aheads) # Prevent from taking a dependency on
+    })
+    FILTERED_SCORECARDS_REACTIVE <- reactive({
       agg_forecasters <- unique(c(input$selected_forecasters, input$baseline))
       if (length(agg_forecasters) == 0 ||
         all(agg_forecasters == "" | is.null(agg_forecasters) | is.na(agg_forecasters))
@@ -194,14 +203,15 @@ shinyApp(
           filter(
             .data$forecast_date %>>% between(.env$input$selected_forecast_date_range[[1L]], .env$input$selected_forecast_date_range[[2L]]),
             .data$target_end_date %>>% between(.env$input$selected_target_end_date_range[[1L]], .env$input$selected_target_end_date_range[[2L]]),
-            !.data$geo_value %in% c(.env$input$excluded_geo_values, "us"),
-            !.data$ahead %in% .env$input$excluded_aheads
+            !.data$geo_value %in% c(EXCLUDED_GEO_VALUES(), "us"),
+            !.data$ahead %in% EXCLUDED_AHEADS()
           )
       }) %>%
         bind_rows()
     })
+
     output$main_plot <- renderPlotly({
-      input_df <- filtered_scorecards_reactive()
+      input_df <- FILTERED_SCORECARDS_REACTIVE()
       if (nrow(input_df) == 0) {
         return()
       }
@@ -266,7 +276,7 @@ shinyApp(
             # points smaller.
             scale_factor_fcast <- length(input$selected_forecasters) * 2
             scale_factor_facet <- length(input$facet_vars) * 5
-            scale_factor_geo <- ("geo_value" %in% input$facet_vars) * (60 - length(input$excluded_geo_values))
+            scale_factor_geo <- ("geo_value" %in% input$facet_vars) * (60 - length(EXCLUDED_GEO_VALUES()))
             scale_factor_geo_x <- ("geo_value" %in% input$x_var) * 10
             scale_factor_facet_fcast <- ifelse("forecaster" %in% input$facet_vars, length(input$selected_forecasters), 0) * 5
             scale_factor <- scale_factor_geo + scale_factor_geo_x + scale_factor_fcast + scale_factor_facet + scale_factor_facet_fcast
