@@ -6,11 +6,10 @@ The repo is also structured as an R package, which means that it is easy to shar
 
 ## Usage
 
-```sh
-# Install renv and R dependencies.
-make install
+Define run parameters:
 
-# Set your .Renviron settings.
+```sh
+# Save to your `.Renviron` file:
 EPIDATR_USE_CACHE=true
 # not strictly necessary, but you probably want a long cache time, since this is for the historical data
 EPIDATR_CACHE_DIR=~/.epidatr-cache
@@ -20,23 +19,6 @@ USE_SHINY=false
 TAR_PROJECT=covid_hosp_explore
 EXTERNAL_SCORES_PATH=legacy-exploration-scorecards.qs
 AWS_S3_PREFIX=exploration
-
-# Pull from the bucket
-make download
-# or
-make pull
-
-# Run only the dashboard, to display results run on other machines
-make dashboard
-
-# Run the pipeline wrapper run.R.
-make run
-
-# upload/push to the bucket even if the results are incomplete
-make upload
-# or
-make push
-
 ```
 
 -   `EPIDATR_USE_CACHE` controls whether `epidatr` functions use the cache.
@@ -45,6 +27,31 @@ make push
 -   `TAR_PROJECT` controls which `targets` project is run by `run.R`.
 -   `EXTERNAL_SCORES_PATH` controls where external scores are loaded from. If not set, external scores are not used.
 -   `AWS_S3_PREFIX` controls the prefix to use in the AWS S3 bucket (a prefix is a pseudo-directory in a bucket).
+
+Run the pipeline using:
+
+```sh
+# Install renv and R dependencies.
+make install
+
+# Pull pre-scored forecasts from the AWS bucket
+make download
+# or
+make pull
+
+# Run only the dashboard, to display results run on other machines
+make dashboard
+
+# Run the pipeline using the helper script `run.R`
+make run
+# or in the background
+make run-nohup
+
+# Upload/push complete or partial results to the AWS bucket
+make upload
+# or
+make push
+```
 
 ## Development
 
