@@ -79,7 +79,7 @@ make_data_targets <- function() {
       command = {
         start_time <- as.Date(training_time$from, format = "%Y%m%d")
         stop_time <- Sys.Date()
-        half <- floor((stop_time - start_time)/2)
+        half <- floor((stop_time - start_time) / 2)
         first_half <- epidatr::pub_covidcast(
           source = "chng",
           signals = chng_signal,
@@ -97,7 +97,7 @@ make_data_targets <- function() {
           time_type = "day",
           geo_values = "*",
           time_values = training_time,
-          issues = epidatr::epirange(from = start_time + half+1, to = stop_time),
+          issues = epidatr::epirange(from = start_time + half + 1, to = stop_time),
           fetch_args = fetch_args
         )
         add_row(first_half, second_half)
@@ -125,7 +125,6 @@ make_data_targets <- function() {
             compactify = TRUE
           )
         epix_merge(hhs_archive_data_2022, chng_archive_data_2022, sync = "locf")$DT %>%
-          drop_na() %>%
           filter(!geo_value %in% c("as", "pr", "vi", "gu", "mp")) %>%
           epiprocess::as_epi_archive()
       }

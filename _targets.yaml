@@ -1,7 +1,7 @@
 covid_hosp_explore:
   script: scripts/covid_hosp_explore.R
   store: covid_hosp_explore
-  use_crew: yes
+  use_crew: no
 flu_hosp_explore:
   script: scripts/flu_hosp_explore.R
   store: flu_hosp_explore

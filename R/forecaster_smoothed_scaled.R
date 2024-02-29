@@ -62,14 +62,14 @@ smoothed_scaled <- function(epi_data,
                             ...) {
   # perform any preprocessing not supported by epipredict
   # this is a temp fix until a real fix gets put into epipredict
-  epi_data <- clear_lastminute_nas(epi_data)
+  epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
   # One that every forecaster will need to handle: how to manage max(time_value)
   # that's older than the `as_of` date
   c(epi_data, effective_ahead) %<-% extend_ahead(epi_data, ahead)
   # see latency_adjusting for other examples
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
-  if (!confirm_sufficient_data(epi_data, effective_ahead, args_input)) {
+  if (!confirm_sufficient_data(epi_data, effective_ahead, args_input, outcome, extra_sources)) {
     null_result <- epi_data[0L, c("geo_value", attr(epi_data, "metadata", exact = TRUE)[["other_keys"]])] %>%
       mutate(
         forecast_date = epi_data$time_value[0],

@@ -1,6 +1,6 @@
 Package: epieval
 Title: Evaluating Timeseries Forecasting on Archival Data
-Version: 0.2.0
+Version: 0.3.0
 Date: 2023-09-28
 Authors@R:
     c(
@@ -49,4 +49,4 @@ Remotes:
 Encoding: UTF-8
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.1

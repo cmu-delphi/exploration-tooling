@@ -15,7 +15,7 @@ flatline_fc <- function(epi_data,
                         ...) {
   # perform any preprocessing not supported by epipredict
   # this is a temp fix until a real fix gets put into epipredict
-  epi_data <- clear_lastminute_nas(epi_data)
+  epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
   # one that every forecaster will need to handle: how to manage max(time_value)
   # that's older than the `as_of` date
   epidataAhead <- extend_ahead(epi_data, ahead)
@@ -25,7 +25,7 @@ flatline_fc <- function(epi_data,
   effective_ahead <- epidataAhead[[2]]
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
-  if (!confirm_sufficient_data(epi_data, effective_ahead, args_input)) {
+  if (!confirm_sufficient_data(epi_data, effective_ahead, args_input, outcome, extra_sources)) {
     null_result <- tibble(
       geo_value = character(),
       forecast_date = lubridate::Date(),
@@ -38,8 +38,11 @@ flatline_fc <- function(epi_data,
   args_input[["ahead"]] <- effective_ahead
   args_input[["quantile_levels"]] <- quantile_levels
   args_list <- do.call(flatline_args_list, args_input)
-  # if you want to ignore extra_sources, setting predictors is the way to do it
-  predictors <- c(outcome, extra_sources)
+  # since this is a flatline forecaster, it can't use other predictors, so we remove them
+  extraneous_sources <- names(epi_data) %>% setdiff(c("geo_value", "time_value", outcome, attributes(epi_data)$metadata$other_keys))
+  epi_data <- epi_data %>% select(-all_of(extraneous_sources))
+  # fixing any weirdness in the args_list and trainer
+  predictors <- c(outcome)
   c(args_list, predictors, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, NULL, args_list)
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
