@@ -2475,16 +2475,6 @@
       ],
       "Hash": "c19df082ba346b0ffa6f833e92de34d1"
     },
-    "secretbase": {
-      "Package": "secretbase",
-      "Version": "0.3.0",
-      "Source": "Repository",
-      "Repository": "RSPM",
-      "Requirements": [
-        "R"
-      ],
-      "Hash": "7b124d44ee9f4a29a67221bb0772064c"
-    },
     "sessioninfo": {
       "Package": "sessioninfo",
       "Version": "1.2.2",
@@ -2729,7 +2719,7 @@
     },
     "targets": {
       "Package": "targets",
-      "Version": "1.5.1",
+      "Version": "1.3.2",
       "Source": "Repository",
       "Repository": "RSPM",
       "Requirements": [
@@ -2743,9 +2733,7 @@
         "digest",
         "igraph",
         "knitr",
-        "ps",
         "rlang",
-        "secretbase",
         "stats",
         "tibble",
         "tidyselect",
@@ -2754,7 +2742,7 @@
         "vctrs",
         "yaml"
       ],
-      "Hash": "782fd3684f0e7b9d2c7229fee21d01c0"
+      "Hash": "eea57f5c8154c12cf13467c6ffb919de"
     },
     "testthat": {
       "Package": "testthat",
