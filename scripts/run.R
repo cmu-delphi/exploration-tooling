@@ -62,9 +62,9 @@ if (!dir.exists(store_dir)) dir.create(store_dir)
 
 tar_manifest()
 if (debug_mode) {
-  tar_make(callr_function = NULL)
+  tar_make(callr_function = NULL, use_crew = FALSE)
 } else {
-  tar_make()
+  tar_make(use_crew = TRUE)
 }
 
 if (use_shiny) {

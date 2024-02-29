@@ -27,6 +27,12 @@ serial_controller <- crew_controller_local(
   name = "serial_controller",
   workers = 1L
 )
+debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", "FALSE"))
+if (debug_mode) {
+  controllers <- crew_controller_group(serial_controller, main_controller)
+} else {
+  controllers <- crew_controller_group(main_controller, serial_controller)
+}
 
 tar_option_set(
   packages = c(
@@ -43,7 +49,7 @@ tar_option_set(
   ), # packages that your targets need to run
   imports = c("epieval"),
   format = "qs", # Optionally set the default storage format. qs is fast.
-  controller = crew_controller_group(main_controller, serial_controller),
+  controller = controllers,
   # Set default crew controller.
   # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
   resources = tar_resources(
