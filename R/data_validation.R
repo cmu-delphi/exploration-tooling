@@ -49,6 +49,8 @@ sanitize_args_predictors_trainer <- function(epi_data,
 #' @param args_input the input as supplied to `slide_forecaster`; lags is the
 #'   important argument, which may or may not be defined, with the default
 #'   coming from `arx_args_list`
+#' @param outcome the outcome column
+#' @param extra_sources any non-outcome predictor columns
 #' @param buffer how many training data to insist on having (e.g. if `buffer=1`,
 #'   this trains on one sample; the default is set so that `linear_reg` isn't
 #'   rank deficient)
