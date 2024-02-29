@@ -22,6 +22,10 @@ confirm_sufficient_data(
 important argument, which may or may not be defined, with the default
 coming from \code{arx_args_list}}
 
+\item{outcome}{the outcome column}
+
+\item{extra_sources}{any non-outcome predictor columns}
+
 \item{buffer}{how many training data to insist on having (e.g. if \code{buffer=1},
 this trains on one sample; the default is set so that \code{linear_reg} isn't
 rank deficient)}
