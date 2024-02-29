@@ -57,7 +57,7 @@ load_forecast_data <- memoise::memoise(load_forecast_data_raw, cache = cache)
 prepare_forecaster_table <- function(selected_forecasters) {
   forecasters <- tar_read(forecaster_params_grid) %>%
     select(-id) %>%
-    mutate(across(where(is.list), map, `%||%`, c(0, 7, 14))) %>%
+    mutate(across(where(is.list), function(x) { map(x, `%||%`, c(0, 7, 14)) })) %>%
     mutate(lags = paste(lags, sep = ",")) %>%
     group_by(parent_id) %>%
     mutate(ahead = toString(unique(ahead))) %>%
@@ -83,7 +83,6 @@ prepare_ensemble_table <- function(selected_forecasters) {
     mutate(forecaster_ids = paste(forecaster_ids, sep = ",")) %>%
     select(name, everything()) %>%
     select(-forecasters)
-  print(selected_forecasters)
   forecasters$present <- map_vec(paste0("ensemble_score_", forecasters$name), \(x) x %in% selected_forecasters)
   return(forecasters)
 }
@@ -165,7 +164,8 @@ shinyApp(
             "Exclude aheads:",
             choices = 1:28,
             multiple = TRUE
-          )
+          ),
+          actionButton("apply_exclusions", "Apply exclusions")
         ),
         mainPanel(
           verticalLayout(
@@ -182,7 +182,15 @@ shinyApp(
     )
   },
   server = function(input, output, session) {
-    filtered_scorecards_reactive <- reactive({
+    EXCLUDED_GEO_VALUES <- reactive({
+      input$apply_exclusions # Take a dependency on
+      isolate(input$excluded_geo_values) # Prevent from taking a dependency on
+    })
+    EXCLUDED_AHEADS <- reactive({
+      input$apply_exclusions # Take a dependency on
+      isolate(input$excluded_aheads) # Prevent from taking a dependency on
+    })
+    FILTERED_SCORECARDS_REACTIVE <- reactive({
       agg_forecasters <- unique(c(input$selected_forecasters, input$baseline))
       if (length(agg_forecasters) == 0 ||
         all(agg_forecasters == "" | is.null(agg_forecasters) | is.na(agg_forecasters))
@@ -195,14 +203,15 @@ shinyApp(
           filter(
             .data$forecast_date %>>% between(.env$input$selected_forecast_date_range[[1L]], .env$input$selected_forecast_date_range[[2L]]),
             .data$target_end_date %>>% between(.env$input$selected_target_end_date_range[[1L]], .env$input$selected_target_end_date_range[[2L]]),
-            !.data$geo_value %in% c(.env$input$excluded_geo_values, "us"),
-            !.data$ahead %in% .env$input$excluded_aheads
+            !.data$geo_value %in% c(EXCLUDED_GEO_VALUES(), "us"),
+            !.data$ahead %in% EXCLUDED_AHEADS()
           )
       }) %>%
         bind_rows()
     })
+
     output$main_plot <- renderPlotly({
-      input_df <- filtered_scorecards_reactive()
+      input_df <- FILTERED_SCORECARDS_REACTIVE()
       if (nrow(input_df) == 0) {
         return()
       }
@@ -262,7 +271,22 @@ shinyApp(
         # Use scatterplot or lines depending on the x var.
         {
           if (input$x_var %in% c(input$facet_vars, "geo_value", "forecaster", "ahead")) {
-            . + geom_point(aes(size = n / 100)) + expand_limits(size = 0)
+            # Fudge factors for scaling in different situations. Modify here
+            # for different scaling behavior. A higher number makes all plot
+            # points smaller.
+            scale_factor_fcast <- length(input$selected_forecasters) * 2
+            scale_factor_facet <- length(input$facet_vars) * 5
+            scale_factor_geo <- ("geo_value" %in% input$facet_vars) * (60 - length(EXCLUDED_GEO_VALUES()))
+            scale_factor_geo_x <- ("geo_value" %in% input$x_var) * 10
+            scale_factor_facet_fcast <- ifelse("forecaster" %in% input$facet_vars, length(input$selected_forecasters), 0) * 5
+            scale_factor <- scale_factor_geo + scale_factor_geo_x + scale_factor_fcast + scale_factor_facet + scale_factor_facet_fcast
+
+            max_size <- 5
+            dynamic_size <- ((0.97 ^ scale_factor) + 0.2) * max_size
+
+            . + geom_point(aes(size = n)) +
+              scale_size_area(max_size = dynamic_size) +
+              expand_limits(size = 0) + geom_line()
           } else {
             . + geom_line()
           }
@@ -275,6 +299,10 @@ shinyApp(
         } else {
           facet_grid(as.formula(paste0(input$facet_vars[[1L]], " ~ ", paste(collapse = " + ", input$facet_vars[-1L]))), scales = scale_type)
         }) %>>%
+        # Make subplots close together
+        `+`(
+          theme(panel.spacing.x = unit(1, "mm"), panel.spacing.y = unit(0.5, "mm"))
+        ) %>>%
         ggplotly() %>>% {
           inject(layout(., hovermode = "x unified", legend = list(orientation = "h", title = list(text = "forecaster")), xaxis = x_tick_angle, !!!facet_x_tick_angles))
         }
