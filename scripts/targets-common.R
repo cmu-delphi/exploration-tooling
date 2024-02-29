@@ -29,7 +29,7 @@ serial_controller <- crew_controller_local(
 )
 debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", "FALSE"))
 if (debug_mode) {
-  controllers <- crew_controller_group(serial_controller, main_controller)
+  controllers <- crew_controller_group(serial_controller)
 } else {
   controllers <- crew_controller_group(main_controller, serial_controller)
 }
