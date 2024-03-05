@@ -68,5 +68,5 @@ if (debug_mode) {
 }
 
 if (use_shiny) {
-  source("dashboard.R")
+  source("scripts/dashboard.R")
 }
