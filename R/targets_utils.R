@@ -216,7 +216,7 @@ make_forecasts_and_scores_by_ahead <- function() {
         run_evaluation_measure(
           data = forecast_by_ahead,
           evaluation_data = hhs_evaluation_data,
-          measure = list(
+          measures = list(
             wis = weighted_interval_score,
             ae = absolute_error,
             cov_80 = interval_coverage(0.8)
