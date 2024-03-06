@@ -21,6 +21,7 @@ suppressPackageStartupMessages({
 main_controller <- crew_controller_local(
   name = "main_controller",
   workers = parallel::detectCores() - 1L,
+  seconds_idle = 60L,
   tasks_max = 1L
 )
 serial_controller <- crew_controller_local(
