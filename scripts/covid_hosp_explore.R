@@ -8,15 +8,8 @@ make_unique_grids <- function() {
   list(
     tidyr::expand_grid(
       forecaster = "scaled_pop",
-      trainer = c("linreg", "quantreg"),
+      trainer = c("linreg"),
       ahead = c(1:7, 14, 21, 28),
-      pop_scaling = TRUE
-    ),
-    tidyr::expand_grid(
-      forecaster = "scaled_pop",
-      trainer = c("linreg", "quantreg"),
-      ahead = c(1:7, 14, 21, 28),
-      lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14)),
       pop_scaling = TRUE
     ),
     tidyr::expand_grid(
@@ -26,11 +19,13 @@ make_unique_grids <- function() {
       #
       lags = list(
         #        smoothed,      sd,          smoothed,   sd
-        list(c(0, 3, 5, 7, 14), c(0)),
-        list(c(0, 7, 14, 21, 28), c(0)),
-        list(c(0, 2, 4, 7, 14, 21, 28), c(0))
+        list(c(0, 7, 14, 21, 28), c(0))
       ),
       pop_scaling = TRUE
+    ),
+    tidyr::expand_grid(
+      forecaster = "flatline_fc",
+      ahead = c(1:7, 14, 21, 28)
     )
   )
 }
@@ -73,7 +68,6 @@ make_unique_ensemble_grid <- function() {
 
 # TODO: Find a way to clean all this stuff about param grids up.
 param_grid <- append(
-  make_shared_grids(),
   make_unique_grids()
 ) %>%
   map(add_id) %>%
