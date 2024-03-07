@@ -22,7 +22,8 @@ main_controller <- crew_controller_local(
   name = "main_controller",
   workers = parallel::detectCores() - 1L,
   seconds_idle = 60L,
-  tasks_max = 1L
+  tasks_max = 1L,
+  launch_max = 10000L
 )
 serial_controller <- crew_controller_local(
   name = "serial_controller",
