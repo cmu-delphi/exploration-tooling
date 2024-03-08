@@ -140,7 +140,7 @@ ensembles_params_grid_target <- list(
 hhs_signal <- "confirmed_admissions_covid_1d"
 chng_signal <- "smoothed_adj_outpatient_covid"
 eval_time <- epidatr::epirange(from = "2020-01-01", to = "2024-01-01")
-training_time <- epidatr::epirange(from = "2020-08-03", to = "2023-12-18")
+training_time <- epidatr::epirange(from = "2020-08-01", to = "2023-12-18")
 fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 400)
 data_targets <- make_data_targets()
 
