@@ -27,7 +27,10 @@ main_controller <- crew_controller_local(
 )
 serial_controller <- crew_controller_local(
   name = "serial_controller",
-  workers = 1L
+  workers = 1L,
+  seconds_idle = 60L,
+  tasks_max = 1L,
+  launch_max = 10000L
 )
 debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", "FALSE"))
 if (debug_mode) {
