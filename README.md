@@ -14,7 +14,7 @@ EPIDATR_USE_CACHE=true
 # not strictly necessary, but you probably want a long cache time, since this is for the historical data
 EPIDATR_CACHE_DIR=~/.epidatr-cache
 EPIDATR_CACHE_MAX_AGE_DAYS=42
-DEBUG_MODE=true
+DEBUG_MODE=false
 USE_SHINY=false
 TAR_PROJECT=covid_hosp_explore
 EXTERNAL_SCORES_PATH=legacy-exploration-scorecards.qs
@@ -53,6 +53,13 @@ make upload
 make push
 ```
 
+-   `EPIDATR_USE_CACHE` controls whether `epidatr` functions use the cache.
+-   `DEBUG_MODE` controls whether `targets::tar_make` is run with the `callr_function=NULL`, which allows for `browser()`. It also disables parallelization. If you are developing, it is recommended to set this to true. If you are just running, it is recommended to set it to false.
+-   `USE_SHINY` controls whether we start a Shiny server after producing the targets.
+-   `TAR_PROJECT` controls which `targets` project is run by `run.R`.
+-   `EXTERNAL_SCORES_PATH` controls where external scores are loaded from. If not set, external scores are not used.
+-   `AWS_S3_PREFIX` controls the prefix to use in the AWS S3 bucket (a prefix is a pseudo-directory in a bucket).
+
 ## Development
 
 ### Directory Layout
@@ -71,6 +78,15 @@ make push
 
 When running a pipeline with parallelization, make sure to install the package via `renv::install(".")` and not just via `devtools::load_all()`.
 It is safest to develop with parallelism disabled.
+
+### Debugging
+
+Targets in parallel mode has two problems when it comes to debugging: 1) it ignores browsers, so you can't step through functions and 2) reloading any changes requires both `renv::install(".")` and restarting R.
+
+To debug a target named `yourTarget`:
+1. set `DEBUG_MODE=true`
+2. insert a browser in the relevant function
+3. run an R session, and call `tar_make(yourTarget)`
 
 ### Pipeline Design
 

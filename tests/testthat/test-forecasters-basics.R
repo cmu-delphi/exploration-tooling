@@ -5,7 +5,6 @@ forecasters <- list(
   list("flatline_fc", flatline_fc),
   list("smoothed_scaled", smoothed_scaled, lags = list(c(0, 2, 5), c(0)))
 )
-forecaster <- forecasters[[1]]
 for (forecaster in forecasters) {
   test_that(paste(forecaster[[1]], "gets the date and columns right"), {
     jhu <- epipredict::case_death_rate_subset %>%
@@ -71,6 +70,22 @@ for (forecaster in forecasters) {
     expect_equal(nas_forecast$target_end_date %>% unique(), as.Date("2022-01-06"))
     # every state and quantile has a prediction
     expect_equal(nrow(nas_forecast), length(covidhub_probs()) * length(jhu$geo_value %>% unique()))
+  })
+
+  test_that(paste(forecaster[[1]], "handles unused extra sources with NAs"), {
+    # if there is an extra source we aren't using, we should ignore any NA's it has
+    jhu <- epipredict::case_death_rate_subset %>%
+      dplyr::filter(time_value >= as.Date("2021-12-01"))
+    jhu_nad <- jhu %>%
+      as_tibble() %>%
+      mutate(some_other_predictor = NA) %>%
+      epiprocess::as_epi_df()
+    attributes(jhu_nad)$metadata$as_of <- max(jhu$time_value) + 3
+    # should run fine
+    expect_no_error(nas_forecast <- forecaster[[2]](jhu_nad, "case_rate", c("death_rate")))
+    expect_equal(nas_forecast$forecast_date %>% unique(), max(jhu$time_value) + 3)
+    # there's an actual full set of predictions
+    expect_equal(nrow(nas_forecast), 1288)
   })
 
   #################################

@@ -158,13 +158,18 @@ id_ahead_ensemble_grid <- function(ensemble_grid, aheads, n_adj = 2) {
 #' @description
 #' just delete rows that have NA's in them. eventually epipredict should directly handle this so we don't have to
 #' @param epi_data the epi_df to be fixed
+#' @param outcome the column name containing the target variable
+#' @param extra_sources any other columns used as predictors
 #' @importFrom tidyr drop_na
 #' @importFrom epiprocess as_epi_df
 #' @export
-clear_lastminute_nas <- function(epi_data) {
+clear_lastminute_nas <- function(epi_data, outcome, extra_sources) {
   meta_data <- attr(epi_data, "metadata")
+  if (extra_sources == c("")) {
+    extra_sources <- character(0L)
+  }
   epi_data %<>%
-    drop_na() %>%
+    drop_na(c(!!outcome, !!!extra_sources)) %>%
     as_epi_df()
   attr(epi_data, "metadata") <- meta_data
   return(epi_data)

@@ -4,10 +4,14 @@
 \alias{clear_lastminute_nas}
 \title{temporary patch that pulls \code{NA}'s out of an epi_df}
 \usage{
-clear_lastminute_nas(epi_data)
+clear_lastminute_nas(epi_data, outcome, extra_sources)
 }
 \arguments{
 \item{epi_data}{the epi_df to be fixed}
+
+\item{outcome}{the column name containing the target variable}
+
+\item{extra_sources}{any other columns used as predictors}
 }
 \description{
 just delete rows that have NA's in them. eventually epipredict should directly handle this so we don't have to

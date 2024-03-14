@@ -21,12 +21,23 @@ suppressPackageStartupMessages({
 main_controller <- crew_controller_local(
   name = "main_controller",
   workers = parallel::detectCores() - 1L,
-  launch_max = 20
+  seconds_idle = 60L,
+  tasks_max = 1L,
+  launch_max = 10000L
 )
 serial_controller <- crew_controller_local(
   name = "serial_controller",
-  workers = 1L
+  workers = 1L,
+  seconds_idle = 60L,
+  tasks_max = 1L,
+  launch_max = 10000L
 )
+debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", "FALSE"))
+if (debug_mode) {
+  controllers <- crew_controller_group(serial_controller)
+} else {
+  controllers <- crew_controller_group(main_controller, serial_controller)
+}
 
 tar_option_set(
   packages = c(
@@ -43,7 +54,7 @@ tar_option_set(
   ), # packages that your targets need to run
   imports = c("epieval"),
   format = "qs", # Optionally set the default storage format. qs is fast.
-  controller = crew_controller_group(main_controller, serial_controller),
+  controller = controllers,
   # Set default crew controller.
   # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
   resources = tar_resources(

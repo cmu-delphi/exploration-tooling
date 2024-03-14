@@ -49,12 +49,14 @@ sanitize_args_predictors_trainer <- function(epi_data,
 #' @param args_input the input as supplied to `slide_forecaster`; lags is the
 #'   important argument, which may or may not be defined, with the default
 #'   coming from `arx_args_list`
+#' @param outcome the outcome column
+#' @param extra_sources any non-outcome predictor columns
 #' @param buffer how many training data to insist on having (e.g. if `buffer=1`,
 #'   this trains on one sample; the default is set so that `linear_reg` isn't
 #'   rank deficient)
 #' @importFrom tidyr drop_na
 #' @export
-confirm_sufficient_data <- function(epi_data, ahead, args_input, buffer = 9) {
+confirm_sufficient_data <- function(epi_data, ahead, args_input, outcome, extra_sources, buffer = 9) {
   if (!is.null(args_input$lags)) {
     lag_max <- max(unlist(args_input$lags))
   } else {
@@ -64,14 +66,16 @@ confirm_sufficient_data <- function(epi_data, ahead, args_input, buffer = 9) {
   # TODO: Buffer should probably be 2 * n(lags) * n(predictors). But honestly,
   # this needs to be fixed in epipredict itself, see
   # https://github.com/cmu-delphi/epipredict/issues/106.
-
+  if (extra_sources == c("")) {
+    extra_sources <- character(0L)
+  }
+  has_no_last_nas <- epi_data %>%
+    drop_na(c(!!outcome, !!!extra_sources)) %>%
+    group_by(geo_value) %>%
+    summarise(has_enough_data = n_distinct(time_value) >= lag_max + ahead + buffer) %>%
+    pull(has_enough_data) %>%
+    any()
   return(
-    !is.infinite(ahead) &&
-      epi_data %>%
-        drop_na() %>%
-        group_by(geo_value) %>%
-        summarise(has_enough_data = n_distinct(time_value) >= lag_max + ahead + buffer) %>%
-        pull(has_enough_data) %>%
-        any()
+    !is.infinite(ahead) && has_no_last_nas
   )
 }

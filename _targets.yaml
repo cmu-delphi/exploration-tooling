@@ -1,16 +1,17 @@
 covid_hosp_explore:
   script: scripts/covid_hosp_explore.R
   store: covid_hosp_explore
-  use_crew: yes
+  use_crew: no
+  error: null
 flu_hosp_explore:
   script: scripts/flu_hosp_explore.R
   store: flu_hosp_explore
-  use_crew: yes
+  use_crew: no
 flu_hosp_prod:
   script: scripts/flu_hosp_prod.R
   store: flu_hosp_prod
-  use_crew: yes
+  use_crew: no
 covid_hosp_prod:
   script: scripts/covid_hosp_prod.R
   store: covid_hosp_prod
-  use_crew: yes
+  use_crew: no
