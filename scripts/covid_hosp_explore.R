@@ -6,32 +6,41 @@ source("scripts/targets-common.R")
 # Add custom parameter combinations in the list below.
 make_unique_grids <- function() {
   list(
+    # tidyr::expand_grid(
+    #   forecaster = "scaled_pop",
+    #   trainer = c("linreg", "quantreg"),
+    #   ahead = c(1:7, 14, 21, 28),
+    #   pop_scaling = TRUE
+    # ),
     tidyr::expand_grid(
       forecaster = "scaled_pop",
-      trainer = c("linreg", "quantreg"),
+      trainer = c("linreg"),
       ahead = c(1:7, 14, 21, 28),
-      pop_scaling = TRUE
-    ),
-    tidyr::expand_grid(
-      forecaster = "scaled_pop",
-      trainer = c("linreg", "quantreg"),
-      ahead = c(1:7, 14, 21, 28),
-      lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14)),
-      pop_scaling = TRUE
-    ),
-    tidyr::expand_grid(
-      forecaster = "smoothed_scaled",
-      trainer = c("quantreg"),
-      ahead = c(1:7, 14, 21, 28),
-      #
-      lags = list(
-        #        smoothed,      sd,          smoothed,   sd
-        list(c(0, 3, 5, 7, 14), c(0)),
-        list(c(0, 7, 14, 21, 28), c(0)),
-        list(c(0, 2, 4, 7, 14, 21, 28), c(0))
-      ),
+      lags = list(c(0, 3, 5, 7, 14)),
       pop_scaling = TRUE
     )
+
+    # tidyr::expand_grid(
+    #   forecaster = "scaled_pop",
+    #   trainer = c("linreg", "quantreg"),
+    #   ahead = c(1:7, 14, 21, 28),
+    #   lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14)),
+    #   pop_scaling = TRUE
+    # )
+    # ,
+    # tidyr::expand_grid(
+    #   forecaster = "smoothed_scaled",
+    #   trainer = c("quantreg"),
+    #   ahead = c(1:7, 14, 21, 28),
+    #   #
+    #   lags = list(
+    #     #        smoothed,      sd,          smoothed,   sd
+    #     list(c(0, 3, 5, 7, 14), c(0)),
+    #     list(c(0, 7, 14, 21, 28), c(0)),
+    #     list(c(0, 2, 4, 7, 14, 21, 28), c(0))
+    #   ),
+    #   pop_scaling = TRUE
+    # )
   )
 }
 #
@@ -50,24 +59,25 @@ make_unique_ensemble_grid <- function() {
         lags = c(0L, 3L, 5L, 7L, 14L)
       ),
       list(forecaster = "flatline_fc")
-    ),
-    # median forecaster
-    "ensemble_average",
-    list(average_type = "median"),
-    list(
-      list(
-        forecaster = "scaled_pop",
-        trainer = "linreg",
-        pop_scaling = TRUE,
-        lags = c(0, 3, 5, 7, 14)
-      ),
-      list(
-        forecaster = "scaled_pop",
-        trainer = "linreg",
-        pop_scaling = FALSE,
-        lags = c(0, 3, 5, 7, 14)
-      )
-    ),
+    )
+    # ,
+    # # median forecaster
+    # "ensemble_average",
+    # list(average_type = "median"),
+    # list(
+    #   list(
+    #     forecaster = "scaled_pop",
+    #     trainer = "linreg",
+    #     pop_scaling = TRUE,
+    #     lags = c(0, 3, 5, 7, 14)
+    #   ),
+    #   list(
+    #     forecaster = "scaled_pop",
+    #     trainer = "linreg",
+    #     pop_scaling = FALSE,
+    #     lags = c(0, 3, 5, 7, 14)
+    #   )
+    # ),
   )
 }
 
