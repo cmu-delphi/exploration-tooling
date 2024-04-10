@@ -9,3 +9,4 @@ scripts/**.html
 nohup.out
 run.Rout
 tmp.R
+reports/
