@@ -2,7 +2,7 @@
 % Please edit documentation in R/epipredict_utilities.R
 \name{run_workflow_and_format}
 \alias{run_workflow_and_format}
-\title{helper function to run a epipredict model and reformat to hub format}
+\title{run_workflow_and_format}
 \usage{
 run_workflow_and_format(preproc, postproc, trainer, epi_data)
 }

@@ -9,7 +9,7 @@ output:
     # lib_dir: libs
 params:
   forecast_generation_date: !r Sys.Date()
-  forecast: ""
+  forecast: !r ""
 ---
 
 ```{css, echo=FALSE}
@@ -28,26 +28,21 @@ body .main-container {
 
 ```{r setup, include=FALSE}
 library(dplyr)
-library(here)
 library(magrittr)
-library(rlang)
-library(tidyr)
-source(here("R", "plotting.R"))
+source(here::here("scripts", "plotting.R"))
 
 exclude_geos <- c("as", "gu", "mp", "vi")
 forecast <- params$forecast
+assertthat::assert_that(tibble::is_tibble(forecast))
+forecast %<>% mutate(forecaster = "epipredict")
 ```
 
 ## epipredict states
 
 ```{r, fig.height = 60, fig.width = 12, echo=FALSE}
 plot_state_forecasters(
-  forecast %>%
-    filter(geo_value != "us"),
-  exclude_geos = exclude_geos,
-  start_day = "2022-01-01",
-  ncol = 2,
-  offline_signal_dir = here::here(".plot_cache")
+  forecast %>% filter(geo_value != "us"),
+  exclude_geos
 ) %>%
   suppressMessages() %>%
   suppressWarnings()
@@ -58,66 +53,12 @@ plot_state_forecasters(
 ```{r, fig.height = 60, fig.width = 12, echo=FALSE}
 plot_nation_forecasters(
   forecast %>%
-    filter(geo_value == "us"),
-  exclude_geos = exclude_geos,
-  start_day = "2022-01-01",
-  ncol = 2,
-  offline_signal_dir = here::here(".plot_cache")
-) %>%
-  suppressMessages() %>%
-  suppressWarnings()
-```
-
-# Previous Forecasts {.tabset}
-
-```{r, echo=FALSE}
-recent_forecast_dates <- forecast_date - 7 * 1:3
-past_predictions_df <- get_covidhub_predictions("CMU-TimeSeries", forecast_dates = recent_forecast_dates, ahead = NULL) %>% tibble()
-```
-
-## Most Recent
-
-```{r, echo=FALSE, fig.height = 60, fig.width = 12}
-plot_state_forecasters(
-  past_predictions_df %>%
-    filter(forecast_date == recent_forecast_dates[[1]]) %>%
-    filter(geo_value != "us"),
-  exclude_geos = exclude_geos,
-  start_day = "2022-01-01",
-  ncol = 2,
-  offline_signal_dir = here::here(".plot_cache")
-) %>%
-  suppressMessages() %>%
-  suppressWarnings()
-```
-
-## Two Weeks Back
-
-```{r, echo=FALSE, fig.height = 60, fig.width = 12}
-plot_state_forecasters(
-  past_predictions_df %>%
-    filter(forecast_date == recent_forecast_dates[[2]]) %>%
-    filter(geo_value != "us"),
-  exclude_geos = exclude_geos,
-  start_day = "2022-01-01",
-  ncol = 2,
-  offline_signal_dir = here::here(".plot_cache")
-) %>%
-  suppressMessages() %>%
-  suppressWarnings()
-```
-
-## Three Weeks Back
-
-```{r, echo=FALSE, fig.height = 60, fig.width = 12}
-plot_state_forecasters(
-  past_predictions_df %>%
-    filter(forecast_date == recent_forecast_dates[[3]]) %>%
-    filter(geo_value != "us"),
-  exclude_geos = exclude_geos,
-  start_day = "2022-01-01",
-  ncol = 2,
-  offline_signal_dir = here::here(".plot_cache")
+    summarise(
+      value = sum(value),
+      .by = c("forecaster", "forecast_date", "target_end_date", "quantile")
+    ) %>%
+    mutate(geo_value = "us"),
+  exclude_geos
 ) %>%
   suppressMessages() %>%
   suppressWarnings()
