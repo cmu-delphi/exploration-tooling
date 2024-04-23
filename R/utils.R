@@ -242,10 +242,13 @@ clear_lastminute_nas <- function(epi_data, outcome, extra_sources) {
 get_exclusions <- function(
     date,
     exclusions_json = here::here("scripts", "geo_exclusions.json")) {
-  s <- jsonlite::read_json(exclusions_json)$exclusions[[as.character(date)]]
+  if (!file.exists(exclusions_json)) {
+    return("")
+  }
 
+  s <- jsonlite::read_json(exclusions_json)$exclusions[[as.character(date)]]
   if (!is.null(s)) {
-    return(s)
+    return(strsplit(s, ",")[[1]])
   }
   return("")
 }

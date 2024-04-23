@@ -2,39 +2,44 @@
 #
 # Ran into some issues with targets:
 #   https://github.com/ropensci/targets/discussions/666#discussioncomment-9050772
+#
 
 source("scripts/targets-common.R")
 
-
-#' Get exclusions from a JSON file for a given date
-#'
-#' @param date A date
-#' @param exclusions_json A JSON file with exclusions in the format:
-#'
-#'    {"exclusions": {"2024-03-24": "ak,hi"}}
-get_exclusions <- function(date, exclusions_json = here::here("scripts", "geo_exclusions.json")) {
-  s <- jsonlite::read_json(exclusions_json)$exclusions[[as.character(date)]]
-  if (!is.null(s)) {
-    return(s)
+insufficient_data_geos <- c("as", "gu", "mp", "vi")
+forecast_generation_date <- as.character(seq.Date(as.Date("2024-04-22"), Sys.Date(), by = "1 week"))
+# forecast_generation_date <- as.character(seq.Date(as.Date("2024-01-01"), Sys.Date(), by = "1 week"))
+bad_forecast_exclusions <- Vectorize(epieval::get_exclusions)(forecast_generation_date)
+forecaster_fns <- list(
+  function(...) {
+    smoothed_scaled(
+      ...,
+      outcome = "hhs",
+      pop_scaling = TRUE,
+      trainer = epipredict::quantile_reg(),
+      lags = list(c(0, 7, 14, 21, 28), c(0))
+    )
   }
-  return("")
-}
-
-forecast_generation_date <- as.character(seq.Date(as.Date("2024-01-01"), Sys.Date(), by = "1 week"))
-geo_exclusions <- Vectorize(get_exclusions)(forecast_generation_date)
+)
 
 rlang::list2(
   tar_target(
     aheads,
     command = {
-      c(1:7)
+      7 * 1:4
+    }
+  ),
+  tar_target(
+    forecasters,
+    command = {
+      seq_along(forecaster_fns)
     }
   ),
   tar_map(
     values = tidyr::expand_grid(
       tibble(
         forecast_generation_date = forecast_generation_date,
-        geo_exclusions = geo_exclusions
+        bad_forecast_exclusions = bad_forecast_exclusions
       )
     ),
     names = "forecast_generation_date",
@@ -53,7 +58,8 @@ rlang::list2(
         ) %>%
           select(geo_value, time_value, value, issue) %>%
           rename("hhs" := value) %>%
-          rename(version = issue)
+          rename(version = issue) %>%
+          filter(!geo_value %in% insufficient_data_geos)
       }
     ),
     tar_target(
@@ -61,19 +67,18 @@ rlang::list2(
       command = {
         hhs_latest_data %>%
           as_epi_df() %>%
-          smoothed_scaled(outcome = "hhs", ahead = aheads)
+          forecaster_fns[[forecasters]](ahead = aheads) %>%
+          mutate(
+            forecaster = sprintf("epipredict_%s", forecasters),
+            geo_value = as.factor(geo_value)
+          )
       },
-      pattern = map(aheads)
-    ),
-    tar_target(
-      forecast_with_exclusions,
-      command = {
-        forecast %>% filter(!geo_value %in% strsplit(geo_exclusions, ",")[[1]])
-      }
+      pattern = cross(aheads, forecasters)
     ),
     tar_target(
       notebook,
       command = {
+        if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
         rmarkdown::render(
           "scripts/covid_hosp_prod.Rmd",
           output_file = here::here(
@@ -81,7 +86,8 @@ rlang::list2(
             sprintf("covid_hosp_prod_%s.html", forecast_generation_date)
           ),
           params = list(
-            forecast = forecast
+            forecast = forecast,
+            bad_forecast_exclusions = bad_forecast_exclusions
           )
         )
       }

@@ -10,6 +10,7 @@ output:
 params:
   forecast_generation_date: !r Sys.Date()
   forecast: !r ""
+  bad_forecast_exclusions: !r ""
 ---
 
 ```{css, echo=FALSE}
@@ -30,19 +31,16 @@ body .main-container {
 library(dplyr)
 library(magrittr)
 source(here::here("scripts", "plotting.R"))
-
-exclude_geos <- c("as", "gu", "mp", "vi")
-forecast <- params$forecast
-assertthat::assert_that(tibble::is_tibble(forecast))
-forecast %<>% mutate(forecaster = "epipredict")
 ```
 
 ## epipredict states
 
 ```{r, fig.height = 60, fig.width = 12, echo=FALSE}
-plot_state_forecasters(
-  forecast %>% filter(geo_value != "us"),
-  exclude_geos
+plot_forecasts(
+  params$forecast %>% filter(geo_value != "us"),
+  params$forecast_generation_date,
+  params$bad_forecast_exclusions,
+  "state"
 ) %>%
   suppressMessages() %>%
   suppressWarnings()
@@ -50,15 +48,17 @@ plot_state_forecasters(
 
 ## epipredict national
 
-```{r, fig.height = 60, fig.width = 12, echo=FALSE}
-plot_nation_forecasters(
-  forecast %>%
+```{r, fig.width = 12, echo=FALSE}
+plot_forecasts(
+  params$forecast %>%
     summarise(
       value = sum(value),
       .by = c("forecaster", "forecast_date", "target_end_date", "quantile")
     ) %>%
     mutate(geo_value = "us"),
-  exclude_geos
+  params$forecast_generation_date,
+  params$bad_forecast_exclusions,
+  "nation"
 ) %>%
   suppressMessages() %>%
   suppressWarnings()

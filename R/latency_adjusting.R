@@ -24,12 +24,3 @@ extend_ahead <- function(epi_data, ahead) {
   }
   return(list(epi_data, effective_ahead))
 }
-
-#' last observation carried forward
-#' @description
-#' instead of modifying `ahead`, interpolate `epi_data` to contain last
-#'   observation carried forward
-#' @param epi_data the dataset
-#' @param ahead how many units (depending on the dataset, normally days or weeks) to predict ahead of the `forecast_date`
-locf_latency <- function(epi_data, ahead) {
-}
