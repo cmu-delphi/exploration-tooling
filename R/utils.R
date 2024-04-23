@@ -9,33 +9,6 @@ covidhub_probs <- function(type = c("standard", "inc_case")) {
   )
 }
 
-
-#' add a unique id based on the column contents
-#' @description
-#' create a string of `n_adj` that is a hash of the parameters
-#' and append the `ahead` at the end.
-#' @param df the df to add a column to. everything should be convertable to a string
-#' @param n_adj the number of adjectives to use; default of 2.
-#' @importFrom cli hash_animal
-#' @export
-add_id <- function(df, n_adj = 2) {
-  no_ahead <- df %>%
-    select(-ahead)
-  stringified <- no_ahead %>%
-    select(order(colnames(no_ahead))) %>%
-    rowwise() %>%
-    mutate(id = paste(across(everything()), sep = "", collapse = ""), .keep = "none") %>%
-    mutate(id = hash_animal(id, n_adj = n_adj)$words) %>%
-    mutate(id = paste(id[1:n_adj], sep = "", collapse = "."))
-  df %<>%
-    ungroup() %>%
-    mutate(parent_id = stringified$id) %>%
-    rowwise() %>%
-    mutate(id = paste(parent_id, ahead, sep = ".", collapse = " ")) %>%
-    ungroup()
-  return(df)
-}
-
 #' look up forecasters by name
 #' @description
 #' given a (partial) forecaster name, look up all forecasters in the given project which contain part of that name.
@@ -105,6 +78,31 @@ ensemble_missing_forecasters_details <- function(ensemble_grid = NULL, param_gri
   return(unique_missing)
 }
 
+#' add a unique id based on the column contents
+#' @description
+#' create a string of `n_adj` that is a hash of the parameters
+#' and append the `ahead` at the end.
+#' @param df the df to add a column to. everything should be convertable to a string
+#' @param n_adj the number of adjectives to use; default of 2.
+#' @importFrom cli hash_animal
+#' @export
+add_id <- function(df, n_adj = 2) {
+  no_ahead <- df %>%
+    select(-ahead)
+  stringified <- no_ahead %>%
+    select(order(colnames(no_ahead))) %>%
+    rowwise() %>%
+    mutate(id = paste(across(everything()), sep = "", collapse = ""), .keep = "none") %>%
+    mutate(id = hash_animal(id, n_adj = n_adj)$words) %>%
+    mutate(id = paste(id[1:n_adj], sep = "", collapse = "."))
+  df %<>%
+    ungroup() %>%
+    mutate(parent_id = stringified$id) %>%
+    rowwise() %>%
+    mutate(id = paste(parent_id, ahead, sep = ".", collapse = " ")) %>%
+    ungroup()
+  return(df)
+}
 
 #' generate an id from a simple list of parameters
 #' @param param_list the list of parameters. must include `ahead` if `ahead = NULL`
@@ -153,28 +151,6 @@ id_ahead_ensemble_grid <- function(ensemble_grid, aheads, n_adj = 2) {
   return(ensemble_grid)
 }
 
-
-#' temporary patch that pulls `NA`'s out of an epi_df
-#' @description
-#' just delete rows that have NA's in them. eventually epipredict should directly handle this so we don't have to
-#' @param epi_data the epi_df to be fixed
-#' @param outcome the column name containing the target variable
-#' @param extra_sources any other columns used as predictors
-#' @importFrom tidyr drop_na
-#' @importFrom epiprocess as_epi_df
-#' @export
-clear_lastminute_nas <- function(epi_data, outcome, extra_sources) {
-  meta_data <- attr(epi_data, "metadata")
-  if (extra_sources == c("")) {
-    extra_sources <- character(0L)
-  }
-  epi_data %<>%
-    drop_na(c(!!outcome, !!!extra_sources)) %>%
-    as_epi_df()
-  attr(epi_data, "metadata") <- meta_data
-  return(epi_data)
-}
-
 #' convert a list of forecasters
 #' @description
 #' the required format for targets is a little jank; this takes a human legible tibble and makes it targets legible.
@@ -197,6 +173,17 @@ make_target_param_grid <- function(param_grid) {
     param_names = list_names
   )
 }
+
+#' helper function for `make_target_param_grid`
+#' @keywords internal
+lists_of_real_values <- function(param_grid) {
+  full_lists <- transpose(param_grid %>% select(-forecaster, -id))
+  filter_nonvalues <- function(x) {
+    Filter(function(a) !all(is.null(a)) && !all(is.na(a)), x)
+  }
+  map(full_lists, filter_nonvalues)
+}
+
 #' convert a list of forecasters
 #' @description
 #' the required format for targets is a little jank; this takes a human legible tibble and makes it targets legible.
@@ -215,6 +202,7 @@ make_target_ensemble_grid <- function(param_grid, ONE_AHEAD_FORECASTER_NAME = "f
     mutate(forecaster_ids = list(syms(paste(ONE_AHEAD_FORECASTER_NAME, forecaster_ids, sep = "_"))))
   return(param_grid)
 }
+
 #' function to map
 #' @keywords internal
 #' @param sym_names a list of the parameter names that should be turned into symbols
@@ -222,12 +210,42 @@ sym_subset <- function(param_list, sym_names = list("average_type")) {
   imap(param_list, \(x, y) if (y %in% sym_names) sym(x) else x)
 }
 
-#' helper function for `make_target_param_grid`
-#' @keywords internal
-lists_of_real_values <- function(param_grid) {
-  full_lists <- transpose(param_grid %>% select(-forecaster, -id))
-  filter_nonvalues <- function(x) {
-    Filter(function(a) !all(is.null(a)) && !all(is.na(a)), x)
+#' temporary patch that pulls `NA`'s out of an epi_df
+#' @description
+#' just delete rows that have NA's in them. eventually epipredict should directly handle this so we don't have to
+#' @param epi_data the epi_df to be fixed
+#' @param outcome the column name containing the target variable
+#' @param extra_sources any other columns used as predictors
+#' @importFrom tidyr drop_na
+#' @importFrom epiprocess as_epi_df
+#' @export
+clear_lastminute_nas <- function(epi_data, outcome, extra_sources) {
+  meta_data <- attr(epi_data, "metadata")
+  if (extra_sources == c("")) {
+    extra_sources <- character(0L)
   }
-  map(full_lists, filter_nonvalues)
+  epi_data %<>%
+    drop_na(c(!!outcome, !!!extra_sources)) %>%
+    as_epi_df()
+  attr(epi_data, "metadata") <- meta_data
+  return(epi_data)
+}
+
+#' Get exclusions from a JSON file for a given date
+#'
+#' @param date A date
+#' @param exclusions_json A JSON file with exclusions in the format:
+#'
+#'    {"exclusions": {"2024-03-24": "ak,hi"}}
+#'
+#' @export
+get_exclusions <- function(
+    date,
+    exclusions_json = here::here("scripts", "geo_exclusions.json")) {
+  s <- jsonlite::read_json(exclusions_json)$exclusions[[as.character(date)]]
+
+  if (!is.null(s)) {
+    return(s)
+  }
+  return("")
 }
