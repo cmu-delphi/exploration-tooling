@@ -26,7 +26,7 @@ rlang::list2(
   tar_target(
     aheads,
     command = {
-      7 * 1:4
+      1:28
     }
   ),
   tar_target(

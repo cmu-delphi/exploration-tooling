@@ -21,6 +21,7 @@ Imports:
     epipredict,
     epiprocess,
     here,
+    jsonlite,
     lubridate,
     magrittr,
     parsnip (>= 1.0.0),
