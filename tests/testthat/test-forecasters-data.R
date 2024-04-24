@@ -1,6 +1,6 @@
-devtools::load_all()
-library(testthat)
-library(dplyr)
+for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
+
+testthat::skip("Optional, long-running tests skipped.")
 
 # A list of forecasters to be tested. Add here to test new forecasters.
 forecasters <- tibble::tribble(
