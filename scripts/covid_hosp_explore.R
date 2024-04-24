@@ -23,9 +23,8 @@ make_unique_grids <- function() {
       forecaster = "smoothed_scaled",
       trainer = c("quantreg"),
       ahead = c(1:7, 14, 21, 28),
-      #
       lags = list(
-        #        smoothed,      sd,          smoothed,   sd
+        # list(smoothed, sd)
         list(c(0, 3, 5, 7, 14), c(0)),
         list(c(0, 7, 14, 21, 28), c(0)),
         list(c(0, 2, 4, 7, 14, 21, 28), c(0))

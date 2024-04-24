@@ -1,6 +1,6 @@
 # Exploration Tooling
 
-This repo is meant to be a place to explore different forecasting methods and tools for both COVID and flu.
+This repo is for exploring forecasting methods and tools for both COVID and Flu.
 The repo is structured as a [targets](https://docs.ropensci.org/targets/) project, which means that it is easy to run things in parallel and to cache results.
 The repo is also structured as an R package, which means that it is easy to share code between different targets.
 
@@ -12,7 +12,6 @@ Define run parameters:
 # Save to your `.Renviron` file:
 EPIDATR_USE_CACHE=true
 # not strictly necessary, but you probably want a long cache time, since this is for the historical data
-EPIDATR_CACHE_DIR=~/.epidatr-cache
 EPIDATR_CACHE_MAX_AGE_DAYS=42
 DEBUG_MODE=false
 USE_SHINY=false
@@ -21,22 +20,20 @@ EXTERNAL_SCORES_PATH=legacy-exploration-scorecards.qs
 AWS_S3_PREFIX=exploration
 ```
 
--   `EPIDATR_USE_CACHE` controls whether `epidatr` functions use the cache.
--   `DEBUG_MODE` controls whether `targets::tar_make` is run with the `callr_function=NULL`, which allows for debugging. This only works if parallelization has been turned off in `scripts/targets-common.R` by setting the default controller to serial on line 51.
--   `USE_SHINY` controls whether we start a Shiny server after producing the targets.
--   `TAR_PROJECT` controls which `targets` project is run by `run.R`. Likely either `covid_hosp_explore` or `flu_hosp_explore`
--   `EXTERNAL_SCORES_PATH` controls where external scores are loaded from. If not set, external scores are not used.
--   `AWS_S3_PREFIX` controls the prefix to use in the AWS S3 bucket (a prefix is a pseudo-directory in a bucket).
+- `EPIDATR_USE_CACHE` controls whether `epidatr` functions use the cache.
+- `DEBUG_MODE` controls whether `targets::tar_make` is run with the `callr_function=NULL`, which allows for debugging. This only works if parallelization has been turned off in `scripts/targets-common.R` by setting the default controller to serial on line 51.
+- `USE_SHINY` controls whether we start a Shiny server after producing the targets.
+- `TAR_PROJECT` controls which `targets` project is run by `run.R`. Likely either `covid_hosp_explore` or `flu_hosp_explore`
+- `EXTERNAL_SCORES_PATH` controls where external scores are loaded from. If not set, external scores are not used.
+- `AWS_S3_PREFIX` controls the prefix to use in the AWS S3 bucket (a prefix is a pseudo-directory in a bucket).
 
 Run the pipeline using:
 
 ```sh
-# Install renv and R dependencies.
+# Install renv and R dependencies
 make install
 
 # Pull pre-scored forecasts from the AWS bucket
-make download
-# or
 make pull
 
 # Run only the dashboard, to display results run on other machines
@@ -47,32 +44,23 @@ make run
 # or in the background
 make run-nohup
 
-# Upload/push complete or partial results to the AWS bucket
-make upload
-# or
+# Push complete or partial results to the AWS bucket
 make push
 ```
-
--   `EPIDATR_USE_CACHE` controls whether `epidatr` functions use the cache.
--   `DEBUG_MODE` controls whether `targets::tar_make` is run with the `callr_function=NULL`, which allows for `browser()`. It also disables parallelization. If you are developing, it is recommended to set this to true. If you are just running, it is recommended to set it to false.
--   `USE_SHINY` controls whether we start a Shiny server after producing the targets.
--   `TAR_PROJECT` controls which `targets` project is run by `run.R`.
--   `EXTERNAL_SCORES_PATH` controls where external scores are loaded from. If not set, external scores are not used.
--   `AWS_S3_PREFIX` controls the prefix to use in the AWS S3 bucket (a prefix is a pseudo-directory in a bucket).
 
 ## Development
 
 ### Directory Layout
 
--   `run.R` and `Makefile`: the main entrypoint for all pipelines
--   `R/`: R package code to be reused
--   `scripts/`: plotting, code, and misc.
--   `tests/`: package tests
--   `covid_hosp_explore/` and `covid_hosp_explore.R`: a `targets` project for exploring covid hospitalization forecasters
--   `flu_hosp_explore/` and `flu_hosp_explore.R`: a `targets` project for exploring flu hospitalization forecasters
--   `covid_hosp_prod/` and `covid_hosp_prod.R`: a `targets` project for predicting covid hospitalizations
--   `flu_hosp_prod/` and `flu_hosp_prod.R`: a `targets` project for predicting flu hospitalizations
--   `forecaster_testing/` and `forecaster_testing.R`: a `targets` project for testing forecasters
+- `Makefile`: the main entrypoint for all pipelines
+- `R/`: R package code to be reused
+- `scripts/`: plotting, code, and misc.
+- `tests/`: package tests
+- `covid_hosp_explore/` and `scripts/covid_hosp_explore.R`: a `targets` project for exploring covid hospitalization forecasters
+- `flu_hosp_explore/` and `scripts/flu_hosp_explore.R`: a `targets` project for exploring flu hospitalization forecasters
+- `covid_hosp_prod/` and `scripts/covid_hosp_prod.R`: a `targets` project for predicting covid hospitalizations
+- `flu_hosp_prod/` and `scripts/flu_hosp_prod.R`: a `targets` project for predicting flu hospitalizations
+- `forecaster_testing/` and `scripts/forecaster_testing.R`: a `targets` project for testing forecasters
 
 ### Parallelization Gotchas
 
@@ -84,6 +72,7 @@ It is safest to develop with parallelism disabled.
 Targets in parallel mode has two problems when it comes to debugging: 1) it ignores browsers, so you can't step through functions and 2) reloading any changes requires both `renv::install(".")` and restarting R.
 
 To debug a target named `yourTarget`:
+
 1. set `DEBUG_MODE=true`
 2. insert a browser in the relevant function
 3. run an R session, and call `tar_make(yourTarget)`

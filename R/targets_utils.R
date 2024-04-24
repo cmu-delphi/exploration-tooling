@@ -155,6 +155,7 @@ make_shared_grids <- function() {
     )
   )
 }
+
 #' Make list of common ensembles for forecasting experiments across projects
 #' @export
 make_shared_ensembles <- function() {

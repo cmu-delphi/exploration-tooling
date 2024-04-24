@@ -14,15 +14,11 @@ run-nohup:
 sync:
 	Rscript scripts/sync.R
 
-download:
+pull:
 	Rscript scripts/sync.R download
 
-pull: download
-
-upload:
+push:
 	Rscript scripts/sync.R upload
-
-push: upload
 
 dashboard:
 	Rscript scripts/dashboard.R

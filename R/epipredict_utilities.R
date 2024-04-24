@@ -65,7 +65,7 @@ arx_postprocess <- function(postproc,
   return(postproc)
 }
 
-#' helper function to run a epipredict model and reformat to hub format
+#' run_workflow_and_format
 #' @description
 #' helper function to run a epipredict model and reformat to hub format
 #' @param preproc the preprocessing steps
