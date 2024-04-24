@@ -49,4 +49,4 @@ if (!is.null(external_options) && length(external_options) > 0 && external_score
 
 forecaster_options <- c(ensemble_options, forecaster_options, external_options)
 
-runApp(here::here("app.R"), port = 3838)
+runApp(here::here("scripts", "app.R"), port = 3838)

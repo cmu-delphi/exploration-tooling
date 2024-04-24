@@ -56,12 +56,35 @@ suppressPackageStartupMessages({
 store_dir <- tar_path_store()
 if (!dir.exists(store_dir)) dir.create(store_dir)
 
+#' This function is useful if you're running into issues with the pipeline
+#' quitting after about 5 hours due to parallelism issues. It will restart the
+#' pipeline and continue where it left off.
+restart_loop <- function() {
+  result <- 1
+  while (result) {
+    result <- tryCatch(
+      {
+        tar_make()
+      },
+      error = function(e) {
+        print("Error! Restarting...")
+        print(e)
+        return(1)
+      },
+      finally = function(e) {
+        print("Finished!")
+        return(0)
+      }
+    )
+  }
+}
 
 tar_manifest()
 if (debug_mode) {
   tar_make(callr_function = NULL, use_crew = FALSE)
 } else {
   tar_make()
+  # restart_loop()
 }
 
 if (use_shiny) {

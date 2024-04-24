@@ -1,3 +1,5 @@
+source(here::here("R", "load_all.R"))
+
 test_that("target param generation works", {
   ex_frame <- tribble(
     ~forecaster, ~id, ~someNAs, ~someNULLs, ~someList, ~someYoDog,

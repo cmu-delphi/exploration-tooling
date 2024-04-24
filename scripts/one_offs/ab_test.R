@@ -19,18 +19,21 @@ library(dplyr)
 library(magrittr)
 library(purrr)
 library(qs)
+library(stringr)
 
 df <- targets::tar_manifest()
 
-# Both have already been produced, so we can just read them in. Let's do a loop to compare them.
+# Keep only the forecaster prediction targets.
 old_forecasts <- list.files("covid_hosp_explore copy/objects", full.names = TRUE) %>%
   keep(~ basename(.) %in% df$name) %>%
+  keep(~ str_detect(., "forecast_")) %>%
   sort()
 new_forecasts <- list.files("covid_hosp_explore/objects", full.names = TRUE) %>%
   keep(~ basename(.) %in% df$name) %>%
+  keep(~ str_detect(., "forecast_")) %>%
   sort()
 
-# Make sure the lists are the same length and the basenames match
+# Make sure the lists are the same length and the basenames match.
 assertthat::assert_that(
   c(
     length(old_forecasts) == length(new_forecasts),
@@ -41,17 +44,22 @@ assertthat::assert_that(
 tib <- tibble::tibble(
   old_forecasts = old_forecasts,
   new_forecasts = new_forecasts,
-  compare = purrr::map2_chr(old_forecasts, new_forecasts, function(x, y) {
+  compare = map2_chr(old_forecasts, new_forecasts, function(x, y) {
+    x <- qs::qread(x) %>% select(-true_value)
+    y <- qs::qread(y) %>% select(-true_value)
     # If objects are not the same, `all.equal` returns a character vector that
-    # can have `length` > 1. In that case, we need to collapse the output
-    # into a length-1 string so that `purrr::map2_chr` accepts it.
-    all.equal(qs::qread(x), qs::qread(y)) %>% as.character() %>% paste(collapse = "; ")
+    # can have `length` > 1 (for all the mismatches). In that case, we need to
+    # collapse the output into a length-1 string so that `purrr::map2_chr`
+    # accepts it.
+    all.equal(x, y) %>%
+      as.character() %>%
+      paste(collapse = "; ")
   })
 )
-tib %>%
-  filter(compare != "TRUE") %>%
-  slice(1:5) %>%
-  c()
+miss <- tib %>%
+  filter(compare != "TRUE")
 
-x <- qread("covid_hosp_explore copy/objects/joined_archive_data_2022")
-y <- qread("covid_hosp_explore/objects/joined_archive_data_2022")
+miss %>% filter(str_detect(old_forecasts, "forecast_"))
+
+# x <- qread(miss %>% slice(6) %>% pull(old_forecasts))
+# y <- qread(miss %>% slice(6) %>% pull(new_forecasts))

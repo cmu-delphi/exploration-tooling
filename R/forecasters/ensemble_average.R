@@ -29,9 +29,7 @@ ensemble_average <- function(epi_data,
                              ensemble_args_names = NULL) {
   # unique parameters must be buried in ensemble_args so that the generic function signature is stable
   # their names are separated for obscure target related reasons
-  if (!is.null(ensemble_args_names)) {
-    names(ensemble_args) <- ensemble_args_names
-  }
+  names(ensemble_args) <- ensemble_args_names %||% names(ensemble_args)
   average_type <- ensemble_args$average_type %||% median
   join_columns <- ensemble_args$join_columns %||% c("geo_value", "forecast_date", "target_end_date", "quantile")
   # begin actual analysis

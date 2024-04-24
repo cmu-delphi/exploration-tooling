@@ -1,16 +1,3 @@
-#' The quantile levels used by the covidhub repository
-#'
-#' @param type either standard or inc_case, with inc_case being a small subset of the standard
-#'
-#' @export
-covidhub_probs <- function(type = c("standard", "inc_case")) {
-  type <- match.arg(type)
-  switch(type,
-    standard = c(0.01, 0.025, seq(0.05, 0.95, by = 0.05), 0.975, 0.99),
-    inc_case = c(0.025, 0.100, 0.250, 0.500, 0.750, 0.900, 0.975)
-  )
-}
-
 #' Look up forecasters by name
 #'
 #' Given a (partial) forecaster name, look up all forecasters in the given
@@ -221,31 +208,6 @@ make_target_ensemble_grid <- function(param_grid, ONE_AHEAD_FORECASTER_NAME = "f
     relocate(id, .before = everything()) %>%
     mutate(forecaster_ids = list(syms(paste(ONE_AHEAD_FORECASTER_NAME, forecaster_ids, sep = "_"))))
   return(param_grid)
-}
-
-
-#' Temporary patch that pulls `NA`'s out of an epi_df
-#'
-#' Just delete rows that have NA's in them. eventually epipredict should
-#' directly handle this so we don't have to
-#'
-#' @param epi_data the epi_df to be fixed
-#' @param outcome the column name containing the target variable
-#' @param extra_sources any other columns used as predictors
-#'
-#' @importFrom tidyr drop_na
-#' @importFrom epiprocess as_epi_df
-#' @export
-clear_lastminute_nas <- function(epi_data, outcome, extra_sources) {
-  meta_data <- attr(epi_data, "metadata")
-  if (extra_sources == c("")) {
-    extra_sources <- character(0L)
-  }
-  epi_data %<>%
-    drop_na(c(!!outcome, !!!extra_sources)) %>%
-    as_epi_df()
-  attr(epi_data, "metadata") <- meta_data
-  return(epi_data)
 }
 
 #' Get exclusions from a JSON file for a given date

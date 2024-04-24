@@ -1,4 +1,5 @@
-library(dplyr)
+source(here::here("R", "load_all.R"))
+
 n_days <- 40
 removed_date <- 10
 simple_dates <- seq(as.Date("2012-01-01"), by = "day", length.out = n_days)

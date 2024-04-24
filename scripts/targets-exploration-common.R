@@ -163,22 +163,19 @@ make_shared_ensembles <- function() {
     lags = c(0, 3, 5, 7, 14)
   )
   # ensembles don't lend themselves to expand grid (inherently needs a list for sub-forecasters)
-  tribble(
-    ~ensemble, ~ensemble_params, ~forecasters,
-    # mean forecaster
-    "ensemble_average",
-    list(average_type = "mean"),
-    list(
-      ex_forecaster,
-      list(forecaster = "flatline_fc")
-    ),
-    # median forecaster
-    "ensemble_average",
-    list(average_type = "median"),
-    list(
-      ex_forecaster,
-      list(forecaster = "flatline_fc")
-    ),
+  tibble(
+    ensemble = c("ensemble_average", "ensemble_average"),
+    ensemble_params = list(list(average_type = "mean"), list(average_type = "median")),
+    forecasters = list(
+      list(
+        ex_forecaster,
+        list(forecaster = "flatline_fc")
+      ),
+      list(
+        ex_forecaster,
+        list(forecaster = "flatline_fc")
+      )
+    )
   )
 }
 

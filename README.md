@@ -6,12 +6,11 @@ The repo is also structured as an R package, which means that it is easy to shar
 
 ## Usage
 
-Define run parameters:
+Define run parameters in your `.Renviron` file:
 
 ```sh
-# Save to your `.Renviron` file:
 EPIDATR_USE_CACHE=true
-# not strictly necessary, but you probably want a long cache time, since this is for the historical data
+# Choose a cache timeout for yourself. We want a long cache time, since we work with historical data.
 EPIDATR_CACHE_MAX_AGE_DAYS=42
 DEBUG_MODE=false
 USE_SHINY=false
@@ -66,20 +65,13 @@ make upload
 - `flu_hosp_prod/` and `scripts/flu_hosp_prod.R`: a `targets` project for predicting flu hospitalizations
 - `forecaster_testing/` and `scripts/forecaster_testing.R`: a `targets` project for testing forecasters
 
-### Parallelization Gotchas
-
-When running a pipeline with parallelization, make sure to install the package via `renv::install(".")` and not just via `devtools::load_all()`.
-It is safest to develop with parallelism disabled.
-
 ### Debugging
 
-Targets in parallel mode has two problems when it comes to debugging: 1) it ignores browsers, so you can't step through functions and 2) reloading any changes requires both `renv::install(".")` and restarting R.
+Targets in parallel mode conflccts with debugging because it ignores `browser()` statements. To debug a target named `yourTarget`:
 
-To debug a target named `yourTarget`:
-
-1. set `DEBUG_MODE=true`
+1. set `DEBUG_MODE=true` in `.Renviron`
 2. insert a browser in the relevant function
-3. run an R session, and call `tar_make(yourTarget)`
+3. run an R session and call `tar_make(yourTarget)`
 
 ### Pipeline Design
 

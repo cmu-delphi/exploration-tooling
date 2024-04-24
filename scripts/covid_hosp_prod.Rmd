@@ -30,7 +30,7 @@ body .main-container {
 ```{r setup, include=FALSE}
 library(dplyr)
 library(magrittr)
-source(here::here("scripts", "plotting.R"))
+source(here::here("R", "plotting.R"))
 ```
 
 ## epipredict states

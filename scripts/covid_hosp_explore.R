@@ -2,6 +2,24 @@
 # tar_source()
 # where the forecasters and parameters are joined; see either the variable param_grid or `tar_read(forecasters)`
 source("scripts/targets-common.R")
+source("scripts/targets-exploration-common.R")
+
+#' A simple faux-forecaster handy for debugging pipelines.
+dummy_forecaster <- function(...) {
+  dots <- list(...)
+  tibble(
+    forecaster = "dummy",
+    geo_value = "d",
+    forecast_date = as.Date("2024-01-01"),
+    target_end_date = forecast_date + pluck(dots, "ahead", .default = 1),
+    quantile = 0,
+    value = 0,
+    actual_value = 1,
+    params = list(dots),
+  )
+}
+debug <- TRUE
+
 
 # Add custom parameter combinations in the list below.
 make_unique_grids <- function() {
@@ -33,7 +51,6 @@ make_unique_grids <- function() {
     )
   )
 }
-#
 make_unique_ensemble_grid <- function() {
   # median forecaster averaging a pop scaled and not pop scaled
   tribble(
@@ -75,6 +92,11 @@ param_grid <- append(
   make_shared_grids(),
   make_unique_grids()
 ) %>%
+  {
+    if (debug) {
+      (.) %>% map(~ .x %>% mutate(forecaster = "dummy_forecaster"))
+    }
+  } %>%
   map(add_id) %>%
   bind_rows() %>%
   relocate(parent_id, id, .after = last_col())
@@ -107,7 +129,18 @@ AHEADS <- 1:4
 ensemble_grid <- add_row(
   make_shared_ensembles(),
   make_unique_ensemble_grid()
-) %>% id_ahead_ensemble_grid(AHEADS)
+) %>%
+  {
+    if (debug) {
+      (.) %>% mutate(forecasters = map(forecasters, function(x) {
+        map(x, function(y) {
+          y$forecaster <- "dummy_forecaster"
+          y
+        })
+      }))
+    }
+  } %>%
+  id_ahead_ensemble_grid(AHEADS)
 # bind them together and give static ids
 target_ensemble_grid <- make_target_ensemble_grid(ensemble_grid)
 ensemble_parent_id_map <- ensemble_grid %>%
@@ -116,6 +149,7 @@ ensemble_parent_id_map <- ensemble_grid %>%
     ensemble_component_ids = list(syms(paste0(ONE_AHEAD_ENSEMBLE_NAME, "_", gsub(" ", ".", id, fixed = TRUE)))),
     score_component_ids = list(syms(paste0(ONE_AHEAD_SCORE_NAME, "_", gsub(" ", ".", id, fixed = TRUE))))
   )
+
 # check that every ensemble dependent is actually included
 missing_forecasters <- ensemble_missing_forecasters_details(ensemble_grid, param_grid)
 if (length(missing_forecasters) > 0) {

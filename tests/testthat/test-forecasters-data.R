@@ -1,4 +1,4 @@
-for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
+source(here::here("R", "load_all.R"))
 
 testthat::skip("Optional, long-running tests skipped.")
 

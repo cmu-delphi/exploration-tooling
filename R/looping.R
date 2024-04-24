@@ -1,9 +1,7 @@
 #' Generate forecaster predictions on a particular dataset
 #'
 #' A wrapper that turns a forecaster, parameters, data combination into an
-#' actual experiment that outputs a prediction. as far as batchtools is
-#' concerned, the scoring function is a particular parameter of the forecaster
-#' (or Algorithm, as they call it).
+#' actual experiment that outputs a prediction for each day.
 #'
 #' @param data the epi_df object
 #' @param outcome the name of the target column
