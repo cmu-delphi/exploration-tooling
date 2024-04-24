@@ -1,13 +1,14 @@
-#' storage format
-#' @description
-#' the columns for any stored prediction are
-#' `(geo_value, forecast_date, target_end_date, quantile, value)`
-#' in that particular order. It does not include the point estimate as a
-#'   separate row.
+#' Storage format
+#'
+#' The columns for any stored prediction are `(geo_value, forecast_date,
+#' target_end_date, quantile, value)` in that particular order. It does not
+#' include the point estimate as a separate row.
+#'
 #' @param pred the output as produced by epipredict
 #' @param true_forecast_date the actual date from which the model is
 #'   making the forecast, rather than the last day of available data
 #' @param target_end_date the date of the prediction
+#'
 #' @importFrom epipredict nested_quantiles
 #' @importFrom tidyr unnest
 #' @export
@@ -23,12 +24,12 @@ format_storage <- function(pred, true_forecast_date, target_end_date) {
     relocate(geo_value, forecast_date, target_end_date, quantile, value)
 }
 
-#' format for the COVID-19 Forecast Hub
-#' @description
-#' expects the pred to have the columns geo_value, .pred, .pred_distn,
-#'   forecast_date, and target_date
-#' It does not assume that the forecast_date is accurate
-#' The end result
+#' Format for the COVID-19 Forecast Hub
+#'
+#' Expects the pred to have the columns geo_value, .pred, .pred_distn,
+#' forecast_date, and target_date. It does not assume that the forecast_date is
+#' accurate.
+#'
 #' @param pred the output as produced by epipredict
 #' @param true_forecast_date the actual date from which the model is
 #'   making the forecast, rather than the last day of available data

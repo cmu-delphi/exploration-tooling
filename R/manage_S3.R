@@ -1,4 +1,5 @@
 #' Manage S3 cache
+#'
 #' @param rel_cache_dir The relative path to the cache directory, e.g.
 #' "data-processed/2021-09-01". Default is `"{tar_project}/objects"`
 #' @param bucket_name The name of the S3 bucket to sync.
@@ -9,6 +10,7 @@
 #'   to sync to those starting with `prefix`.
 #' @param tar_project which targets project we're working on
 #' @param external_scores_path which external scores file to sync
+#'
 #' @importFrom aws.s3 s3sync get_bucket
 #' @importFrom here here
 #' @export

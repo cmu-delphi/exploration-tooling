@@ -1,7 +1,7 @@
-# various reusable transforms to apply before handing to epipredict
+# Various reusable transforms to apply before handing to epipredict
 
-#' extract the non-key, non-smoothed columns from epi_data
-#' @keywords internal
+#' Extract the non-key, non-smoothed columns from epi_data
+#'
 #' @param epi_data the `epi_df`
 #' @param cols vector of column names to use. If `NULL`, fill with all non-key columns
 get_trainable_names <- function(epi_data, cols) {
@@ -13,9 +13,10 @@ get_trainable_names <- function(epi_data, cols) {
   return(cols)
 }
 
-#' just the names which aren't keys for an epi_df
-#' @description
-#' names, but it excludes keys
+#' Just the names which aren't keys for an epi_df
+#'
+#' Names, but it excludes keys
+#'
 #' @param epi_data the epi_df
 get_nonkey_names <- function(epi_data) {
   cols <- names(epi_data)
@@ -23,15 +24,17 @@ get_nonkey_names <- function(epi_data) {
   return(cols)
 }
 
-#' get a rolling average for the named columns
-#' @description
-#' add column(s) that are the rolling means of the specified columns, as
-#'   implemented by slider. Defaults to the previous 7 days.
-#' Currently only group_by's on the geo_value. Should probably extend to more
-#'   keys if you have them
+#' Get a rolling average for the named columns
+#'
+#' Add column(s) that are the rolling means of the specified columns, as
+#' implemented by slider. Defaults to the previous 7 days. Currently only
+#' group_by's on the geo_value. Should probably extend to more keys if you have
+#' them.
+#'
 #' @param epi_data the dataset
 #' @param width the number of days (or examples, the sliding isn't time-aware) to use
 #' @param cols_to_mean the non-key columns to take the mean over. `NULL` means all
+#'
 #' @importFrom slider slide_dbl
 #' @importFrom epiprocess epi_slide
 #' @export
@@ -46,11 +49,12 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
   return(epi_data)
 }
 
-#' get a rolling standard deviation for the named columns
-#' @description
+#' Get a rolling standard deviation for the named columns
+#'
 #' A rolling standard deviation, based off of a rolling mean. First it
-#'   calculates a rolling mean with width `mean_width`, and then squares the
-#'   difference between that and the actual value, averaged over `sd_width`.
+#' calculates a rolling mean with width `mean_width`, and then squares the
+#' difference between that and the actual value, averaged over `sd_width`.
+#'
 #' @param epi_data the dataset
 #' @param sd_width the number of days (or examples, the sliding isn't
 #'   time-aware) to use for the standard deviation calculation
@@ -59,6 +63,7 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
 #'   (so 14 in the complete default case)
 #' @param cols_to_sd the non-key columns to take the sd over. `NULL` means all
 #' @param keep_mean bool, if `TRUE`, it retains keeps the mean column
+#'
 #' @importFrom epiprocess epi_slide
 #' @export
 rolling_sd <- function(epi_data, sd_width = 28L, mean_width = NULL, cols_to_sd = NULL, keep_mean = FALSE) {

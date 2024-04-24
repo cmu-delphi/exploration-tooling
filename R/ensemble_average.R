@@ -1,8 +1,9 @@
-#' an ensemble model that averages each quantile separately
-#' @description
+#' An ensemble model that averages each quantile separately
+#'
 #' The simplest class of ensembing models, it takes in a list of quantile
-#'   forecasts and averages them on a per-quantile basis. By default the average
-#'   used is the median, but it can accept any vectorized function.
+#' forecasts and averages them on a per-quantile basis. By default the average
+#' used is the median, but it can accept any vectorized function.
+#'
 #' @param epi_data unused for this forecaster, but potentially an ensemble may
 #'   want the underlying data.
 #' @param outcome The name of the target variable.
@@ -17,6 +18,7 @@
 #' @param ensemble_args_names an argument purely for use in targets. You
 #'   probably shouldn't worry about it. In a target, it should probably be
 #'   `ensemble_args_names = names(ensemble_args)`
+#'
 #' @importFrom rlang %||%
 #' @export
 ensemble_average <- function(epi_data,

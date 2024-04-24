@@ -1,5 +1,7 @@
-#' the quantile levels used by the covidhub repository
+#' The quantile levels used by the covidhub repository
+#'
 #' @param type either standard or inc_case, with inc_case being a small subset of the standard
+#'
 #' @export
 covidhub_probs <- function(type = c("standard", "inc_case")) {
   type <- match.arg(type)
@@ -9,12 +11,15 @@ covidhub_probs <- function(type = c("standard", "inc_case")) {
   )
 }
 
-#' look up forecasters by name
-#' @description
-#' given a (partial) forecaster name, look up all forecasters in the given project which contain part of that name.
+#' Look up forecasters by name
+#'
+#' Given a (partial) forecaster name, look up all forecasters in the given
+#' project which contain part of that name.
+#'
 #' @param forecaster_name a part of the adj.adj.1 name used to identify the forecaster.
 #' @param param_grid the tibble containing the mapping between
 #' @param project the project to be used; by default, the environmental variable is used
+#'
 #' @importFrom targets tar_read tar_config_get
 #' @export
 forecaster_lookup <- function(forecaster_name, param_grid = NULL, project = NULL) {
@@ -34,13 +39,12 @@ strip_underscored <- function(x) {
   substr(x[[1]], start = last_underscore + 1, stop = nchar(x))
 }
 
-#' list forecasters used in the given ensemble table not found in the given forecaster grid
-#' @description
-#' list forecasters used in the given ensemble table not found in the given forecaster grid
+#' List forecasters used in the given ensemble table not found in the given forecaster grid
 #'
 #' @param ensemble_grid the grid of ensembles used
 #' @param param_grid the grid of forecasters used that we're checking for presence
 #' @param project the project to be used; by default, the environmental variable is used
+#'
 #' @export
 ensemble_missing_forecasters <- function(ensemble_grid = NULL, param_grid = NULL, project = NULL) {
   if (is.null(project)) {
@@ -55,7 +59,8 @@ ensemble_missing_forecasters <- function(ensemble_grid = NULL, param_grid = NULL
   return(absent_forecasters)
 }
 
-#' given an ensemble and a list of forecasters used in some of those ensembles, return the ones that use them
+#' Given an ensemble and a list of forecasters used in some of those ensembles, return the ones that use them
+#'
 #' @inheritParams ensemble_missing_forecasters
 #' @export
 ensemble_missing_forecasters_details <- function(ensemble_grid = NULL, param_grid = NULL, project = NULL) {
@@ -78,12 +83,14 @@ ensemble_missing_forecasters_details <- function(ensemble_grid = NULL, param_gri
   return(unique_missing)
 }
 
-#' add a unique id based on the column contents
-#' @description
-#' create a string of `n_adj` that is a hash of the parameters
-#' and append the `ahead` at the end.
+#' Add a unique id based on the column contents
+#'
+#' Create a string of `n_adj` that is a hash of the parameters and append the
+#' `ahead` at the end.
+#'
 #' @param df the df to add a column to. everything should be convertable to a string
 #' @param n_adj the number of adjectives to use; default of 2.
+#'
 #' @importFrom cli hash_animal
 #' @export
 add_id <- function(df, n_adj = 2) {
@@ -104,9 +111,11 @@ add_id <- function(df, n_adj = 2) {
   return(df)
 }
 
-#' generate an id from a simple list of parameters
+#' Generate an id from a simple list of parameters
+#'
 #' @param param_list the list of parameters. must include `ahead` if `ahead = NULL`
 #' @param ahead the ahead to use.
+#'
 #' @inheritParams add_id
 #' @export
 single_id <- function(param_list, ahead = NULL, n_adj = 2) {
@@ -124,14 +133,16 @@ single_id <- function(param_list, ahead = NULL, n_adj = 2) {
   return(full_name)
 }
 
-#' add aheads, forecaster_ids, and ids to a list of ensemble models
-#' @description
+#' Add aheads, forecaster_ids, and ids to a list of ensemble models
+#'
 #' First, do an expand grid to do a full combination of ensemble_grid x aheads.
-#'   Then add a column containing lists of ids of the dependent forecasters
-#'   based on their parameters.
+#' Then add a column containing lists of ids of the dependent forecasters based
+#' on their parameters.
+#'
 #' @param ensemble_grid the list of ensembles,
 #' @param aheads the aheads to add
 #' @inheritParams add_id
+#'
 #' @importFrom tidyr expand_grid
 #' @importFrom tibble tibble
 #' @export
@@ -151,11 +162,14 @@ id_ahead_ensemble_grid <- function(ensemble_grid, aheads, n_adj = 2) {
   return(ensemble_grid)
 }
 
-#' convert a list of forecasters
-#' @description
-#' the required format for targets is a little jank; this takes a human legible tibble and makes it targets legible.
-#' Currently only `forecaster` and `trainer` can be symbols.
+#' Convert a list of forecasters
+#'
+#' The required format for targets is a little jank; this takes a human legible
+#' tibble and makes it targets legible. Currently only `forecaster` and
+#' `trainer` can be symbols.
+#'
 #' @param param_grid the tibble of parameters. Must have forecaster and trainer, everything else is optional
+#'
 #' @export
 #' @importFrom rlang syms
 make_target_param_grid <- function(param_grid) {
@@ -174,8 +188,7 @@ make_target_param_grid <- function(param_grid) {
   )
 }
 
-#' helper function for `make_target_param_grid`
-#' @keywords internal
+#' Helper function for `make_target_param_grid`
 lists_of_real_values <- function(param_grid) {
   full_lists <- transpose(param_grid %>% select(-forecaster, -id))
   filter_nonvalues <- function(x) {
@@ -184,15 +197,22 @@ lists_of_real_values <- function(param_grid) {
   map(full_lists, filter_nonvalues)
 }
 
-#' convert a list of forecasters
-#' @description
-#' the required format for targets is a little jank; this takes a human legible tibble and makes it targets legible.
-#' Currently only `forecaster` and `trainer` can be symbols.
+#' Convert a list of forecasters
+#'
+#' The required format for targets is a little jank; this takes a human legible
+#' tibble and makes it targets legible. Currently only `forecaster` and
+#' `trainer` can be symbols.
+#'
 #' @param param_grid the tibble of parameters. Must have forecaster and trainer, everything else is optional
 #' @param ONE_AHEAD_FORECASTER_NAME the extra bit of name that is shared by all
+#'
 #' @export
 #' @importFrom rlang syms
 make_target_ensemble_grid <- function(param_grid, ONE_AHEAD_FORECASTER_NAME = "forecast_by_ahead") {
+  sym_subset <- function(param_list, sym_names = list("average_type")) {
+    imap(param_list, \(x, y) if (y %in% sym_names) sym(x) else x)
+  }
+
   param_grid$ensemble_params <- map(param_grid$ensemble_params, sym_subset)
   param_grid %<>%
     mutate(ensemble = syms(ensemble)) %>%
@@ -203,19 +223,16 @@ make_target_ensemble_grid <- function(param_grid, ONE_AHEAD_FORECASTER_NAME = "f
   return(param_grid)
 }
 
-#' function to map
-#' @keywords internal
-#' @param sym_names a list of the parameter names that should be turned into symbols
-sym_subset <- function(param_list, sym_names = list("average_type")) {
-  imap(param_list, \(x, y) if (y %in% sym_names) sym(x) else x)
-}
 
-#' temporary patch that pulls `NA`'s out of an epi_df
-#' @description
-#' just delete rows that have NA's in them. eventually epipredict should directly handle this so we don't have to
+#' Temporary patch that pulls `NA`'s out of an epi_df
+#'
+#' Just delete rows that have NA's in them. eventually epipredict should
+#' directly handle this so we don't have to
+#'
 #' @param epi_data the epi_df to be fixed
 #' @param outcome the column name containing the target variable
 #' @param extra_sources any other columns used as predictors
+#'
 #' @importFrom tidyr drop_na
 #' @importFrom epiprocess as_epi_df
 #' @export

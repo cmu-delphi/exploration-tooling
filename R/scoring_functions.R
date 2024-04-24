@@ -99,7 +99,6 @@ evaluate_predictions <- function(
 #' Remove all quantile forecasts
 #'
 #' @param cards either predictions_cards or scorecards
-#'
 #' @return cards of the same class but with only one row for each
 #'   geo_value/forecast_date/ahead/forecaster (the point estimate)
 #'
@@ -189,10 +188,7 @@ weighted_interval_score <- function(quantile, value, actual_value) {
   return(wis)
 }
 
-#' Compute absolute error
-#'
 #' Absolute error of a forecaster
-#'
 #'
 #' Intended to be used with `evaluate_predictions()`, it expects three arguments
 #' of the same length, finds the location of the point forecast, and returns
@@ -343,6 +339,7 @@ underprediction <- function(quantile, value, actual_value) {
 
   return(ans)
 }
+
 #' Sharpness component of the weighted interval score
 #'
 #' Requires symmetric quantile forecasts. Roughly, a penalty for the
@@ -353,13 +350,11 @@ underprediction <- function(quantile, value, actual_value) {
 #' @param actual_value Actual value.
 #'
 #' @export
-
 sharpness <- function(quantile, value, actual_value) {
   weighted_interval_score(quantile, value, actual_value) -
     overprediction(quantile, value, actual_value) -
     underprediction(quantile, value, actual_value)
 }
-
 
 #' Common parameter checks for score functions
 #'
@@ -418,7 +413,6 @@ is_symmetric <- function(x, tol = 1e-8) {
   all(abs(x + rev(x) - 1) < tol)
 }
 
-
 find_quantile_match <- function(quantiles, val_to_match, tol = 1e-8) {
   return(abs(quantiles - val_to_match) < tol & !is.na(quantiles))
 }
@@ -439,12 +433,14 @@ read_external_predictions_data <- function(predictions_filename, forecaster_name
     filter(forecaster == forecaster_name)
 }
 
-#' evaluate_predictions wrapper
-#' @description
-#' run the measures on `data`, with truth data `evaluation_data`
+#' Evaluate_predictions wrapper
+#'
+#' Run the measures on `data`, with truth data `evaluation_data`.
+#'
 #' @param data a prediction card to be scored
 #' @param evaluation_data the true values
 #' @param measures a set of scores to be used
+#'
 #' @export
 run_evaluation_measure <- function(data, evaluation_data, measures) {
   data %>%

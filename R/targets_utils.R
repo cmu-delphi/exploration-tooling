@@ -6,7 +6,6 @@
 #' - `fetch_args`
 #' - `eval_time`
 #' - `traing_time`
-#' @export
 make_data_targets <- function() {
   list(
     tar_target(
@@ -133,7 +132,6 @@ make_data_targets <- function() {
 }
 
 #' Make list of common forecasters for forecasting experiments across projects
-#' @export
 make_shared_grids <- function() {
   list(
     tidyr::expand_grid(
@@ -157,7 +155,6 @@ make_shared_grids <- function() {
 }
 
 #' Make list of common ensembles for forecasting experiments across projects
-#' @export
 make_shared_ensembles <- function() {
   ex_forecaster <- list(
     forecaster = "scaled_pop",
@@ -185,12 +182,8 @@ make_shared_ensembles <- function() {
   )
 }
 
-#' Make forecasts and scores by ahead targets
-#' @description
-#' globals this depends on:
 #' Relies on the following globals:
 #' - `date_step`
-#' @export
 make_forecasts_and_scores_by_ahead <- function() {
   tar_map(
     values = targets_param_grid,
@@ -228,8 +221,6 @@ make_forecasts_and_scores_by_ahead <- function() {
   )
 }
 
-#' Make forecasts and scores targets
-#' @export
 make_forecasts_and_scores <- function() {
   tar_map(
     values = forecaster_parent_id_map,
@@ -251,8 +242,6 @@ make_forecasts_and_scores <- function() {
   )
 }
 
-#' Make ensemble targets
-#' @export
 make_ensemble_targets_and_scores <- function() {
   ensembles_and_scores <- tar_map(
     values = ensemble_parent_id_map,
@@ -274,10 +263,6 @@ make_ensemble_targets_and_scores <- function() {
   )
 }
 
-
-#' Make external names and scores targets
-#' @importFrom targets tar_target tar_group
-#' @export
 make_external_names_and_scores <- function() {
   external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
   project_path <- Sys.getenv("TAR_PROJECT", "")

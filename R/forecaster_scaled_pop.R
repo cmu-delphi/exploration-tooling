@@ -1,11 +1,11 @@
-#' example forecaster definition
-#' @description
-#' a forecaster is a function that takes in an epi_df, an outcome column name, a
-#'   list of extra columns, and an ahead, and produces a forecast with a
-#'   `target_end_date` that is `ahead` many days after
-#'   `attributes(epi_df)$metadata$as_of`. The resulting output should be a tibble
-#'   with columns `(geo_value, forecast_date, target_end_date, quantile,
-#'   value)`, preferably in that order.
+#' Example forecaster definition
+#'
+#' A forecaster is a function that takes in an epi_df, an outcome column name, a
+#' list of extra columns, and an ahead, and produces a forecast with a
+#' `target_end_date` that is `ahead` many days after
+#' `attributes(epi_df)$metadata$as_of`. The resulting output should be a
+#' tibble with columns `(geo_value, forecast_date, target_end_date, quantile,
+#' value)`, preferably in that order.
 #'
 #' To define a forecaster:
 #' 1. first define any pre-epipredict steps (they should be operating on a
@@ -13,6 +13,7 @@
 #' 2. then define any post-epipredict steps (same)
 #' 3. then create the forecaster as a function, which must have the following
 #' arguments:
+#'
 #' @param epi_data the actual data used
 #' @param outcome the name of the target variable
 #' @param extra_sources the name of any extra columns to use. This list could be
@@ -36,6 +37,7 @@
 #'   covidhub.
 #' @seealso some utilities for making forecasters: [format_storage],
 #'   [sanitize_args_predictors_trainer]
+#'
 #' @importFrom epipredict epi_recipe step_population_scaling frosting arx_args_list layer_population_scaling
 #' @importFrom tibble tibble
 #' @importFrom zeallot %<-%
