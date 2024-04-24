@@ -12,16 +12,23 @@ run-nohup:
 	nohup Rscript scripts/run.R &
 
 sync:
-	Rscript scripts/sync.R
+	Rscript -e "source('R/utils.R'); manage_s3_forecast_cache()"
 
 pull:
-	Rscript scripts/sync.R download
+	Rscript -e "source('R/utils.R'); manage_s3_forecast_cache(direction = 'download')"
+
+download:pull
 
 push:
-	Rscript scripts/sync.R upload
+	Rscript -e "source('R/utils.R'); manage_s3_forecast_cache(direction = 'upload')"
+
+upload: push
 
 dashboard:
 	Rscript scripts/dashboard.R
+
+test:
+	Rscript -e "testthat::test_dir('tests/testthat')"
 
 test-forecasters:
 	Rscript scripts/test-forecasters-data.R

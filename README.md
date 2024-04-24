@@ -35,6 +35,8 @@ make install
 
 # Pull pre-scored forecasts from the AWS bucket
 make pull
+# or
+make download
 
 # Run only the dashboard, to display results run on other machines
 make dashboard
@@ -46,6 +48,8 @@ make run-nohup
 
 # Push complete or partial results to the AWS bucket
 make push
+# or
+make upload
 ```
 
 ## Development
