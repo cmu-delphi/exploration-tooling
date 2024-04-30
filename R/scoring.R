@@ -31,8 +31,6 @@
 #' @param truth_data truth data (observed). This should be a data frame that
 #'   will be joined to `predictions_cards` by all available columns. The
 #'   observed data column should be named `actual`.
-#' @param grp_vars character vector of named columns in `predictions_cards`
-#'  such that the combination gives a unique (quantile) prediction.
 #'
 #' @return tibble of "score cards". Contains the same information as the
 #'   `predictions_cards()` with additional columns for each `err_measure` and
@@ -48,10 +46,6 @@ evaluate_predictions <- function(
       wis = weighted_interval_score,
       ae = absolute_error,
       coverage_80 = interval_coverage(coverage = 0.8)
-    ),
-    grp_vars = c(
-      "forecaster",
-      intersect(colnames(predictions_cards), colnames(truth_data))
     )) {
   if ("actual" %in% names(predictions_cards)) {
     cli::cli_warn(
@@ -68,75 +62,27 @@ evaluate_predictions <- function(
   assert_that("actual" %in% names(truth_data),
     msg = paste("`truth_data` must contain a column named `actual`")
   )
-  predictions_cards <- left_join(predictions_cards, truth_data,
-    by = intersect(colnames(predictions_cards), colnames(truth_data))
-  )
-  if (is.null(err_measures) || length(err_measures) == 0) {
-    score_card <- predictions_cards
-  } else {
-    err_calls <- lapply(err_measures, function(err_measure) {
-      quo(err_measure(.data$quantile, .data$value, .data$actual))
-    })
-    score_card <- predictions_cards %>%
-      group_by(across(all_of(grp_vars))) %>%
-      summarize(!!!err_calls, .groups = "drop") %>%
-      inner_join(predictions_cards, by = grp_vars, multiple = "all")
-  }
+
+  grp_vars <- c("geo_value", "forecast_date", "target_end_date")
+  err_calls <- lapply(err_measures, function(err_measure) {
+    quo(err_measure(.data$quantile, .data$value, .data$actual))
+  })
+  predictions_cards <- left_join(predictions_cards, truth_data)
+
+  score_card <- predictions_cards %>%
+    group_by(across(all_of(grp_vars))) %>%
+    summarize(!!!err_calls, .groups = "drop") %>%
+    inner_join(predictions_cards, by = grp_vars, multiple = "all") %>%
+    filter(dplyr::near(.data$quantile, 0.5)) %>%
+    select(-quantile, -value) %>%
+    relocate(attr(err_measures, "names"), .after = last_col())
+
   class(score_card) <- c("score_cards", class(score_card))
   attributes(score_card) <- c(attributes(score_card),
     as_of = Sys.Date()
   )
-  score_card <- collapse_cards(score_card)
-  score_card %<>%
-    select(-.data$quantile, -.data$value)
-
-  score_card %<>%
-    relocate(attr(err_measures, "names"), .after = last_col())
   return(score_card)
 }
-
-
-#' Remove all quantile forecasts
-#'
-#' @param cards either predictions_cards or scorecards
-#' @return cards of the same class but with only one row for each
-#'   geo_value/forecast_date/ahead/forecaster (the point estimate)
-#'
-#' @importFrom assertthat assert_that
-#' @importFrom tidyr pivot_wider
-#'
-#' @export
-collapse_cards <- function(cards) {
-  cls <- class(cards)[1]
-  assert_that(cls %in% c("predictions_cards", "score_cards"),
-    msg = paste(
-      "This function is only appropriate for",
-      "predictions_cards or score_cards classes."
-    )
-  )
-  cards %<>%
-    filter(abs(.data$quantile - 0.5) < 1e-8 | is.na(.data$quantile)) %>%
-    mutate(quantile = ifelse(is.na(.data$quantile), "p", "m"))
-  if (n_distinct(cards$quantile) == 1) {
-    cards %<>%
-      mutate(quantile = ifelse(.data$quantile == "p", NA, 0.5))
-  } else {
-    cards %<>%
-      pivot_wider(names_from = .data$quantile, values_from = .data$value) %>%
-      mutate(
-        quantile = ifelse(is.na(.data$p), 0.5, NA),
-        value = ifelse(is.na(.data$p), .data$m, .data$p)
-      ) %>%
-      select(-.data$p, -.data$m)
-  }
-  if ("geo_value" %in% colnames(cards)) {
-    cards %<>%
-      relocate(.data$quantile:.data$value, .after = .data$geo_value)
-  }
-  class(cards) <- c(cls, class(cards))
-  cards
-}
-
 
 
 #' Compute weighted interval score
@@ -431,27 +377,4 @@ read_external_predictions_data <- function(predictions_filename, forecaster_name
   prediction_cards %>%
     filter(forecast_date >= "2023-06-01") %>%
     filter(forecaster == forecaster_name)
-}
-
-#' Evaluate_predictions wrapper
-#'
-#' Run the measures on `data`, with truth data `evaluation_data`.
-#'
-#' @param data a prediction card to be scored
-#' @param evaluation_data the true values
-#' @param measures a set of scores to be used
-#'
-#' @export
-run_evaluation_measure <- function(data, evaluation_data, measures) {
-  data %>%
-    evaluate_predictions(
-      evaluation_data,
-      err_measures = measures,
-      grp_vars = c(
-        "signal",
-        "geo_value",
-        "forecast_date",
-        "target_end_date"
-      )
-    )
 }

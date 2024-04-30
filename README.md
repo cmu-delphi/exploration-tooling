@@ -67,7 +67,7 @@ make upload
 
 ### Debugging
 
-Targets in parallel mode conflccts with debugging because it ignores `browser()` statements. To debug a target named `yourTarget`:
+Targets in parallel mode conflicts with debugging because it ignores `browser()` statements. To debug a target named `yourTarget`:
 
 1. set `DEBUG_MODE=true` in `.Renviron`
 2. insert a browser in the relevant function

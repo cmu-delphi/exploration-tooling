@@ -43,6 +43,12 @@ make_data_targets <- function() {
           rename(
             actual = value,
             target_end_date = time_value
+          ) %>%
+          select(
+            signal,
+            geo_value,
+            target_end_date,
+            actual
           )
       }
     ),
@@ -131,134 +137,71 @@ make_data_targets <- function() {
   )
 }
 
-#' Make list of common forecasters for forecasting experiments across projects
-make_shared_grids <- function() {
-  list(
-    tidyr::expand_grid(
-      forecaster = "scaled_pop",
-      trainer = c("linreg", "quantreg"),
-      ahead = c(1:7, 14, 21, 28),
-      pop_scaling = FALSE
-    ),
-    tidyr::expand_grid(
-      forecaster = "scaled_pop",
-      trainer = c("linreg", "quantreg"),
-      ahead = c(1:7, 14, 21, 28),
-      lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14), c(0, 7, 14, 24)),
-      pop_scaling = FALSE
-    ),
-    tidyr::expand_grid(
-      forecaster = "flatline_fc",
-      ahead = c(1:7, 14, 21, 28)
-    )
-  )
-}
-
-#' Make list of common ensembles for forecasting experiments across projects
-make_shared_ensembles <- function() {
-  ex_forecaster <- list(
-    forecaster = "scaled_pop",
-    trainer = "linreg",
-    pop_scaling = FALSE,
-    lags = c(0, 3, 5, 7, 14)
-  )
-  # ensembles don't lend themselves to expand grid (inherently needs a list for sub-forecasters)
-  tibble(
-    ensemble = c("ensemble_average", "ensemble_average"),
-    ensemble_params = list(list(average_type = "mean"), list(average_type = "median")),
-    forecasters = list(
-      list(
-        ex_forecaster,
-        list(forecaster = "flatline_fc")
-      ),
-      list(
-        ex_forecaster,
-        list(forecaster = "flatline_fc")
-      )
-    )
-  )
-}
 
 #' Relies on the following globals:
+#' - `forecaster_grid`
 #' - `date_step`
-make_forecasts_and_scores_by_ahead <- function() {
+make_forecasts_and_scores <- function() {
   tar_map(
-    values = targets_param_grid,
+    values = forecaster_grid,
     names = id,
     unlist = FALSE,
-    tar_target_raw(
-      name = ONE_AHEAD_FORECAST_NAME,
-      command = expression(
+    tar_target(
+      name = forecast,
+      command = {
         slide_forecaster(
-          data = joined_archive_data_2022,
+          epi_archive = joined_archive_data_2022,
           outcome = "hhs",
+          ahead = aheads,
           extra_sources = "",
           forecaster = forecaster,
           n_training_pad = 30L,
           forecaster_args = params,
           forecaster_args_names = param_names,
-          date_range_step_size = date_step
-        )
-      )
-    ),
-    tar_target_raw(
-      name = ONE_AHEAD_SCORE_NAME,
-      command = expression(
-        run_evaluation_measure(
-          data = forecast_by_ahead,
-          evaluation_data = hhs_evaluation_data,
-          measures = list(
-            wis = weighted_interval_score,
-            ae = absolute_error,
-            cov_80 = interval_coverage(0.8)
-          )
-        )
-      )
-    )
-  )
-}
-
-make_forecasts_and_scores <- function() {
-  tar_map(
-    values = forecaster_parent_id_map,
-    names = parent_id,
-    tar_target(
-      name = forecast,
-      command = {
-        bind_rows(forecast_component_ids) %>%
-          mutate(parent_forecaster = parent_id)
-      }
+          date_range_step_size = date_step,
+          cache_key = "joined_archive_data_2022"
+        ) %>% mutate(id = id)
+      },
+      pattern = map(aheads)
     ),
     tar_target(
       name = score,
       command = {
-        bind_rows(score_component_ids) %>%
-          mutate(parent_forecaster = parent_id)
+        evaluate_predictions(predictions_cards = forecast, truth_data = hhs_evaluation_data)
       }
     )
   )
 }
 
-make_ensemble_targets_and_scores <- function() {
-  ensembles_and_scores <- tar_map(
-    values = ensemble_parent_id_map,
-    names = parent_id,
+#' Relies on the following globals:
+#' - `ensemble_grid`
+make_ensembles_and_scores <- function() {
+  tar_map(
+    values = ensemble_grid,
+    names = id,
     tar_target(
-      name = ensemble,
+      name = ensemble_forecast,
       command = {
-        bind_rows(ensemble_component_ids) %>%
-          mutate(parent_ensemble = parent_id)
-      }
+        ensemble(
+          joined_archive_data_2022,
+          children_ids,
+          "hhs",
+          extra_sources = "chng",
+          ensemble_args,
+          ensemble_args_names
+        )
+      },
+      priority = .9999
     ),
     tar_target(
-      name = ensemble_score,
+      name = ensemble_scores,
       command = {
-        bind_rows(score_component_ids) %>%
-          mutate(parent_ensemble = parent_id)
+        evaluate_predictions(predictions_cards = ensemble_forecast, truth_data = hhs_evaluation_data)
       }
     )
   )
 }
+
 
 make_external_names_and_scores <- function() {
   external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")

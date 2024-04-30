@@ -10,3 +10,4 @@ nohup.out
 run.Rout
 tmp.R
 reports/
+.exploration_cache

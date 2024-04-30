@@ -75,10 +75,9 @@ scaled_pop <- function(epi_data,
   }
   args_input[["ahead"]] <- effective_ahead
   args_input[["quantile_levels"]] <- quantile_levels
-  args_list <- do.call(arx_args_list, args_input)
+  args_list <- inject(arx_args_list(!!!args_input))
   # if you want to hardcode particular predictors in a particular forecaster
   predictors <- c(outcome, extra_sources)
-  # TODO: Partial match quantile_level coming from here (on Dmitry's machine)
   c(args_list, predictors, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by

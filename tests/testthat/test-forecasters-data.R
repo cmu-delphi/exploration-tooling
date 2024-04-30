@@ -37,7 +37,7 @@ default_slide_forecaster <- function(dataset,
     wrapperfun <- identity
   }
   wrapperfun(res <- slide_forecaster(
-    data = dataset,
+    epi_archive = dataset,
     outcome = outcome,
     extra_sources = extra_sources,
     n_training_pad = 5,

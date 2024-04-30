@@ -57,7 +57,9 @@ load_forecast_data <- memoise::memoise(load_forecast_data_raw, cache = cache)
 prepare_forecaster_table <- function(selected_forecasters) {
   forecasters <- tar_read(forecaster_params_grid) %>%
     select(-id) %>%
-    mutate(across(where(is.list), function(x) { map(x, `%||%`, c(0, 7, 14)) })) %>%
+    mutate(across(where(is.list), function(x) {
+      map(x, `%||%`, c(0, 7, 14))
+    })) %>%
     mutate(lags = paste(lags, sep = ",")) %>%
     group_by(parent_id) %>%
     mutate(ahead = toString(unique(ahead))) %>%
@@ -79,7 +81,7 @@ prepare_ensemble_table <- function(selected_forecasters) {
     ungroup() %>%
     distinct(parent_id, .keep_all = TRUE) %>%
     rename(name = parent_id) %>%
-    mutate(ensemble_params = paste(ensemble_params, sep = ",")) %>%
+    mutate(ensemble_args = paste(ensemble_args, sep = ",")) %>%
     mutate(forecaster_ids = paste(forecaster_ids, sep = ",")) %>%
     select(name, everything()) %>%
     select(-forecasters)
@@ -282,7 +284,7 @@ shinyApp(
             scale_factor <- scale_factor_geo + scale_factor_geo_x + scale_factor_fcast + scale_factor_facet + scale_factor_facet_fcast
 
             max_size <- 5
-            dynamic_size <- ((0.97 ^ scale_factor) + 0.2) * max_size
+            dynamic_size <- ((0.97^scale_factor) + 0.2) * max_size
 
             . + geom_point(aes(size = n)) +
               scale_size_area(max_size = dynamic_size) +
