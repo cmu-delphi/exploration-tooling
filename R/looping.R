@@ -108,7 +108,8 @@ slide_forecaster <- function(data,
   names(res) <- sub("^slide_value_", "", names(res))
 
   # append the truth data
-  true_value <- archive$as_of(archive$versions_end) %>%
+  true_value <- archive %>%
+    epiprocess::epix_as_of(archive$versions_end) %>%
     select(geo_value, time_value, !!outcome) %>%
     rename(true_value = !!outcome)
   res %<>%

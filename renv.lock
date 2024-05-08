@@ -812,14 +812,15 @@
     },
     "epidatr": {
       "Package": "epidatr",
-      "Version": "1.1.4",
+      "Version": "1.1.5",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
-      "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epidatr",
-      "RemoteRef": "dev",
-      "RemoteSha": "a53ad5671cc072518feaed605637d0bf27fde3e6",
+      "RemoteUsername": "cmu-delphi",
+      "RemotePkgRef": "cmu-delphi/epidatr",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "626c30bc07f4aae3c3e6a6c6b825a6cd5eee1ce7",
       "Requirements": [
         "MMWRweek",
         "R",
@@ -838,19 +839,20 @@
         "usethis",
         "xml2"
       ],
-      "Hash": "c495a916c7f3aba065e09fcaceca4b01"
+      "Hash": "5c76408a283a0b20c6fd455fcd1c44b6"
     },
     "epipredict": {
       "Package": "epipredict",
-      "Version": "0.0.10",
+      "Version": "0.0.13",
       "Source": "GitHub",
-      "RemoteType": "github",
-      "RemoteUsername": "cmu-delphi",
-      "RemoteRepo": "epipredict",
-      "RemoteRef": "HEAD",
-      "RemoteSha": "7a4ea55437f6415e86b34d0fb7079ba7e8d5e286",
-      "RemoteHost": "api.github.com",
       "Remotes": "cmu-delphi/epidatr, cmu-delphi/epiprocess, dajmcdon/smoothqr",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "epipredict",
+      "RemoteUsername": "cmu-delphi",
+      "RemotePkgRef": "cmu-delphi/epipredict",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "8a516e96bbd0d647291700c32da9d4c5182e9f13",
       "Requirements": [
         "R",
         "checkmate",
@@ -858,13 +860,11 @@
         "distributional",
         "dplyr",
         "epiprocess",
-        "fs",
         "generics",
+        "ggplot2",
         "glue",
         "hardhat",
-        "lifecycle",
         "magrittr",
-        "methods",
         "parsnip",
         "quantreg",
         "recipes",
@@ -874,26 +874,25 @@
         "tibble",
         "tidyr",
         "tidyselect",
-        "usethis",
+        "tsibble",
         "vctrs",
         "workflows"
       ],
-      "Hash": "d59cd87c1aef1bfb1afce0bbf9b7c9c5"
+      "Hash": "c8f4f260388bc61e562f599c00c73fa6"
     },
     "epiprocess": {
       "Package": "epiprocess",
-      "Version": "0.7.5",
+      "Version": "0.7.7",
       "Source": "GitHub",
       "RemoteType": "github",
+      "RemoteHost": "api.github.com",
       "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epiprocess",
-      "RemoteRef": "HEAD",
-      "RemoteSha": "f29654512c4784c5a622b76b0ad13c0b43004d48",
-      "RemoteHost": "api.github.com",
+      "RemoteRef": "ds/r6-clean",
+      "RemoteSha": "d5c89b7e6bcf27d76aeb58c13c1bf9a528f92a3b",
       "Remotes": "cmu-delphi/epidatr, reconverse/outbreaks, glmgen/genlasso",
       "Requirements": [
         "R",
-        "R6",
         "checkmate",
         "cli",
         "data.table",
@@ -916,7 +915,7 @@
         "utils",
         "vctrs"
       ],
-      "Hash": "d408b669e3b55d445b76272049fdb07e"
+      "Hash": "a6d480168d4ada8865470ca9912187a5"
     },
     "evaluate": {
       "Package": "evaluate",
@@ -1154,7 +1153,7 @@
     },
     "ggplot2": {
       "Package": "ggplot2",
-      "Version": "3.5.0",
+      "Version": "3.5.1",
       "Source": "Repository",
       "Repository": "RSPM",
       "Requirements": [
@@ -1175,7 +1174,7 @@
         "vctrs",
         "withr"
       ],
-      "Hash": "52ef83f93f74833007f193b2d4c159a2"
+      "Hash": "44c6a2f8202d5b7e878ea274b1092426"
     },
     "gh": {
       "Package": "gh",
