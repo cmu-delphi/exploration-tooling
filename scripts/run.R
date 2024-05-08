@@ -26,9 +26,6 @@
 #   # Save to disk
 #   saveRDS(scorecards, "exploration-scorecards-2023-10-04.RDS")
 
-
-
-
 tar_project <- Sys.getenv("TAR_PROJECT", "covid_hosp_explore")
 external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
 debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
@@ -64,7 +61,7 @@ tar_manifest()
 if (debug_mode) {
   tar_make(callr_function = NULL, use_crew = FALSE)
 } else {
-  tar_make(use_crew = TRUE)
+  tar_make()
 }
 
 if (use_shiny) {

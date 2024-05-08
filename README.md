@@ -52,7 +52,7 @@ make push
 
 ### Directory Layout
 
-- `Makefile`: the main entrypoint for all pipelines
+- `run.R` and `Makefile`: the main entrypoint for all pipelines
 - `R/`: R package code to be reused
 - `scripts/`: plotting, code, and misc.
 - `tests/`: package tests
