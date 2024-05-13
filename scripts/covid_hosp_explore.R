@@ -18,7 +18,7 @@ dummy_forecaster <- function(...) {
     params = list(dots),
   )
 }
-debug <- TRUE
+debug <- FALSE
 
 
 # Add custom parameter combinations in the list below.

@@ -1,5 +1,5 @@
 suppressPackageStartupMessages({
-  targets::tar_source()
+  source(here::here("R", "load_all.R"))
 })
 
 # The external scores processing causes the pipeline to exit with an error,
