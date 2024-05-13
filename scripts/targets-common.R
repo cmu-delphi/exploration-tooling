@@ -1,17 +1,5 @@
 suppressPackageStartupMessages({
-  library(targets)
-  library(tarchetypes) # Load other packages as needed.
-
-  library(crew)
-  library(dplyr)
-  library(epipredict)
-  library(epieval)
-  library(lubridate)
-  library(parsnip)
-  library(purrr)
-  library(tibble)
-  library(tidyr)
-  library(rlang)
+  targets::tar_source()
 })
 
 # The external scores processing causes the pipeline to exit with an error,
@@ -40,19 +28,6 @@ if (debug_mode) {
 }
 
 tar_option_set(
-  packages = c(
-    "assertthat",
-    "dplyr",
-    "epieval",
-    "epipredict",
-    "ggplot2",
-    "lubridate",
-    "parsnip",
-    "tibble",
-    "tidyr",
-    "epidatr"
-  ), # packages that your targets need to run
-  imports = c("epieval"),
   format = "qs", # Optionally set the default storage format. qs is fast.
   controller = controllers,
   # Set default crew controller.

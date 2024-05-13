@@ -1,6 +1,6 @@
-#' helper function for those writing forecasters
-#' @description
-#' a smorgasbord of checks that any epipredict-based forecaster should do:
+#' Helper function for those writing forecasters
+#'
+#' A smorgasbord of checks that any epipredict-based forecaster should do:
 #' 1. check that the args list is created correctly,
 #' 2. rewrite an empty extra sources list from an empty string
 #' 3. validate the outcome and predictors as present,
@@ -8,10 +8,12 @@
 #' 5. adjust the trainer's quantiles based on those in args_list if it's a
 #'    quantile trainer
 #' 6. remake the lags to match the numebr of predictors
+#'
 #' @inheritParams scaled_pop
 #' @param predictors the full list of predictors including the outcome. can
 #'   include empty strings
 #' @param args_list the args list created by [`epipredict::arx_args_list`]
+#'
 #' @export
 sanitize_args_predictors_trainer <- function(epi_data,
                                              outcome,
@@ -40,10 +42,11 @@ sanitize_args_predictors_trainer <- function(epi_data,
   return(list(args_list, predictors, trainer))
 }
 
-#' confirm that there's enough data to run this model
-#' @description
-#' epipredict is a little bit fragile about having enough data to train; we want
-#'   to be able to return a null result rather than error out.
+#' Confirm that there's enough data to run this model
+#'
+#' Epipredict is a little bit fragile about having enough data to train; we want
+#' to be able to return a null result rather than error out.
+#'
 #' @param epi_data the input data
 #' @param ahead the effective ahead; may be infinite if there isn't enough data.
 #' @param args_input the input as supplied to `slide_forecaster`; lags is the
@@ -54,6 +57,7 @@ sanitize_args_predictors_trainer <- function(epi_data,
 #' @param buffer how many training data to insist on having (e.g. if `buffer=1`,
 #'   this trains on one sample; the default is set so that `linear_reg` isn't
 #'   rank deficient)
+#'
 #' @importFrom tidyr drop_na
 #' @export
 confirm_sufficient_data <- function(epi_data, ahead, args_input, outcome, extra_sources, buffer = 9) {

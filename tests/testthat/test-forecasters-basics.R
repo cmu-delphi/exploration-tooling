@@ -1,4 +1,5 @@
-library(dplyr)
+source(here::here("R", "load_all.R"))
+
 # TODO better way to do this than copypasta
 forecasters <- list(
   list("scaled_pop", scaled_pop),

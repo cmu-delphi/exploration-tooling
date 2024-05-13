@@ -1,3 +1,5 @@
+source(here::here("R", "load_all.R"))
+
 test_that("extend_ahead", {
   # testing that POSIXct converts correctly (as well as basic types)
   expect_no_error(epidataAhead <- extend_ahead(epipredict::case_death_rate_subset, 1))

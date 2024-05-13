@@ -1,7 +1,9 @@
-#' flatline forecaster (aka baseline)
-#' @description
-#' a minimal forecaster whose median is just the last value
-#' does not support `lags` as a parameter, but otherwise has the same parameters as `arx_forecaster`
+#' Flatline forecaster (aka baseline)
+#'
+#' A minimal forecaster whose median is just the last value does not support
+#' `lags` as a parameter, but otherwise has the same parameters as
+#' `arx_forecaster`.
+#'
 #' @inheritParams scaled_pop
 #' @importFrom rlang sym
 #' @importFrom epipredict flatline_forecaster flatline_args_list

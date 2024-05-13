@@ -35,10 +35,10 @@ plot_forecasts <- function(predictions_cards, forecast_date, exclude_geos, geo_t
 
   # Plot (symmetric) quantiles
   quantiles <- c(0.8, 0.95)
-  alpha <- c(0.4, 0.2)
+  alphas <- c(0.4, 0.2)
   for (i in seq_along(quantiles)) {
     q <- quantiles[i]
-    a <- alpha[i]
+    a <- alphas[i]
     g <- g +
       geom_ribbon(
         data = predictions_cards %>%

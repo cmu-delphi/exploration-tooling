@@ -1,10 +1,8 @@
-#' generate forecaster predictions on a particular dataset
-#' @description
-#' a wrapper that turns a forecaster, parameters, data
-#' combination into an actual experiment that outputs a
-#' prediction.
-#' as far as batchtools is concerned, the scoring function is a particular
-#'   parameter of the forecaster (or Algorithm, as they call it).
+#' Generate forecaster predictions on a particular dataset
+#'
+#' A wrapper that turns a forecaster, parameters, data combination into an
+#' actual experiment that outputs a prediction for each day.
+#'
 #' @param data the epi_df object
 #' @param outcome the name of the target column
 #' @param extra_sources any extra columns used for prediction that aren't
@@ -23,6 +21,7 @@
 #'   the names of the `forecaster_args`.
 #' @param date_range_step_size the step size (in days) to use when generating
 #'   the forecast dates.
+#'
 #' @importFrom epiprocess epix_slide
 #' @importFrom cli cli_abort
 #' @importFrom rlang !!

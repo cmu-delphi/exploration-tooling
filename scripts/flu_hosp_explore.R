@@ -2,6 +2,7 @@
 # tar_source()
 # where the forecasters and parameters are joined; see either the variable param_grid or `tar_read(forecasters)`
 source("scripts/targets-common.R")
+source("scripts/targets-exploration-common.R")
 
 # Add custom parameter combinations in the list below.
 make_unique_grids <- function() {

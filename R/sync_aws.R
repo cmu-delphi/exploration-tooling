@@ -1,4 +1,5 @@
-#' Manage S3 cache
+#' Sync AWS S3 cache
+#'
 #' @param rel_cache_dir The relative path to the cache directory, e.g.
 #' "data-processed/2021-09-01". Default is `"{tar_project}/objects"`
 #' @param bucket_name The name of the S3 bucket to sync.
@@ -9,16 +10,17 @@
 #'   to sync to those starting with `prefix`.
 #' @param tar_project which targets project we're working on
 #' @param external_scores_path which external scores file to sync
+#'
 #' @importFrom aws.s3 s3sync get_bucket
 #' @importFrom here here
 #' @export
-manage_S3_forecast_cache <- function(rel_cache_dir = NULL,
-                                     bucket_name = "forecasting-team-data",
-                                     direction = "sync",
-                                     verbose = FALSE,
-                                     prefix = Sys.getenv("AWS_S3_PREFIX", "exploration"),
-                                     tar_project = Sys.getenv("TAR_PROJECT", ""),
-                                     external_scores_path = Sys.getenv("EXTERNAL_SCORES_PATH", "")) {
+sync_aws <- function(rel_cache_dir = NULL,
+                     bucket_name = "forecasting-team-data",
+                     direction = "sync",
+                     verbose = FALSE,
+                     prefix = Sys.getenv("AWS_S3_PREFIX", "exploration"),
+                     tar_project = Sys.getenv("TAR_PROJECT", ""),
+                     external_scores_path = Sys.getenv("EXTERNAL_SCORES_PATH", "")) {
   if (is.null(rel_cache_dir)) {
     cache_path <- tar_project
   } else {

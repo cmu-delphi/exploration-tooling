@@ -1,3 +1,5 @@
+source(here::here("R", "load_all.R"))
+
 test_that("sanitize_args_predictors_trainer", {
   epi_data <- epipredict::case_death_rate_subset
   # don't need to test validate_forecaster_inputs as that's inherited
