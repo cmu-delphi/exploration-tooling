@@ -35,6 +35,8 @@ source(here::here("R", "plotting.R"))
 
 ## epipredict states
 
+Fan displays 5/25/50/75/95% quantiles.
+
 ```{r, fig.height = 60, fig.width = 12, echo=FALSE}
 plot_forecasts(
   params$forecast %>% filter(geo_value != "us"),
