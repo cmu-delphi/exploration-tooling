@@ -12,7 +12,7 @@ if (parallel::detectCores() < 30) {
 
 main_controller <- crew_controller_local(
   name = "main_controller",
-  workers = num_cores,
+  workers = num_workers,
   # These settings were cobbled together from various discussion threads on the
   # targets Github. There's been an ongoing issue in a dependency of {crew}
   # called {mirai}, where workers mysteriously stop working. The settings below
@@ -22,7 +22,6 @@ main_controller <- crew_controller_local(
   tasks_max = 1L,
   launch_max = 10000L
 )
-
 # The external scores processing causes the pipeline to exit with an error,
 # apparently due to running out of memory. Set up a non-parallel `crew`
 # controller to avoid.

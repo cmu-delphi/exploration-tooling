@@ -34,7 +34,7 @@ plot_forecasts <- function(predictions_cards, forecast_date, exclude_geos, geo_t
     geom_line(mapping = aes(y = .data$value))
 
   # Plot (symmetric) quantiles
-  quantiles <- c(0.8, 0.95)
+  quantiles <- c(0.75, 0.95)
   alphas <- c(0.4, 0.2)
   for (i in seq_along(quantiles)) {
     q <- quantiles[i]
