@@ -95,6 +95,8 @@ param_grid <- append(
   {
     if (debug) {
       (.) %>% map(~ .x %>% mutate(forecaster = "dummy_forecaster"))
+    } else {
+      .
     }
   } %>%
   map(add_id) %>%
@@ -138,6 +140,8 @@ ensemble_grid <- add_row(
           y
         })
       }))
+    } else {
+      .
     }
   } %>%
   id_ahead_ensemble_grid(AHEADS)
