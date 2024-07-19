@@ -16,6 +16,10 @@ flu_hosp_prod:
 covid_hosp_prod:
   script: scripts/covid_hosp_prod.R
   store: covid_hosp_prod
-  use_crew: yes
+  use_crew: no
   reporter_make: timestamp
-
+engine_comparisons:
+  script: scripts/engine_comparisons.R
+  store: engine_comparisons
+  use_crew: no
+  reporter_make: timestamp

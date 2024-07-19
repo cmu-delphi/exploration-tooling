@@ -1,6 +1,6 @@
-# Profiling Script
+# Profiling Script Template
 #
-# Use this script to profile a slow forecaster.
+# Use this script to profile slow parts of the pipeline.
 #
 source("scripts/targets-common.R")
 

@@ -1,0 +1,119 @@
+# {targets} Branching
+
+There are often times when you want to create multiple targets with largely the
+same code, but slightly different function inputs. Through a {targets} technique
+called "branching" we can do this with relative ease. This guide shows some
+examples. The manual also provides these introductions:
+
+- [static branching](https://books.ropensci.org/targets/static.html)
+- [dynamic branching](https://books.ropensci.org/targets/dynamic.html)
+
+```{r, eval = FALSE}
+library(targets)
+library(tarchetypes)
+```
+
+## Method 1: Use static branching with `tar_map()`.
+
+If you need to map over a list of values, you can use `tar_map()` to create
+multiple targets.
+
+```{r, eval = FALSE}
+list(
+  tar_map(
+    values = list(a = 1:7, b = letters[1:7]),
+    tar_target(
+      name,
+      command = list(a, b)
+    )
+  )
+)
+```
+
+## Method 2: Use static aggregation with `tar_combine()`.
+
+If we want to combine multiple targets made with static branching into one, we
+can use `tar_combine()`. The typical workflow requires you to store the mapped
+targets in a list and then pass a subselection of that list to `tar_combine()`.
+Note the necessary `unlist = TRUE` argument in `tar_map()`.
+
+```{r, eval = FALSE}
+mapped <- tar_map(
+  values = list(a = 1:7, b = letters[1:7]),
+  tar_target(
+    name,
+    command = list(a, b)
+  ),
+  unlist = TRUE
+)
+list(
+  mapped,
+  tar_combine(
+    combined,
+    mapped[[1:3]],
+    command = {
+      dplyr::bind_rows(!!!.x)
+    }
+  )
+)
+```
+
+The mapped object is a list with names that correspond to each target
+
+```r
+names(mapped)
+# [1] "name_1_a" "name_2_b" "name_3_c" "name_4_d" "name_5_e" "name_6_f" "name_7_g"
+```
+
+## Method 3: Use dynamic branching and aggregation with `tar_map(pattern = ...)`.
+
+The target `combined` below will be identical to the one in the previous
+example. Note that the aggregation is handled automatically. Furthermore, note
+that input to the `pattern` argument need to be previously targets objects.
+
+```{r, eval = FALSE}
+list(
+  tar_target(
+    name = a,
+    command = {
+      1:7
+    }
+  ),
+  tar_target(
+    name = b,
+    command = {
+      letters[1:7]
+    }
+  ),
+  tar_target(
+    combined,
+    command = list(a, b),
+    pattern = map(a, b)
+  )
+)
+```
+
+## Method x: Use general metaprogramming with `tar_eval()`.
+
+TODO: If you want complete control, you can manually generate target names using
+`tar_eval()` and `tar_target()`. This will require you to come up with a naming
+scheme ahead of time and store it in a table, next to the other parameters you
+want.
+
+```{r, eval = FALSE}
+list(
+  tar_eval(
+    tar_target(
+      name,
+      command = list(a, b)
+    ),
+    values = list(name = letters[1:7], a = 1:7, b = 1:7)
+  ),
+  tar_target(
+    test,
+    command = {
+      list(a, "e")
+    }
+  )
+)
+```
