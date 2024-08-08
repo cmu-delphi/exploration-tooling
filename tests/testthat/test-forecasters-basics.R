@@ -4,7 +4,8 @@ source(here::here("R", "load_all.R"))
 forecasters <- list(
   list("scaled_pop", scaled_pop),
   list("flatline_fc", flatline_fc),
-  list("smoothed_scaled", smoothed_scaled, lags = list(c(0, 2, 5), c(0)))
+  list("smoothed_scaled", smoothed_scaled, lags = list(c(0, 2, 5), c(0))),
+  list("flusion")
 )
 for (forecaster in forecasters) {
   test_that(paste(forecaster[[1]], "gets the date and columns right"), {
