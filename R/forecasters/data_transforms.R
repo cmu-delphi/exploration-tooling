@@ -43,7 +43,9 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
   epi_data %<>% group_by(geo_value)
   for (col in cols_to_mean) {
     mean_name <- paste0(col, "_m", width)
-    epi_data %<>% epi_slide(~ mean(.x[[col]], rm.na = TRUE), before = width - 1L, new_col_name = mean_name)
+    epi_data %<>%
+      epi_slide_mean(col, before = width - 1L) %>%
+      rename(!!mean_name := paste0("slide_value_", col))
   }
   epi_data %<>% ungroup()
   return(epi_data)
