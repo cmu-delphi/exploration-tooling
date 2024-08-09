@@ -74,20 +74,29 @@ rolling_sd <- function(epi_data, sd_width = 28L, mean_width = NULL, cols_to_sd =
   }
   cols_to_sd <- get_trainable_names(epi_data, cols_to_sd)
   result <- epi_data
+  result %<>% group_by(geo_value)
   for (col in cols_to_sd) {
-    result %<>% group_by(geo_value)
     mean_name <- paste0(col, "_m", mean_width)
     sd_name <- paste0(col, "_sd", sd_width)
-    result %<>% epi_slide(~ mean(.x[[col]], na.rm = TRUE), before = mean_width - 1L, new_col_name = mean_name)
-    result %<>% epi_slide(~ sqrt(mean((.x[[mean_name]] - .x[[col]])^2, na.rm = TRUE)), before = sd_width - 1, new_col_name = sd_name)
+
+    result %<>%
+      epi_slide_mean(col, before = mean_width - 1L) %>%
+      rename(!!mean_name := paste0("slide_value_", col))
+
+    result %<>%
+      mutate(.temp = (.data[[mean_name]] - .data[[col]])^2) %>%
+      epi_slide_mean(".temp", before = sd_width - 1) %>%
+      select(-.temp) %>%
+      rename(!!sd_name := "slide_value_.temp") %>%
+      mutate(!!sd_name := sqrt(.data[[sd_name]]))
+
     if (!keep_mean) {
-      # select currently turns result into a tibble
       result %<>% select(-{{ mean_name }})
     }
-    # convert back to an epi_df from a tibble
-    result %<>% dplyr_reconstruct(epi_data)
   }
+
   result %<>% ungroup()
+  result
 }
 
 #' Temporary patch that pulls `NA`'s out of an epi_df
