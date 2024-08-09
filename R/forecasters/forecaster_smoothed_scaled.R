@@ -68,6 +68,13 @@ smoothed_scaled <- function(epi_data,
   # One that every forecaster will need to handle: how to manage max(time_value)
   # that's older than the `as_of` date
   c(epi_data, effective_ahead) %<-% extend_ahead(epi_data, ahead)
+  if (effective_ahead > 45) {
+    cli::cli_warn(
+      "effective_ahead is greater than 45 days; this may be too far in the future.
+      Your epi_df as_of date is {attr(jhu_csse_daily_subset, 'metadata')$as_of} and
+      the epi_df max(time_value) is {max(epi_data$time_value)}."
+    )
+  }
   # see latency_adjusting for other examples
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
@@ -111,7 +118,6 @@ smoothed_scaled <- function(epi_data,
     unused_columns <- c(unused_columns, sd_cols[!(sd_cols %in% unused_columns)])
   }
 
-
   if (!is.null(smooth_width) && !keep_mean) {
     epi_data %<>% rolling_mean(
       width = smooth_width,
@@ -128,6 +134,7 @@ smoothed_scaled <- function(epi_data,
       keep_mean = keep_mean
     )
   }
+
   # and need to make sure we exclude the original variables as predictors
   all_names <- get_nonkey_names(epi_data)
   predictors <- all_names[!(all_names %in% unused_columns)]
