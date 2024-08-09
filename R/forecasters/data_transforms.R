@@ -152,3 +152,25 @@ extend_ahead <- function(epi_data, ahead) {
   }
   return(list(epi_data, effective_ahead))
 }
+
+
+#' get the Taylor expansion coefficients for a vector of values
+#' @param values the vector of values to interpolate
+#' @param degree the degree of the polynomial
+#' @param the expected length of values (needed b/c epi_slide may return fewer
+#'   points)
+#' @export
+get_poly_coefs <- function(values, degree, n_points) {
+  values <- values[!is.na(values)]
+  if (length(values) < n_points) {
+    return(
+      tibble(
+        c0 = NA, c1 = NA, c2 = NA
+      )
+    )
+  }
+  res <- tibble(time_value = seq(-n_points+2,1), value = values) %>%
+    lm(value ~ poly(time_value, degree = degree, raw = TRUE), .)
+  coefs <- unname(res$coefficients)
+  as_tibble(t(coefs))
+}
