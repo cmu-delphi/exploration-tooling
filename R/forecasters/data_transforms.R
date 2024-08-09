@@ -44,7 +44,7 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
   for (col in cols_to_mean) {
     mean_name <- paste0(col, "_m", width)
     epi_data %<>%
-      epi_slide_mean(col, before = width - 1L) %>%
+      epi_slide_mean(!!col, before = width - 1L) %>%
       rename(!!mean_name := paste0("slide_value_", col))
   }
   epi_data %<>% ungroup()
@@ -80,12 +80,12 @@ rolling_sd <- function(epi_data, sd_width = 28L, mean_width = NULL, cols_to_sd =
     sd_name <- paste0(col, "_sd", sd_width)
 
     result %<>%
-      epi_slide_mean(col, before = mean_width - 1L) %>%
+      epi_slide_mean(!!col, before = mean_width - 1L) %>%
       rename(!!mean_name := paste0("slide_value_", col))
 
     result %<>%
       mutate(.temp = (.data[[mean_name]] - .data[[col]])^2) %>%
-      epi_slide_mean(".temp", before = sd_width - 1) %>%
+      epi_slide_mean(!!".temp", before = sd_width - 1) %>%
       select(-.temp) %>%
       rename(!!sd_name := "slide_value_.temp") %>%
       mutate(!!sd_name := sqrt(.data[[sd_name]]))

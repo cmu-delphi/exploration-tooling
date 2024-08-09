@@ -68,13 +68,6 @@ smoothed_scaled <- function(epi_data,
   # One that every forecaster will need to handle: how to manage max(time_value)
   # that's older than the `as_of` date
   c(epi_data, effective_ahead) %<-% extend_ahead(epi_data, ahead)
-  if (effective_ahead > 45) {
-    cli::cli_warn(
-      "effective_ahead is greater than 45 days; this may be too far in the future.
-      Your epi_df as_of date is {attr(jhu_csse_daily_subset, 'metadata')$as_of} and
-      the epi_df max(time_value) is {max(epi_data$time_value)}."
-    )
-  }
   # see latency_adjusting for other examples
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
@@ -87,6 +80,13 @@ smoothed_scaled <- function(epi_data,
         value = numeric()
       )
     return(null_result)
+  }
+  if (effective_ahead > 45) {
+    cli::cli_warn(
+      "effective_ahead is greater than 45 days; this may be too far in the future.
+      Your epi_df as_of date is {attr(jhu_csse_daily_subset, 'metadata')$as_of} and
+      the epi_df max(time_value) is {max(epi_data$time_value)}."
+    )
   }
   args_input[["ahead"]] <- effective_ahead
   args_input[["quantile_levels"]] <- quantile_levels
