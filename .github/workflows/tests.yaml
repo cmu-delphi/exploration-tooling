@@ -7,7 +7,7 @@ on:
   pull_request:
     branches: [main]
 
-name: R-CMD-check
+name: Run Tests
 
 jobs:
   R-CMD-check:
@@ -28,11 +28,7 @@ jobs:
       DELPHI_EPIDATA_KEY: ${{ secrets.DELPHI_GITHUB_ACTIONS_EPIDATA_API_KEY }}
 
     steps:
-      - uses: actions/checkout@v3
-
-      - name: System dependencies
-        run: |
-          sudo apt-get install libudunits2-dev libgdal-dev libgeos-dev libproj-dev libglpk-dev
+      - uses: actions/checkout@v4
 
       - uses: r-lib/actions/setup-r@v2
         with:
