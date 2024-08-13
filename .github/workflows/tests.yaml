@@ -36,6 +36,10 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
+      - name: System dependencies
+        run: |
+          sudo apt-get update && sudo apt-get -y install libudunits2-dev libgdal-dev libgeos-dev libproj-dev libglpk-dev
+
       - uses: r-lib/actions/setup-renv@v2
 
       - name: Run tests
