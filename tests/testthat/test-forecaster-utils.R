@@ -38,29 +38,17 @@ test_that("id generation works", {
 
 test_that("forecaster lookup selects the right rows", {
   param_grid_ex <- tibble(
-    forecaster = rep("scaled_pop", 5),
-    ahead = c(1, 2, 3, 4, 5),
-    pop_scale = c(rep(FALSE, 4), TRUE),
-    lags = list(NULL, NULL, NULL, NULL, c(0, 7, 14)),
-    id = c("unexpected.criminological.1", "unexpected.criminological.3", "unexpected.criminological.2", "unexpected.criminological.4", "vain.intrapsychic.5")
+    id = c("simian.irishsetter", "monarchist.thrip"),
+    forecaster = rep("scaled_pop", 2),
+    lags = list(NULL, c(0, 7, 14)),
+    pop_scale = c(FALSE, TRUE),
   )
-  expect_equal(forecaster_lookup("score_unexpected.criminological", param_grid_ex), tibble(
-    forecaster = rep("scaled_pop", 4),
-    ahead = c(1, 2, 3, 4),
-    pop_scale = rep(FALSE, 4),
-    lags = list(NULL, NULL, NULL, NULL),
-    id = c("unexpected.criminological.1", "unexpected.criminological.3", "unexpected.criminological.2", "unexpected.criminological.4")
+  expect_equal(param_grid_ex %>% forecaster_lookup("monarchist"), tribble(
+    ~id, ~forecaster, ~lags, ~pop_scale,
+    "monarchist.thrip", "scaled_pop", c(0, 7, 14), TRUE,
   ))
-  expect_equal(forecaster_lookup("score_unexpected.criminological.1", param_grid_ex), tibble(
-    forecaster = c("scaled_pop"),
-    ahead = c(1),
-    pop_scale = c(FALSE),
-    lags = list(NULL),
-    id = c("unexpected.criminological.1")
+  expect_equal(param_grid_ex %>% forecaster_lookup("irish"), tribble(
+    ~id, ~forecaster, ~lags, ~pop_scale,
+    "simian.irishsetter", "scaled_pop", NULL, FALSE,
   ))
-})
-
-test_that("strip_underscored drops 1 or several", {
-  expect_identical(strip_underscored("forecast_by_ahead_unexpected.criminological.1"), "unexpected.criminological.1")
-  expect_identical(strip_underscored("score_unexpected.criminological"), "unexpected.criminological")
 })

@@ -137,7 +137,6 @@ make_data_targets <- function() {
   )
 }
 
-
 #' Relies on the following globals:
 #' - `forecaster_grid`
 #' - `date_step`

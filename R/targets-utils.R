@@ -3,18 +3,12 @@
 #' Given a (partial) forecaster name, look up all forecasters in the given
 #' project which contain part of that name.
 #'
-#' @param forecaster_name a part of the adj.adj.1 name used to identify the forecaster.
+#' @param forecaster_grid the forecaster grid to search.
+#' @param pattern string to search in the forecaster name.
 #'
-#' @importFrom targets tar_read tar_config_get
 #' @export
-forecaster_lookup <- function(forecaster_name, param_grid) {
-  param_grid %>% filter(grepl(strip_underscored(forecaster_name), id))
-}
-
-strip_underscored <- function(x) {
-  g <- gregexpr("_", x, fixed = TRUE)
-  last_underscore <- g[[1]][[length(g[[1]])]]
-  substr(x[[1]], start = last_underscore + 1, stop = nchar(x))
+forecaster_lookup <- function(forecaster_grid, pattern) {
+  forecaster_grid %>% filter(grepl(pattern, id))
 }
 
 #' Add a unique id based on the column contents
@@ -24,7 +18,6 @@ strip_underscored <- function(x) {
 #' @param tib the tibble to add a column to. everything should be convertable to a string
 #' @param exclude a vector of column names to exclude from the hash
 #'
-#' @importFrom cli hash_animal
 #' @export
 add_id <- function(tib, exclude = c()) {
   tib %>%
@@ -45,8 +38,8 @@ add_id <- function(tib, exclude = c()) {
 get_single_id <- function(param_list) {
   param_list %>%
     paste(sep = "", collapse = "") %>%
-    hash_animal(n_adj = 1) %>%
-    pluck("words", 1) %>%
+    cli::hash_animal(n_adj = 1) %>%
+    purrr::pluck("words", 1) %>%
     paste(sep = ".", collapse = ".")
 }
 
@@ -60,7 +53,6 @@ get_single_id <- function(param_list) {
 #' columns, everything else is optional.
 #'
 #' @export
-#' @importFrom rlang syms
 make_forecaster_grid <- function(tib) {
   if ("trainer" %in% colnames(tib)) {
     tib$trainer <- rlang::syms(tib$trainer)
@@ -93,22 +85,20 @@ make_forecaster_grid <- function(tib) {
 #'
 #' Same as `make_forecaster_grid`, but for ensembles.
 #'
-#' @param tib the tibble of parameters. Must have the forecaster and trainer
-#' columns, everything else is optional.
+#' @param tib the tibble of parameters.
 #'
 #' @export
-#' @importFrom rlang syms
 make_ensemble_grid <- function(tib) {
   sym_subset <- function(param_list) {
-    imap(param_list, \(x, y) if (y %in% list("average_type")) sym(x) else x)
+    imap(param_list, \(x, y) if (y %in% list("average_type")) rlang::sym(x) else x)
   }
 
   tibble(
     id = tib$id,
     children_ids = tib$children_ids %>%
       map(function(x) paste0("forecast_", x)) %>%
-      map(syms),
-    ensemble = syms(tib$ensemble),
+      map(rlang::syms),
+    ensemble = rlang::syms(tib$ensemble),
     ensemble_args = map(tib$ensemble_args, sym_subset),
     ensemble_args_names = map(tib$ensemble_args, ~ names(.x))
   )

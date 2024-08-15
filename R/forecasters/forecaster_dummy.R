@@ -9,8 +9,8 @@
 #'  column. Defaults to `FALSE` because it's expensive to store and read.
 dummy_forecaster <- function(..., .keep_epi_data = FALSE) {
   dots <- list(...)
-  if ("epi_df" %in% names(dots)) {
-    forecast_date <- max(pluck(dots, "epi_df")$time_value)
+  if ("epi_data" %in% names(dots)) {
+    forecast_date <- max(pluck(dots, "epi_data")$time_value)
   } else {
     forecast_date <- as.Date("2024-01-01")
   }
