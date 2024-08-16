@@ -127,7 +127,7 @@ external_names_and_scores <- make_external_names_and_scores()
 list(
   list(
     tar_target(
-      name = forecaster_params_grid,
+      name = forecaster_parameter_combinations,
       command = {
         forecaster_parameter_combinations_
       },
