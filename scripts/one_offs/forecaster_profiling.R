@@ -2,9 +2,6 @@
 #
 # Use this script to profile a slow forecaster.
 #
-# 2024-08-15: will profile these forecasters (both took ~1 hour per ahead when run in parallel)
-# - arduous.dingo (scaled_pop)
-# - byzantium.metamorphosis (smoothed_scaled)
 source("scripts/targets-common.R")
 
 # Forecaster profiling.
@@ -15,12 +12,12 @@ p <- profvis::profvis({
     outcome = "hhs",
     ahead = 2,
     extra_sources = "",
-    forecaster = dummy_forecaster,
+    forecaster = scaled_pop,
     n_training_pad = 30L,
     forecaster_args = list(
-      lags = list(c(0, 3, 5, 7, 14), c(0)),
+      lags = c(0, 3, 5, 7, 14),
       pop_scaling = TRUE,
-      trainer = quantile_reg
+      trainer = quantreg
     ),
     forecaster_args_names = c("lags", "pop_scaling", "trainer"),
     date_range_step_size = 7,
