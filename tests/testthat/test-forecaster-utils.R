@@ -34,6 +34,10 @@ test_that("id generation works", {
   same_ids <- map(simple_ex, add_id)
   expect_equal(same_ids[[1]]$id, same_ids[[2]]$id)
   expect_equal(same_ids[[3]]$id, same_ids[[4]]$id)
+  # Same as above, but direct calls into get_single_id
+  for (i in 1:4) {
+    expect_equal(simple_ex[[i]] %>% transpose() %>% pluck(1) %>% get_single_id(), same_ids[[i]]$id)
+  }
 })
 
 test_that("forecaster lookup selects the right rows", {

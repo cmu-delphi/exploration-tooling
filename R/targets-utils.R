@@ -20,23 +20,22 @@ forecaster_lookup <- function(forecaster_grid, pattern) {
 #'
 #' @export
 add_id <- function(tib, exclude = c()) {
+  ids <- tib %>%
+    select(-all_of(exclude)) %>%
+    transpose() %>%
+    map_chr(get_single_id)
   tib %>%
-    select(all_of(order(colnames(.))) & !all_of(exclude)) %>%
-    rowwise() %>%
-    mutate(id = get_single_id(across(everything()))) %>%
-    ungroup() %>%
+    mutate(id = ids) %>%
     relocate(id, .before = everything())
 }
 
 #' Generate a two-word id from a simple list of parameters.
 #'
-#' Assumes the list keys are sorted.
-#'
-#' @param param_list the list of parameters. must include `ahead` if `ahead = NULL`
+#' @param param_list a list of parameters.
 #'
 #' @export
 get_single_id <- function(param_list) {
-  param_list %>%
+  param_list[sort(names(param_list))] %>%
     paste(sep = "", collapse = "") %>%
     cli::hash_animal(n_adj = 1) %>%
     purrr::pluck("words", 1) %>%

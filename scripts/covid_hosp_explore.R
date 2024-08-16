@@ -101,7 +101,7 @@ ensemble_parameter_combinations_ <- tribble(
   mutate(
     children_ids = map(.$forecasters, function(x) {
       map_chr(x, function(y) {
-        get_single_id(y[sort(names(y))])
+        get_single_id(y)
       })
     })
   ) %>%
