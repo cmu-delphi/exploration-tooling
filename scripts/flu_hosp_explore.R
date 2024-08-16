@@ -136,7 +136,7 @@ list(
     tar_target(
       name = ensemble_forecasters,
       command = {
-        ensemble_grid
+        ensemble_parameter_combinations
       },
       priority = 0.99
     )
