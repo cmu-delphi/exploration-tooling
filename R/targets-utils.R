@@ -78,7 +78,7 @@ make_forecaster_grid <- function(tib) {
     )
   }
 
-  out
+  return(out)
 }
 
 #' Make an ensemble grid.
