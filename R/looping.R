@@ -99,11 +99,8 @@ epix_slide_simple <- function(epi_archive, forecaster, ref_time_values, before, 
         epi_df <- qs::qread(file_path)
       } else {
         epi_df <- epi_archive %>%
-          epix_as_of(tv, min_time_value = tv - before) %>%
-          {
-            qs::qsave(., file_path)
-            .
-          }
+          epix_as_of(tv, min_time_value = tv - before)
+         qs::qsave(epi_df, file_path)
       }
     }
     epi_df %>% forecaster()
