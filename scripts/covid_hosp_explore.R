@@ -3,14 +3,14 @@ source("scripts/targets-exploration-common.R")
 
 # Debug mode will replace all forecasters with a fast dummy forecaster. Helps
 # with prototyping the pipeline.
-debug <- FALSE
+debug <- TRUE
 
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
 forecaster_parameter_combinations_ <- list(
   tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = c("linreg", "quantreg"),
-    lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14)),
+    lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14), c(0, 7, 14, 24)),
     pop_scaling = c(TRUE, FALSE)
   ),
   tidyr::expand_grid(
@@ -118,8 +118,7 @@ if (length(missing_forecasters) > 0) {
 ensemble_grid <- make_ensemble_grid(ensemble_parameter_combinations_)
 
 # These globals are needed by the function below (and they need to persist
-# during the actual targets run, since targets commands are frozen as
-# expressions).
+# during the actual targets run, since the commands are frozen as expressions).
 hhs_signal <- "confirmed_admissions_covid_1d"
 chng_signal <- "smoothed_adj_outpatient_covid"
 eval_time <- epidatr::epirange(from = "2020-01-01", to = "2024-01-01")
@@ -129,8 +128,7 @@ data_targets <- make_data_targets()
 
 
 # These globals are needed by the function below (and they need to persist
-# during the actual targets run, since targets commands are frozen as
-# expressions).
+# during the actual targets run, since the commands are frozen as expressions).
 date_step <- 7L
 forecasts_and_scores <- make_forecasts_and_scores()
 

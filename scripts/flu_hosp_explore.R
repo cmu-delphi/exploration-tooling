@@ -8,22 +8,21 @@ debug <- TRUE
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
 forecaster_parameter_combinations_ <- list(
   tidyr::expand_grid(
-    forecaster = "smoothed_scaled",
-    trainer = c("quantreg"),
-    ahead = c(7, 14, 21, 28),
-    lags = list(
-      # list(smoothed, sd)
-      list(c(0, 3, 5, 7, 14), c(0)),
-      list(c(0, 7, 14), c(0)),
-      list(c(0, 2, 4, 7, 14, 21, 28), c(0))
-    ),
-    pop_scaling = FALSE
-  ),
-  tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = c("linreg", "quantreg"),
     lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14), c(0, 7, 14, 24)),
-    pop_scaling = FALSE
+    pop_scaling = c(TRUE, FALSE)
+  ),
+  tidyr::expand_grid(
+    forecaster = "smoothed_scaled",
+    trainer = c("quantreg"),
+    lags = list(
+      # list(smoothed, sd)
+      list(c(0, 3, 5, 7, 14), c(0)),
+      list(c(0, 7, 14, 21, 28), c(0)),
+      list(c(0, 2, 4, 7, 14, 21, 28), c(0))
+    ),
+    pop_scaling = c(TRUE, FALSE)
   ),
   tidyr::expand_grid(
     forecaster = "flatline_fc",
@@ -36,6 +35,7 @@ forecaster_parameter_combinations_ <- list(
     x
   }) %>%
   map(add_id)
+
 # Make sure all ids are unique.
 stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(forecaster_parameter_combinations_$id))
 # Build targets-internal tibble to map over.
@@ -43,6 +43,18 @@ forecaster_grid <- forecaster_parameter_combinations_ %>%
   map(make_forecaster_grid) %>%
   bind_rows()
 
+scaled_pop_not_scaled <- list(
+  forecaster = "scaled_pop",
+  trainer = "linreg",
+  pop_scaling = FALSE,
+  lags = list(c(0, 3, 5, 7, 14))
+)
+scaled_pop_scaled <- list(
+  forecaster = "scaled_pop",
+  trainer = "linreg",
+  pop_scaling = FALSE,
+  lags = list(c(0, 3, 5, 7, 14))
+)
 # Human-readable object to be used for inspecting the ensembles in the pipeline.
 ensemble_parameter_combinations_ <- tribble(
   ~ensemble, ~ensemble_args, ~forecasters,
@@ -111,7 +123,7 @@ hhs_signal <- "confirmed_admissions_influenza_1d_prop_7dav"
 chng_signal <- "smoothed_adj_outpatient_flu"
 eval_time <- epidatr::epirange(from = "2020-01-01", to = "2024-01-01")
 training_time <- epidatr::epirange(from = "2021-01-01", to = "2023-06-01")
-fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 300)
+fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 400)
 data_targets <- make_data_targets()
 
 
@@ -124,7 +136,7 @@ ensembles_and_scores <- make_ensembles_and_scores()
 external_names_and_scores <- make_external_names_and_scores()
 
 
-list(
+rlang::list2(
   list(
     tar_target(
       name = forecaster_parameter_combinations,
@@ -136,7 +148,7 @@ list(
     tar_target(
       name = ensemble_forecasters,
       command = {
-        ensemble_parameter_combinations
+        ensemble_parameter_combinations_
       },
       priority = 0.99
     )
