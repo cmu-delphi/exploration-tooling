@@ -66,7 +66,25 @@ slide_forecaster <- function(epi_archive,
     .homonyms = "last"
   )
   forecaster_wrapper <- function(x) {
-    inject(forecaster(epi_data = x, !!!forecaster_args))
+    tryCatch(
+      {
+        inject(forecaster(epi_data = x, !!!forecaster_args))
+      },
+      error = function(e) {
+        if (interactive()) {
+          browser()
+        } else {
+          dump_vars <- list(
+            epi_data = x,
+            forecaster = forecaster,
+            forecaster_args = forecaster_args,
+            e = e
+          )
+          saveRDS(dump_vars, "slide_forecaster_error.rds")
+          e
+        }
+      }
+    )
   }
   epix_slide_simple(
     epi_archive,
@@ -90,7 +108,7 @@ epix_slide_simple <- function(epi_archive, forecaster, ref_time_values, before, 
       } else {
         epi_df <- epi_archive %>%
           epix_as_of(tv, min_time_value = tv - before)
-         qs::qsave(epi_df, file_path)
+        qs::qsave(epi_df, file_path)
       }
     }
     epi_df %>% forecaster()
