@@ -61,11 +61,7 @@ sanitize_args_predictors_trainer <- function(epi_data,
 #' @importFrom tidyr drop_na
 #' @export
 confirm_sufficient_data <- function(epi_data, ahead, args_input, outcome, extra_sources, buffer = 9) {
-  if (!is.null(args_input$lags)) {
-    lag_max <- max(unlist(args_input$lags))
-  } else {
-    lag_max <- 14 # default value of 2 weeks
-  }
+  lag_max <- max(unlist(pluck(args_input, "lags", .default = list(14))))
 
   # TODO: Buffer should probably be 2 * n(lags) * n(predictors). But honestly,
   # this needs to be fixed in epipredict itself, see

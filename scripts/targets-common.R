@@ -57,11 +57,8 @@ tar_option_set(
   memory = "transient",
   garbage_collection = TRUE,
   storage = "worker",
-  retrieval = "worker"
+  retrieval = "main"
 )
 
 linreg <- parsnip::linear_reg()
 quantreg <- epipredict::quantile_reg()
-ONE_AHEAD_FORECAST_NAME <- "forecast_by_ahead"
-ONE_AHEAD_SCORE_NAME <- "score_by_ahead"
-ONE_AHEAD_ENSEMBLE_NAME <- "ensemble_by_ahead"

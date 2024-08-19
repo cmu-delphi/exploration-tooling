@@ -8,7 +8,7 @@ source("scripts/targets-common.R")
 
 insufficient_data_geos <- c("as", "gu", "mp", "vi")
 forecast_generation_date <- as.character(seq.Date(as.Date("2023-10-01"), as.Date("2023-10-01") + 30, by = "1 week"))
-bad_forecast_exclusions <- Vectorize(get_exclusions)(forecast_generation_date)
+bad_forecast_exclusions <- map(forecast_generation_date, get_exclusions)
 forecaster_fns <- list(
   function(...) {
     smoothed_scaled(

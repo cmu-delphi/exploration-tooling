@@ -4,14 +4,15 @@
 #' forecasts and averages them on a per-quantile basis. By default the average
 #' used is the median, but it can accept any vectorized function.
 #'
-#' @param epi_data unused for this forecaster, but potentially an ensemble may
-#'   want the underlying data.
-#' @param outcome The name of the target variable.
-#' @param extra_sources The name of any extra columns to use. This list could be
-#'   empty
-#' @param forecasts a list of quantile forecasts to aggregate. They should
+#' @param epi_data The data for fitting. Currently unused, but matches interface
+#' of other forecasters.
+#' @param forecasts A tibble of quantile forecasts to aggregate. They should
 #'   be tibbles with columns `(geo_value, forecast_date, target_end_date,
 #'   quantile, value)`, preferably in that order.
+#' @param outcome The name of the target variable. Currently unused, but matches
+#' interface of other forecasters.
+#' @param extra_sources Optional name of any extra columns to use. Currently
+#' unused, but matches interface of other forecasters.
 #' @param ensemble_args any arguments unique to this particular ensembler should
 #'   be included in a list like this (unfortunate targets issues). The arguments
 #'   for `ensemble_average` in particular are `average_type` and `join_columns`
@@ -33,7 +34,8 @@ ensemble_average <- function(epi_data,
   average_type <- ensemble_args$average_type %||% median
   join_columns <- ensemble_args$join_columns %||% c("geo_value", "forecast_date", "target_end_date", "quantile")
   # begin actual analysis
-  bind_rows(!!!forecasts, .id = "forecaster") %>%
+  forecasts %>%
+    bind_rows(.id = "id") %>%
     group_by(across(all_of(join_columns))) %>%
     summarize(value = average_type(value)) %>%
     ungroup()

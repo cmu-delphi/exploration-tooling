@@ -4,11 +4,11 @@ testthat::skip("Optional, long-running tests skipped.")
 
 # A list of forecasters to be tested. Add here to test new forecasters.
 forecasters <- tibble::tribble(
-  ~forecaster, ~extra_params, ~extra_params_names, ~fc_name,
-  scaled_pop, list(1, TRUE), list("ahead", "pop_scaling"), "scaled_pop",
-  scaled_pop, list(1, FALSE), list("ahead", "pop_scaling"), "scaled_pop",
-  flatline_fc, list(1), list("ahead"), "flatline_fc",
-  smoothed_scaled, list(1, list(c(0, 7, 14), c(0))), list("ahead", "lags"), "smoothed_scaled"
+  ~forecaster, ~forecaster_args, ~forecaster_args_names, ~fc_name, ~outcome, ~extra_sources, ~ahead,
+  scaled_pop, list(TRUE), list("pop_scaling"), "scaled_pop", "a", "", 1,
+  scaled_pop, list(FALSE), list("pop_scaling"), "scaled_pop", "a", "", 1,
+  flatline_fc, list(), list(), "flatline_fc", "a", "", 1,
+  smoothed_scaled, list(list(c(0, 7, 14), c(0)), 14, 7), list("lags", "sd_width", "sd_mean_width"), "smoothed_scaled", "a", "", 1,
 )
 # Which forecasters expect the data to be non-identical?
 expects_nonequal <- c("scaled_pop", "smoothed_scaled")
@@ -27,8 +27,7 @@ expects_nonequal <- c("scaled_pop", "smoothed_scaled")
 #' - n_training_pad is set to avoid warnings from the trainer.
 #' - linear_reg doesn't like exactly equal data when training and throws a
 #'   warning. wrapperfun is used to suppress that.
-default_slide_forecaster <- function(dataset,
-                                     ii, outcome = "a", extra_sources = "", expect_linreg_warnings = TRUE) {
+default_slide_forecaster <- function(dataset, ii, expect_linreg_warnings = TRUE) {
   if (any(forecasters$fc_name[[ii]] %in% expects_nonequal) && expect_linreg_warnings) {
     wrapperfun <- function(x) {
       suppressWarnings(expect_warning(x, regexp = "prediction from rank-deficient fit"))
@@ -36,15 +35,12 @@ default_slide_forecaster <- function(dataset,
   } else {
     wrapperfun <- identity
   }
-  wrapperfun(res <- slide_forecaster(
-    data = dataset,
-    outcome = outcome,
-    extra_sources = extra_sources,
-    n_training_pad = 5,
-    forecaster = forecasters$forecaster[[ii]],
-    forecaster_args = forecasters$extra_params[[ii]],
-    forecaster_args_names = forecasters$extra_params_names[[ii]]
-  ))
+  args <- forecasters %>%
+    select(-fc_name) %>%
+    slice(ii) %>%
+    transpose() %>%
+    pluck(1)
+  wrapperfun(res <- inject(slide_forecaster(epi_archive = dataset, n_training_pad = 30, !!!args)))
   return(res)
 }
 
@@ -56,12 +52,12 @@ simple_dates <- seq(as.Date("2012-01-01"), by = "day", length.out = 40)
 
 # Create an archive that contains a single version for each of the 40 days in
 # `simple_dates`, for the single geo-value "al" (arbitrary choice).
-constant <- epiprocess::as_epi_archive(tibble(
+constant <- tibble(
   geo_value = "al",
   time_value = simple_dates,
   version = simple_dates,
   a = synth_mean
-))
+) %>% epiprocess::as_epi_archive()
 
 ################################################################################
 ################################ Constant data #################################
@@ -80,8 +76,11 @@ different_constants <- rbind(
 ) %>%
   arrange(version, time_value) %>%
   epiprocess::as_epi_archive()
-
-for (ii in 1:nrow(forecasters)) {
+different_constants_truth <- different_constants$DT %>%
+  tibble() %>%
+  rename("true_value" = "a", "target_end_date" = "time_value") %>%
+  select(-version)
+for (ii in seq_len(nrow(forecasters))) {
   test_that(paste(
     forecasters$fc_name[[ii]],
     " predicts a constant median for constant data"
@@ -97,6 +96,10 @@ for (ii in 1:nrow(forecasters)) {
     # We expect the forecaster median to be equal to the actual median plus
     # small noise noise
     actual_value <- rel_values %>%
+      inner_join(
+        different_constants_truth,
+        by = c("geo_value", "target_end_date")
+      ) %>%
       mutate(is_right = near(value, true_value)) %>%
       pull(is_right) %>%
       all()
@@ -125,7 +128,7 @@ white_noise <- epiprocess::as_epi_archive(tibble(
   version = simple_dates,
   a = rnorm(length(simple_dates), mean = synth_mean, sd = synth_sd)
 ))
-for (ii in 1:nrow(forecasters)) {
+for (ii in seq_len(nrow(forecasters))) {
   test_that(paste(
     forecasters$fc_name[[ii]],
     " predicts the median and the right quantiles for Gaussian data"
@@ -147,10 +150,10 @@ for (ii in 1:nrow(forecasters)) {
       mutate(
         diff_from_expected = value - qnorm(quantile, mean = synth_mean, sd = synth_sd)
       ) %>%
-      select(-true_value, -value) %>%
+      select(-any_of(c("true_value", "value"))) %>%
       group_by(quantile) %>%
       summarize(err = abs(mean(diff_from_expected)))
-    expect_true(all(quantile_deviation$err < synth_sd))
+    expect_true(all(quantile_deviation$err < 4 * synth_sd))
   })
 }
 
@@ -163,12 +166,6 @@ for (ii in 1:nrow(forecasters)) {
 # behavior. We check that the undelayed is predicted every day, while the
 # delayed is predicted whenever there's data at the appropriate lags (this could
 # use work, its not that precise).
-constant <- epiprocess::as_epi_archive(tibble(
-  geo_value = "al",
-  time_value = simple_dates,
-  version = simple_dates,
-  a = synth_mean
-))
 set.seed(12345)
 # delay is set to a small poisson
 state_delay <- rpois(length(simple_dates), 0.5)

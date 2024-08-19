@@ -1,95 +1,121 @@
-# Run the R scripts in the R/ folder with your custom functions:
-# tar_source()
-# where the forecasters and parameters are joined; see either the variable param_grid or `tar_read(forecasters)`
 source("scripts/targets-common.R")
 source("scripts/targets-exploration-common.R")
 
-# Add custom parameter combinations in the list below.
-make_unique_grids <- function() {
-  list(
-    tidyr::expand_grid(
-      forecaster = "smoothed_scaled",
-      trainer = c("quantreg"),
-      ahead = c(7, 14, 21, 28),
-      lags = list(
-        #        smoothed,      sd,          smoothed,   sd
-        list(c(0, 3, 5, 7, 14), c(0)),
-        list(c(0, 7, 14), c(0)),
-        list(c(0, 2, 4, 7, 14, 21, 28), c(0))
-      ),
-      pop_scaling = FALSE
-    )
-  )
-}
-make_unique_ensemble_grid <- function() {
-  tribble(
-    ~ensemble, ~ensemble_params, ~forecasters,
-  )
-}
+# Debug mode will replace all forecasters with a fast dummy forecaster. Helps
+# with prototyping the pipeline.
+debug <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
 
-# TODO: Find a way to clean all this stuff about param grids up.
-param_grid <- append(
-  make_shared_grids(),
-  make_unique_grids()
+# Human-readable object to be used for inspecting the forecasters in the pipeline.
+forecaster_parameter_combinations_ <- list(
+  tidyr::expand_grid(
+    forecaster = "scaled_pop",
+    trainer = c("linreg", "quantreg"),
+    lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14), c(0, 7, 14, 24)),
+    pop_scaling = c(TRUE, FALSE)
+  ),
+  tidyr::expand_grid(
+    forecaster = "smoothed_scaled",
+    trainer = c("quantreg"),
+    lags = list(
+      # list(smoothed, sd)
+      list(c(0, 3, 5, 7, 14), c(0)),
+      list(c(0, 7, 14, 21, 28), c(0)),
+      list(c(0, 2, 4, 7, 14, 21, 28), c(0))
+    ),
+    pop_scaling = c(TRUE, FALSE)
+  ),
+  tidyr::expand_grid(
+    forecaster = "flatline_fc",
+  )
 ) %>%
-  map(add_id) %>%
-  bind_rows() %>%
-  relocate(parent_id, id, .after = last_col())
-if (length(param_grid$id %>% unique()) < length(param_grid$id)) {
-  abort("there are non-unique forecasters")
-}
-forecaster_parent_id_map <- param_grid %>%
-  group_by(parent_id) %>%
-  summarize(
-    forecast_component_ids = list(syms(paste0(ONE_AHEAD_FORECAST_NAME, "_", gsub(" ", ".", id, fixed = TRUE)))),
-    score_component_ids = list(syms(paste0(ONE_AHEAD_SCORE_NAME, "_", gsub(" ", ".", id, fixed = TRUE))))
-  )
-targets_param_grid <- make_target_param_grid(param_grid) %>%
-  ## TODO This forecaster is hanging. Filter it out for now.
-  filter(id != "necessary endless 5")
+  map(function(x) {
+    if (debug) {
+      x$forecaster <- "dummy_forecaster"
+    }
+    x
+  }) %>%
+  map(add_id)
 
-# not actually used downstream, this is for lookup during plotting and human evaluation
-forecaster_params_grid_target <- list(
-  tar_target(
-    name = forecaster_params_grid,
-    command = {
-      param_grid
-    },
-    priority = 0.99
-  )
+# Make sure all ids are unique.
+stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(forecaster_parameter_combinations_$id))
+# Build targets-internal tibble to map over.
+forecaster_grid <- forecaster_parameter_combinations_ %>%
+  map(make_forecaster_grid) %>%
+  bind_rows()
+
+scaled_pop_not_scaled <- list(
+  forecaster = "scaled_pop",
+  trainer = "linreg",
+  pop_scaling = FALSE,
+  lags = list(c(0, 3, 5, 7, 14))
 )
-
-# moving on to the ensemble
-AHEADS <- 1:4
-ensemble_grid <- add_row(
-  make_shared_ensembles(),
-  make_unique_ensemble_grid()
-) %>% id_ahead_ensemble_grid(AHEADS)
-# bind them together and give static ids
-target_ensemble_grid <- make_target_ensemble_grid(ensemble_grid)
-ensemble_parent_id_map <- ensemble_grid %>%
-  group_by(parent_id) %>%
-  summarize(
-    ensemble_component_ids = list(syms(paste0(ONE_AHEAD_ENSEMBLE_NAME, "_", gsub(" ", ".", id, fixed = TRUE)))),
-    score_component_ids = list(syms(paste0(ONE_AHEAD_SCORE_NAME, "_", gsub(" ", ".", id, fixed = TRUE))))
+scaled_pop_scaled <- list(
+  forecaster = "scaled_pop",
+  trainer = "linreg",
+  pop_scaling = FALSE,
+  lags = list(c(0, 3, 5, 7, 14))
+)
+# Human-readable object to be used for inspecting the ensembles in the pipeline.
+ensemble_parameter_combinations_ <- tribble(
+  ~ensemble, ~ensemble_args, ~forecasters,
+  # mean forecaster
+  "ensemble_average",
+  list(average_type = "mean"),
+  list(
+    scaled_pop_scaled,
+    list(forecaster = "flatline_fc")
+  ),
+  # median forecaster
+  "ensemble_average",
+  list(average_type = "median"),
+  list(
+    scaled_pop_scaled,
+    scaled_pop_not_scaled
+  ),
+  # mean forecaster with baseline
+  "ensemble_average",
+  list(average_type = "mean"),
+  list(
+    scaled_pop_not_scaled,
+    list(forecaster = "flatline_fc")
+  ),
+  # median forecaster with baseline
+  "ensemble_average",
+  list(average_type = "median"),
+  list(
+    scaled_pop_not_scaled,
+    list(forecaster = "flatline_fc")
   )
-# check that every ensemble dependent is actually included
-missing_forecasters <- ensemble_missing_forecasters_details(ensemble_grid, param_grid)
+) %>%
+  {
+    if (debug) {
+      .$forecasters <- map(.$forecasters, function(x) {
+        map(x, function(y) {
+          y$forecaster <- "dummy_forecaster"
+          y
+        })
+      })
+    }
+    .
+  } %>%
+  mutate(
+    children_ids = map(.$forecasters, function(x) {
+      map_chr(x, function(y) {
+        get_single_id(y)
+      })
+    })
+  ) %>%
+  add_id(exclude = "forecasters")
+# Check that every ensemble dependent is actually included.
+missing_forecasters <- setdiff(
+  ensemble_parameter_combinations_ %>% pull(children_ids) %>% unlist() %>% unique(),
+  forecaster_grid$id
+)
 if (length(missing_forecasters) > 0) {
-  print("missing forecasters:")
-  print(glue::glue("{missing_forecasters}"))
-  rlang::abort(c("ensemble missing forecasters"))
+  cli_abort("Ensemble depends on forecasters not included in pipeline: {missing_forecasters}.")
 }
-# not actually used downstream, this is for lookup during plotting and human evaluation
-ensembles_params_grid_target <- list(
-  tar_target(
-    name = ensemble_forecasters,
-    command = {
-      ensemble_grid
-    },
-    priority = 0.99
-  )
-)
+# Build targets-internal tibble to map over.
+ensemble_grid <- make_ensemble_grid(ensemble_parameter_combinations_)
 
 # These globals are needed by the function below (and they need to persist
 # during the actual targets run, since the commands are frozen as expressions).
@@ -97,61 +123,44 @@ hhs_signal <- "confirmed_admissions_influenza_1d_prop_7dav"
 chng_signal <- "smoothed_adj_outpatient_flu"
 eval_time <- epidatr::epirange(from = "2020-01-01", to = "2024-01-01")
 training_time <- epidatr::epirange(from = "2021-01-01", to = "2023-06-01")
-fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 300)
+fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 400)
 data_targets <- make_data_targets()
 
 
 # These globals are needed by the function below (and they need to persist
 # during the actual targets run, since the commands are frozen as expressions).
 date_step <- 7L
-forecasts_and_scores_by_ahead <- make_forecasts_and_scores_by_ahead()
 forecasts_and_scores <- make_forecasts_and_scores()
-# ensembles
 
-# do a tar_map or tar_target to asdf
-ensembles_and_scores_by_ahead <- tar_map(
-  values = target_ensemble_grid,
-  names = id,
-  tar_target(
-    name = ensemble_by_ahead,
-    command = {
-      ensemble(joined_archive_data_2022,
-        forecaster_ids,
-        "hhs",
-        extra_sources = "chng",
-        ensemble_params,
-        ensemble_params_names
-      )
-    },
-    priority = .9999
-  ),
-  tar_target(
-    name = score_by_ahead,
-    command = {
-      run_evaluation_measure(
-        data = ensemble_by_ahead,
-        evaluation_data = hhs_evaluation_data,
-        measure = list(
-          wis = weighted_interval_score,
-          ae = absolute_error,
-          cov_80 = interval_coverage(0.8)
-        )
-      )
-    }
-  )
-)
-ensembles_and_scores <- make_ensemble_targets_and_scores()
-# other sources
+ensembles_and_scores <- make_ensembles_and_scores()
 external_names_and_scores <- make_external_names_and_scores()
 
 
-list(
+rlang::list2(
+  list(
+    tar_target(
+      name = forecaster_parameter_combinations,
+      command = {
+        forecaster_parameter_combinations_
+      },
+      priority = 0.99
+    ),
+    tar_target(
+      name = ensemble_forecasters,
+      command = {
+        ensemble_parameter_combinations_
+      },
+      priority = 0.99
+    )
+  ),
+  tar_target(
+    name = aheads,
+    command = {
+      c(1:7, 14, 21, 28)
+    }
+  ),
   data_targets,
-  forecaster_params_grid_target,
-  forecasts_and_scores_by_ahead,
   forecasts_and_scores,
-  ensembles_params_grid_target,
-  ensembles_and_scores_by_ahead,
   ensembles_and_scores,
   external_names_and_scores
 )
