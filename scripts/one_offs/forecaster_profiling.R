@@ -24,4 +24,4 @@ p <- profvis::profvis({
     cache_key = "joined_archive_data_2022"
   )
 })
-htmlwidgets::saveWidget(p, "profvis.html", selfcontained = TRUE)
+htmlwidgets::saveWidget(p, glue::glue("profvis_{Sys.time()}.html"), selfcontained = TRUE)

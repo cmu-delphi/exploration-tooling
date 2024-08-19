@@ -41,14 +41,14 @@ make_data_targets <- function() {
       command = {
         hhs_latest_data %>%
           rename(
-            actual = value,
+            true_value = value,
             target_end_date = time_value
           ) %>%
           select(
             signal,
             geo_value,
             target_end_date,
-            actual
+            true_value
           )
       }
     ),
@@ -159,7 +159,7 @@ make_forecasts_and_scores <- function() {
           forecaster_args_names = param_names,
           date_range_step_size = date_step,
           cache_key = "joined_archive_data_2022"
-        ) %>% mutate(id = id)
+        ) %>% rename(prediction = value)
       },
       pattern = map(aheads)
     ),

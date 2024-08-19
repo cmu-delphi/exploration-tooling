@@ -68,30 +68,20 @@ slide_forecaster <- function(epi_archive,
   forecaster_wrapper <- function(x) {
     inject(forecaster(epi_data = x, !!!forecaster_args))
   }
-  res <- epix_slide_simple(
+  epix_slide_simple(
     epi_archive,
     forecaster_wrapper,
     valid_predict_dates,
     before,
     cache_key = cache_key
   )
-
-  true_value <- epi_archive %>%
-    epiprocess::epix_as_of(epi_archive$versions_end) %>%
-    select(geo_value, time_value, !!outcome) %>%
-    rename(true_value = !!outcome)
-  res %>%
-    inner_join(true_value,
-      by = join_by(geo_value, target_end_date == time_value)
-    )
 }
 
 epix_slide_simple <- function(epi_archive, forecaster, ref_time_values, before, cache_key = NULL) {
   purrr::map(ref_time_values, function(tv) {
     if (is.null(cache_key)) {
       epi_df <- epi_archive %>%
-        epix_as_of(tv, min_time_value = tv - before) %>%
-        forecaster()
+        epix_as_of(tv, min_time_value = tv - before)
     } else {
       dir.create(".exploration_cache/slide_cache", showWarnings = FALSE, recursive = TRUE)
       file_path <- glue::glue(".exploration_cache/slide_cache/{cache_key}_{before}_{tv}.parquet")
