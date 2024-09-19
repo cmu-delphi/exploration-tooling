@@ -1,3 +1,4 @@
+library(aws.s3)
 #' Sync AWS S3 cache
 #'
 #' @param rel_cache_dir The relative path to the cache directory, e.g.
@@ -20,7 +21,8 @@ sync_aws <- function(rel_cache_dir = NULL,
                      verbose = FALSE,
                      prefix = Sys.getenv("AWS_S3_PREFIX", "exploration"),
                      tar_project = Sys.getenv("TAR_PROJECT", ""),
-                     external_scores_path = Sys.getenv("EXTERNAL_SCORES_PATH", "")) {
+                     external_scores_path = Sys.getenv("EXTERNAL_SCORES_PATH", ""),
+                     aux_data_path = Sys.getenv("AUX_DATA_PATH", "")) {
   if (is.null(rel_cache_dir)) {
     cache_path <- tar_project
   } else {
@@ -56,6 +58,10 @@ sync_aws <- function(rel_cache_dir = NULL,
   if ((is.null(external_scores_path)) && (external_scores_path != "") && external_scores_path != " ") {
     s3b <- get_bucket(bucket_name, prefix = prefix, max = 1)
     aws.s3::save_object(paste0(project_prefix, "/", external_scores_path), s3b)
+  }
+  if (aux_data_path != "" && aux_data_path != " ") {
+    s3b <- get_bucket(bucket_name, prefix = prefix, max = 1)
+    aws.s3::save_object(paste0(project_prefix, aux_data_path), s3b)
   }
   return(TRUE)
 }
