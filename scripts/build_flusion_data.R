@@ -12,8 +12,8 @@ library(scoringutils)
 library(feasts)
 # library(forecast)
 library(lubridate)
-library(ISOweek)
 library(readr)
+# TODO consider switching this to https://github.com/brookslogan/epicalendar
 library(MMWRweek)
 library(rlang)
 library(vctrs)
@@ -65,6 +65,7 @@ nhsn_state <- pub_covidcast(
   signals = "confirmed_admissions_influenza_1d_prop",
   time_type = "day",
   geo_type = "state",
+  time_values = epirange(10990101, 20990101),
   issues = epirange(20000101, 20251231)
 ) %>%
   select(geo_value, time_value, admission_rate = value, version = issue) %>%
@@ -99,8 +100,8 @@ nhsn <- bind_rows(nhsn_state, nhsn_hhs_region, nhsn_nation) %>% drop_na()
 nhsn <- nhsn %>%
   mutate(epiyear = epiyear(time_value), epiweek = epiweek(time_value)) %>%
   mutate(season = convert_epiweek_to_season(epiyear, epiweek)) %>%
-  mutate(season_week = convert_epiweek_to_season_week(epiyear, epiweek)) %>%
-  mutate(week_end_date = convert_epiweek_to_week_end_date(epiyear, epiweek))
+  mutate(season_week = convert_epiweek_to_season_week(epiyear, epiweek)) #%>%
+  #mutate(week_end_date = convert_epiweek_to_week_end_date(epiyear, epiweek))
 
 turn_nhsn_weekly <- function(x, gk = 0, rtv = 0) {
   x <- drop_na(x)
@@ -267,6 +268,31 @@ ili_plus_state <- process_who_nrevss(
 ) %>%
   mutate(`% WEIGHTED ILI` = `%UNWEIGHTED ILI`)
 
+
+ili_plus <- bind_rows(ili_plus_HHS, ili_plus_nation, ili_plus_state) %>%
+  mutate(across(c(`PERCENT POSITIVE`, `% WEIGHTED ILI`), as.numeric)) %>%
+  select(-`%UNWEIGHTED ILI`) %>%
+  mutate(value = `PERCENT POSITIVE` * `% WEIGHTED ILI` / 100, source = "ILI+") %>%
+  rename(agg_level = `REGION TYPE`, geo_value = REGION) %>%
+  mutate(agg_level = str_replace_all(agg_level, "HHS Regions", "hhs_region")) %>%
+  mutate(agg_level = str_replace_all(agg_level, "National", "nation")) %>%
+  mutate(agg_level = str_replace_all(agg_level, "States", "state")) %>%
+  mutate(geo_value = if_else(agg_level == "hhs_region",
+    str_replace_all(geo_value, "Region (\\d+)", "\\1"),
+    geo_value
+  )) %>%
+  mutate(geo_value = if_else(agg_level == "nation",
+    str_replace_all(geo_value, "X", "us"),
+    geo_value
+  )) %>%
+  rename(epiyear = YEAR, epiweek = WEEK) %>%
+  mutate(
+    season = convert_epiweek_to_season(epiyear, epiweek),
+    season_week = convert_epiweek_to_season_week(epiyear, epiweek),
+    time_value = MMWRweek2Date(epiyear, epiweek, default_day_of_week),
+    version = time_value
+  )
+# map names to lower case
 name_map <- tibble(abb = state.abb, name = state.name) %>%
   bind_rows(
     tribble(
@@ -282,32 +308,6 @@ name_map <- tibble(abb = state.abb, name = state.name) %>%
       "New York City", "ny"
     )
 ) %>% mutate(abb = tolower(abb))
-
-ili_plus <- bind_rows(ili_plus_HHS, ili_plus_nation, ili_plus_state) %>%
-  mutate(across(c(`PERCENT POSITIVE`, `% WEIGHTED ILI`), as.numeric)) %>%
-  select(-`%UNWEIGHTED ILI`) %>%
-  mutate(value = `PERCENT POSITIVE` * `% WEIGHTED ILI` / 100, source = "ILI+") %>%
-  rename(agg_level = `REGION TYPE`, geo_value = REGION) %>%
-  mutate(agg_level = str_replace_all(agg_level, "HHS Regions", "hhs_region")) %>%
-  mutate(agg_level = str_replace_all(agg_level, "National", "nation")) %>%
-  mutate(agg_level = str_replace_all(agg_level, "States", "state")) %>%
-  mutate(geo_value = if_else(agg_level == "hhs_region",
-    str_replace_all(geo_value, "Region (\\d+)", "region_\\1"),
-    geo_value
-  )) %>%
-  mutate(geo_value = if_else(agg_level == "nation",
-    str_replace_all(geo_value, "X", "us"),
-    geo_value
-  )) %>%
-  rename(epiyear = YEAR, epiweek = WEEK) %>%
-  mutate(
-    season = convert_epiweek_to_season(epiyear, epiweek),
-    season_week = convert_epiweek_to_season_week(epiyear, epiweek),
-    time_value = MMWRweek2Date(epiyear, epiweek, default_day_of_week),
-    version = time_value
-  )
-ili_plus %>% filter(is.na(geo_value))
-# map names to lower case
 ili_states <- ili_plus %>%
   filter(agg_level == "state") %>%
   left_join(name_map, by=join_by(geo_value == name)) %>%
@@ -445,7 +445,7 @@ ili_final <- ili_final$DT %>% select(geo_value, time_value, version, value, sour
 
 
 flusion_merged <- bind_rows(ili_final, flusurv_final, nhsn_final) %>% as_epi_archive(compactify = TRUE, other_keys = "source")
-flusion_merged
+flusion_merged$DT %>% pull(geo_value) %>% unique
 
 flusion_merged_latest <- flusion_merged %>%
   epix_as_of(max_version = max(.$DT$version))
@@ -470,5 +470,163 @@ ggplot(filter(flusion_merged_latest, agg_level == "nation", source == "ILI+"),
   labs(title = "Weekly Admission Rate Over Time", x = "Time", y = "Admission Rate") +
   theme_minimal()
 
+flusion_merged
 
-flusion_merged %>% saveRDS("aux_data")
+# adding population and density data
+
+# apportionment data taken from here: https://www.census.gov/data/tables/time-series/dec/popchange-data-text.html
+# there's probably a better way of doing this buried in https://www.census.gov/data/developers/data-sets/popest-popproj/popest.html, but for now it's not worth the time
+apportionment_data <- read_csv(here::here("aux_data", "flusion_data", "apportionment.csv")) %>% as_tibble()
+imputed_pop_data <- apportionment_data %>%
+  filter(`Geography Type` %in% c("State", "Nation")) %>%
+  select(Name, Year, `Resident Population`, `Resident Population Density`) %>%
+  group_by(Name) %>%
+  reframe(population = spline(Year, `Resident Population`, n = 2020-1910+1)$y, density = spline(Year, `Resident Population Density`, n = 2020-1910+1)$y, Year = seq(1910,2020,by=1))
+
+# comparing the imputed to the original
+ggplot(imputed_pop_data, aes(x=Year,y=population, color = Name)) +
+  geom_line() +
+  geom_point(data = apportionment_data %>% rename(population = `Resident Population`)) +
+  scale_y_continuous(trans="log10")
+
+ggplot(imputed_pop_data, aes(x=Year,y=density, color = Name)) +
+  geom_line() +
+  geom_point(data = apportionment_data %>% rename(density = `Resident Population Density`)) +
+  scale_y_continuous(trans="log10")
+
+# converting names and adding to hhs_regions
+state_codes <- read_csv(here::here("aux_data", "flusion_data","state_codes_table.csv")) %>%
+  mutate(state_code = as.character(as.integer(state_code)))
+hhs_codes <- read_csv(here::here("aux_data", "flusion_data","state_code_hhs_table.csv")) %>%
+  mutate(state_code = as.character(as.integer(state_code)))
+
+pops_by_state_hhs <-
+  state_codes %>%
+  left_join(hhs_codes, by = join_by(state_code)) %>%
+  mutate(hhs = as.character(hhs)) %>%
+  right_join(imputed_pop_data, by = join_by(state_name == Name)) %>%
+  select(-state_name, -state_code) %>%
+  rename(state = state_id, hhs_region = hhs, year = Year) %>%
+  pivot_longer(
+    cols = c(state, hhs_region),
+    values_to = "geo_value",
+    names_to = "agg_level") %>%
+  # remove hhs_region na geo_values (this is national, and should only be present once)
+  filter(!(is.na(geo_value) & (agg_level == "hhs_region"))) %>%
+  group_by(year, agg_level, geo_value) %>%
+  summarize(area = sum(population / density), population = sum(population), density = population / area, .groups = "drop") %>%
+  select(-area) %>%
+  # deal with us missing from the state_codes/ hhs_codes tables
+  mutate(geo_value = ifelse(is.na(geo_value), "us", geo_value), agg_level = ifelse(geo_value=="us","nation", agg_level))
+pops_by_state_hhs %>% pull(geo_value) %>% unique
+pops_by_state_hhs %>% group_by(year, geo_value, agg_level) %>% count() %>% arrange(desc(n))
+
+flusion_merged <- flusion_merged$DT %>%
+  mutate(year = year(time_value)) %>%
+  left_join(
+    pops_by_state_hhs,
+    by = join_by(year, geo_value, agg_level)
+  ) %>%
+  # virgin islands data too limited for now
+  filter(geo_value !="vi") %>%
+  arrange(geo_value, time_value) %>%
+  fill(population, density) %>%
+
+
+
+flusion_merged$DT %>% qs::qsave(here::here("aux_data/flusion_data/flusion_merged"))
+flusion_merged <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
+  as_epi_archive(other_keys="source", compactify = TRUE)
+
+# given that 2020 is the earliest we have nhsn, let's just drop any versions
+# older than that to avoid making computing the quantiles difficult
+epi_data <- flusion_merged$DT %>%
+  filter(season_week < 35, ) %>%
+  # drop anomalous years
+  filter(season!="2020/21", season!="2021/22", season!="2008/09") %>%
+  as_epi_archive(other_keys = "source", compactify = TRUE) %>%
+  epix_as_of(as.Date("2022-10-29"))
+epi_data$time_value %>% max
+epi_data %>% filter(source=="flusurv") %>% pull(value) %>% summary
+epi_data %>% filter(source=="nhsn") %>% pull(value) %>% summary
+epi_data %>% filter(source=="ILI+") %>% pull(value) %>% summary
+epi_data %>% pull(source) %>% unique
+
+# actually just moving this inside the forecaster
+flusion_stabilized_quantile <- flusion_merged %>%
+  as_epi_archive(other_keys = "source", compactify = TRUE) %>%
+  epix_as_of(as.Date("2020-01-01")) %>%
+  mutate(version = as.Date("2020-01-01")) %>%
+  rbind(flusion_merged %>% filter(version > "2020-01-01")) %>%
+  # only keep data actually in the season
+  filter(season_week < 35) %>%
+  # fourth root transform to stabilize variability
+  mutate(value_transformed = (value + 0.01) ^ 0.25) %>%
+  group_by(source, geo_value) %>%
+  # scale so that the 95th quantile for each source is 1
+  mutate(quantile_scale_factor = quantile(value_transformed, 0.95, na.rm = TRUE)) %>%
+  mutate(value_transformed = value_transformed / (quantile_scale_factor + 0.01)) %>%
+  # subtract the mean for each source
+  mutate(mean_value = mean(value_transformed, na.rm = TRUE)) %>%
+  mutate(value_transformed = value_transformed - mean_value)
+
+flusion_merged$DT %>% filter(season == "2021/22", season_week==1)
+library(epipredict)
+epi_recipe(flusion_merged %>% epix_as_of(as.Date("2021-10-03"))) %>%
+  step_mutate(
+
+  )
+
+flusion_stabilized_quantile %>% select(-agg_level, -season)
+
+flusion_merged %>% filter(source == "nhsn")
+
+# Now I make the above transformation archive to archive
+# Problem: Too big in size during operation (exceeding R's limit)
+# Solution: Calculate transform factors using the latest snapshot
+flusion_merged_transform_factor <- flusion_merged %>%
+  as_epi_archive(compactify = TRUE, other_keys = "source") %>%
+  epix_as_of(max_version = max(.$DT$version)) %>%
+  mutate(value_transformed = (value + 0.01) ^ 0.25) %>%
+  mutate(value_transformed_in_season =
+     ifelse(season_week < 10 | season_week > 45, NA, value_transformed)) %>%
+  group_by(source, geo_value) %>%
+  mutate(value_transform_scale_factor =
+           quantile(value_transformed_in_season, 0.95, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(value_transformed_cs = value_transformed / (value_transform_scale_factor + 0.01)) %>%
+  mutate(value_transformed_cs_in_season =
+           ifelse(season_week < 10 | season_week > 45, NA, value_transformed_cs)) %>%
+  group_by(source, geo_value) %>%
+  mutate(value_transformed_center_factor =
+           mean(value_transformed_cs_in_season, na.rm = TRUE)) %>%
+  ungroup() %>%
+  select(geo_value, source, value_transform_scale_factor, value_transformed_center_factor) %>%
+  distinct()
+
+flusion_final <- inner_join(flusion_merged, flusion_merged_transform_factor,
+                               by = c("geo_value", "source"))
+
+## flusion_merged_latest_transformed <- flusion_merged_latest %>%
+##   mutate(value_transformed = (value + 0.01) ^ 0.25)
+## # # divide by location- and source- specific 95th percentile
+## flusion_merged_latest_transformed <- flusion_merged_latest_transformed %>%
+##   # Calculate the scale factor for inc_trans within the season
+##   mutate(value_transformed_in_season =
+##            ifelse(season_week < 10 | season_week > 45, NA, value_transformed)) %>%
+##   group_by(source, geo_value) %>%
+##   mutate(value_transform_scale_factor = quantile(value_transformed_in_season, 0.95, na.rm = TRUE)) %>%
+##   ungroup() %>%
+##   # Scale inc_trans by the scale factor
+##   mutate(value_transformed_cs = value_transformed / (value_transform_scale_factor + 0.01))
+
+# center relative to location- and source- specific mean
+## flusion_merged_latest_transformed <- flusion_merged_latest_transformed %>%
+##   # Calculate the center factor for inc_trans_cs within the season
+##   mutate(value_transformed_cs_in_season =
+##            ifelse(season_week < 10 | season_week > 45, NA, value_transformed_cs)) %>%
+##   group_by(source, geo_value) %>%
+##   mutate(value_transformed_center_factor = mean(value_transformed_cs_in_season, na.rm = TRUE)) %>%
+##   ungroup() %>%
+##   # Center inc_trans_cs by subtracting the center factor
+##   mutate(value_transformed_cs = value_transformed_cs - value_transformed_center_factor)
