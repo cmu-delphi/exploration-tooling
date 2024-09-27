@@ -162,15 +162,90 @@ extend_ahead <- function(epi_data, ahead) {
 #' @export
 get_poly_coefs <- function(values, degree, n_points) {
   values <- values[!is.na(values)]
+  coef_name <- paste0("c", seq(1, degree + 1, by= 1))
   if (length(values) < n_points) {
+    # return NA's for all values
     return(
-      tibble(
-        c0 = NA, c1 = NA, c2 = NA
-      )
+      tibble(coef_name,val = as.double(NA)) %>%
+      pivot_wider(values_from = val, names_from = coef_name)
     )
   }
-  res <- tibble(time_value = seq(-n_points+2,1), value = values) %>%
+  res <- tibble(time_value = seq(-n_points + 2, 1), value = values) %>%
     lm(value ~ poly(time_value, degree = degree, raw = TRUE), .)
   coefs <- unname(res$coefficients)
+  names(coefs) <- coef_name
   as_tibble(t(coefs))
+}
+
+#' get the mean and median used to whiten epi_data on a per source-geo_value basis
+calculate_whitening_params <- function(epi_data, colname, scale_method = c("quantile", "quantile_upper", "std"), center_method = c("median","mean")) {
+  scale_method <- arg_match(scale_method)
+  center_method <- arg_match(center_method)
+  scaled_data <- epi_data %>%
+    mutate(across(all_of(colname), \(x) (x + 0.01)^0.25)) %>%
+    group_by(source, geo_value)
+  # center so that either the mean or median is 0
+  if (center_method == "mean") {
+    fn <- mean
+  } else {
+    fn <- median
+  }
+  learned_params <-
+    scaled_data %>%
+    summarize(
+      across(all_of(colname),
+        ~ fn(.x, na.rm = TRUE),
+        .names = "{.col}_center"
+      ),
+      .groups = "drop"
+    )
+  if (scale_method == "quantile") {
+    # scale so that the difference between the 5th and 95th quantiles is 1
+    scale_fn <- function(x) {
+      diff(quantile(x, c(0.05, 0.95), na.rm = TRUE))[[1]] + .01
+    }
+  } else if (scale_method == "quantile_upper") {
+    # scale so that the 95th quantile is 1
+    scale_fn <- function(x) (quantile(x, 0.95, na.rm = TRUE) + 0.01)
+  } else {
+    # scale so that one standard deviation is 1
+    scale_fn <- function(x) (sd(x, 0.95, na.rm = TRUE) + 0.01)
+  }
+  learned_params %<>% full_join(
+    summarize(
+      scaled_data,
+      across(all_of(colname),
+        ~ scale_fn(.x),
+        .names = "{.col}_scale"
+      ),
+      .groups = "drop"
+    ),
+    by = join_by(source, geo_value)
+  )
+  return(learned_params)
+}
+
+
+#' scale so that every data source has the same 95th quantile
+data_whitening <- function(epi_data, colname, learned_params) {
+  epi_data %>%
+    left_join(
+      learned_params,
+      by = epipredict:::kill_time_value(key_colnames(epi_data))
+    ) %>%
+    mutate(across(all_of(colname), ~ (.x + 0.01)^(1/4))) %>%
+    mutate(across(all_of(colname), ~ .x - get(paste0(cur_column(), "_center")))) %>%
+    mutate(across(all_of(colname), ~ .x / get(paste0(cur_column(), "_scale"))))
+}
+
+#' undo data whitening by multiplying by the scaling and adding the center
+data_coloring <- function(epi_data, colname, learned_params, join_cols) {
+  epi_data %>%
+    left_join(
+      learned_params,
+      by = join_by(geo_value, source)
+    ) %>%
+    mutate(across(all_of(colname), ~ .x * get(paste0(cur_column(), "_scale")))) %>%
+    mutate(across(all_of(colname), ~ .x + get(paste0(cur_column(), "_center")))) %>%
+    mutate(across(all_of(colname), ~ .x^4 - 0.01))
 }

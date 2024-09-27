@@ -458,13 +458,13 @@ nhsn_final <- nhsn_weekly$DT %>%
 
 flusurv_final <-
   flusurv_adjusted$DT %>%
-  mutate(time_value = time_value + 2) %>%
+  mutate(time_value = time_value + 3) %>%
   mutate(source = "flusurv") %>%
   select(geo_value, time_value, version, value = adj_hosp_rate, source, agg_level, season, season_week)
 
 ili_final <-
   ili_plus$DT %>%
-  mutate(time_value = time_value + 2) %>%
+  mutate(time_value = time_value + 3) %>%
   select(geo_value, time_value, version, value, source, agg_level, season, season_week)
 flusurv_final %>% pull(time_value) %>% unique %>% wday %>% unique
 nhsn_final %>% pull(time_value) %>% unique %>% wday %>% unique
@@ -578,12 +578,9 @@ flusion_merged <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) 
 
 # given that 2020 is the earliest we have nhsn, let's just drop any versions
 # older than that to avoid making computing the quantiles difficult
-epi_data <- flusion_merged$DT %>%
-  filter(season_week < 35, ) %>%
-  # drop anomalous years
-  filter(season != "2020/21", season != "2021/22", season != "2008/09") %>%
+epi_data <- flusion_merged %>%
   as_epi_archive(other_keys = "source", compactify = TRUE) %>%
-  epix_as_of(as.Date("2022-10-29"))
+  epix_as_of(as.Date("2022-10-26"))
 epi_data$time_value %>% max()
 epi_data %>%
   filter(source == "flusurv") %>%

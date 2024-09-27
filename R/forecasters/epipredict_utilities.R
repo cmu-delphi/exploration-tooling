@@ -80,8 +80,7 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
   workflow <- epi_workflow(preproc, trainer) %>%
     fit(epi_data) %>%
     add_frosting(postproc)
-  latest <- get_test_data(recipe = preproc, x = epi_data)
-  pred <- predict(workflow, latest)
+  pred <- predict(workflow, epi_data)
   # the forecast_date may currently be the max time_value
   as_of <- attributes(epi_data)$metadata$as_of
   if (is.null(as_of)) {
