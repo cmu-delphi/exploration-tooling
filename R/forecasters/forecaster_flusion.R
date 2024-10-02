@@ -3,7 +3,10 @@ flusion <- function(epi_data,
                     extra_sources = "",
                     ahead = 7,
                     pop_scaling = FALSE,
-                    trainer = parsnip::linear_reg(),
+                    trainer = rand_forest(
+                      engine = "grf_quantiles",
+                      mode = "regression"
+                    ),
                     quantile_levels = covidhub_probs(),
                     scale_method = c("quantile", "std"),
                     center_method = c("median", "mean"),
@@ -23,11 +26,11 @@ flusion <- function(epi_data,
   c(epi_data, effective_ahead) %<-% extend_ahead(epi_data, ahead)
   # see latency_adjusting for other examples
 
+
+  args_input <- list(...)
   # because we're whitening, we don't want to threshold the predictions inside epipredict
   args_input[["nonneg"]] <- FALSE
-
   # this next part is basically unavoidable boilerplate you'll want to copy
-  args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
   if (!confirm_sufficient_data(epi_data, effective_ahead, args_input, outcome, extra_sources)) {
     null_result <- tibble(
@@ -53,9 +56,9 @@ flusion <- function(epi_data,
   epi_data %<>% ungroup() %>% mutate(across(where(is.character), as.factor))
   # drop between-season values for actual training; we'll need them for prediction though
   full_data <- epi_data
-  epi_data %<>% drop_non_seasons()
+  season_data <- epi_data %>% drop_non_seasons()
   # whiten to get the sources on the same scale
-  learned_params <- calculate_whitening_params(epi_data, predictors, scale_method, center_method)
+  learned_params <- calculate_whitening_params(season_data, predictors, scale_method, center_method)
   full_data %<>% data_whitening(predictors, learned_params)
   keys <- epipredict:::kill_time_value(key_colnames(epi_data))
   # add the slightly smoothed values beforehand; this is about speed, since step_epi_slide isn't ready yet
@@ -63,22 +66,47 @@ flusion <- function(epi_data,
     group_by(across(all_of(keys))) %>%
     epi_slide_mean(
       predictors,
-      before = as.difftime(2 - 1, units = "weeks"),
-      after =  as.difftime(0, units = "weeks")
+      .window_size = as.difftime(2, units = "weeks")
     ) %>%
     rename_with(~ gsub("slide_value_", "slide_value_1wk_", .x)) %>%
     epi_slide_mean(
       predictors,
-      before = as.difftime(4 - 1, units = "weeks"),
-      after =  as.difftime(0, units = "weeks")
+      .window_size = as.difftime(4, units = "weeks"),
     ) %>%
-    rename_with(~ gsub("slide_value_(?!1wk)", "slide_value_3wk_", .x, perl = TRUE)) %>% ungroup()
-  # only train on the season, but we need the off-season data for training purposes
-  epi_data <- full_data %>%
+    rename_with(~ gsub("slide_value_(?!1wk)", "slide_value_3wk_", .x, perl = TRUE))
+  # this is actually for 7-8, epi_slide just needs an actual epi_df to run, and several of the later operations don't maintain type stability
+  # also, they're in the same step to speed up the epi_slide
+  full_data_with_derivatives <- full_data %<>%
+    group_by(across(all_of(keys))) %>%
+    epi_slide(
+      .f = \(x, gk, rtv) {
+        rel_col <- x$value
+        quad4 <- rel_col %>%
+          tail(n = 4) %>%
+          get_poly_coefs(degree = 2, n_points = 4) %>%
+          setNames(paste0("quad4_", names(.)))
+        quad6 <- rel_col %>%
+          tail(n = 6) %>%
+          get_poly_coefs(degree = 2, n_points = 6) %>%
+          setNames(paste0("quad6_", names(.)))
+        lin3 <- rel_col %>%
+          tail(n = 3) %>%
+          get_poly_coefs(degree = 2, n_points = 3) %>%
+          setNames(paste0("lin3_", names(.)))
+        lin5 <- rel_col %>%
+          tail(n = 5) %>%
+          get_poly_coefs(degree = 2, n_points = 5) %>%
+          setNames(paste0("lin5_", names(.)))
+        return(bind_cols(quad4, quad6, lin3, lin5))
+      },
+      .window_size = as.difftime(6, units = "weeks")
+    )
+  # only train on the season, but we need the off-season data for prediction purposes
+  season_data <- full_data_with_derivatives %>%
     drop_non_seasons()
 
   # preprocessing supported by epipredict
-  preproc <- epi_recipe(epi_data)
+  preproc <- epi_recipe(season_data)
   if (pop_scaling && !is.null(sources_to_pop_scale)) {
     preproc %<>% step_population_scaling(
       sources_to_pop_scale,
@@ -89,44 +117,18 @@ flusion <- function(epi_data,
       by = c("geo_value" = "abbr")
     )
   }
+  # slide is currently done before for efficiency reasons, added as predictors here
   preproc %<>%
-    # this is actually for 7-8, epi_slide just needs an actual epi_df to run, and several of the later operations don't maintain type stability
-    step_epi_slide(value,
-                   .f = \(x, gk, rtv) {
-                     get_poly_coefs(x, degree = 2, n_points = 4) },
-                   f_name = "quad4",
-                   before = as.difftime(4-1, units = "weeks"),
-                   after =  as.difftime(0, units = "weeks")) %>%
-    step_epi_slide(value,
-                   .f = \(x, gk, rtv) {
-                     get_poly_coefs(x, degree = 2, n_points = 6)
-                   },
-                   f_name = "quad6",
-                   before = as.difftime(6-1, units = "weeks"),
-                   after =  as.difftime(0, units = "weeks")) %>%
-    step_epi_slide(value,
-                   .f = \(x, gk, rtv) {
-                     get_poly_coefs(x, degree = 1, n_points = 3)
-                   },
-                   f_name = "lin3",
-                   before = as.difftime(3-1, units = "weeks"),
-                   after =  as.difftime(0, units = "weeks")) %>%
-    step_epi_slide(value,
-                   .f = \(x, gk, rtv) {
-                     get_poly_coefs(x, degree = 1, n_points = 5)
-                   },
-                   f_name = "lin5",
-                   before = as.difftime(5-1, units = "weeks"),
-                   after =  as.difftime(0, units = "weeks")) %>%
-    # slide is currently done before for efficiency reasons, added as predictors here
     add_role(starts_with("slide_value"), new_role = "predictor") %>%
+    # anything similar to quad4_c3, or lin3_c2, etc
+    add_role(matches("(lin|quad)[0-9]_c[1-3]"), new_role = "predictor") %>%
     # one-hot encoding of the data source
     step_dummy(source, one_hot = TRUE, keep_original_cols = TRUE) %>%
     # one-hot encoding of location
     step_dummy(geo_value, one_hot = TRUE, keep_original_cols = TRUE) %>%
     # one-hot encoding of scale (probably redundant with geo_value)
-    add_role(population, new_role = "predictor") %>%
-    # population (included in data creation)
+    # population and density
+    add_role(population, density, new_role = "predictor") %>%
     # week of the year
     step_date(time_value, features = "week") %>%
     # distance to christmas
@@ -148,14 +150,19 @@ flusion <- function(epi_data,
     )
   }
   # with all the setup done, we execute and format
-  pred <- run_workflow_and_format(preproc, postproc, trainer, full_data)
+  pred <- run_workflow_and_format(preproc, postproc, trainer, season_data, full_data_with_derivatives)
+  pred
+  tmp_full_data %>% filter(time_value >= max(time_value) - 28)
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict
-  #
   # reintroduce color into the value
   pred <- data_coloring(pred, "value", learned_params)
   return(pred)
+}
+
+#' this is semi temporary to apply the same logic twice to the with and the without
+local_pre_slide <- function(epi_data) {
 }
 
 #' for training, we don't want off-season times or anomalous seasons, but for
@@ -163,3 +170,4 @@ flusion <- function(epi_data,
 drop_non_seasons <- function(epi_data) {
   epi_data %>% filter(season_week > 35, season != "2020/21", season != "2021/22", season != "2008/09")
 }
+

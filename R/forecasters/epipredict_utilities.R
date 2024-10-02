@@ -76,11 +76,19 @@ arx_postprocess <- function(postproc,
 #'
 #' @importFrom epipredict epi_workflow fit add_frosting get_test_data
 #' @export
-run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
+run_workflow_and_format <- function(preproc,
+                                    postproc,
+                                    trainer,
+                                    epi_data,
+                                    test_data) {
   workflow <- epi_workflow(preproc, trainer) %>%
     fit(epi_data) %>%
+    workflow() %>%
     add_frosting(postproc)
-  pred <- predict(workflow, epi_data)
+  if (is.null(test_data)) {
+    test_data <- get_test_data(recipe = preproc, x = epi_data)
+  }
+  pred <- predict(workflow, test_data)
   # the forecast_date may currently be the max time_value
   as_of <- attributes(epi_data)$metadata$as_of
   if (is.null(as_of)) {
@@ -89,3 +97,4 @@ run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
   true_forecast_date <- as_of
   return(format_storage(pred, true_forecast_date))
 }
+
