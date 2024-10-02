@@ -151,14 +151,12 @@ flusion <- function(epi_data,
   }
   # with all the setup done, we execute and format
   pred <- run_workflow_and_format(preproc, postproc, trainer, season_data, full_data_with_derivatives)
-  pred
-  tmp_full_data %>% filter(time_value >= max(time_value) - 28)
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict
   # reintroduce color into the value
-  pred <- data_coloring(pred, "value", learned_params)
-  return(pred)
+  pred_final <- data_coloring(pred, "value", learned_params)
+  return(pred_final)
 }
 
 #' this is semi temporary to apply the same logic twice to the with and the without

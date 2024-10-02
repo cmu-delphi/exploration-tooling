@@ -45,7 +45,7 @@ arx_postprocess <- function(postproc,
                             forecast_date = NULL,
                             target_date = NULL) {
   postproc %<>% layer_predict()
-  if (inherits(trainer, "quantile_reg")) {
+  if (inherits(trainer, "quantile_reg") || trainer$engine == "grf_quantiles") {
     postproc %<>%
       layer_quantile_distn(quantile_levels = args_list$quantile_levels) %>%
       layer_point_from_distn()
@@ -83,7 +83,6 @@ run_workflow_and_format <- function(preproc,
                                     test_data) {
   workflow <- epi_workflow(preproc, trainer) %>%
     fit(epi_data) %>%
-    workflow() %>%
     add_frosting(postproc)
   if (is.null(test_data)) {
     test_data <- get_test_data(recipe = preproc, x = epi_data)
