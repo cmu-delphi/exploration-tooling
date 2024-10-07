@@ -65,13 +65,10 @@ smoothed_scaled <- function(epi_data,
   # perform any preprocessing not supported by epipredict
   # this is a temp fix until a real fix gets put into epipredict
   epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
-  # One that every forecaster will need to handle: how to manage max(time_value)
-  # that's older than the `as_of` date
-  c(epi_data, effective_ahead) %<-% extend_ahead(epi_data, ahead)
   # see latency_adjusting for other examples
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
-  if (!confirm_sufficient_data(epi_data, effective_ahead, args_input, outcome, extra_sources)) {
+  if (!confirm_sufficient_data(epi_data, ahead, args_input, outcome, extra_sources)) {
     null_result <- epi_data[0L, c("geo_value", attr(epi_data, "metadata", exact = TRUE)[["other_keys"]])] %>%
       mutate(
         forecast_date = epi_data$time_value[0],
@@ -81,14 +78,14 @@ smoothed_scaled <- function(epi_data,
       )
     return(null_result)
   }
-  if (effective_ahead > 45) {
+  if (ahead > 45) {
     cli::cli_warn(
       "effective_ahead is greater than 45 days; this may be too far in the future.
       Your epi_df as_of date is {attr(jhu_csse_daily_subset, 'metadata')$as_of} and
       the epi_df max(time_value) is {max(epi_data$time_value)}."
     )
   }
-  args_input[["ahead"]] <- effective_ahead
+  args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
   args_list <- inject(arx_args_list(!!!args_input))
   # `extra_sources` sets which variables beyond the outcome are lagged and used as predictors

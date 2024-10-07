@@ -11,6 +11,16 @@
 arx_preprocess <- function(preproc, outcome, predictors, args_list) {
   # input already validated
   lags <- args_list$lags
+  if (args_list$adjust_latency != "none") {
+    preproc %<>% step_adjust_latency(
+      method = args_list$adjust_latency,
+      keys_to_ignore = args_list$keys_to_ignore
+    )
+    if (args_list$adjust_latency == "extend_lags") {
+      # this is a bit of a hack to make sure that *all* predictors are present at the correct lag
+      preproc %<>% step_epi_lag(all_predictors(), lag = 0)
+    }
+  }
   for (l in seq_along(lags)) {
     p <- predictors[l]
     preproc %<>% step_epi_lag(!!p, lag = lags[[l]])
@@ -61,7 +71,8 @@ arx_postprocess <- function(postproc,
 
   postproc %<>%
     layer_naomit(dplyr::starts_with(".pred")) %>%
-    layer_add_target_date(target_date = target_date)
+    layer_add_target_date() %>%
+    layer_add_forecast_date()
   return(postproc)
 }
 
@@ -80,20 +91,37 @@ run_workflow_and_format <- function(preproc,
                                     postproc,
                                     trainer,
                                     epi_data,
-                                    test_data) {
+                                    full_data,
+                                    return_model = FALSE) {
   workflow <- epi_workflow(preproc, trainer) %>%
     fit(epi_data) %>%
     add_frosting(postproc)
-  if (is.null(test_data)) {
+  if (is.null(full_data)) {
     test_data <- get_test_data(recipe = preproc, x = epi_data)
+  } else {
+    test_data <- get_test_data(recipe = preproc, x = full_data)
   }
+  actual_rec <- extract_recipe(workflow)
   pred <- predict(workflow, test_data)
-  # the forecast_date may currently be the max time_value
-  as_of <- attributes(epi_data)$metadata$as_of
-  if (is.null(as_of)) {
-    as_of <- max(epi_data$time_value)
+  # get_test_data ends up predicting slightly more points than it needs,
+  # so we winnow them out
+  possible_time_values <-
+    test_data %>%
+    group_by(across(
+      kill_time_value(key_colnames(test_data))
+    )) %>%
+    summarize(max_time_value = max(time_value), .groups = "drop")
+  pred <- pred %>%
+    left_join(
+      possible_time_values,
+      by = kill_time_value(key_colnames(test_data))
+    ) %>%
+    filter(time_value == max_time_value) %>%
+    select(-max_time_value)
+  if (return_model) {
+    return(list(pred = format_storage(pred, possible_time_values), workflow = workflow))
+  } else {
+    return(format_storage(pred, possible_time_values))
   }
-  true_forecast_date <- as_of
-  return(format_storage(pred, true_forecast_date))
 }
 

@@ -19,20 +19,13 @@ flusion <- function(epi_data,
   }
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
-  # this is a temp fix until a real fix gets put into epipredict
-  epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
-  # one that every forecaster will need to handle: how to manage max(time_value)
-  # that's older than the `as_of` date
-  c(epi_data, effective_ahead) %<-% extend_ahead(epi_data, ahead)
-  # see latency_adjusting for other examples
-
 
   args_input <- list(...)
   # because we're whitening, we don't want to threshold the predictions inside epipredict
   args_input[["nonneg"]] <- FALSE
   # this next part is basically unavoidable boilerplate you'll want to copy
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
-  if (!confirm_sufficient_data(epi_data, effective_ahead, args_input, outcome, extra_sources)) {
+  if (!confirm_sufficient_data(epi_data, ahead, args_input, outcome, extra_sources)) {
     null_result <- tibble(
       geo_value = character(),
       forecast_date = lubridate::Date(),
@@ -42,7 +35,7 @@ flusion <- function(epi_data,
     )
     return(null_result)
   }
-  args_input[["ahead"]] <- effective_ahead
+  args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
   args_list <- do.call(arx_args_list, args_input)
   # if you want to hardcode particular predictors in a particular forecaster

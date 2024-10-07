@@ -54,16 +54,10 @@ scaled_pop <- function(epi_data,
   # perform any preprocessing not supported by epipredict
   # this is a temp fix until a real fix gets put into epipredict
   epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
-  # one that every forecaster will need to handle: how to manage max(time_value)
-  # that's older than the `as_of` date
-  epidataAhead <- extend_ahead(epi_data, ahead)
-  # see latency_adjusting for other examples
   # this next part is basically unavoidable boilerplate you'll want to copy
-  epi_data <- epidataAhead[[1]]
-  effective_ahead <- epidataAhead[[2]]
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
-  if (!confirm_sufficient_data(epi_data, effective_ahead, args_input, outcome, extra_sources)) {
+  if (!confirm_sufficient_data(epi_data, ahead, args_input, outcome, extra_sources)) {
     null_result <- tibble(
       geo_value = character(),
       forecast_date = lubridate::Date(),
@@ -73,7 +67,7 @@ scaled_pop <- function(epi_data,
     )
     return(null_result)
   }
-  args_input[["ahead"]] <- effective_ahead
+  args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
   args_list <- inject(arx_args_list(!!!args_input))
   # if you want to hardcode particular predictors in a particular forecaster
