@@ -235,7 +235,8 @@ data_whitening <- function(epi_data, colname, learned_params) {
     ) %>%
     mutate(across(all_of(colname), ~ (.x + 0.01)^(1/4))) %>%
     mutate(across(all_of(colname), ~ .x - get(paste0(cur_column(), "_center")))) %>%
-    mutate(across(all_of(colname), ~ .x / get(paste0(cur_column(), "_scale"))))
+    mutate(across(all_of(colname), ~ .x / get(paste0(cur_column(), "_scale")))) %>%
+    select(-ends_with("_center"), -ends_with("_scale"))
 }
 
 #' undo data whitening by multiplying by the scaling and adding the center
@@ -247,5 +248,6 @@ data_coloring <- function(epi_data, colname, learned_params, join_cols) {
     ) %>%
     mutate(across(all_of(colname), ~ .x * get(paste0(cur_column(), "_scale")))) %>%
     mutate(across(all_of(colname), ~ .x + get(paste0(cur_column(), "_center")))) %>%
-    mutate(across(all_of(colname), ~ .x^4 - 0.01))
+    mutate(across(all_of(colname), ~ .x^4 - 0.01)) %>%
+    select(-ends_with("_center"), -ends_with("_scale"))
 }
