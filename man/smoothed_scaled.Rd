@@ -64,7 +64,7 @@ used.}
 \item{sd_cols}{the names of the columns to smooth. If \code{NULL} its includes
 the sd of everything}
 
-\item{...}{any additional arguments as used by \link{arx_args_list}
+\item{...}{any additional arguments as used by \link{default_args_list}
 required by covidhub.}
 }
 \description{
