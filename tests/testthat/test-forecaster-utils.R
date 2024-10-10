@@ -4,7 +4,7 @@ test_that("sanitize_args_predictors_trainer", {
   epi_data <- epipredict::case_death_rate_subset
   # don't need to test validate_forecaster_inputs as that's inherited
   # testing args_list inheritance
-  ex_args <- arx_args_list()
+  ex_args <- default_args_list()
   expect_error(sanitize_args_predictors_trainer(epi_data, "case_rate", c("case_rate"), 5, ex_args))
   argsPredictors <- sanitize_args_predictors_trainer(
     epi_data, "case_rate", c("case_rate", ""), parsnip::linear_reg(), ex_args

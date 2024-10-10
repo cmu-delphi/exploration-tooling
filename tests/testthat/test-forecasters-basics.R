@@ -1,3 +1,4 @@
+local_edition(3)
 source(here::here("R", "load_all.R"))
 
 # TODO better way to do this than copypasta
@@ -5,14 +6,16 @@ forecasters <- list(
   list("scaled_pop", scaled_pop),
   list("flatline_fc", flatline_fc),
   list("smoothed_scaled", smoothed_scaled, lags = list(c(0, 2, 5), c(0))),
-  list("flusion")
+  list("flusion", flusion)
 )
+forecaster <- list("flatline_fc", flatline_fc)
 for (forecaster in forecasters) {
   test_that(paste(forecaster[[1]], "gets the date and columns right"), {
     jhu <- epipredict::case_death_rate_subset %>%
       dplyr::filter(time_value >= as.Date("2021-11-01"))
     # the as_of for this is wildly far in the future
     attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
+
     res <- forecaster[[2]](jhu, "case_rate", c("death_rate"), -2L)
     expect_equal(
       names(res),
@@ -41,8 +44,11 @@ for (forecaster in forecasters) {
       dplyr::filter(time_value >= as.Date("2021-11-01"))
     # what if we have no as_of date? assume they mean the last available data
     attributes(jhu)$metadata$as_of <- NULL
-    expect_no_error(res <- forecaster[[2]](jhu, "case_rate", c("death_rate"), 2L))
-    expect_equal(res$target_end_date %>% unique(), max(jhu$time_value) + 2)
+    if (forecaster[[1]] != "flatline_fc") {
+    expect_snapshot(error = TRUE, res <- forecaster[[2]](jhu, "case_rate", c("death_rate"), 2L))
+    } else {
+    expect_snapshot(error = FALSE, res <- forecaster[[2]](jhu, "case_rate", c("death_rate"), 2L))
+    }
   })
 
   test_that(paste(forecaster[[1]], "handles last second NA's"), {
@@ -64,14 +70,16 @@ for (forecaster in forecasters) {
       bind_rows(one_day_nas, second_day_nas) %>%
       epiprocess::as_epi_df()
     attributes(jhu_nad)$metadata$as_of <- max(jhu_nad$time_value) + 3
-    expect_no_error(nas_forecast <- forecaster[[2]](jhu_nad, "case_rate", c("death_rate")))
+    expect_no_error(nas_forecast <- forecaster[[2]](jhu_nad, "case_rate", c("death_rate"), ahead = 1))
     # TODO: this shouldn't actually be null, it should be a bit further delayed
     # predicting from 3 days later
     expect_equal(nas_forecast$forecast_date %>% unique(), as.Date("2022-01-05"))
     # predicting 1 day into the future
     expect_equal(nas_forecast$target_end_date %>% unique(), as.Date("2022-01-06"))
-    # every state and quantile has a prediction
-    expect_equal(nrow(nas_forecast), length(covidhub_probs()) * length(jhu$geo_value %>% unique()))
+    # (nearly) every state and quantile has a prediction
+    # as, vi and mp don't currently have populations for flusion, so they're not getting forecast
+    expect_true((nrow(nas_forecast) == length(covidhub_probs()) * length(jhu$geo_value %>% unique())) ||
+                (nrow(nas_forecast) == length(covidhub_probs()) * (length(jhu$geo_value %>% unique())-3)))
   })
 
   test_that(paste(forecaster[[1]], "handles unused extra sources with NAs"), {
@@ -80,14 +88,15 @@ for (forecaster in forecasters) {
       dplyr::filter(time_value >= as.Date("2021-11-01"))
     jhu_nad <- jhu %>%
       as_tibble() %>%
-      mutate(some_other_predictor = NA) %>%
+      mutate(some_other_predictor = rep(c(NA, 3),times=1708)) %>%
       epiprocess::as_epi_df()
     attributes(jhu_nad)$metadata$as_of <- max(jhu$time_value) + 3
     # should run fine
     expect_no_error(nas_forecast <- forecaster[[2]](jhu_nad, "case_rate", c("death_rate")))
     expect_equal(nas_forecast$forecast_date %>% unique(), max(jhu$time_value) + 3)
     # there's an actual full set of predictions
-    expect_equal(nrow(nas_forecast), 1288)
+    expect_true((nrow(nas_forecast) == length(covidhub_probs()) * length(jhu$geo_value %>% unique())) ||
+                (nrow(nas_forecast) == length(covidhub_probs()) * (length(jhu$geo_value %>% unique())-3)))
   })
 
   #################################

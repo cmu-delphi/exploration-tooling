@@ -20,7 +20,7 @@ format_storage <- function(pred, true_forecast_date, target_end_date) {
     unnest(.dstn) %>%
     select(-any_of(c(".pred_distn", ".pred", "time_value"))) %>%
     rename(quantile = quantile_levels, value = values) %>%
-    relocate(where(is.character), where(is.factor), forecast_date, target_end_date=target_date, quantile, value)
+    relocate(where(is.character), where(is.factor), forecast_date, target_end_date = target_date, quantile, value)
 }
 
 #' Format for the COVID-19 Forecast Hub
@@ -68,4 +68,3 @@ covidhub_probs <- function(type = c("standard", "inc_case")) {
     inc_case = c(0.025, 0.100, 0.250, 0.500, 0.750, 0.900, 0.975)
   )
 }
-

@@ -26,10 +26,10 @@
 #' @param pop_scaling an example extra parameter unique to this forecaster
 #' @param trainer an example extra parameter that is fairly common
 #' @param ... it can also have any number of other parameters. In this case, the
-#'   `...` args are all inputs to [`epipredict::arx_args_list`].  Consult the
+#'   `...` args are all inputs to [`epipredict::default_args_list`].  Consult the
 #'   repository for existing parameter names so that your function will follow a
 #'   similar schema (e.g. `trainer`, while not strictly required, is a common
-#'   parameter, as are any of the `arx_args_list()` parameters) these parameters
+#'   parameter, as are any of the `default_args_list()` parameters) these parameters
 #'   should be ones that will store well in a data.table; if you need more
 #'   complicated parameters, it is better to store them in separate files, and
 #'   use the filename as the parameter.
@@ -38,7 +38,7 @@
 #' @seealso some utilities for making forecasters: [format_storage],
 #'   [sanitize_args_predictors_trainer]
 #'
-#' @importFrom epipredict epi_recipe step_population_scaling frosting arx_args_list layer_population_scaling
+#' @importFrom epipredict epi_recipe step_population_scaling frosting default_args_list layer_population_scaling
 #' @importFrom tibble tibble
 #' @importFrom zeallot %<-%
 #' @importFrom recipes all_numeric
@@ -52,8 +52,6 @@ scaled_pop <- function(epi_data,
                        quantile_levels = covidhub_probs(),
                        ...) {
   # perform any preprocessing not supported by epipredict
-  # this is a temp fix until a real fix gets put into epipredict
-  epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
   # this next part is basically unavoidable boilerplate you'll want to copy
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
@@ -69,7 +67,7 @@ scaled_pop <- function(epi_data,
   }
   args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
-  args_list <- inject(arx_args_list(!!!args_input))
+  args_list <- inject(default_args_list(!!!args_input))
   # if you want to hardcode particular predictors in a particular forecaster
   predictors <- c(outcome, extra_sources)
   c(args_list, predictors, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
@@ -90,7 +88,6 @@ scaled_pop <- function(epi_data,
     )
   }
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
-
   # postprocessing supported by epipredict
   postproc <- frosting()
   postproc %<>% arx_postprocess(trainer, args_list)

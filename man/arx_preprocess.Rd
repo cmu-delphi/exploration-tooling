@@ -13,7 +13,7 @@ arx_preprocess(preproc, outcome, predictors, args_list)
 
 \item{predictors}{a character vector of the columns used as predictors}
 
-\item{args_list}{an \code{\link[epipredict:arx_args_list]{epipredict::arx_args_list}}}
+\item{args_list}{an \code{\link[epipredict:default_args_list]{epipredict::default_args_list}}}
 }
 \description{
 add the default steps for arx_forecaster

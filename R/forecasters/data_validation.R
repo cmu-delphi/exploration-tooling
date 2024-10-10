@@ -12,7 +12,7 @@
 #' @inheritParams scaled_pop
 #' @param predictors the full list of predictors including the outcome. can
 #'   include empty strings
-#' @param args_list the args list created by [`epipredict::arx_args_list`]
+#' @param args_list the args list created by [`epipredict::default_args_list`]
 #'
 #' @export
 sanitize_args_predictors_trainer <- function(epi_data,
@@ -21,7 +21,7 @@ sanitize_args_predictors_trainer <- function(epi_data,
                                              trainer,
                                              args_list) {
   if (!inherits(args_list, c("arx_fcast", "alist"))) {
-    cli::cli_abort("args_list was not created using `arx_args_list().")
+    cli::cli_abort("args_list was not created using `default_args_list().")
   }
 
   predictors <- predictors[predictors != ""]
@@ -51,7 +51,7 @@ sanitize_args_predictors_trainer <- function(epi_data,
 #' @param ahead the effective ahead; may be infinite if there isn't enough data.
 #' @param args_input the input as supplied to `slide_forecaster`; lags is the
 #'   important argument, which may or may not be defined, with the default
-#'   coming from `arx_args_list`
+#'   coming from `default_args_list`
 #' @param outcome the outcome column
 #' @param extra_sources any non-outcome predictor columns
 #' @param buffer how many training data to insist on having (e.g. if `buffer=1`,

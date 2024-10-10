@@ -34,10 +34,10 @@ existing examples)}
 covidhub.}
 
 \item{...}{it can also have any number of other parameters. In this case, the
-\code{...} args are all inputs to \code{\link[epipredict:arx_args_list]{epipredict::arx_args_list}}.  Consult the
+\code{...} args are all inputs to \code{\link[epipredict:default_args_list]{epipredict::default_args_list}}.  Consult the
 repository for existing parameter names so that your function will follow a
 similar schema (e.g. \code{trainer}, while not strictly required, is a common
-parameter, as are any of the \code{arx_args_list()} parameters) these parameters
+parameter, as are any of the \code{default_args_list()} parameters) these parameters
 should be ones that will store well in a data.table; if you need more
 complicated parameters, it is better to store them in separate files, and
 use the filename as the parameter.}

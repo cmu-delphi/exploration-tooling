@@ -44,7 +44,7 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
   for (col in cols_to_mean) {
     mean_name <- paste0(col, "_m", width)
     epi_data %<>%
-      epi_slide_mean(!!col, before = width - 1L) %>%
+      epi_slide_mean(all_of(col), .window_size = width) %>%
       rename(!!mean_name := paste0("slide_value_", col))
   }
   epi_data %<>% ungroup()
@@ -68,7 +68,7 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
 #'
 #' @importFrom epiprocess epi_slide
 #' @export
-rolling_sd <- function(epi_data, sd_width = 28L, mean_width = NULL, cols_to_sd = NULL, keep_mean = FALSE) {
+rolling_sd <- function(epi_data, sd_width = 29L, mean_width = NULL, cols_to_sd = NULL, keep_mean = FALSE) {
   if (is.null(mean_width)) {
     mean_width <- as.integer(ceiling(sd_width / 2))
   }
@@ -80,12 +80,12 @@ rolling_sd <- function(epi_data, sd_width = 28L, mean_width = NULL, cols_to_sd =
     sd_name <- paste0(col, "_sd", sd_width)
 
     result %<>%
-      epi_slide_mean(!!col, before = mean_width - 1L) %>%
+      epi_slide_mean(all_of(col), .window_size = mean_width) %>%
       rename(!!mean_name := paste0("slide_value_", col))
 
     result %<>%
       mutate(.temp = (.data[[mean_name]] - .data[[col]])^2) %>%
-      epi_slide_mean(!!".temp", before = sd_width - 1) %>%
+      epi_slide_mean(all_of(".temp"), .window_size = sd_width - 1) %>%
       select(-.temp) %>%
       rename(!!sd_name := "slide_value_.temp") %>%
       mutate(!!sd_name := sqrt(.data[[sd_name]]))
@@ -162,12 +162,12 @@ extend_ahead <- function(epi_data, ahead) {
 #' @export
 get_poly_coefs <- function(values, degree, n_points) {
   values <- values[!is.na(values)]
-  coef_name <- paste0("c", seq(1, degree + 1, by= 1))
+  coef_name <- paste0("c", seq(1, degree + 1, by = 1))
   if (length(values) < n_points) {
     # return NA's for all values
     return(
-      tibble(coef_name,val = as.double(NA)) %>%
-      pivot_wider(values_from = val, names_from = coef_name)
+      tibble(coef_name, val = as.double(NA)) %>%
+        pivot_wider(values_from = val, names_from = coef_name)
     )
   }
   res <- tibble(time_value = seq(-n_points + 2, 1), value = values) %>%
@@ -178,7 +178,7 @@ get_poly_coefs <- function(values, degree, n_points) {
 }
 
 #' get the mean and median used to whiten epi_data on a per source-geo_value basis
-calculate_whitening_params <- function(epi_data, colname, scale_method = c("quantile", "quantile_upper", "std"), center_method = c("median","mean")) {
+calculate_whitening_params <- function(epi_data, colname, scale_method = c("quantile", "quantile_upper", "std"), center_method = c("median", "mean")) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   scaled_data <- epi_data %>%
@@ -233,18 +233,21 @@ data_whitening <- function(epi_data, colname, learned_params) {
       learned_params,
       by = epipredict:::kill_time_value(key_colnames(epi_data))
     ) %>%
-    mutate(across(all_of(colname), ~ (.x + 0.01)^(1/4))) %>%
+    mutate(across(all_of(colname), ~ (.x + 0.01)^(1 / 4))) %>%
     mutate(across(all_of(colname), ~ .x - get(paste0(cur_column(), "_center")))) %>%
     mutate(across(all_of(colname), ~ .x / get(paste0(cur_column(), "_scale")))) %>%
     select(-ends_with("_center"), -ends_with("_scale"))
 }
 
 #' undo data whitening by multiplying by the scaling and adding the center
-data_coloring <- function(epi_data, colname, learned_params, join_cols) {
+data_coloring <- function(epi_data, colname, learned_params, join_cols = NULL) {
+  if (is.null(join_cols)) {
+    join_cols <- key_colnames(epi_data, exclude = "time_value")
+  }
   epi_data %>%
     left_join(
       learned_params,
-      by = join_by(geo_value, source)
+      by = join_cols
     ) %>%
     mutate(across(all_of(colname), ~ .x * get(paste0(cur_column(), "_scale")))) %>%
     mutate(across(all_of(colname), ~ .x + get(paste0(cur_column(), "_center")))) %>%

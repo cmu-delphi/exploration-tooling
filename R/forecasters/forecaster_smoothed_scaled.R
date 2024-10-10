@@ -39,12 +39,12 @@
 #' @param sd_cols the names of the columns to smooth. If `NULL` its includes
 #'   the sd of everything
 #' @param quantile_levels The quantile levels to predict. Defaults to those
-#' @param ... any additional arguments as used by [arx_args_list]
+#' @param ... any additional arguments as used by [default_args_list]
 #'   required by covidhub.
 #' @seealso some utilities for making forecasters: [format_storage],
 #'   [sanitize_args_predictors_trainer]
 #'
-#' @importFrom epipredict epi_recipe step_population_scaling frosting arx_args_list layer_population_scaling
+#' @importFrom epipredict epi_recipe step_population_scaling frosting default_args_list layer_population_scaling
 #' @importFrom tibble tibble
 #' @importFrom recipes all_numeric
 #' @importFrom zeallot %<-%
@@ -87,7 +87,7 @@ smoothed_scaled <- function(epi_data,
   }
   args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
-  args_list <- inject(arx_args_list(!!!args_input))
+  args_list <- inject(default_args_list(!!!args_input))
   # `extra_sources` sets which variables beyond the outcome are lagged and used as predictors
   # any which are modified by `rolling_mean` or `rolling_sd` have their original values dropped later
   predictors <- c(outcome, extra_sources)

@@ -405,7 +405,7 @@ daily_to_weekly <- function(epi_arch,
     function(x, group, ref_time) {
       x %>%
         group_by(across(all_of(keys))) %>%
-        epi_slide_sum(agg_columns, before = 6L) %>%
+        epi_slide_sum(agg_columns, .window_size = 5L) %>%
         select(-all_of(agg_columns)) %>%
         rename_with(~ gsub("slide_value_", "", .x)) %>%
         # only keep 1/week
@@ -439,9 +439,6 @@ ili_final <-
   ili_plus$DT %>%
   mutate(time_value = time_value + 3) %>%
   select(geo_value, time_value, version, value, source, agg_level, season, season_week)
-flusurv_final %>% pull(time_value) %>% unique %>% wday %>% unique
-nhsn_final %>% pull(time_value) %>% unique %>% wday %>% unique
-ili_final %>% pull(time_value) %>% unique %>% wday %>% unique
 
 
 flusion_merged <- bind_rows(ili_final, flusurv_final, nhsn_final) %>% as_epi_archive(compactify = TRUE, other_keys = "source")
@@ -486,43 +483,145 @@ flusion_merged <-
 
 
 flusion_merged %>% qs::qsave(here::here("aux_data/flusion_data/flusion_merged"))
-
-
-
-
-flusion_merged <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
-  as_epi_archive(other_keys = "source", compactify = TRUE)
-
 source(here::here("R", "load_all.R"))
+# dropping "as" (American Samoa) because the data is terrible; there's a single point that's 80 and the rest are zero
+flusion_merged <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
+  filter(geo_value != "as") %>%
+  as_epi_archive(other_keys = "source", compactify = TRUE)
+options(error=NULL)
 # given that 2020 is the earliest we have nhsn, let's just drop any versions
 # older than that to avoid making computing the quantiles difficult
 epi_data <- flusion_merged %>%
   epix_as_of(as.Date("2022-10-26"))
-outcome <- "value"
-extra_sources = ""
-ahead = 7
-pop_scaling = FALSE
-trainer = rand_forest(engine = "grf_quantiles", mode = "regression")
-quantile_levels = covidhub_probs()
-scale_method = c("quantile")
-center_method = c("median")
-sources_to_pop_scale = c()
+flusion_merged$DT %>% filter(!is.na(value)) %>% group_by(source) %>% count()
+flusion_merged$DT %>% filter(time_value == "2022-10-26")
+flusion_merged %>%
+  epix_as_of(as.Date("2022-10-26")) %>% filter(!is.na(value), source=="flusurv")
+epi_data %>% filter(!is.na(value), source =="flusurv")
+last_value <- flusion_merged %>%
+  epix_as_of(as.Date("2024-01-01")) %>%
+  filter(time_value =="2022-10-26")
+true_value <- flusion_merged %>%
+  epix_as_of(as.Date("2024-01-01"))
+source(here::here("R", "load_all.R"))
+pred_final <- flusion(epi_data, "value", adjust_latency = "extend_lags", derivative_estimator = "growth_rate")
+
+# various plots used after
+ggplot(epi_data, aes(x=time_value, y=value, color = source)) + geom_line()
+ggplot(full_data, aes(x=time_value, y=value, color = source)) + geom_line()
+ggplot(season_data, aes(x=time_value, y=value, color = geo_value)) + geom_line() + facet_wrap(~source,ncol=1)
+ggplot(full_data, aes(x=time_value, y=value, color = geo_value)) + geom_line() + facet_wrap(~source,ncol=1, scales="free_y")
+full_data %>% filter(geo_value == "as") %>% ggplot(aes(x=time_value, y = value))
+ggplot(season_data %>% filter(year > 2019), aes(x=time_value, y=value, color = geo_value)) + geom_line() + facet_wrap(~source,ncol=1, scales="free_y")
+# end various plots
+
+pred_final %>%
+    filter(!is.na(value)) %>%
+    pull(source) %>%
+    unique()
+true_value %>% filter(source =="nhsn") %>% pull(value) %>% median
+pred_final
+pred_final %>% filter(quantile == .5) %>% left_join(
+    true_value %>%
+      select(-agg_level, -season, -season_week, -year, -population, -density),
+    by = join_by(geo_value, source, target_end_date == time_value)
+  ) %>% ggplot(aes(x = value.x, y = value.y, color = source)) + geom_point() + geom_abline()
+
+calculate
+
+pred_final %>%
+  filter(quantile == .5) %>%
+  left_join(
+    true_value %>%
+      select(-agg_level, -season, -season_week, -year, -population, -density),
+    by = join_by(geo_value, source, forecast_date == time_value)
+  )
+
+
+pred_final %>%
+  left_join(
+    true_value %>%
+      select(-agg_level, -season, -season_week, -year, -population, -density),
+    by = join_by(geo_value, source, target_end_date == time_value)
+  ) %>%
+  rename(prediction = value.x, true_value = value.y, model = source) %>%
+  arrange(geo_value, model, forecast_date, target_end_date, quantile) %>%
+  scoringutils::score(metrics = c("interval_score", "ae_median")) %>%
+  scoringutils::summarize_scores(across = c("geo_value"))
+pred_final %>%
+  left_join(true_value %>% select(-agg_level, -season, -season_week, -year, -population, -density), by = join_by(geo_value, source, target_end_date == time_value)) %>%
+  mutate(off_by = value.x - value.y, score = abs(0.5 - quantile) * abs(off_by) / value.y) %>%
+  group_by(geo_value, source, forecast_date, target_end_date) %>%
+  summarize(net_score = sum(score)) %>%
+  arrange(net_score)
+# round 2
+source(here::here("R", "load_all.R"))
+epi_data2 <- flusion_merged %>%
+  epix_as_of(as.Date("2024-01-03"))
+epi_data2
+flusion_merged$DT %>% filter(time_value > "2024-01-01")
+true_value2 <- flusion_merged %>%
+  epix_as_of(as.Date("2024-07-05")) %>%
+  filter(time_value == "2024-01-10")
+pred_final2 <- flusion(epi_data2, "value")
+pred_final2
+pred_final2 %>%
+  left_join(true_value2 %>% select(-agg_level, -season, -season_week, -year, -population, -density), by = join_by(geo_value, source, target_end_date == time_value)) %>%
+  mutate(off_by = value.x - value.y, score = abs(0.5 - quantile) * abs(off_by) / value.y) %>%
+  select(-value.x, -value_center, -value_scale) %>%
+  group_by(geo_value, source, forecast_date, target_end_date) %>%
+  summarize(net_score = sum(score)) %>%
+  arrange(net_score)
+pred_final2 %>%
+  pull(source) %>%
+  unique()
+pred_final2 %>%
+  left_join(
+    true_value2 %>%
+      select(-agg_level, -season, -season_week, -year, -population, -density),
+    by = join_by(geo_value, source, target_end_date == time_value)
+  ) %>%
+  rename(prediction = value.x, true_value = value.y, model = source) %>%
+  scoringutils::score(metrics = c("interval_score", "ae_median")) %>%
+  scoringutils::summarize_scores(across = c("geo_value"))
+true_value2 %>%
+  select(-agg_level, -season, -season_week, -year, -population, -density) %>%
+  group_by(source, time_value) %>%
+  drop_na() %>%
+  summarise(min = min(value), max = max(value), mean = mean(value), median = median(value))
+pred_final2 %>% filter(quantile==0.5) %>% arrange(desc(value))
+pred_final2 %>% arrange(desc(value))
+epi_data2 %>% arrange(desc(value))
+true_value2 %>% filter(`source` == "ILI+") %>% arrange(desc(value))
+true_value2 %>%
+   %>%
+  pull(value) %>%
+  summary()
+outcome() <- "value"
+extra_sources <- ""
+ahead <- 7
+pop_scaling <- FALSE
+trainer <- rand_forest(engine = "grf_quantiles", mode = "regression")
+quantile_levels <- covidhub_probs()
+scale_method <- c("quantile")
+center_method <- c("median")
+sources_to_pop_scale <- c()
 args_input <- list()
 
-epi_data$time_value %>% max()
-epi_data %>%
+epi_data2$time_value %>% max()
+epi_data2 %>%
   filter(source == "flusurv") %>%
   pull(value) %>%
   summary()
-epi_data %>%
+epi_data2 %>%
   filter(source == "nhsn") %>%
   pull(value) %>%
   summary()
-epi_data %>%
+epi_data2 %>%
   filter(source == "ILI+") %>%
   pull(value) %>%
   summary()
-epi_data %>%
+epi_data2 %>%
   pull(source) %>%
   unique()
 
@@ -611,3 +710,4 @@ flusion_final <- inner_join(flusion_merged, flusion_merged_transform_factor,
 ##   ungroup() %>%
 ##   # Center inc_trans_cs by subtracting the center factor
 ##   mutate(value_transformed_cs = value_transformed_cs - value_transformed_center_factor)
+
