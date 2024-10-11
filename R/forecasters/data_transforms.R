@@ -42,10 +42,12 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
   cols_to_mean <- get_trainable_names(epi_data, cols_to_mean)
   epi_data %<>% group_by(geo_value)
   for (col in cols_to_mean) {
-    mean_name <- paste0(col, "_m", width)
-    epi_data %<>%
-      epi_slide_mean(all_of(col), .window_size = width) %>%
-      rename(!!mean_name := paste0("slide_value_", col))
+    for (w in width) {
+      mean_name <- paste0("slide_", col, "_m", w)
+      epi_data %<>%
+        epi_slide_mean(all_of(col), .window_size = w) %>%
+        rename(!!mean_name := paste0("slide_value_", col))
+    }
   }
   epi_data %<>% ungroup()
   return(epi_data)
@@ -76,8 +78,8 @@ rolling_sd <- function(epi_data, sd_width = 29L, mean_width = NULL, cols_to_sd =
   result <- epi_data
   result %<>% group_by(geo_value)
   for (col in cols_to_sd) {
-    mean_name <- paste0(col, "_m", mean_width)
-    sd_name <- paste0(col, "_sd", sd_width)
+    mean_name <- glue::glue("slide_{col}_m{mean_width}")
+    sd_name <- glue::glue("slide_{col}_sd{sd_width}")
 
     result %<>%
       epi_slide_mean(all_of(col), .window_size = mean_width) %>%
@@ -231,7 +233,7 @@ data_whitening <- function(epi_data, colname, learned_params) {
   epi_data %>%
     left_join(
       learned_params,
-      by = epipredict:::kill_time_value(key_colnames(epi_data))
+      by = key_colnames(epi_data, exclude = "time_value")
     ) %>%
     mutate(across(all_of(colname), ~ (.x + 0.01)^(1 / 4))) %>%
     mutate(across(all_of(colname), ~ .x - get(paste0(cur_column(), "_center")))) %>%

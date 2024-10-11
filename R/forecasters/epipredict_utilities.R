@@ -10,7 +10,6 @@
 #' @export
 arx_preprocess <- function(preproc, outcome, predictors, args_list) {
   # input already validated
-  lags <- args_list$lags
   if (args_list$adjust_latency != "none") {
     preproc %<>% step_adjust_latency(
       method = args_list$adjust_latency,
@@ -21,9 +20,12 @@ arx_preprocess <- function(preproc, outcome, predictors, args_list) {
       preproc %<>% step_epi_lag(has_role("pre-predictor"), lag = 0, role = "predictor")
     }
   }
-  for (l in seq_along(lags)) {
+  lags <- args_list$lags
+  if (any(predictors != "")) {
+  for (l in seq_along(predictors)) {
     p <- predictors[l]
     preproc %<>% step_epi_lag(!!p, lag = lags[[l]])
+  }
   }
   preproc %<>%
     step_epi_ahead(!!outcome, ahead = args_list$ahead) %>%

@@ -397,7 +397,7 @@ daily_to_weekly <- function(epi_arch,
                             agg_method = c("total", "mean", "median"),
                             day_of_week = 4L,
                             day_of_week_end = 6L) {
-  keys <- grep("time_value", key_colnames(epi_arch), invert = TRUE, value = TRUE)
+  keys <- key_colnames(epi_arch, exclude = "time_value")
   too_many_tibbles <- epix_slide(
     epi_arch,
     before = 99999999L,

@@ -1,14 +1,14 @@
-local_edition(3)
 source(here::here("R", "load_all.R"))
+local_edition(3)
 
 # TODO better way to do this than copypasta
 forecasters <- list(
   list("scaled_pop", scaled_pop),
   list("flatline_fc", flatline_fc),
   list("smoothed_scaled", smoothed_scaled, lags = list(c(0, 2, 5), c(0))),
-  list("flusion", flusion)
+  list("flusion", flusion),
+  list("season_week", season_week_forecaster)
 )
-forecaster <- list("flatline_fc", flatline_fc)
 for (forecaster in forecasters) {
   test_that(paste(forecaster[[1]], "gets the date and columns right"), {
     jhu <- epipredict::case_death_rate_subset %>%
@@ -17,6 +17,7 @@ for (forecaster in forecasters) {
     attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
 
     res <- forecaster[[2]](jhu, "case_rate", c("death_rate"), -2L)
+
     expect_equal(
       names(res),
       c("geo_value", "forecast_date", "target_end_date", "quantile", "value")
@@ -78,8 +79,8 @@ for (forecaster in forecasters) {
     expect_equal(nas_forecast$target_end_date %>% unique(), as.Date("2022-01-06"))
     # (nearly) every state and quantile has a prediction
     # as, vi and mp don't currently have populations for flusion, so they're not getting forecast
-    expect_true((nrow(nas_forecast) == length(covidhub_probs()) * length(jhu$geo_value %>% unique())) ||
-                (nrow(nas_forecast) == length(covidhub_probs()) * (length(jhu$geo_value %>% unique())-3)))
+    max_n_geos <-length(jhu$geo_value %>% unique())
+    expect_true(any(nrow(nas_forecast) == length(covidhub_probs()) * (max_n_geos - c(0,1,3))))
   })
 
   test_that(paste(forecaster[[1]], "handles unused extra sources with NAs"), {
@@ -95,8 +96,7 @@ for (forecaster in forecasters) {
     expect_no_error(nas_forecast <- forecaster[[2]](jhu_nad, "case_rate", c("death_rate")))
     expect_equal(nas_forecast$forecast_date %>% unique(), max(jhu$time_value) + 3)
     # there's an actual full set of predictions
-    expect_true((nrow(nas_forecast) == length(covidhub_probs()) * length(jhu$geo_value %>% unique())) ||
-                (nrow(nas_forecast) == length(covidhub_probs()) * (length(jhu$geo_value %>% unique())-3)))
+    expect_true(any(nrow(nas_forecast) == length(covidhub_probs()) * (max_n_geos - c(0,1,3))))
   })
 
   #################################
@@ -121,7 +121,7 @@ for (forecaster in forecasters) {
           suffix = c(".unscaled", ".scaled")
         ) %>%
         mutate(equal = value.unscaled == value.scaled) %>%
-        summarize(all(equal)) %>% pull(`all(equal)`))
+        summarize(all(equal), .groups = "drop") %>% pull(`all(equal)`))
     })
   } else if (forecaster[[1]] == "smoothed_scaled") {
     testthat("smoothed_scaled handles variable lags correctly", {
@@ -230,7 +230,7 @@ test_that("ensemble_average", {
   expect_no_error(partial_ave_ens <- ensemble_average(jhu, one_partially_missing))
   # the entries that are present for all of them are the same
   left_join(partial_ave_ens, ave_ens, by = c("geo_value", "forecast_date", "target_end_date", "quantile")) %>%
-    summarize(all.equal(value.x, value.y))
+    summarize(all.equal(value.x, value.y), .groups = "drop")
   left_join(partial_ave_ens, ave_ens, by = c("geo_value", "forecast_date", "target_end_date", "quantile")) %>%
     mutate(eq = value.x == value.y) %>%
     pull(eq)

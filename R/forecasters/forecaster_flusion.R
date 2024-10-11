@@ -78,7 +78,7 @@ flusion <- function(epi_data,
   # whiten to get the sources on the same scale
   learned_params <- calculate_whitening_params(season_data, predictors, scale_method, center_method)
   full_data %<>% data_whitening(predictors, learned_params)
-  keys <- epipredict:::kill_time_value(key_colnames(epi_data))
+  keys <- key_colnames(epi_data, exclude = "time_value")
   # add the slightly smoothed values beforehand; this is about speed, since step_epi_slide isn't ready yet
   full_data %<>%
     group_by(across(all_of(keys))) %>%
@@ -199,12 +199,15 @@ flusion <- function(epi_data,
   return(pred_final)
 }
 
-#' this is semi temporary to apply the same logic twice to the with and the without
-local_pre_slide <- function(epi_data) {
-}
-
 #' for training, we don't want off-season times or anomalous seasons, but for
 #' prediction we do
-drop_non_seasons <- function(epi_data) {
-  epi_data %>% filter(season_week < 35, season != "2020/21", season != "2021/22", season != "2008/09")
+drop_non_seasons <- function(epi_data, min_window = 12) {
+  epi_data %>%
+    filter(
+      (season_week < 35) |
+        (attributes(epi_data)$metadata$as_of - time_value < as.difftime(min_window, units = "weeks")),
+      season != "2020/21",
+      (season != "2019/20") | (time_value < "2020-03-01"),
+      season != "2008/09"
+    )
 }
