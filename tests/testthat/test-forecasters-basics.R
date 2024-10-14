@@ -7,7 +7,7 @@ forecasters <- list(
   list("flatline_fc", flatline_fc),
   list("smoothed_scaled", smoothed_scaled, lags = list(c(0, 2, 5), c(0))),
   list("flusion", flusion),
-  list("season_week", season_week_forecaster)
+  forecaster <- list("no_recent_outcome", no_recent_outcome)
 )
 for (forecaster in forecasters) {
   test_that(paste(forecaster[[1]], "gets the date and columns right"), {
@@ -96,6 +96,7 @@ for (forecaster in forecasters) {
     expect_no_error(nas_forecast <- forecaster[[2]](jhu_nad, "case_rate", c("death_rate")))
     expect_equal(nas_forecast$forecast_date %>% unique(), max(jhu$time_value) + 3)
     # there's an actual full set of predictions
+    max_n_geos <-length(jhu$geo_value %>% unique())
     expect_true(any(nrow(nas_forecast) == length(covidhub_probs()) * (max_n_geos - c(0,1,3))))
   })
 

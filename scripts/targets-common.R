@@ -62,3 +62,4 @@ tar_option_set(
 
 linreg <- parsnip::linear_reg()
 quantreg <- epipredict::quantile_reg()
+randforest_grf <- rand_forest(engine = "grf_quantiles", mode = "regression")

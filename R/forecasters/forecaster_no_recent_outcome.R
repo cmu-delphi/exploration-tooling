@@ -1,20 +1,21 @@
 #' predict the value using only the week in the season, maybe the population, and any extra sources
 #' it may whiten any old data as the outcome
 no_recent_outcome <- function(epi_data,
-                                         outcome,
-                                         extra_sources = "",
-                                         ahead = 7,
-                                         pop_scaling = FALSE,
-                                         trainer = parsnip::linear_reg(),
-                                         quantile_levels = covidhub_probs(),
-                                         use_population = TRUE,
-                                         scale_method = c("quantile", "std", "none"),
-                                         center_method = c("median", "mean", "none"),
-                                         filter_source = NULL,
-                                         smooth_width = 3,
-                                         smooth_cols = NULL,
-                                         sources_to_pop_scale = c(),
-                                         ...) {
+                              outcome,
+                              extra_sources = "",
+                              ahead = 7,
+                              pop_scaling = FALSE,
+                              trainer = parsnip::quantile_reg(),
+                              quantile_levels = covidhub_probs(),
+                              use_population = TRUE,
+                              use_density = TRUE,
+                              scale_method = c("quantile", "std", "none"),
+                              center_method = c("median", "mean", "none"),
+                              filter_source = NULL,
+                              smooth_width = 3,
+                              smooth_cols = NULL,
+                              sources_to_pop_scale = c(),
+                              ...) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   if (is.null(smooth_cols)) {
@@ -99,11 +100,19 @@ no_recent_outcome <- function(epi_data,
     preproc %>%
       add_role(starts_with("slide_"), new_role = "pre-predictor")
   }
-  # population and density
-  preproc %<>%
-    add_role(population, density, new_role = "pre-predictor") %>%
-    # week of the season
-    add_role(season_week, new_role = "pre-predictor")
+  if (use_population == TRUE) {
+    # population and density
+    preproc %<>%
+      add_role(population, density, new_role = "pre-predictor")
+  }
+  if (use_population == TRUE) {
+    # population and density
+    preproc %<>%
+      add_role(population, density, new_role = "pre-predictor")
+  }
+  # week of the season
+  preproc %<>% add_role(season_week, new_role = "pre-predictor")
+  # any relevant lags, the aheads, latency adjustment, that sort of thing
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
   # postprocessing supported by epipredict
   postproc <- frosting()

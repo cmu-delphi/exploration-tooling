@@ -25,6 +25,8 @@
 #'   existing examples)
 #' @param pop_scaling an example extra parameter unique to this forecaster
 #' @param trainer an example extra parameter that is fairly common
+#' @param filter_source if multiple sources are mixed together, if this is non-null it filters to just ones that match this value
+#' @param filter_agg_level if multiple geographic levels are mixed together, if this is non-null it filters to just ones that match this value (e.g. you probably want "state")
 #' @param ... it can also have any number of other parameters. In this case, the
 #'   `...` args are all inputs to [`epipredict::default_args_list`].  Consult the
 #'   repository for existing parameter names so that your function will follow a
@@ -50,8 +52,18 @@ scaled_pop <- function(epi_data,
                        pop_scaling = TRUE,
                        trainer = parsnip::linear_reg(),
                        quantile_levels = covidhub_probs(),
+                       filter_source = NULL,
+                       filter_agg_level = NULL,
                        ...) {
   # perform any preprocessing not supported by epipredict
+  #
+  # this is for the case where there are multiple sources in the same column
+  if (!is.null(filter_source)) {
+    epi_data %<>% filter(source == filter_source)
+  }
+  if (!is.null(filter_agg_level)) {
+    epi_data %<>% filter(agg_level == filter_agg_level)
+  }
   # this next part is basically unavoidable boilerplate you'll want to copy
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this

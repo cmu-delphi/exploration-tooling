@@ -37,6 +37,8 @@ slide_forecaster <- function(epi_archive,
                              n_training_pad = 5,
                              forecaster_args = list(),
                              forecaster_args_names = list(),
+                             start_date = NULL,
+                             end_date = NULL,
                              date_range_step_size = 1L,
                              cache_key = NULL) {
   if (length(forecaster_args) > 0) {
@@ -51,8 +53,12 @@ slide_forecaster <- function(epi_archive,
     net_slide_training <- slide_training + n_training_pad
   }
   # restrict the dataset to areas where training is possible
-  start_date <- min(epi_archive$DT$time_value) + net_slide_training
-  end_date <- max(epi_archive$DT$time_value) - forecaster_args$ahead
+  if (is.null(start_date)) {
+    start_date <- min(epi_archive$DT$time_value) + net_slide_training
+  }
+  if (is.null(end_date)) {
+    end_date <- max(epi_archive$DT$time_value) - forecaster_args$ahead
+  }
   valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = date_range_step_size)
 
   # first generate the forecasts

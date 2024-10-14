@@ -10,8 +10,10 @@ flusion <- function(epi_data,
                     quantile_levels = covidhub_probs(),
                     scale_method = c("quantile", "std"),
                     center_method = c("median", "mean"),
+                    dummy_states = TRUE,
+                    dummy_source = TRUE,
                     sources_to_pop_scale = c(),
-                    derivative_estimator = c("growth_rate", "quadratic_regression"),
+                    derivative_estimator = c("growth_rate", "quadratic_regression", "none"),
                     ...) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
@@ -145,14 +147,16 @@ flusion <- function(epi_data,
   preproc %<>%
     add_role(all_of(starts_with("slide_value")), new_role = "pre-predictor")
   # one-hot encoding of the data source
-  if (levels(epi_data$source) != "none") {
+  if ((levels(epi_data$source) != "none") && dummy_source) {
     preproc %<>% step_dummy(source, one_hot = TRUE, keep_original_cols = TRUE, role = "pre-predictor")
   }
   # one-hot encoding of location
-  preproc %<>% step_dummy(geo_value, one_hot = TRUE, keep_original_cols = TRUE, role = "pre-predictor") %>%
+  if (dummy_states) {
+    preproc %<>% step_dummy(geo_value, one_hot = TRUE, keep_original_cols = TRUE, role = "pre-predictor")
+  }
     # one-hot encoding of scale (probably redundant with geo_value)
     # population and density
-    add_role(population, density, new_role = "pre-predictor") %>%
+    preproc %<>% add_role(population, density, new_role = "pre-predictor") %>%
     # week of the year
     step_date(time_value, features = "week") %>%
     # distance to christmas
@@ -202,10 +206,11 @@ flusion <- function(epi_data,
 #' for training, we don't want off-season times or anomalous seasons, but for
 #' prediction we do
 drop_non_seasons <- function(epi_data, min_window = 12) {
+  forecast_date <- attributes(epi_data)$metadata$as_of %||% max(epi_data$time_value)
   epi_data %>%
     filter(
       (season_week < 35) |
-        (attributes(epi_data)$metadata$as_of - time_value < as.difftime(min_window, units = "weeks")),
+        (forecast_date - time_value < as.difftime(min_window, units = "weeks")),
       season != "2020/21",
       (season != "2019/20") | (time_value < "2020-03-01"),
       season != "2008/09"
