@@ -15,15 +15,15 @@ run-nohup:
 	nohup Rscript scripts/run.R &
 
 sync:
-	Rscript -e "source('R/utils.R'); sync_aws()"
+	Rscript -e "source('R/sync_aws.R'); sync_aws()"
 
 pull:
-	Rscript -e "source('R/utils.R'); sync_aws(direction = 'download')"
+	Rscript -e "source('R/sync_aws.R'); sync_aws(direction = 'download')"
 
 download:pull
 
 push:
-	Rscript -e "source('R/utils.R'); sync_aws(direction = 'upload')"
+	Rscript -e "source('R/sync_aws.R'); sync_aws(direction = 'upload')"
 
 upload: push
 

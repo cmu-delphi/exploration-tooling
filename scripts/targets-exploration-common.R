@@ -5,7 +5,7 @@
 #' - `chng_signal`
 #' - `fetch_args`
 #' - `eval_time`
-#' - `traing_time`
+#' - `training_time`
 make_data_targets <- function() {
   list(
     tar_target(
@@ -109,7 +109,7 @@ make_data_targets <- function() {
       }
     ),
     tar_target(
-      name = joined_archive_data_2022,
+      name = joined_archive_data,
       command = {
         hhs_archive_data_2022 %<>%
           select(geo_value, time_value, value, issue) %>%
@@ -140,6 +140,11 @@ make_data_targets <- function() {
 #' Relies on the following globals:
 #' - `forecaster_grid`
 #' - `date_step`
+#' - `start_date` (can be NULL)
+#' - `end_date` (can be NULL)
+#' Relies on the following targets:
+#' - joined_archive_data: the target data, it needs the outcome column to be hhs
+#' - hhs_evaluation_data: the true values of the target data
 make_forecasts_and_scores <- function() {
   tar_map(
     values = forecaster_grid,
@@ -149,7 +154,7 @@ make_forecasts_and_scores <- function() {
       name = forecast,
       command = {
         slide_forecaster(
-          epi_archive = joined_archive_data_2022,
+          epi_archive = joined_archive_data,
           outcome = "hhs",
           ahead = aheads,
           extra_sources = "",
@@ -158,7 +163,7 @@ make_forecasts_and_scores <- function() {
           forecaster_args = params,
           forecaster_args_names = param_names,
           date_range_step_size = date_step,
-          cache_key = "joined_archive_data_2022"
+          cache_key = "joined_archive_data"
         ) %>% rename(prediction = value)
       },
       pattern = map(aheads)
@@ -174,6 +179,9 @@ make_forecasts_and_scores <- function() {
 
 #' Relies on the following globals:
 #' - `ensemble_grid`
+#' Relies on the following targets:
+#' - joined_archive_data: the target data, it needs the outcome column to be hhs
+#' - hhs_evaluation_data: the true values of the target data
 make_ensembles_and_scores <- function() {
   tar_map(
     values = ensemble_grid,
@@ -182,7 +190,7 @@ make_ensembles_and_scores <- function() {
       name = ensemble_forecast,
       command = {
         ensemble(
-          joined_archive_data_2022,
+          joined_archive_data,
           children_ids,
           "hhs",
           extra_sources = "chng",

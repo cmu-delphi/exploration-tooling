@@ -20,7 +20,7 @@ confirm_sufficient_data(
 
 \item{args_input}{the input as supplied to \code{slide_forecaster}; lags is the
 important argument, which may or may not be defined, with the default
-coming from \code{arx_args_list}}
+coming from \code{default_args_list}}
 
 \item{outcome}{the outcome column}
 

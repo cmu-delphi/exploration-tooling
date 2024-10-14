@@ -22,7 +22,7 @@ include empty strings}
 
 \item{trainer}{an example extra parameter that is fairly common}
 
-\item{args_list}{the args list created by \code{\link[epipredict:arx_args_list]{epipredict::arx_args_list}}}
+\item{args_list}{the args list created by \code{\link[epipredict:default_args_list]{epipredict::default_args_list}}}
 }
 \description{
 a smorgasbord of checks that any epipredict-based forecaster should do:
