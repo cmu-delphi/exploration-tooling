@@ -72,10 +72,21 @@ confirm_sufficient_data <- function(epi_data, ahead, args_input, outcome, extra_
   has_no_last_nas <- epi_data %>%
     drop_na(c(!!outcome, !!!extra_sources)) %>%
     group_by(geo_value) %>%
-    summarise(has_enough_data = n_distinct(time_value) >= lag_max + ahead + buffer) %>%
+    summarise(has_enough_data = n_distinct(time_value) >= lag_max + ahead + buffer, .groups = "drop") %>%
     pull(has_enough_data) %>%
     any()
   return(
-    !is.infinite(ahead) && has_no_last_nas
+    all(!is.infinite(ahead)) && has_no_last_nas
   )
+}
+
+#' if we want to filter the main data column in some way, this is a simple way to share that across forecasters
+filter_extraneous <- function(epi_data, filter_source, filter_agg_level) {
+  if (filter_source != "") {
+    epi_data %<>% filter(source == filter_source)
+  }
+  if (filter_agg_level != "") {
+    epi_data %<>% filter(agg_level == filter_agg_level)
+  }
+  return(epi_data)
 }

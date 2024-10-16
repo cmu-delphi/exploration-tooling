@@ -5,13 +5,14 @@ no_recent_outcome <- function(epi_data,
                               extra_sources = "",
                               ahead = 7,
                               pop_scaling = FALSE,
-                              trainer = parsnip::quantile_reg(),
+                              trainer = epipredict::quantile_reg(),
                               quantile_levels = covidhub_probs(),
                               use_population = TRUE,
                               use_density = TRUE,
                               scale_method = c("quantile", "std", "none"),
                               center_method = c("median", "mean", "none"),
-                              filter_source = NULL,
+                              filter_source = "",
+                              filter_agg_level = "",
                               smooth_width = 3,
                               smooth_cols = NULL,
                               sources_to_pop_scale = c(),
@@ -22,9 +23,7 @@ no_recent_outcome <- function(epi_data,
     smooth_cols <- extra_sources
   }
   # this is for the case where there are multiple sources in the same column
-  if (!is.null(filter_source)) {
-    epi_data %<>% filter(source == filter_source)
-  }
+  epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   args_input <- list(...)
   # this next part is basically unavoidable boilerplate you'll want to copy
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
@@ -137,8 +136,6 @@ no_recent_outcome <- function(epi_data,
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict
   # reintroduce color into the value
-  pred
-  learned_params
   if (scale_method != "none") {
     pred <- pred %>%
       rename({{ outcome }} := value) %>%

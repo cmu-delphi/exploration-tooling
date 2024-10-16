@@ -107,8 +107,6 @@ run_workflow_and_format <-
       test_data <- full_data
     }
     # getting test data
-    ## rec <- extract_recipe(workflow)
-    ## rec$steps[[6]]$latency_table %>% print(n = 74)
     max_time_value <- test_data %>%
       na.omit() %>%
       pull(time_value) %>%

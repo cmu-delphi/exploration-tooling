@@ -162,6 +162,8 @@ make_forecasts_and_scores <- function() {
           n_training_pad = 30L,
           forecaster_args = params,
           forecaster_args_names = param_names,
+          start_date = start_date,
+          end_date = end_date,
           date_range_step_size = date_step,
           cache_key = "joined_archive_data"
         ) %>% rename(prediction = value)

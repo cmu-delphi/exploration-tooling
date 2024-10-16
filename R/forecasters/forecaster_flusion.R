@@ -147,7 +147,7 @@ flusion <- function(epi_data,
   preproc %<>%
     add_role(all_of(starts_with("slide_value")), new_role = "pre-predictor")
   # one-hot encoding of the data source
-  if ((levels(epi_data$source) != "none") && dummy_source) {
+  if (all(levels(epi_data$source) != "none") && dummy_source) {
     preproc %<>% step_dummy(source, one_hot = TRUE, keep_original_cols = TRUE, role = "pre-predictor")
   }
   # one-hot encoding of location

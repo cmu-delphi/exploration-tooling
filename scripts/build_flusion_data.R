@@ -220,7 +220,7 @@ flusurv_adjusted$DT %>%
   summarize(minn = min(season_week), maxx = max(season_week)) %>%
   summarize(max(minn), min(maxx))
 
-################# FluView ##########################
+################# Ili ##########################
 # this is novel data
 # its also weekly
 # https://gis.cdc.gov/grasp/fluview/fluportaldashboard.html

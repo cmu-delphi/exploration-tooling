@@ -29,7 +29,7 @@ main_controller <- crew_controller_local(
 serial_controller <- crew_controller_local(
   name = "serial_controller",
   workers = 1L,
-  local_log_directory = "local_logs",
+  options_local = crew_options_local(log_directory = "local_logs"),
   seconds_idle = 60L,
   seconds_timeout = 7 * 24 * 60 * 60L,
   tasks_max = 1L,

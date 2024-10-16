@@ -4,7 +4,7 @@ source("scripts/targets-exploration-common.R")
 
 # Debug mode will replace all forecasters with a fast dummy forecaster. Helps
 # with prototyping the pipeline.
-debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
+dummy_mode <- as.logical(Sys.getenv("DUMMY_MODE", TRUE))
 
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
 forecaster_parameter_combinations_ <- list(
@@ -13,23 +13,26 @@ forecaster_parameter_combinations_ <- list(
   tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = c("linreg", "quantreg", "randforest_grf"),
-    lags = list(c(0, 1, 2, 3)),
-    pop_scaling = TRUE,
-    filter_source = list(NULL, "nhsn"),
-    filter_agg_level = list(NULL, "state"),
+    lags = list(c(0, 7, 14, 21)),
+    pop_scaling = c(TRUE, FALSE),
+    filter_source = c("", "nhsn"),
+    filter_agg_level = c("", "state"),
   ),
   # The covid forecaster, ported over to flu. Also likely to struggle with the
   # extra data
   tidyr::expand_grid(
     forecaster = "smoothed_scaled",
-    trainer = c("quantreg"),
+    trainer = c("quantreg", "randforest_grf"),
     lags = list(
       # list(smoothed, sd)
-      list(c(0, 1, 2, 3, 4), c(0))
+      list(c(0, 7, 14, 21, 28), c(0))
     ),
-    pop_scaling = c(TRUE),
-    filter_source = list(NULL, "nhsn"),
-    filter_agg_level = list(NULL, "state"),
+    smooth_width = as.difftime(2, units = "weeks"),
+    sd_width = as.difftime(4, units = "weeks"),
+    sd_mean_width = as.difftime(2, units = "weeks"),
+    pop_scaling = c(TRUE, FALSE),
+    filter_source = c("", "nhsn"),
+    filter_agg_level = c("", "state")
   ),
   # the thing to beat (a simplistic baseline forecast)
   tidyr::expand_grid(
@@ -37,9 +40,7 @@ forecaster_parameter_combinations_ <- list(
   ),
   tidyr::expand_grid(
     forecaster = "flusion",
-    lags = list(
-      list(c(0, 1, 3))
-    ),
+    lags =  list(c(0, 7, 21)),
     dummy_states = FALSE,
     dummy_source = c(TRUE, FALSE),
     derivative_estimator = c("growth_rate", "none")
@@ -48,13 +49,14 @@ forecaster_parameter_combinations_ <- list(
   tidyr::expand_grid(
     forecaster = "no_recent_outcome",
     scale_method = c("quantile", "none"),
-    filter_source = list(NULL, "nhsn"),
+    filter_source = c("", "nhsn"),
+    filter_agg_level = c("", "state"),
     use_population = c(FALSE, TRUE),
     use_density = c(FALSE, TRUE)
   )
 ) %>%
   map(function(x) {
-    if (debug_mode) {
+    if (dummy_mode) {
       x$forecaster <- "dummy_forecaster"
     }
     x
@@ -71,7 +73,7 @@ forecaster_grid <- forecaster_parameter_combinations_ %>%
 no_recent_outcome_params <- list(
   forecaster = "no_recent_outcome",
   scale_method = "quantile",
-  filter_source = NULL,
+  filter_source = "",
   use_population = TRUE,
   use_density = TRUE
 )
@@ -94,7 +96,7 @@ ensemble_parameter_combinations_ <- tribble(
   )
 ) %>%
   {
-    if (debug_mode) {
+    if (dummy_mode) {
       .$forecasters <- map(.$forecasters, function(x) {
         map(x, function(y) {
           y$forecaster <- "dummy_forecaster"
@@ -140,6 +142,7 @@ data_targets <- list(
           !is.na(value),
           time_value <= max(eval_dates)
         ) %>%
+        rename(hhs = value) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
       joined_archive_data
     }
@@ -157,7 +160,7 @@ data_targets <- list(
       new_flu_data %>%
         epix_as_of(new_flu_data$versions_end) %>%
         rename(
-          true_value = value,
+          true_value = hhs,
           target_end_date = time_value,
           signal = source
         ) %>%
@@ -181,8 +184,8 @@ end_date <- as.Date("2024-04-24")
 forecasts_and_scores <- make_forecasts_and_scores()
 
 ensembles_and_scores <- make_ensembles_and_scores()
-external_names_and_scores <- make_external_names_and_scores()
 
+# TODO external
 
 rlang::list2(
   list(
@@ -204,11 +207,10 @@ rlang::list2(
   tar_target(
     name = aheads,
     command = {
-      c(-1, 0, 1, 2, 3)
+      c(-7, 0, 7, 14, 21)
     }
   ),
   data_targets,
   forecasts_and_scores,
-  ensembles_and_scores,
-  external_names_and_scores
+  ensembles_and_scores
 )

@@ -262,6 +262,18 @@
       ],
       "Hash": "50c838a310445e954bc13f26f26a6ecf"
     },
+    "autometric": {
+      "Package": "autometric",
+      "Version": "0.0.5",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "graphics",
+        "utils"
+      ],
+      "Hash": "7d0799fd62464b9bad05d11db3009a9a"
+    },
     "aws.s3": {
       "Package": "aws.s3",
       "Version": "0.3.21",
@@ -581,12 +593,13 @@
     },
     "crew": {
       "Package": "crew",
-      "Version": "0.9.5",
+      "Version": "0.10.0",
       "Source": "Repository",
       "Repository": "RSPM",
       "Requirements": [
         "R",
         "R6",
+        "autometric",
         "cli",
         "data.table",
         "getip",
@@ -603,7 +616,7 @@
         "tools",
         "utils"
       ],
-      "Hash": "1498e9c5b0f2a644d7c4a8534c9d20fe"
+      "Hash": "28744826095dc77228493deb10b43702"
     },
     "crosstalk": {
       "Package": "crosstalk",
@@ -644,14 +657,14 @@
     },
     "data.table": {
       "Package": "data.table",
-      "Version": "1.16.0",
+      "Version": "1.16.2",
       "Source": "Repository",
       "Repository": "RSPM",
       "Requirements": [
         "R",
         "methods"
       ],
-      "Hash": "fb24e05d4a91d8b1c7ff8e284bde834a"
+      "Hash": "2e00b378fc3be69c865120d9f313039a"
     },
     "desc": {
       "Package": "desc",
@@ -826,6 +839,21 @@
       ],
       "Hash": "bb0eec2fe32e88d9e2836c2f73ea2077"
     },
+    "epidatasets": {
+      "Package": "epidatasets",
+      "Version": "0.0.1",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteUsername": "cmu-delphi",
+      "RemoteRepo": "epidatasets",
+      "RemoteRef": "main",
+      "RemoteSha": "3bb5a8209ce4f0188a3f3d2c6119a5c7c751410c",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "84890ee0dd393058a88d65935eec53f0"
+    },
     "epidatr": {
       "Package": "epidatr",
       "Version": "1.2.0",
@@ -864,7 +892,7 @@
       "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epipredict",
       "RemoteRef": "dev",
-      "RemoteSha": "a415100b7ca3d25799bb82352bec6e7530102687",
+      "RemoteSha": "e53af97818969bd1769c21a19b24c7f87565b1dd",
       "RemoteHost": "api.github.com",
       "Requirements": [
         "R",
@@ -891,17 +919,17 @@
         "vctrs",
         "workflows"
       ],
-      "Hash": "22039f6386260a12f88f48b7ffa85374"
+      "Hash": "ab336429e2c1f6b1e2f78ca5d9a4f658"
     },
     "epiprocess": {
       "Package": "epiprocess",
-      "Version": "0.9.4",
+      "Version": "0.9.5",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epiprocess",
       "RemoteRef": "dev",
-      "RemoteSha": "63cb8200a40c2b14c0d0a6a06340a4b1b09f7212",
+      "RemoteSha": "cb468dbcce71032672959042fdab66cac6dd00a1",
       "RemoteHost": "api.github.com",
       "Requirements": [
         "R",
@@ -909,6 +937,7 @@
         "cli",
         "data.table",
         "dplyr",
+        "epidatasets",
         "genlasso",
         "ggplot2",
         "glue",
@@ -926,17 +955,17 @@
         "vctrs",
         "waldo"
       ],
-      "Hash": "a2aa9bd114ff62fd014eb49bebbaab4a"
+      "Hash": "c9248cd65c8df0a4b58f49ce645e1699"
     },
     "evaluate": {
       "Package": "evaluate",
-      "Version": "1.0.0",
+      "Version": "1.0.1",
       "Source": "Repository",
       "Repository": "RSPM",
       "Requirements": [
         "R"
       ],
-      "Hash": "6b567375113ceb7d9f800de4dd42218e"
+      "Hash": "3fd29944b231036ad67c3edb32e02201"
     },
     "fansi": {
       "Package": "fansi",
@@ -1046,7 +1075,7 @@
     },
     "gert": {
       "Package": "gert",
-      "Version": "2.1.2",
+      "Version": "2.1.4",
       "Source": "Repository",
       "Repository": "RSPM",
       "Requirements": [
@@ -1057,7 +1086,7 @@
         "sys",
         "zip"
       ],
-      "Hash": "347d104ed332650b737f509a703c9c7f"
+      "Hash": "ae855ad6d7be20dd7b05d43d25700398"
     },
     "getip": {
       "Package": "getip",
@@ -1637,16 +1666,17 @@
     },
     "modelenv": {
       "Package": "modelenv",
-      "Version": "0.1.1",
+      "Version": "0.2.0",
       "Source": "Repository",
       "Repository": "RSPM",
       "Requirements": [
+        "cli",
         "glue",
         "rlang",
         "tibble",
         "vctrs"
       ],
-      "Hash": "fc2e59a68030885555c7be34ee7765a1"
+      "Hash": "d3c0bebed774ca58574f6f1d7e9b9a62"
     },
     "munsell": {
       "Package": "munsell",
@@ -2241,13 +2271,13 @@
     },
     "renv": {
       "Package": "renv",
-      "Version": "1.0.10",
+      "Version": "1.0.11",
       "Source": "Repository",
       "Repository": "RSPM",
       "Requirements": [
         "utils"
       ],
-      "Hash": "d0387d5687ec933dd7587efd4cfa2d85"
+      "Hash": "47623f66b4e80b3b0587bc5d7b309888"
     },
     "rex": {
       "Package": "rex",
@@ -2473,7 +2503,7 @@
     },
     "sf": {
       "Package": "sf",
-      "Version": "1.0-17",
+      "Version": "1.0-18",
       "Source": "Repository",
       "Repository": "RSPM",
       "Requirements": [
@@ -2492,7 +2522,7 @@
         "units",
         "utils"
       ],
-      "Hash": "453a7d0263eae87a7831242a74fe9b60"
+      "Hash": "801bec14b3bae0f37eef4d187ee0bb44"
     },
     "shape": {
       "Package": "shape",
@@ -3040,13 +3070,13 @@
     },
     "wk": {
       "Package": "wk",
-      "Version": "0.9.3",
+      "Version": "0.9.4",
       "Source": "Repository",
       "Repository": "RSPM",
       "Requirements": [
         "R"
       ],
-      "Hash": "9ca478d7cb1450b42dcb8af2ea5681cc"
+      "Hash": "37be35d733130f1de1ef51672cf7cdc0"
     },
     "workflows": {
       "Package": "workflows",

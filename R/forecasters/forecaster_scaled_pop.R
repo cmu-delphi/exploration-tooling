@@ -52,18 +52,13 @@ scaled_pop <- function(epi_data,
                        pop_scaling = TRUE,
                        trainer = parsnip::linear_reg(),
                        quantile_levels = covidhub_probs(),
-                       filter_source = NULL,
-                       filter_agg_level = NULL,
+                       filter_source = "",
+                       filter_agg_level = "",
                        ...) {
   # perform any preprocessing not supported by epipredict
   #
   # this is for the case where there are multiple sources in the same column
-  if (!is.null(filter_source)) {
-    epi_data %<>% filter(source == filter_source)
-  }
-  if (!is.null(filter_agg_level)) {
-    epi_data %<>% filter(agg_level == filter_agg_level)
-  }
+  epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   # this next part is basically unavoidable boilerplate you'll want to copy
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
@@ -91,7 +86,7 @@ scaled_pop <- function(epi_data,
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {
     preproc %<>% step_population_scaling(
-      all_numeric(),
+      all_of(predictors),
       df = epipredict::state_census,
       df_pop_col = "pop",
       create_new = FALSE,

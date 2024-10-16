@@ -61,8 +61,14 @@ smoothed_scaled <- function(epi_data,
                             sd_width = 28,
                             sd_mean_width = 14,
                             sd_cols = NULL,
+                            filter_source = "",
+                            filter_agg_level = "",
                             ...) {
   # perform any preprocessing not supported by epipredict
+  # 
+  # this is for the case where there are multiple sources in the same column
+  epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
+  epi_data %>% filter(agg_level == "state")
   # this is a temp fix until a real fix gets put into epipredict
   epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
   # see latency_adjusting for other examples

@@ -13,6 +13,7 @@ default_args_list <- function(
     quantile_by_key = character(0L),
     check_enough_data_n = NULL,
     check_enough_data_epi_keys = NULL,
+    keys_to_ignore = list(geo_value = c("dc", "nh", "nv", "de", "ak", "me", "nd", "ut", "wy", "nc", "id"), source = "flusurv"),
     ...) {
   # error checking if lags is a list
   rlang::check_dots_empty()
@@ -56,7 +57,8 @@ default_args_list <- function(
       max_lags,
       quantile_by_key,
       check_enough_data_n,
-      check_enough_data_epi_keys
+      check_enough_data_epi_keys,
+      keys_to_ignore
     ),
     class = c("arx_fcast", "alist")
   )

@@ -56,10 +56,18 @@ make_forecaster_grid <- function(tib) {
   if ("trainer" %in% colnames(tib)) {
     tib$trainer <- rlang::syms(tib$trainer)
   }
-
-  params_list <- tib %>%
+  # turns a tibble into a list of named lists
+  params_list <-
+    tib %>%
     select(-forecaster, -id) %>%
-    transpose()
+    split(seq_len(nrow(.))) %>%
+    unname() %>%
+    lapply(as.list)
+  # for whatever reason, trainer ends up being a list of lists, which we do not want
+  params_list %<>% lapply(function(x) {
+    x$trainer <- x$trainer[[1]]
+    x
+  })
 
   if (length(params_list) == 0) {
     out <- tibble(
