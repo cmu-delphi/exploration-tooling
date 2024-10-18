@@ -149,5 +149,6 @@ no_recent_outcome <- function(epi_data,
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict
+  gc()
   return(pred)
 }

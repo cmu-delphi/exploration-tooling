@@ -121,6 +121,15 @@ smoothed_scaled <- function(epi_data,
     unused_columns <- c(unused_columns, sd_cols[!(sd_cols %in% unused_columns)])
   }
 
+
+  # make sure that sd_width etc have the right units; the process of going through targets strips the type
+  time_type <- attributes(epi_data)$metadata$time_type
+  if (time_type != "day") {
+    sd_width <- as.difftime(sd_width, units = paste0(time_type, "s"))
+    sd_mean_width <- as.difftime(sd_mean_width, units = paste0(time_type, "s"))
+    smooth_width <- as.difftime(smooth_width, units = paste0(time_type, "s"))
+  }
+
   if (!is.null(smooth_width) && !keep_mean) {
     epi_data %<>% rolling_mean(
       width = smooth_width,
@@ -174,5 +183,6 @@ smoothed_scaled <- function(epi_data,
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration
+  gc()
   return(pred)
 }

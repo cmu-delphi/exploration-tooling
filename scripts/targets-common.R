@@ -18,7 +18,9 @@ main_controller <- crew_controller_local(
   # called {mirai}, where workers mysteriously stop working. The settings below
   # are an attempt to mitigate that.
   seconds_idle = 60L,
-  seconds_timeout = 7 * 24 * 60 * 60L,
+  seconds_timeout = 7 * 24 * 60 * 60L, # 7 days is probably enough
+  garbage_collection = TRUE,
+  options_local = crew_options_local(log_directory = "local_logs"),
   tasks_max = 1L,
   launch_max = 10000L
 )
@@ -32,6 +34,7 @@ serial_controller <- crew_controller_local(
   options_local = crew_options_local(log_directory = "local_logs"),
   seconds_idle = 60L,
   seconds_timeout = 7 * 24 * 60 * 60L,
+  garbage_collection = TRUE,
   tasks_max = 1L,
   launch_max = 10000L
 )
@@ -57,7 +60,7 @@ tar_option_set(
   memory = "transient",
   garbage_collection = TRUE,
   storage = "worker",
-  retrieval = "main"
+  retrieval = "worker" # this may need to go back to main
 )
 
 linreg <- parsnip::linear_reg()

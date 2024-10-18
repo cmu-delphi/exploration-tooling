@@ -40,7 +40,7 @@ get_nonkey_names <- function(epi_data) {
 #' @export
 rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
   cols_to_mean <- get_trainable_names(epi_data, cols_to_mean)
-  epi_data %<>% group_by(geo_value)
+  epi_data %<>% group_by(across(key_colnames(epi_data, exclude = "time_value")))
   for (col in cols_to_mean) {
     for (w in width) {
       mean_name <- paste0("slide_", col, "_m", w)
@@ -76,7 +76,7 @@ rolling_sd <- function(epi_data, sd_width = 29L, mean_width = NULL, cols_to_sd =
   }
   cols_to_sd <- get_trainable_names(epi_data, cols_to_sd)
   result <- epi_data
-  result %<>% group_by(geo_value)
+  result %<>% group_by(across(key_colnames(epi_data, exclude = "time_value")))
   for (col in cols_to_sd) {
     mean_name <- glue::glue("slide_{col}_m{mean_width}")
     sd_name <- glue::glue("slide_{col}_sd{sd_width}")
@@ -87,7 +87,7 @@ rolling_sd <- function(epi_data, sd_width = 29L, mean_width = NULL, cols_to_sd =
 
     result %<>%
       mutate(.temp = (.data[[mean_name]] - .data[[col]])^2) %>%
-      epi_slide_mean(all_of(".temp"), .window_size = sd_width - 1) %>%
+      epi_slide_mean(all_of(".temp"), .window_size = sd_width) %>%
       select(-.temp) %>%
       rename(!!sd_name := "slide_value_.temp") %>%
       mutate(!!sd_name := sqrt(.data[[sd_name]]))
@@ -118,9 +118,11 @@ clear_lastminute_nas <- function(epi_data, outcome, extra_sources) {
   if (extra_sources == c("")) {
     extra_sources <- character(0L)
   }
+  as_of <- attributes(epi_data)$metadata$as_of
+  other_keys <- attributes(epi_data)$metadata$other_keys
   epi_data %<>%
     drop_na(c(!!outcome, !!!extra_sources)) %>%
-    as_epi_df()
+    as_epi_df(as_of = as_of, other_keys = other_keys)
   attr(epi_data, "metadata") <- meta_data
   return(epi_data)
 }

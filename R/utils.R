@@ -66,6 +66,7 @@ make_forecaster_grid <- function(tib) {
   # for whatever reason, trainer ends up being a list of lists, which we do not want
   params_list %<>% lapply(function(x) {
     x$trainer <- x$trainer[[1]]
+    x$lags <- x$lags[[1]]
     x
   })
 

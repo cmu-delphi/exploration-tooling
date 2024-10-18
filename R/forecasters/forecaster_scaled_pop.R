@@ -113,5 +113,6 @@ scaled_pop <- function(epi_data,
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration
+  gc()
   return(pred)
 }

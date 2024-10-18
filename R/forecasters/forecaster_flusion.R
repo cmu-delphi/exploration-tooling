@@ -200,6 +200,7 @@ flusion <- function(epi_data,
   if (adding_source) {
     pred_final %<>% select(-source)
   }
+  gc()
   return(pred_final)
 }
 

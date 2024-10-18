@@ -153,7 +153,7 @@ make_forecasts_and_scores <- function() {
     tar_target(
       name = forecast,
       command = {
-        slide_forecaster(
+        slid <- slide_forecaster(
           epi_archive = joined_archive_data,
           outcome = "hhs",
           ahead = aheads,
@@ -167,6 +167,8 @@ make_forecasts_and_scores <- function() {
           date_range_step_size = date_step,
           cache_key = "joined_archive_data"
         ) %>% rename(prediction = value)
+      	gc()
+        return(slid)
       },
       pattern = map(aheads)
     ),

@@ -20,12 +20,13 @@ arx_preprocess <- function(preproc, outcome, predictors, args_list) {
       preproc %<>% step_epi_lag(has_role("pre-predictor"), lag = 0, role = "predictor")
     }
   }
+
   lags <- args_list$lags
   if (any(predictors != "")) {
-  for (l in seq_along(predictors)) {
-    p <- predictors[l]
-    preproc %<>% step_epi_lag(!!p, lag = lags[[l]])
-  }
+    for (l in seq_along(predictors)) {
+      p <- predictors[l]
+      preproc %<>% step_epi_lag(!!p, lag = lags[[l]])
+    }
   }
   preproc %<>%
     step_epi_ahead(!!outcome, ahead = args_list$ahead) %>%
@@ -140,4 +141,3 @@ run_workflow_and_format <-
       return(format_storage(pred, possible_time_values))
     }
   }
-
