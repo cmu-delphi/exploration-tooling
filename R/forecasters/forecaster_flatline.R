@@ -63,4 +63,3 @@ flatline_fc <- function(epi_data,
   gc()
   return(pred)
 }
-

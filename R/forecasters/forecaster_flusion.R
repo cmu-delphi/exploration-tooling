@@ -154,9 +154,9 @@ flusion <- function(epi_data,
   if (dummy_states) {
     preproc %<>% step_dummy(geo_value, one_hot = TRUE, keep_original_cols = TRUE, role = "pre-predictor")
   }
-    # one-hot encoding of scale (probably redundant with geo_value)
-    # population and density
-    preproc %<>% add_role(population, density, new_role = "pre-predictor") %>%
+  # one-hot encoding of scale (probably redundant with geo_value)
+  # population and density
+  preproc %<>% add_role(population, density, new_role = "pre-predictor") %>%
     # week of the year
     step_date(time_value, features = "week") %>%
     # distance to christmas

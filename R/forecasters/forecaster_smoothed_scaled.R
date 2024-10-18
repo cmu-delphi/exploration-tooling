@@ -65,7 +65,7 @@ smoothed_scaled <- function(epi_data,
                             filter_agg_level = "",
                             ...) {
   # perform any preprocessing not supported by epipredict
-  # 
+  #
   # this is for the case where there are multiple sources in the same column
   epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   epi_data %>% filter(agg_level == "state")

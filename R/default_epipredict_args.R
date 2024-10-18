@@ -95,4 +95,3 @@ default_flatline_args <- function(
     class = c("flat_fcast", "alist")
   )
 }
-
