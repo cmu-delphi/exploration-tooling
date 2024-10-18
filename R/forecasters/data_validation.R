@@ -12,7 +12,7 @@
 #' @inheritParams scaled_pop
 #' @param predictors the full list of predictors including the outcome. can
 #'   include empty strings
-#' @param args_list the args list created by [`epipredict::arx_args_list`]
+#' @param args_list the args list created by [`epipredict::default_args_list`]
 #'
 #' @export
 sanitize_args_predictors_trainer <- function(epi_data,
@@ -21,7 +21,7 @@ sanitize_args_predictors_trainer <- function(epi_data,
                                              trainer,
                                              args_list) {
   if (!inherits(args_list, c("arx_fcast", "alist"))) {
-    cli::cli_abort("args_list was not created using `arx_args_list().")
+    cli::cli_abort("args_list was not created using `default_args_list().")
   }
 
   predictors <- predictors[predictors != ""]
@@ -51,7 +51,7 @@ sanitize_args_predictors_trainer <- function(epi_data,
 #' @param ahead the effective ahead; may be infinite if there isn't enough data.
 #' @param args_input the input as supplied to `slide_forecaster`; lags is the
 #'   important argument, which may or may not be defined, with the default
-#'   coming from `arx_args_list`
+#'   coming from `default_args_list`
 #' @param outcome the outcome column
 #' @param extra_sources any non-outcome predictor columns
 #' @param buffer how many training data to insist on having (e.g. if `buffer=1`,
@@ -72,10 +72,21 @@ confirm_sufficient_data <- function(epi_data, ahead, args_input, outcome, extra_
   has_no_last_nas <- epi_data %>%
     drop_na(c(!!outcome, !!!extra_sources)) %>%
     group_by(geo_value) %>%
-    summarise(has_enough_data = n_distinct(time_value) >= lag_max + ahead + buffer) %>%
+    summarise(has_enough_data = n_distinct(time_value) >= lag_max + ahead + buffer, .groups = "drop") %>%
     pull(has_enough_data) %>%
     any()
   return(
-    !is.infinite(ahead) && has_no_last_nas
+    all(!is.infinite(ahead)) && has_no_last_nas
   )
+}
+
+#' if we want to filter the main data column in some way, this is a simple way to share that across forecasters
+filter_extraneous <- function(epi_data, filter_source, filter_agg_level) {
+  if (filter_source != "") {
+    epi_data %<>% filter(source == filter_source)
+  }
+  if (filter_agg_level != "") {
+    epi_data %<>% filter(agg_level == filter_agg_level)
+  }
+  return(epi_data)
 }

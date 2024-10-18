@@ -40,12 +40,14 @@ get_nonkey_names <- function(epi_data) {
 #' @export
 rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
   cols_to_mean <- get_trainable_names(epi_data, cols_to_mean)
-  epi_data %<>% group_by(geo_value)
+  epi_data %<>% group_by(across(key_colnames(epi_data, exclude = "time_value")))
   for (col in cols_to_mean) {
-    mean_name <- paste0(col, "_m", width)
-    epi_data %<>%
-      epi_slide_mean(!!col, before = width - 1L) %>%
-      rename(!!mean_name := paste0("slide_value_", col))
+    for (w in width) {
+      mean_name <- paste0("slide_", col, "_m", w)
+      epi_data %<>%
+        epi_slide_mean(all_of(col), .window_size = w) %>%
+        rename(!!mean_name := paste0("slide_value_", col))
+    }
   }
   epi_data %<>% ungroup()
   return(epi_data)
@@ -68,24 +70,24 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
 #'
 #' @importFrom epiprocess epi_slide
 #' @export
-rolling_sd <- function(epi_data, sd_width = 28L, mean_width = NULL, cols_to_sd = NULL, keep_mean = FALSE) {
+rolling_sd <- function(epi_data, sd_width = 29L, mean_width = NULL, cols_to_sd = NULL, keep_mean = FALSE) {
   if (is.null(mean_width)) {
     mean_width <- as.integer(ceiling(sd_width / 2))
   }
   cols_to_sd <- get_trainable_names(epi_data, cols_to_sd)
   result <- epi_data
-  result %<>% group_by(geo_value)
+  result %<>% group_by(across(key_colnames(epi_data, exclude = "time_value")))
   for (col in cols_to_sd) {
-    mean_name <- paste0(col, "_m", mean_width)
-    sd_name <- paste0(col, "_sd", sd_width)
+    mean_name <- glue::glue("slide_{col}_m{mean_width}")
+    sd_name <- glue::glue("slide_{col}_sd{sd_width}")
 
     result %<>%
-      epi_slide_mean(!!col, before = mean_width - 1L) %>%
+      epi_slide_mean(all_of(col), .window_size = mean_width) %>%
       rename(!!mean_name := paste0("slide_value_", col))
 
     result %<>%
       mutate(.temp = (.data[[mean_name]] - .data[[col]])^2) %>%
-      epi_slide_mean(!!".temp", before = sd_width - 1) %>%
+      epi_slide_mean(all_of(".temp"), .window_size = sd_width) %>%
       select(-.temp) %>%
       rename(!!sd_name := "slide_value_.temp") %>%
       mutate(!!sd_name := sqrt(.data[[sd_name]]))
@@ -116,9 +118,11 @@ clear_lastminute_nas <- function(epi_data, outcome, extra_sources) {
   if (extra_sources == c("")) {
     extra_sources <- character(0L)
   }
+  as_of <- attributes(epi_data)$metadata$as_of
+  other_keys <- attributes(epi_data)$metadata$other_keys
   epi_data %<>%
     drop_na(c(!!outcome, !!!extra_sources)) %>%
-    as_epi_df()
+    as_epi_df(as_of = as_of, other_keys = other_keys)
   attr(epi_data, "metadata") <- meta_data
   return(epi_data)
 }
@@ -151,4 +155,106 @@ extend_ahead <- function(epi_data, ahead) {
     effective_ahead <- Inf
   }
   return(list(epi_data, effective_ahead))
+}
+
+
+#' get the Taylor expansion coefficients for a vector of values
+#' @param values the vector of values to interpolate
+#' @param degree the degree of the polynomial
+#' @param the expected length of values (needed b/c epi_slide may return fewer
+#'   points)
+#' @export
+get_poly_coefs <- function(values, degree, n_points) {
+  values <- values[!is.na(values)]
+  coef_name <- paste0("c", seq(1, degree + 1, by = 1))
+  if (length(values) < n_points) {
+    # return NA's for all values
+    return(
+      tibble(coef_name, val = as.double(NA)) %>%
+        pivot_wider(values_from = val, names_from = coef_name)
+    )
+  }
+  res <- tibble(time_value = seq(-n_points + 2, 1), value = values) %>%
+    lm(value ~ poly(time_value, degree = degree, raw = TRUE), .)
+  coefs <- unname(res$coefficients)
+  names(coefs) <- coef_name
+  as_tibble(t(coefs))
+}
+
+#' get the mean and median used to whiten epi_data on a per source-geo_value basis
+calculate_whitening_params <- function(epi_data, colname, scale_method = c("quantile", "quantile_upper", "std"), center_method = c("median", "mean")) {
+  scale_method <- arg_match(scale_method)
+  center_method <- arg_match(center_method)
+  scaled_data <- epi_data %>%
+    mutate(across(all_of(colname), \(x) (x + 0.01)^0.25)) %>%
+    group_by(source, geo_value)
+  # center so that either the mean or median is 0
+  if (center_method == "mean") {
+    fn <- mean
+  } else {
+    fn <- median
+  }
+  learned_params <-
+    scaled_data %>%
+    summarize(
+      across(all_of(colname),
+        ~ fn(.x, na.rm = TRUE),
+        .names = "{.col}_center"
+      ),
+      .groups = "drop"
+    )
+  if (scale_method == "quantile") {
+    # scale so that the difference between the 5th and 95th quantiles is 1
+    scale_fn <- function(x) {
+      diff(quantile(x, c(0.05, 0.95), na.rm = TRUE))[[1]] + .01
+    }
+  } else if (scale_method == "quantile_upper") {
+    # scale so that the 95th quantile is 1
+    scale_fn <- function(x) (quantile(x, 0.95, na.rm = TRUE) + 0.01)
+  } else {
+    # scale so that one standard deviation is 1
+    scale_fn <- function(x) (sd(x, 0.95, na.rm = TRUE) + 0.01)
+  }
+  learned_params %<>% full_join(
+    summarize(
+      scaled_data,
+      across(all_of(colname),
+        ~ scale_fn(.x),
+        .names = "{.col}_scale"
+      ),
+      .groups = "drop"
+    ),
+    by = join_by(source, geo_value)
+  )
+  return(learned_params)
+}
+
+
+#' scale so that every data source has the same 95th quantile
+data_whitening <- function(epi_data, colname, learned_params) {
+  epi_data %>%
+    left_join(
+      learned_params,
+      by = key_colnames(epi_data, exclude = "time_value")
+    ) %>%
+    mutate(across(all_of(colname), ~ (.x + 0.01)^(1 / 4))) %>%
+    mutate(across(all_of(colname), ~ .x - get(paste0(cur_column(), "_center")))) %>%
+    mutate(across(all_of(colname), ~ .x / get(paste0(cur_column(), "_scale")))) %>%
+    select(-ends_with("_center"), -ends_with("_scale"))
+}
+
+#' undo data whitening by multiplying by the scaling and adding the center
+data_coloring <- function(epi_data, colname, learned_params, join_cols = NULL) {
+  if (is.null(join_cols)) {
+    join_cols <- key_colnames(epi_data, exclude = "time_value")
+  }
+  epi_data %>%
+    left_join(
+      learned_params,
+      by = join_cols
+    ) %>%
+    mutate(across(all_of(colname), ~ .x * get(paste0(cur_column(), "_scale")))) %>%
+    mutate(across(all_of(colname), ~ .x + get(paste0(cur_column(), "_center")))) %>%
+    mutate(across(all_of(colname), ~ .x^4 - 0.01)) %>%
+    select(-ends_with("_center"), -ends_with("_scale"))
 }

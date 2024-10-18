@@ -1,35 +1,62 @@
+eval_dates <- seq.Date(as.Date("2023-10-04"), as.Date("2024-04-24"), by = 7)
 source("scripts/targets-common.R")
 source("scripts/targets-exploration-common.R")
 
 # Debug mode will replace all forecasters with a fast dummy forecaster. Helps
 # with prototyping the pipeline.
-debug <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
+dummy_mode <- as.logical(Sys.getenv("DUMMY_MODE", TRUE))
 
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
 forecaster_parameter_combinations_ <- list(
+  # just the data, possibly population scaled; likely to run into troubles
+  # because of the scales of the different sources
   tidyr::expand_grid(
     forecaster = "scaled_pop",
-    trainer = c("linreg", "quantreg"),
-    lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14), c(0, 7, 14, 24)),
-    pop_scaling = c(TRUE, FALSE)
+    trainer = c("linreg", "quantreg", "randforest_grf"),
+    lags = list(c(0, 7, 14, 21)),
+    pop_scaling = c(TRUE, FALSE),
+    filter_source = c("", "nhsn"),
+    filter_agg_level = c("", "state"),
   ),
+  # The covid forecaster, ported over to flu. Also likely to struggle with the
+  # extra data
   tidyr::expand_grid(
     forecaster = "smoothed_scaled",
-    trainer = c("quantreg"),
+    trainer = c("quantreg", "randforest_grf"),
     lags = list(
       # list(smoothed, sd)
-      list(c(0, 3, 5, 7, 14), c(0)),
-      list(c(0, 7, 14, 21, 28), c(0)),
-      list(c(0, 2, 4, 7, 14, 21, 28), c(0))
+      list(c(0, 7, 14, 21, 28), c(0))
     ),
-    pop_scaling = c(TRUE, FALSE)
+    smooth_width = as.difftime(2, units = "weeks"),
+    sd_width = as.difftime(4, units = "weeks"),
+    sd_mean_width = as.difftime(2, units = "weeks"),
+    pop_scaling = c(TRUE, FALSE),
+    filter_source = c("", "nhsn"),
+    filter_agg_level = c("", "state")
   ),
+  # the thing to beat (a simplistic baseline forecast)
   tidyr::expand_grid(
     forecaster = "flatline_fc",
+  ),
+  tidyr::expand_grid(
+    forecaster = "flusion",
+    lags =  list(c(0, 7, 21)),
+    dummy_states = FALSE,
+    dummy_source = c(TRUE, FALSE),
+    derivative_estimator = c("growth_rate", "none")
+  ),
+  # another kind of baseline forecaster
+  tidyr::expand_grid(
+    forecaster = "no_recent_outcome",
+    scale_method = c("quantile", "none"),
+    filter_source = c("", "nhsn"),
+    filter_agg_level = c("", "state"),
+    use_population = c(FALSE, TRUE),
+    use_density = c(FALSE, TRUE)
   )
 ) %>%
   map(function(x) {
-    if (debug) {
+    if (dummy_mode) {
       x$forecaster <- "dummy_forecaster"
     }
     x
@@ -43,17 +70,12 @@ forecaster_grid <- forecaster_parameter_combinations_ %>%
   map(make_forecaster_grid) %>%
   bind_rows()
 
-scaled_pop_not_scaled <- list(
-  forecaster = "scaled_pop",
-  trainer = "linreg",
-  pop_scaling = FALSE,
-  lags = list(c(0, 3, 5, 7, 14))
-)
-scaled_pop_scaled <- list(
-  forecaster = "scaled_pop",
-  trainer = "linreg",
-  pop_scaling = FALSE,
-  lags = list(c(0, 3, 5, 7, 14))
+no_recent_outcome_params <- list(
+  forecaster = "no_recent_outcome",
+  scale_method = "quantile",
+  filter_source = "",
+  use_population = TRUE,
+  use_density = TRUE
 )
 # Human-readable object to be used for inspecting the ensembles in the pipeline.
 ensemble_parameter_combinations_ <- tribble(
@@ -62,33 +84,19 @@ ensemble_parameter_combinations_ <- tribble(
   "ensemble_average",
   list(average_type = "mean"),
   list(
-    scaled_pop_scaled,
+    no_recent_outcome_params,
     list(forecaster = "flatline_fc")
   ),
   # median forecaster
   "ensemble_average",
   list(average_type = "median"),
   list(
-    scaled_pop_scaled,
-    scaled_pop_not_scaled
-  ),
-  # mean forecaster with baseline
-  "ensemble_average",
-  list(average_type = "mean"),
-  list(
-    scaled_pop_not_scaled,
-    list(forecaster = "flatline_fc")
-  ),
-  # median forecaster with baseline
-  "ensemble_average",
-  list(average_type = "median"),
-  list(
-    scaled_pop_not_scaled,
+    no_recent_outcome_params,
     list(forecaster = "flatline_fc")
   )
 ) %>%
   {
-    if (debug) {
+    if (dummy_mode) {
       .$forecasters <- map(.$forecasters, function(x) {
         map(x, function(y) {
           y$forecaster <- "dummy_forecaster"
@@ -124,17 +132,60 @@ chng_signal <- "smoothed_adj_outpatient_flu"
 eval_time <- epidatr::epirange(from = "2020-01-01", to = "2024-01-01")
 training_time <- epidatr::epirange(from = "2021-01-01", to = "2023-06-01")
 fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 400)
-data_targets <- make_data_targets()
+data_targets <- list(
+  tar_target(
+    name = joined_archive_data,
+    command = {
+      joined_archive_data <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
+        filter(
+          !geo_value %in% c("as", "pr", "vi", "gu", "mp"),
+          !is.na(value),
+          time_value <= max(eval_dates)
+        ) %>%
+        rename(hhs = value) %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+      joined_archive_data
+    }
+  ),
+  tar_target(
+    name = hhs_evaluation_data,
+    command = {
+      new_flu_data <- joined_archive_data$DT %>%
+        filter(
+          source == "nhsn",
+          agg_level %in% c("state", "nation"),
+          time_value %in% eval_dates
+        ) %>%
+        as_epi_archive(compactify = TRUE)
+      new_flu_data %>%
+        epix_as_of(new_flu_data$versions_end) %>%
+        rename(
+          true_value = hhs,
+          target_end_date = time_value,
+          signal = source
+        ) %>%
+        select(
+          signal,
+          geo_value,
+          target_end_date,
+          true_value
+        )
+    }
+  )
+)
+
 
 
 # These globals are needed by the function below (and they need to persist
 # during the actual targets run, since the commands are frozen as expressions).
 date_step <- 7L
+start_date <- as.Date("2023-10-04")
+end_date <- as.Date("2024-04-24")
 forecasts_and_scores <- make_forecasts_and_scores()
 
 ensembles_and_scores <- make_ensembles_and_scores()
-external_names_and_scores <- make_external_names_and_scores()
 
+# TODO external
 
 rlang::list2(
   list(
@@ -156,11 +207,10 @@ rlang::list2(
   tar_target(
     name = aheads,
     command = {
-      c(1:7, 14, 21, 28)
+      c(-7, 0, 7, 14, 21)
     }
   ),
   data_targets,
   forecasts_and_scores,
-  ensembles_and_scores,
-  external_names_and_scores
+  ensembles_and_scores
 )
