@@ -20,7 +20,7 @@ forecaster_lookup <- function(pattern, forecaster_grid = NULL, printing = TRUE) 
     print(glue::glue("name: {fc_row %>% pull(id)}"))
     print(glue::glue("forecaster: {fc_row$forecaster[[1]]}"))
     print(glue::glue("params:"))
-    print(params %>% as.data.table)
+    print(params %>% as.data.table())
   }
   return(fc_row)
 }

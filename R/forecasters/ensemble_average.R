@@ -37,6 +37,6 @@ ensemble_average <- function(epi_data,
   forecasts %>%
     bind_rows(.id = "id") %>%
     group_by(across(all_of(join_columns))) %>%
-    summarize(value = average_type(value)) %>%
+    summarize(value = average_type(value), .groups = "drop") %>%
     ungroup()
 }

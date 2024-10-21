@@ -36,8 +36,8 @@ convert_epiweek_to_season_week <- function(epiyear, epiweek, season_start = 39) 
 step_season_week_sine <- function(preproc, season = 35) {
   preproc %<>%
     step_mutate(
-      season_half_sine = sinpi((pmin(season_week, !!season+1)-1)/ !!season),
-      season_sine = sinpi(2*(pmin(season_week, !!season+1)-1)/ !!season),
+      season_half_sine = sinpi((pmin(season_week, !!season + 1) - 1) / !!season),
+      season_sine = sinpi(2 * (pmin(season_week, !!season + 1) - 1) / !!season),
       role = "pre-predictor"
     )
 }
@@ -92,8 +92,10 @@ add_pop_and_density <-
       filter(!(is.na(geo_value) & (agg_level == "hhs_region"))) %>%
       group_by(year, agg_level, geo_value) %>%
       summarize(
-        area = sum(population / density), population = sum(population),
-        density = population / area, .groups = "drop"
+        area = sum(population / density),
+        population = sum(population),
+        density = population / area,
+        .groups = "drop"
       ) %>%
       select(-area)
     # deal with us missing from the state_codes/ hhs_codes tables

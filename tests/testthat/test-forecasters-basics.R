@@ -45,9 +45,9 @@ for (forecaster in forecasters) {
     # what if we have no as_of date? assume they mean the last available data
     attributes(jhu)$metadata$as_of <- NULL
     if (forecaster[[1]] != "flatline_fc") {
-    expect_snapshot(error = TRUE, res <- forecaster[[2]](jhu, "case_rate", c("death_rate"), 2L))
+      expect_snapshot(error = TRUE, res <- forecaster[[2]](jhu, "case_rate", c("death_rate"), 2L))
     } else {
-    expect_snapshot(error = FALSE, res <- forecaster[[2]](jhu, "case_rate", c("death_rate"), 2L))
+      expect_snapshot(error = FALSE, res <- forecaster[[2]](jhu, "case_rate", c("death_rate"), 2L))
     }
   })
 
@@ -78,8 +78,8 @@ for (forecaster in forecasters) {
     expect_equal(nas_forecast$target_end_date %>% unique(), as.Date("2022-01-06"))
     # (nearly) every state and quantile has a prediction
     # as, vi and mp don't currently have populations for flusion, so they're not getting forecast
-    max_n_geos <-length(jhu$geo_value %>% unique())
-    expect_true(any(nrow(nas_forecast) == length(covidhub_probs()) * (max_n_geos - c(0,1,3))))
+    max_n_geos <- length(jhu$geo_value %>% unique())
+    expect_true(any(nrow(nas_forecast) == length(covidhub_probs()) * (max_n_geos - c(0, 1, 3))))
   })
 
   test_that(paste(forecaster[[1]], "handles unused extra sources with NAs"), {
@@ -88,15 +88,15 @@ for (forecaster in forecasters) {
       dplyr::filter(time_value >= as.Date("2021-11-01"))
     jhu_nad <- jhu %>%
       as_tibble() %>%
-      mutate(some_other_predictor = rep(c(NA, 3),times=1708)) %>%
+      mutate(some_other_predictor = rep(c(NA, 3), times = 1708)) %>%
       epiprocess::as_epi_df()
     attributes(jhu_nad)$metadata$as_of <- max(jhu$time_value) + 3
     # should run fine
     expect_no_error(nas_forecast <- forecaster[[2]](jhu_nad, "case_rate", c("death_rate")))
     expect_equal(nas_forecast$forecast_date %>% unique(), max(jhu$time_value) + 3)
     # there's an actual full set of predictions
-    max_n_geos <-length(jhu$geo_value %>% unique())
-    expect_true(any(nrow(nas_forecast) == length(covidhub_probs()) * (max_n_geos - c(0,1,3))))
+    max_n_geos <- length(jhu$geo_value %>% unique())
+    expect_true(any(nrow(nas_forecast) == length(covidhub_probs()) * (max_n_geos - c(0, 1, 3))))
   })
 
   #################################
