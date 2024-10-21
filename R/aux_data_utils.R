@@ -32,6 +32,18 @@ convert_epiweek_to_season_week <- function(epiyear, epiweek, season_start = 39) 
   return(season_week)
 }
 
+#' add a sine and half sine component; it is zero after `season` (by default 35, which roughly corresponds to epiweek 23)
+step_season_week_sine <- function(preproc, season = 35) {
+  preproc %<>%
+    step_mutate(
+      season_half_sine = sinpi((pmin(season_week, !!season+1)-1)/ !!season),
+      season_sine = sinpi(2*(pmin(season_week, !!season+1)-1)/ !!season),
+      role = "pre-predictor"
+    )
+}
+
+
+
 
 #' Append the state population and state population density, taken from the census and interpolated in the most straightforward way.
 #' apportionment data taken from here: https://www.census.gov/data/tables/time-series/dec/popchange-data-text.html

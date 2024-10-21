@@ -1,13 +1,12 @@
 source(here::here("R", "load_all.R"))
 local_edition(3)
-
 # TODO better way to do this than copypasta
 forecasters <- list(
   list("scaled_pop", scaled_pop),
   list("flatline_fc", flatline_fc),
   list("smoothed_scaled", smoothed_scaled, lags = list(c(0, 2, 5), c(0))),
   list("flusion", flusion),
-  forecaster <- list("no_recent_outcome", no_recent_outcome)
+  list("no_recent_outcome", no_recent_outcome)
 )
 for (forecaster in forecasters) {
   test_that(paste(forecaster[[1]], "gets the date and columns right"), {

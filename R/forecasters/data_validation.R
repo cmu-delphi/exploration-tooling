@@ -83,10 +83,14 @@ confirm_sufficient_data <- function(epi_data, ahead, args_input, outcome, extra_
 #' if we want to filter the main data column in some way, this is a simple way to share that across forecasters
 filter_extraneous <- function(epi_data, filter_source, filter_agg_level) {
   if (filter_source != "") {
-    epi_data %<>% filter(source == filter_source)
+    if ("source" %in% colnames(epi_data)){
+      epi_data %<>% filter(source == filter_source)
+    }
   }
   if (filter_agg_level != "") {
-    epi_data %<>% filter(agg_level == filter_agg_level)
+    if ("agg_level" %in% colnames(epi_data)){
+      epi_data %<>% filter(agg_level == filter_agg_level)
+    }
   }
   return(epi_data)
 }

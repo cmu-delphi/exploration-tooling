@@ -6,6 +6,11 @@ source("scripts/targets-exploration-common.R")
 # with prototyping the pipeline.
 dummy_mode <- as.logical(Sys.getenv("DUMMY_MODE", TRUE))
 
+# these are locations we shouldn't take into account when deciding on latency,
+# since e.g. flusurv stopped updating, and the various geos stopped updating for
+# ILI+
+very_latent_locations <- list(geo_value = c("dc", "nh", "nv", "de", "ak", "me", "nd", "ut", "wy", "nc", "id"), source = "flusurv")
+
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
 forecaster_parameter_combinations_ <- list(
   # just the data, possibly population scaled; likely to run into troubles
@@ -17,6 +22,7 @@ forecaster_parameter_combinations_ <- list(
     pop_scaling = c(TRUE, FALSE),
     filter_source = c("", "nhsn"),
     filter_agg_level = c("", "state"),
+    keys_to_ignore = very_latent_locations
   ),
   # The covid forecaster, ported over to flu. Also likely to struggle with the
   # extra data
@@ -32,7 +38,8 @@ forecaster_parameter_combinations_ <- list(
     sd_mean_width = as.difftime(2, units = "weeks"),
     pop_scaling = c(TRUE, FALSE),
     filter_source = c("", "nhsn"),
-    filter_agg_level = c("", "state")
+    filter_agg_level = c("", "state"),
+    keys_to_ignore = very_latent_locations
   ),
   # the thing to beat (a simplistic baseline forecast)
   tidyr::expand_grid(
@@ -43,16 +50,20 @@ forecaster_parameter_combinations_ <- list(
     lags =  list(c(0, 7, 21)),
     dummy_states = FALSE,
     dummy_source = c(TRUE, FALSE),
-    derivative_estimator = c("growth_rate", "none")
+    derivative_estimator = c("growth_rate", "none"),
+    keys_to_ignore = very_latent_locations
   ),
   # another kind of baseline forecaster
   tidyr::expand_grid(
     forecaster = "no_recent_outcome",
+    trainer = c("quantreg", "randforest_grf"),
     scale_method = c("quantile", "none"),
     filter_source = c("", "nhsn"),
     filter_agg_level = c("", "state"),
     use_population = c(FALSE, TRUE),
-    use_density = c(FALSE, TRUE)
+    use_density = c(FALSE, TRUE),
+    week_method = c("linear", "sine"),
+    keys_to_ignore = very_latent_locations
   )
 ) %>%
   map(function(x) {

@@ -119,7 +119,7 @@ clear_lastminute_nas <- function(epi_data, outcome, extra_sources) {
     extra_sources <- character(0L)
   }
   as_of <- attributes(epi_data)$metadata$as_of
-  other_keys <- attributes(epi_data)$metadata$other_keys
+  other_keys <- attributes(epi_data)$metadata$other_keys %||% character()
   epi_data %<>%
     drop_na(c(!!outcome, !!!extra_sources)) %>%
     as_epi_df(as_of = as_of, other_keys = other_keys)

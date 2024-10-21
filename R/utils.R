@@ -7,8 +7,22 @@
 #' @param pattern string to search in the forecaster name.
 #'
 #' @export
-forecaster_lookup <- function(forecaster_grid, pattern) {
-  forecaster_grid %>% filter(grepl(pattern, id))
+forecaster_lookup <- function(pattern, forecaster_grid = NULL, printing = TRUE) {
+  if (is.null(forecaster_grid)) {
+    forecaster_grid <- tar_read_raw("forecaster_parameter_combinations") %>%
+      map(make_forecaster_grid) %>%
+      bind_rows()
+  }
+  fc_row <- forecaster_grid %>% filter(grepl(pattern, id))
+  if (printing) {
+    params <- fc_row$params[[1]]
+    params$trainer <- as_string(params$trainer)
+    print(glue::glue("name: {fc_row %>% pull(id)}"))
+    print(glue::glue("forecaster: {fc_row$forecaster[[1]]}"))
+    print(glue::glue("params:"))
+    print(params %>% as.data.table)
+  }
+  return(fc_row)
 }
 
 #' Add a unique id based on the column contents

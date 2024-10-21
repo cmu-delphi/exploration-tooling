@@ -11,6 +11,7 @@ no_recent_outcome <- function(epi_data,
                               use_density = TRUE,
                               scale_method = c("quantile", "std", "none"),
                               center_method = c("median", "mean", "none"),
+                              week_method = c("linear", "sine"),
                               filter_source = "",
                               filter_agg_level = "",
                               smooth_width = 3,
@@ -19,6 +20,7 @@ no_recent_outcome <- function(epi_data,
                               ...) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
+  week_method <- arg_match(week_method)
   if (is.null(smooth_cols)) {
     smooth_cols <- extra_sources
   }
@@ -61,7 +63,8 @@ no_recent_outcome <- function(epi_data,
     epi_data %<>% mutate(agg_level = ifelse(is.na(agg_level), "state", agg_level))
   }
 
-  args_input[["nonneg"]] <- TRUE
+  # only force to be non-negative if we're not scaling
+  args_input[["nonneg"]] <- scale_method == "none"
   args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
   args_list <- do.call(default_args_list, args_input)
@@ -92,6 +95,7 @@ no_recent_outcome <- function(epi_data,
     learned_params <- calculate_whitening_params(season_data, outcome, scale_method, center_method)
     full_data %<>% data_whitening(outcome, learned_params)
   }
+  season_data <- full_data %>% drop_non_seasons()
   # preprocessing supported by epipredict
   preproc <- epi_recipe(season_data)
   # slide is currently done before for efficiency reasons, added as predictors here
@@ -104,13 +108,12 @@ no_recent_outcome <- function(epi_data,
     preproc %<>%
       add_role(population, density, new_role = "pre-predictor")
   }
-  if (use_population == TRUE) {
-    # population and density
-    preproc %<>%
-      add_role(population, density, new_role = "pre-predictor")
-  }
   # week of the season
-  preproc %<>% add_role(season_week, new_role = "pre-predictor")
+  if (week_method == "linear") {
+    preproc %<>% add_role(season_week, new_role = "pre-predictor")
+  } else if (week_method == "sine") {
+    preproc %<>% step_season_week_sine(season = 35)
+  }
   # any relevant lags, the aheads, latency adjustment, that sort of thing
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
   # postprocessing supported by epipredict
@@ -132,6 +135,7 @@ no_recent_outcome <- function(epi_data,
     trainer, season_data,
     full_data
   )
+
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict

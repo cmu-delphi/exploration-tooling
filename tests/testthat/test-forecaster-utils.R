@@ -47,11 +47,11 @@ test_that("forecaster lookup selects the right rows", {
     lags = list(NULL, c(0, 7, 14)),
     pop_scale = c(FALSE, TRUE),
   )
-  expect_equal(param_grid_ex %>% forecaster_lookup("monarchist"), tribble(
+  expect_equal(param_grid_ex %>% forecaster_lookup("monarchist", ., printing = FALSE), tribble(
     ~id, ~forecaster, ~lags, ~pop_scale,
     "monarchist.thrip", "scaled_pop", c(0, 7, 14), TRUE,
   ))
-  expect_equal(param_grid_ex %>% forecaster_lookup("irish"), tribble(
+  expect_equal(param_grid_ex %>% forecaster_lookup("irish", ., printing = FALSE), tribble(
     ~id, ~forecaster, ~lags, ~pop_scale,
     "simian.irishsetter", "scaled_pop", NULL, FALSE,
   ))
