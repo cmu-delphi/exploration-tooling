@@ -11,6 +11,7 @@ no_recent_outcome <- function(epi_data,
                               use_density = TRUE,
                               scale_method = c("quantile", "std", "none"),
                               center_method = c("median", "mean", "none"),
+                              nonlin_method = c("quart_root", "none"),
                               week_method = c("linear", "sine"),
                               filter_source = "",
                               filter_agg_level = "",
@@ -20,6 +21,7 @@ no_recent_outcome <- function(epi_data,
                               ...) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
+  nonlin_method <- arg_match(nonlin_method)
   week_method <- arg_match(week_method)
   if (is.null(smooth_cols)) {
     smooth_cols <- extra_sources
@@ -92,8 +94,8 @@ no_recent_outcome <- function(epi_data,
   full_data <- epi_data
   season_data <- epi_data %>% drop_non_seasons()
   if (scale_method != "none") {
-    learned_params <- calculate_whitening_params(season_data, outcome, scale_method, center_method)
-    full_data %<>% data_whitening(outcome, learned_params)
+    learned_params <- calculate_whitening_params(season_data, outcome, scale_method, center_method, nonlin_method)
+    full_data %<>% data_whitening(outcome, learned_params, nonlin_method = nonlin_method)
   }
   season_data <- full_data %>% drop_non_seasons()
   # preprocessing supported by epipredict
@@ -143,7 +145,7 @@ no_recent_outcome <- function(epi_data,
   if (scale_method != "none") {
     pred <- pred %>%
       rename({{ outcome }} := value) %>%
-      data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value")) %>%
+      data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
       rename(value = {{ outcome }}) %>%
       mutate(value = pmax(0, value))
   }

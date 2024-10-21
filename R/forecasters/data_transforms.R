@@ -182,11 +182,18 @@ get_poly_coefs <- function(values, degree, n_points) {
 }
 
 #' get the mean and median used to whiten epi_data on a per source-geo_value basis
-calculate_whitening_params <- function(epi_data, colname, scale_method = c("quantile", "quantile_upper", "std"), center_method = c("median", "mean")) {
+#' note that we can't just use step_boxcox or step yeo-johnson because it doesn't allow for grouping
+calculate_whitening_params <- function(epi_data, colname, scale_method = c("quantile", "quantile_upper", "std"), center_method = c("median", "mean"), nonlin_method = c("quart_root","none")) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
+  nonlin_method <- arg_match(nonlin_method)
+  if (nonlin_method == "quart_root") {
   scaled_data <- epi_data %>%
-    mutate(across(all_of(colname), \(x) (x + 0.01)^0.25)) %>%
+    mutate(across(all_of(colname), \(x) (x + 0.01)^0.25))
+  } else if (nonlin_method == "none") {
+    scaled_data <- epi_data
+  }
+  scaled_data <- scaled_data %>%
     group_by(source, geo_value)
   # center so that either the mean or median is 0
   if (center_method == "mean") {
@@ -231,30 +238,41 @@ calculate_whitening_params <- function(epi_data, colname, scale_method = c("quan
 
 
 #' scale so that every data source has the same 95th quantile
-data_whitening <- function(epi_data, colname, learned_params) {
-  epi_data %>%
+data_whitening <- function(epi_data, colname, learned_params, nonlin_method = c("quart_root", "none"), join_cols = NULL) {
+  if (is.null(join_cols)) {
+    join_cols <- key_colnames(epi_data, exclude = "time_value")
+  }
+  nonlin_method <- arg_match(nonlin_method)
+  res <- epi_data %>%
     left_join(
       learned_params,
-      by = key_colnames(epi_data, exclude = "time_value")
-    ) %>%
-    mutate(across(all_of(colname), ~ (.x + 0.01)^(1 / 4))) %>%
+      by = join_cols
+    )
+  if (nonlin_method == "quart_root") {
+    res %<>% mutate(across(all_of(colname), ~ (.x + 0.01)^(1 / 4)))
+  }
+  res %>%
     mutate(across(all_of(colname), ~ .x - get(paste0(cur_column(), "_center")))) %>%
     mutate(across(all_of(colname), ~ .x / get(paste0(cur_column(), "_scale")))) %>%
     select(-ends_with("_center"), -ends_with("_scale"))
 }
 
 #' undo data whitening by multiplying by the scaling and adding the center
-data_coloring <- function(epi_data, colname, learned_params, join_cols = NULL) {
+data_coloring <- function(epi_data, colname, learned_params, nonlin_method = c("quart_root", "none"), join_cols = NULL) {
   if (is.null(join_cols)) {
     join_cols <- key_colnames(epi_data, exclude = "time_value")
   }
-  epi_data %>%
+  nonlin_method <- arg_match(nonlin_method)
+  res <- epi_data %>%
     left_join(
       learned_params,
       by = join_cols
     ) %>%
     mutate(across(all_of(colname), ~ .x * get(paste0(cur_column(), "_scale")))) %>%
-    mutate(across(all_of(colname), ~ .x + get(paste0(cur_column(), "_center")))) %>%
-    mutate(across(all_of(colname), ~ .x^4 - 0.01)) %>%
+    mutate(across(all_of(colname), ~ .x + get(paste0(cur_column(), "_center"))))
+  if (nonlin_method == "quart_root") {
+    res %<>% mutate(across(all_of(colname), ~ .x^4 - 0.01))
+  }
+  res %>%
     select(-ends_with("_center"), -ends_with("_scale"))
 }

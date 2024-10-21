@@ -50,6 +50,7 @@ forecaster_parameter_combinations_ <- list(
     lags =  list(c(0, 7, 21)),
     dummy_states = FALSE,
     dummy_source = c(TRUE, FALSE),
+    nonlin_method = c("quart_root", "none"),
     derivative_estimator = c("growth_rate", "none"),
     keys_to_ignore = very_latent_locations
   ),
@@ -58,6 +59,7 @@ forecaster_parameter_combinations_ <- list(
     forecaster = "no_recent_outcome",
     trainer = c("quantreg", "randforest_grf"),
     scale_method = c("quantile", "none"),
+    nonlin_method = c("quart_root", "none"),
     filter_source = c("", "nhsn"),
     filter_agg_level = c("", "state"),
     use_population = c(FALSE, TRUE),

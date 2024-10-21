@@ -10,13 +10,16 @@ flusion <- function(epi_data,
                     quantile_levels = covidhub_probs(),
                     scale_method = c("quantile", "std"),
                     center_method = c("median", "mean"),
+                    nonlin_method = c("quart_root", "none"),
                     dummy_states = TRUE,
                     dummy_source = TRUE,
                     sources_to_pop_scale = c(),
                     derivative_estimator = c("growth_rate", "quadratic_regression", "none"),
+                    difference = FALSE,
                     ...) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
+  nonlin_method <- arg_match(nonlin_method)
   derivative_estimator <- arg_match(derivative_estimator)
   # perform any preprocessing not supported by epipredict
   args_input <- list(...)
@@ -78,8 +81,8 @@ flusion <- function(epi_data,
   season_data <- epi_data %>% drop_non_seasons()
 
   # whiten to get the sources on the same scale
-  learned_params <- calculate_whitening_params(season_data, predictors, scale_method, center_method)
-  full_data %<>% data_whitening(predictors, learned_params)
+  learned_params <- calculate_whitening_params(season_data, predictors, scale_method, center_method, nonlin_method)
+  full_data %<>% data_whitening(predictors, learned_params, nonlin_method)
   keys <- key_colnames(epi_data, exclude = "time_value")
   # add the slightly smoothed values beforehand; this is about speed, since step_epi_slide isn't ready yet
   full_data %<>%
@@ -194,7 +197,7 @@ flusion <- function(epi_data,
   # reintroduce color into the value
   pred_final <- pred %>%
     rename({{ outcome }} := value) %>%
-    data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value")) %>%
+    data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
     rename(value = {{ outcome }}) %>%
     mutate(value = pmax(0, value))
   if (adding_source) {

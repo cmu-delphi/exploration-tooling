@@ -14,6 +14,7 @@ test_that("whitening and then coloring returns the original data", {
     summarise(err_death = sum(net_death, na.rm = TRUE), err_case = sum(net_case, na.rm = TRUE))
   expect_equal(whiten_color_diff %>% unlist(use.names = FALSE), c(0, 0))
 })
+
 test_that("whitening small specific example", {
   linear_small <- c(0, .5, 1, 1.5, 2)
   linear_large <- linear_small * 100 + 50
