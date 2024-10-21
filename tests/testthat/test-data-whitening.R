@@ -4,7 +4,6 @@ real_ex <- epipredict::case_death_rate_subset %>%
   mutate(source = "same") %>%
   as_epi_df(other_keys = "source")
 real_params <- calculate_whitening_params(real_ex, c("case_rate", "death_rate"))
-real_params
 test_that("whitening and then coloring returns the original data", {
   whiten_color_diff <- real_ex %>%
     data_whitening(c("case_rate", "death_rate"), real_params) %>%
