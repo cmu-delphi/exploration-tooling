@@ -20,7 +20,7 @@ forecaster_parameter_combinations_ <- list(
   # because of the scales of the different sources
   tidyr::expand_grid(
     forecaster = "scaled_pop",
-    trainer = c("linreg", "quantreg", "randforest_grf"),
+    trainer = c("quantreg", "randforest_grf"),
     lags = list(c(0, 7, 14, 21)),
     pop_scaling = c(TRUE, FALSE),
     filter_source = c("", "nhsn"),

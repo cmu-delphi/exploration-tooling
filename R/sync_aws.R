@@ -61,6 +61,7 @@ sync_aws <- function(rel_cache_dir = NULL,
   }
   if (aux_data_path != "" && aux_data_path != " ") {
     s3b <- get_bucket(bucket_name, prefix = prefix, max = 1)
+    if (!dir.exists(here::here(aux_data_path))) dir.create(here::here(aux_data_path))
     if (verbose) {
       aws.s3::s3sync(here::here(aux_data_path), s3b, prefix = paste0(prefix, "/", aux_data_path), direction = direction)
     } else {
