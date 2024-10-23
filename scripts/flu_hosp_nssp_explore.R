@@ -156,6 +156,7 @@ source("scripts/targets-exploration-common.R")
 # Debug mode will replace all forecasters with a fast dummy forecaster. Helps
 # with prototyping the pipeline.
 debug <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
+# TODO: Need DUMMY_MODE
 
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
 forecaster_parameter_combinations_ <- list(

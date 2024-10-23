@@ -592,7 +592,6 @@ pred_final2 %>% arrange(desc(value))
 epi_data2 %>% arrange(desc(value))
 true_value2 %>% filter(`source` == "ILI+") %>% arrange(desc(value))
 true_value2 %>%
-   %>%
   pull(value) %>%
   summary()
 outcome() <- "value"

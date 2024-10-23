@@ -11,3 +11,4 @@ run.Rout
 tmp.R
 reports/
 .exploration_cache
+aux_data

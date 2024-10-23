@@ -107,4 +107,3 @@ epix_slide_simple <- function(epi_archive, forecaster, ref_time_values, before, 
     epi_df %>% forecaster()
   }) %>% bind_rows()
 }
-

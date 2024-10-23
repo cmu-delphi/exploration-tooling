@@ -95,18 +95,28 @@ arx_postprocess <- function(postproc,
 #'
 #' @importFrom epipredict epi_workflow fit add_frosting get_test_data
 #' @export
-run_workflow_and_format <-
-  function(preproc,
-           postproc,
-           trainer,
-           train_data,
-           full_data = NULL,
-           test_data_interval = as.difftime(52, units = "weeks"),
-           return_model = FALSE) {
-    workflow <-
-      epi_workflow(preproc, trainer) %>%
-      fit(train_data) %>%
-      add_frosting(postproc)
+run_workflow_and_format <- function(preproc,
+                                    postproc,
+                                    trainer,
+                                    train_data,
+                                    full_data = NULL,
+                                    test_data_interval = as.difftime(52, units = "weeks"),
+                                    return_model = FALSE) {
+  workflow <- epi_workflow(preproc, trainer) %>%
+    fit(train_data) %>%
+    add_frosting(postproc)
+
+  if (is.null(full_data)) {
+    latest <- get_test_data(recipe = preproc, x = train_data)
+    pred <- predict(workflow, latest)
+    # the forecast_date may currently be the max time_value
+    as_of <- attributes(train_data)$metadata$as_of
+    if (is.null(as_of)) {
+      as_of <- max(train_data$time_value)
+    }
+    true_forecast_date <- as_of
+    return(format_storage(pred, true_forecast_date))
+  } else {
     # filter full_data to less than full but more than we need
     test_data <- get_oversized_test_data(full_data %||% train_data, test_data_interval, preproc)
     # predict, and filter out those forecasts for less recent days (predict
@@ -119,6 +129,7 @@ run_workflow_and_format <-
       return(format_storage(pred, possible_time_values))
     }
   }
+}
 
 #' @param full_data the full data to narrow down from
 #' @param test_data_interval the amount of time to go backwards from the last day
@@ -131,6 +142,7 @@ get_oversized_test_data <- function(full_data, test_data_interval, preproc) {
     na.omit(non_na_indicators) %>%
     pull(time_value) %>%
     max()
-  full_data %>% filter((max_time_value - time_value) < test_data_interval) %>% arrange(time_value)
+  full_data %>%
+    filter((max_time_value - time_value) < test_data_interval) %>%
+    arrange(time_value)
 }
-
