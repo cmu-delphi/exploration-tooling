@@ -73,7 +73,6 @@ flusion <- function(epi_data,
   # epipredict
   # flusurv is out of date, so we need to drop it from latency considerations,
   # and several states are also no longer participating in ILI+ (with wy only having `NA` values)
-  args_list[["keys_to_ignore"]] <- list(geo_value = c("dc", "nh", "nv", "de", "ak", "me", "nd", "ut", "wy", "nc", "id"), source = "flusurv")
   # need factors for most things
   epi_data %<>% ungroup() %>% mutate(across(where(is.character), as.factor))
   # drop between-season values for actual training; we'll need them for prediction though

@@ -1,7 +1,6 @@
 install:
 	Rscript -e "install.packages(c('renv', 'pak', 'rspm'))"
 	Rscript -e "renv::restore()"
-	Rscript -e 'renv::install(".")'
 
 .PHONY: all test test-forecasters run run-nohup sync download upload dashboard
 

@@ -130,6 +130,7 @@ data_targets <- make_data_targets()
 # These globals are needed by the function below (and they need to persist
 # during the actual targets run, since the commands are frozen as expressions).
 date_step <- 7L
+ref_time_values <- NULL
 start_date <- NULL
 end_date <- NULL
 forecasts_and_scores <- make_forecasts_and_scores()

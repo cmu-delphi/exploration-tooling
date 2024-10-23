@@ -140,6 +140,7 @@ make_data_targets <- function() {
 #' Relies on the following globals:
 #' - `forecaster_grid`
 #' - `date_step`
+#' - `ref_time-values` (can be NULL)
 #' - `start_date` (can be NULL)
 #' - `end_date` (can be NULL)
 #' Relies on the following targets:
@@ -162,6 +163,7 @@ make_forecasts_and_scores <- function() {
           n_training_pad = 30L,
           forecaster_args = params,
           forecaster_args_names = param_names,
+          ref_time_values = ref_time_values,
           start_date = start_date,
           end_date = end_date,
           date_range_step_size = date_step,

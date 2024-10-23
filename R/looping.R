@@ -37,6 +37,7 @@ slide_forecaster <- function(epi_archive,
                              n_training_pad = 5,
                              forecaster_args = list(),
                              forecaster_args_names = list(),
+                             ref_time_values = NULL,
                              start_date = NULL,
                              end_date = NULL,
                              date_range_step_size = 1L,
@@ -52,14 +53,16 @@ slide_forecaster <- function(epi_archive,
     n_training <- Inf
     net_slide_training <- slide_training + n_training_pad
   }
-  # restrict the dataset to areas where training is possible
-  if (is.null(start_date)) {
-    start_date <- min(epi_archive$DT$time_value) + net_slide_training
+  if (is.null(ref_time_values)) {
+    # restrict the dataset to areas where training is possible
+    if (is.null(start_date)) {
+      start_date <- min(epi_archive$DT$time_value) + net_slide_training
+    }
+    if (is.null(end_date)) {
+      end_date <- max(epi_archive$DT$time_value) - forecaster_args$ahead
+    }
+    ref_time_values <- seq.Date(from = start_date, to = end_date, by = date_range_step_size)
   }
-  if (is.null(end_date)) {
-    end_date <- max(epi_archive$DT$time_value) - forecaster_args$ahead
-  }
-  valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = date_range_step_size)
 
   # first generate the forecasts
   before <- n_training + n_training_pad - 1
@@ -95,7 +98,7 @@ slide_forecaster <- function(epi_archive,
   epix_slide_simple(
     epi_archive,
     forecaster_wrapper,
-    valid_predict_dates,
+    ref_time_values,
     before,
     cache_key = cache_key
   )
@@ -122,3 +125,4 @@ epix_slide_simple <- function(epi_archive, forecaster, ref_time_values, before, 
     epi_df %>% forecaster()
   }) %>% bind_rows()
 }
+

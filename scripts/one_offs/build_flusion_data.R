@@ -81,12 +81,12 @@ nhsn_nation <- pub_covidcast(
 
 # Combine agg_level
 nhsn <- bind_rows(nhsn_state, nhsn_hhs_region, nhsn_nation) %>% drop_na()
-# Additional column: season, season_week, week_end_date
+
+# Additional column: season, season_week
 nhsn <- nhsn %>%
   mutate(epiyear = epiyear(time_value), epiweek = epiweek(time_value)) %>%
   mutate(season = convert_epiweek_to_season(epiyear, epiweek)) %>%
-  mutate(season_week = convert_epiweek_to_season_week(epiyear, epiweek)) # %>%
-# mutate(week_end_date = convert_epiweek_to_week_end_date(epiyear, epiweek))
+  mutate(season_week = convert_epiweek_to_season_week(epiyear, epiweek))
 
 # are there any season_weeks with more than 7 days? no
 expect_equal(
@@ -95,7 +95,7 @@ expect_equal(
 )
 # is the start of every season week a Sunday?
 expect_equal(
-  nhsn %>% group_by(geo_value, version, season, season_week) %>% summarize(first_day = wday(min(time_value), label = TRUE), n = n()) %>% filter(n == 7) %>% pull(first_day) %>% unique(),
+  nhsn %>% group_by(geo_value, version, season, season_week) %>% summarize(first_day = wday(min(time_value), label = TRUE), n = n(), .groups = "drop") %>% filter(n == 7) %>% pull(first_day) %>% unique(),
   wday("2020-12-06", label = TRUE)
 )
 
@@ -368,7 +368,6 @@ ggplot(ili_plus_nation_latest, aes(x = time_value)) +
 
 # some revision stats:
 rev_sum <- flusurv_adjusted %>%
-  as_epi_archive(compactify = TRUE) %>%
   revision_summary(adj_hosp_rate)
 rev_sum %>%
   filter(time_value > "2020-01-01") %>%
@@ -398,10 +397,12 @@ daily_to_weekly <- function(epi_arch,
                             day_of_week = 4L,
                             day_of_week_end = 6L) {
   keys <- key_colnames(epi_arch, exclude = "time_value")
+  ref_time_values <- epi_arch$DT$version %>% unique() %>% sort()
+  browser()
   too_many_tibbles <- epix_slide(
     epi_arch,
-    before = 99999999L,
-    ref_time_values = ref_time_values,
+    .before = 99999999L,
+    .versions = ref_time_values,
     function(x, group, ref_time) {
       x %>%
         group_by(across(all_of(keys))) %>%
@@ -416,11 +417,8 @@ daily_to_weekly <- function(epi_arch,
     }
   )
   too_many_tibbles %>%
-    rename(version = time_value) %>%
-    rename_with(~ gsub("slide_value_", "", .x)) %>%
     as_epi_archive(compactify = TRUE)
 }
-
 nhsn_weekly <- nhsn %>%
   as_epi_archive(compactify = TRUE) %>%
   daily_to_weekly("admission_rate")

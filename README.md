@@ -13,6 +13,7 @@ EPIDATR_USE_CACHE=true
 # Choose a cache timeout for yourself. We want a long cache time, since we work with historical data.
 EPIDATR_CACHE_MAX_AGE_DAYS=42
 DEBUG_MODE=false
+DUMMY_MODE=false
 USE_SHINY=false
 TAR_PROJECT=covid_hosp_explore
 EXTERNAL_SCORES_PATH=legacy-exploration-scorecards.qs
@@ -21,6 +22,7 @@ AWS_S3_PREFIX=exploration
 
 - `EPIDATR_USE_CACHE` controls whether `epidatr` functions use the cache.
 - `DEBUG_MODE` controls whether `targets::tar_make` is run with the `callr_function=NULL`, which allows for debugging. This only works if parallelization has been turned off in `scripts/targets-common.R` by setting the default controller to serial on line 51.
+- `DUMMY_MODE` controls whether all forecasters are replaced with a dummy. This is useful for testing a new pipeline.
 - `USE_SHINY` controls whether we start a Shiny server after producing the targets.
 - `TAR_PROJECT` controls which `targets` project is run by `run.R`. Likely either `covid_hosp_explore` or `flu_hosp_explore`
 - `EXTERNAL_SCORES_PATH` controls where external scores are loaded from. If not set, external scores are not used.

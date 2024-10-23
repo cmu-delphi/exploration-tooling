@@ -9,7 +9,10 @@ dummy_mode <- as.logical(Sys.getenv("DUMMY_MODE", TRUE))
 # these are locations we shouldn't take into account when deciding on latency,
 # since e.g. flusurv stopped updating, and the various geos stopped updating for
 # ILI+
-very_latent_locations <- list(geo_value = c("dc", "nh", "nv", "de", "ak", "me", "nd", "ut", "wy", "nc", "id"), source = "flusurv")
+very_latent_locations <- list(
+  geo_value = c("dc", "nh", "nv", "de", "ak", "me", "nd", "ut", "wy", "nc", "id"),
+  source = c("flusurv", "ILI+")
+)
 
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
 forecaster_parameter_combinations_ <- list(
@@ -47,7 +50,7 @@ forecaster_parameter_combinations_ <- list(
   ),
   tidyr::expand_grid(
     forecaster = "flusion",
-    lags =  list(c(0, 7, 21)),
+    lags = list(c(0, 7, 21)),
     dummy_states = FALSE,
     dummy_source = c(TRUE, FALSE),
     nonlin_method = c("quart_root", "none"),
@@ -85,10 +88,15 @@ forecaster_grid <- forecaster_parameter_combinations_ %>%
 
 no_recent_outcome_params <- list(
   forecaster = "no_recent_outcome",
+  trainer = "quantreg",
   scale_method = "quantile",
+  nonlin_method = "quart_root",
   filter_source = "",
+  filter_agg_level = "",
   use_population = TRUE,
-  use_density = TRUE
+  use_density = TRUE,
+  week_method = "linear",
+  keys_to_ignore = very_latent_locations
 )
 # Human-readable object to be used for inspecting the ensembles in the pipeline.
 ensemble_parameter_combinations_ <- tribble(
@@ -192,8 +200,11 @@ data_targets <- list(
 # These globals are needed by the function below (and they need to persist
 # during the actual targets run, since the commands are frozen as expressions).
 date_step <- 7L
-start_date <- as.Date("2023-10-04")
-end_date <- as.Date("2024-04-24")
+if (!exists(ref_time_values)) {
+  ref_time_values <- NULL
+  start_date <- as.Date("2023-10-04")
+  end_date <- as.Date("2024-04-24")
+}
 forecasts_and_scores <- make_forecasts_and_scores()
 
 ensembles_and_scores <- make_ensembles_and_scores()

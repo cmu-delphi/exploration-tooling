@@ -7,6 +7,10 @@ flu_hosp_explore:
   script: scripts/flu_hosp_explore.R
   store: flu_hosp_explore
   use_crew: no
+flu_hosp_tiny:
+  script: scripts/flu_hosp_tiny.R
+  store: flu_hosp_explore
+  use_crew: no
 flu_hosp_prod:
   script: scripts/flu_hosp_prod.R
   store: flu_hosp_prod
