@@ -18,6 +18,7 @@ USE_SHINY=false
 TAR_PROJECT=covid_hosp_explore
 EXTERNAL_SCORES_PATH=legacy-exploration-scorecards.qs
 AWS_S3_PREFIX=exploration
+AUX_DATA_PATH=aux_data
 ```
 
 - `EPIDATR_USE_CACHE` controls whether `epidatr` functions use the cache.
@@ -27,6 +28,7 @@ AWS_S3_PREFIX=exploration
 - `TAR_PROJECT` controls which `targets` project is run by `run.R`. Likely either `covid_hosp_explore` or `flu_hosp_explore`
 - `EXTERNAL_SCORES_PATH` controls where external scores are loaded from. If not set, external scores are not used.
 - `AWS_S3_PREFIX` controls the prefix to use in the AWS S3 bucket (a prefix is a pseudo-directory in a bucket).
+- `AUX_DATA_PATH=aux_data`
 
 Run the pipeline using:
 

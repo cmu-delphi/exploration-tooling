@@ -4,7 +4,7 @@ source("scripts/targets-exploration-common.R")
 
 # Debug mode will replace all forecasters with a fast dummy forecaster. Helps
 # with prototyping the pipeline.
-dummy_mode <- as.logical(Sys.getenv("DUMMY_MODE", TRUE))
+dummy_mode <- as.logical(Sys.getenv("DUMMY_MODE", FALSE))
 
 # these are locations we shouldn't take into account when deciding on latency,
 # since e.g. flusurv stopped updating, and the various geos stopped updating for
