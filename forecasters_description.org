@@ -22,7 +22,7 @@ Neither we nor they have tested/examined whether a robust scaler is more appropr
 
 The model is roughly (dropping coefficients, and ignoring subtleties in the way different engines handle different variables)
 $$
-\bar{x}_{t+k} = \textrm{ar}(\bar{x}) + t_{season} + (t_{year}-52) + p + d + \chi_{geo} + \chi_{source} + \big\langle \bar{x}_{t-k}\big\rangle_{k=0:1} + \big\langle \bar{x}_{t-k}\big\rangle_{t=0:3} + \textrm{de}(\bar{x})
+\bar{x}_{t+k} = \textrm{ar}(\bar{x}) + t_{season} + p + d + \chi_{geo} + \chi_{source} + \big\langle \bar{x}_{t-k}\big\rangle_{k=0:1} + \big\langle \bar{x}_{t-k}\big\rangle_{t=0:3} + \textrm{de}(\bar{x})
 $$
 
 Where:
@@ -47,9 +47,24 @@ I have a test set up to drop the state dummy variables, the source dummy variabl
 * =no_recent_outcome=
 A flusion-adjacent model pared down to handle the case of not having the target as a predictor.
 $$
-\bar{x}_{t+k} = t_{season} + (t_{year}-52) + p + d + \big\langle y_{t-k}\big\rangle_{k=0:1} + \big\langle y_{t-k}\big\rangle_{t=0:3}
+\bar{x}_{t+k} = f(t_{season}) + p + d + \big\langle y_{t-k}\big\rangle_{k=0:1} + \big\langle y_{t-k}\big\rangle_{t=0:3}
 $$
 $y$ here is any exogenous variables; initially this will be empty, as nssp is missing some states, so we will have to rewrite these models to handle missing geos (most likely by having a separate model for the case when an exogenous variable is missing).
+
+$f$ is either the identity or 2 sine terms, defined so that the first has half a period during the season, and is zero after it, while the second is one period over the season, with zero after:
+#+begin_src R :file 4.png :session :results graphics file
+library(tidyverse)
+res <- tibble(season_week = 1:52)
+res %>% mutate(
+          first_term = sinpi((pmin(season_week, 36) - 1)/35),
+          second_term = sinpi(2*(pmin(season_week, 36) - 1)/35)
+               ) %>%
+  pivot_longer(cols = c("first_term", "second_term")) %>%
+  ggplot(aes(x=season_week, y = value, color = name)) +geom_line()
+#+end_src
+
+#+RESULTS:
+[[file:4.png]]
 
 
 I am also going to test having and dropping the robust scaling, the population $p$, and the density $d$ (and using one but not the other).

@@ -161,8 +161,6 @@ flusion <- function(epi_data,
   preproc %<>% add_role(population, density, new_role = "pre-predictor") %>%
     # week of the year
     step_date(time_value, features = "week") %>%
-    # distance to christmas
-    step_mutate(dist_to_christmas = (time_value_week - 52)) %>%
     # week of the season
     add_role(season_week, new_role = "pre-predictor")
   if (derivative_estimator == "growth_rate") {

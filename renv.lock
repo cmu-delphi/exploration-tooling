@@ -887,13 +887,9 @@
     "epipredict": {
       "Package": "epipredict",
       "Version": "0.1.2",
-      "Source": "GitHub",
-      "RemoteType": "github",
-      "RemoteUsername": "cmu-delphi",
-      "RemoteRepo": "epipredict",
-      "RemoteRef": "dev",
-      "RemoteSha": "e53af97818969bd1769c21a19b24c7f87565b1dd",
-      "RemoteHost": "api.github.com",
+      "Source": "Local",
+      "RemoteType": "local",
+      "RemoteUrl": "../epipredict",
       "Requirements": [
         "R",
         "checkmate",
@@ -919,17 +915,17 @@
         "vctrs",
         "workflows"
       ],
-      "Hash": "ab336429e2c1f6b1e2f78ca5d9a4f658"
+      "Hash": "09d6c3a06e0d1ebbed24ccee958db701"
     },
     "epiprocess": {
       "Package": "epiprocess",
-      "Version": "0.9.5",
+      "Version": "0.9.6",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epiprocess",
       "RemoteRef": "dev",
-      "RemoteSha": "cb468dbcce71032672959042fdab66cac6dd00a1",
+      "RemoteSha": "c901a680e461f73823c3e53c859e4c70f4231735",
       "RemoteHost": "api.github.com",
       "Requirements": [
         "R",
@@ -955,7 +951,7 @@
         "vctrs",
         "waldo"
       ],
-      "Hash": "c9248cd65c8df0a4b58f49ce645e1699"
+      "Hash": "15d7af99e41cd86b544c76ab3a271b53"
     },
     "evaluate": {
       "Package": "evaluate",
@@ -1353,7 +1349,7 @@
     },
     "igraph": {
       "Package": "igraph",
-      "Version": "2.0.3",
+      "Version": "2.1.1",
       "Source": "Repository",
       "Repository": "RSPM",
       "Requirements": [
@@ -1372,7 +1368,7 @@
         "utils",
         "vctrs"
       ],
-      "Hash": "c3b7d801d722e26e4cd888e042bf9af5"
+      "Hash": "c03878b48737a0e2da3b772d7b2e22da"
     },
     "ini": {
       "Package": "ini",
@@ -2382,10 +2378,10 @@
     },
     "rstudioapi": {
       "Package": "rstudioapi",
-      "Version": "0.16.0",
+      "Version": "0.17.0",
       "Source": "Repository",
       "Repository": "RSPM",
-      "Hash": "96710351d642b70e8f02ddeb237c46a7"
+      "Hash": "fb9f5fce8f609e9b66f0bea5c783f88a"
     },
     "rversions": {
       "Package": "rversions",

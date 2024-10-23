@@ -13,7 +13,7 @@ arx_preprocess <- function(preproc, outcome, predictors, args_list) {
   if (args_list$adjust_latency != "none") {
     preproc %<>% step_adjust_latency(
       method = args_list$adjust_latency,
-      keys_to_ignore = args_list$keys_to_ignore
+      keys_to_ignore = args_list$keys_to_ignore[[1]]
     )
     if (args_list$adjust_latency == "extend_lags") {
       # this is a bit of a hack to make sure that *all* predictors are present at the correct lag

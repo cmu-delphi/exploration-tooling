@@ -51,6 +51,7 @@ add_id <- function(tib, exclude = c()) {
 get_single_id <- function(param_list) {
   param_list[sort(names(param_list))] %>%
     paste(sep = "", collapse = "") %>%
+    gsub("[[:blank:]]", "", .) %>%
     cli::hash_animal(n_adj = 1) %>%
     purrr::pluck("words", 1) %>%
     paste(sep = ".", collapse = ".")
