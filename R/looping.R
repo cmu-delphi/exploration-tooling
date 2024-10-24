@@ -75,25 +75,7 @@ slide_forecaster <- function(epi_archive,
     .homonyms = "last"
   )
   forecaster_wrapper <- function(x) {
-    tryCatch(
-      {
-        inject(forecaster(epi_data = x, !!!forecaster_args))
-      },
-      error = function(e) {
-        if (interactive()) {
-          browser()
-        } else {
-          dump_vars <- list(
-            epi_data = x,
-            forecaster = forecaster,
-            forecaster_args = forecaster_args,
-            e = e
-          )
-          saveRDS(dump_vars, "slide_forecaster_error.rds")
-          e
-        }
-      }
-    )
+    rlang::inject(forecaster(epi_data = x, !!!forecaster_args))
   }
   epix_slide_simple(
     epi_archive,
