@@ -253,6 +253,7 @@ data_targets <- list(
           time_value %in% eval_dates
         ) %>%
         drop_na() %>%
+        mutate(hhs = hhs * population / 10**5) %>%
         as_epi_archive(compactify = TRUE)
       new_flu_data %>%
         epix_as_of(new_flu_data$versions_end) %>%
@@ -265,7 +266,8 @@ data_targets <- list(
           signal,
           geo_value,
           target_end_date,
-          true_value
+          true_value,
+          population
         )
     }
   )

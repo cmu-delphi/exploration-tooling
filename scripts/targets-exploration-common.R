@@ -179,7 +179,19 @@ make_forecasts_and_scores <- function() {
     tar_target(
       name = score,
       command = {
-        evaluate_predictions(predictions_cards = forecast, truth_data = hhs_evaluation_data)
+        # Undo population scaling
+        forecast_scaled <- forecast %>%
+          left_join(
+            hhs_evaluation_data %>%
+              select(geo_value, population) %>%
+              distinct(),
+            by = "geo_value"
+          ) %>%
+          mutate(prediction = prediction * population / 10L**5)
+        evaluate_predictions(
+          predictions_cards = forecast_scaled,
+          truth_data = hhs_evaluation_data %>% select(-population)
+        )
       }
     )
   )

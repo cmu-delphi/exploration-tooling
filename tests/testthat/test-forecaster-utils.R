@@ -36,7 +36,7 @@ test_that("id generation works", {
   expect_equal(same_ids[[3]]$id, same_ids[[4]]$id)
   # Same as above, but direct calls into get_single_id
   for (i in 1:4) {
-    expect_equal(simple_ex[[i]] %>% transpose() %>% pluck(1) %>% get_single_id(), same_ids[[i]]$id)
+    expect_equal(simple_ex[[i]] %>% purrr::transpose() %>% pluck(1) %>% get_single_id(), same_ids[[i]]$id)
   }
 })
 

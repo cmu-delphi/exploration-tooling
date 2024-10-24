@@ -38,7 +38,7 @@ forecaster_lookup <- function(pattern, forecaster_grid = NULL, printing = TRUE) 
 add_id <- function(tib, exclude = c()) {
   ids <- tib %>%
     select(-all_of(exclude)) %>%
-    transpose() %>%
+    purrr::transpose() %>%
     map_chr(get_single_id)
   tib %>%
     mutate(id = ids) %>%

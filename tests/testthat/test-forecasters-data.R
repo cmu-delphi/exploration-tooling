@@ -38,7 +38,7 @@ default_slide_forecaster <- function(dataset, ii, expect_linreg_warnings = TRUE)
   args <- forecasters %>%
     select(-fc_name) %>%
     slice(ii) %>%
-    transpose() %>%
+    purrr::transpose() %>%
     pluck(1)
   wrapperfun(res <- inject(slide_forecaster(epi_archive = dataset, n_training_pad = 30, !!!args)))
   return(res)
