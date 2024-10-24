@@ -168,8 +168,10 @@ make_forecasts_and_scores <- function() {
           end_date = end_date,
           date_range_step_size = date_step,
           cache_key = "joined_archive_data"
-        ) %>% rename(prediction = value)
-      	gc()
+        ) %>%
+          rename(prediction = value) %>%
+          mutate(ahead = as.numeric(target_end_date - forecast_date))
+        gc()
         return(slid)
       },
       pattern = map(aheads)

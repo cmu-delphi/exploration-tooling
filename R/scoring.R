@@ -13,8 +13,9 @@ evaluate_predictions <- function(predictions_cards, truth_data) {
   )
 
   left_join(predictions_cards, truth_data, by = c("geo_value", "target_end_date")) %>%
+    scoringutils::add_coverage(by = c("geo_value", "forecast_date", "target_end_date"), ranges = c(80)) %>%
     scoringutils::score(metrics = c("interval_score", "ae_median")) %>%
-    scoringutils::summarize_scores(by = c("forecast_date")) %>%
+    scoringutils::summarize_scores(by = c("geo_value", "forecast_date", "target_end_date")) %>%
     rename(wis = interval_score, ae = ae_median)
 }
 
