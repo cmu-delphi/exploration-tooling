@@ -183,10 +183,9 @@ flusion <- function(epi_data,
     )
   }
   # with all the setup done, we execute and format
-  c(pred, workflow) %<-% run_workflow_and_format(
+  pred %<-% run_workflow_and_format(
     preproc, postproc,
-    trainer, season_data, full_data,
-    return_model = TRUE
+    trainer, season_data, full_data
   )
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)

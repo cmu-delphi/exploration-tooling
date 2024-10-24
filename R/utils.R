@@ -16,7 +16,9 @@ forecaster_lookup <- function(pattern, forecaster_grid = NULL, printing = TRUE) 
   fc_row <- forecaster_grid %>% filter(grepl(pattern, id))
   if (printing) {
     params <- fc_row$params[[1]]
-    params$trainer <- as_string(params$trainer)
+    if (!is.null(params$trainer)) {
+      params$trainer <- as_string(fc_row$trainer)
+    }
     print(glue::glue("name: {fc_row %>% pull(id)}"))
     print(glue::glue("forecaster: {fc_row$forecaster[[1]]}"))
     print(glue::glue("params:"))

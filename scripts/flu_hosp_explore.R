@@ -10,6 +10,7 @@ dummy_mode <- as.logical(Sys.getenv("DUMMY_MODE", FALSE))
 # since e.g. flusurv stopped updating, and the various geos stopped updating for
 # ILI+
 very_latent_locations <- list(list(
+  geo_value = c("dc", "nh", "nv", "de", "ak", "me", "nd", "ut", "wy", "nc", "id"),
   source = c("flusurv", "ILI+")
 ))
 
