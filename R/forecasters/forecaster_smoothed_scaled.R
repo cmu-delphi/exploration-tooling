@@ -39,12 +39,12 @@
 #' @param sd_cols the names of the columns to smooth. If `NULL` its includes
 #'   the sd of everything
 #' @param quantile_levels The quantile levels to predict. Defaults to those
-#' @param ... any additional arguments as used by [arx_args_list]
+#' @param ... any additional arguments as used by [default_args_list]
 #'   required by covidhub.
 #' @seealso some utilities for making forecasters: [format_storage],
 #'   [sanitize_args_predictors_trainer]
 #'
-#' @importFrom epipredict epi_recipe step_population_scaling frosting arx_args_list layer_population_scaling
+#' @importFrom epipredict epi_recipe step_population_scaling frosting default_args_list layer_population_scaling
 #' @importFrom tibble tibble
 #' @importFrom recipes all_numeric
 #' @importFrom zeallot %<-%
@@ -61,17 +61,19 @@ smoothed_scaled <- function(epi_data,
                             sd_width = 28,
                             sd_mean_width = 14,
                             sd_cols = NULL,
+                            filter_source = "",
+                            filter_agg_level = "",
                             ...) {
   # perform any preprocessing not supported by epipredict
+  #
+  # this is for the case where there are multiple sources in the same column
+  epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   # this is a temp fix until a real fix gets put into epipredict
   epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
-  # One that every forecaster will need to handle: how to manage max(time_value)
-  # that's older than the `as_of` date
-  c(epi_data, effective_ahead) %<-% extend_ahead(epi_data, ahead)
   # see latency_adjusting for other examples
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
-  if (!confirm_sufficient_data(epi_data, effective_ahead, args_input, outcome, extra_sources)) {
+  if (!confirm_sufficient_data(epi_data, ahead, args_input, outcome, extra_sources)) {
     null_result <- epi_data[0L, c("geo_value", attr(epi_data, "metadata", exact = TRUE)[["other_keys"]])] %>%
       mutate(
         forecast_date = epi_data$time_value[0],
@@ -81,16 +83,16 @@ smoothed_scaled <- function(epi_data,
       )
     return(null_result)
   }
-  if (effective_ahead > 45) {
+  if (ahead > 45) {
     cli::cli_warn(
       "effective_ahead is greater than 45 days; this may be too far in the future.
       Your epi_df as_of date is {attr(jhu_csse_daily_subset, 'metadata')$as_of} and
       the epi_df max(time_value) is {max(epi_data$time_value)}."
     )
   }
-  args_input[["ahead"]] <- effective_ahead
+  args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
-  args_list <- inject(arx_args_list(!!!args_input))
+  args_list <- inject(default_args_list(!!!args_input))
   # `extra_sources` sets which variables beyond the outcome are lagged and used as predictors
   # any which are modified by `rolling_mean` or `rolling_sd` have their original values dropped later
   predictors <- c(outcome, extra_sources)
@@ -116,6 +118,15 @@ smoothed_scaled <- function(epi_data,
   # same idea for sd if we're keeping the mean
   if (keep_mean) {
     unused_columns <- c(unused_columns, sd_cols[!(sd_cols %in% unused_columns)])
+  }
+
+
+  # make sure that sd_width etc have the right units; the process of going through targets strips the type
+  time_type <- attributes(epi_data)$metadata$time_type
+  if (time_type != "day") {
+    sd_width <- as.difftime(sd_width, units = paste0(time_type, "s"))
+    sd_mean_width <- as.difftime(sd_mean_width, units = paste0(time_type, "s"))
+    smooth_width <- as.difftime(smooth_width, units = paste0(time_type, "s"))
   }
 
   if (!is.null(smooth_width) && !keep_mean) {
@@ -171,5 +182,6 @@ smoothed_scaled <- function(epi_data,
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration
+  gc()
   return(pred)
 }

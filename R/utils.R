@@ -7,8 +7,24 @@
 #' @param pattern string to search in the forecaster name.
 #'
 #' @export
-forecaster_lookup <- function(forecaster_grid, pattern) {
-  forecaster_grid %>% filter(grepl(pattern, id))
+forecaster_lookup <- function(pattern, forecaster_grid = NULL, printing = TRUE) {
+  if (is.null(forecaster_grid)) {
+    forecaster_grid <- tar_read_raw("forecaster_parameter_combinations") %>%
+      map(make_forecaster_grid) %>%
+      bind_rows()
+  }
+  fc_row <- forecaster_grid %>% filter(grepl(pattern, id))
+  if (printing) {
+    params <- fc_row$params[[1]]
+    if (!is.null(params$trainer)) {
+      params$trainer <- as_string(fc_row$trainer)
+    }
+    print(glue::glue("name: {fc_row %>% pull(id)}"))
+    print(glue::glue("forecaster: {fc_row$forecaster[[1]]}"))
+    print(glue::glue("params:"))
+    print(params %>% data.table::as.data.table())
+  }
+  return(fc_row)
 }
 
 #' Add a unique id based on the column contents
@@ -37,6 +53,7 @@ add_id <- function(tib, exclude = c()) {
 get_single_id <- function(param_list) {
   param_list[sort(names(param_list))] %>%
     paste(sep = "", collapse = "") %>%
+    gsub("[[:blank:]]", "", .) %>%
     cli::hash_animal(n_adj = 1) %>%
     purrr::pluck("words", 1) %>%
     paste(sep = ".", collapse = ".")
@@ -56,10 +73,19 @@ make_forecaster_grid <- function(tib) {
   if ("trainer" %in% colnames(tib)) {
     tib$trainer <- rlang::syms(tib$trainer)
   }
-
-  params_list <- tib %>%
+  # turns a tibble into a list of named lists
+  params_list <-
+    tib %>%
     select(-forecaster, -id) %>%
-    transpose()
+    split(seq_len(nrow(.))) %>%
+    unname() %>%
+    lapply(as.list)
+  # for whatever reason, trainer ends up being a list of lists, which we do not want
+  params_list %<>% lapply(function(x) {
+    x$trainer <- x$trainer[[1]]
+    x$lags <- x$lags[[1]]
+    x
+  })
 
   if (length(params_list) == 0) {
     out <- tibble(

@@ -25,11 +25,13 @@
 #'   existing examples)
 #' @param pop_scaling an example extra parameter unique to this forecaster
 #' @param trainer an example extra parameter that is fairly common
+#' @param filter_source if multiple sources are mixed together, if this is non-null it filters to just ones that match this value
+#' @param filter_agg_level if multiple geographic levels are mixed together, if this is non-null it filters to just ones that match this value (e.g. you probably want "state")
 #' @param ... it can also have any number of other parameters. In this case, the
-#'   `...` args are all inputs to [`epipredict::arx_args_list`].  Consult the
+#'   `...` args are all inputs to [`epipredict::default_args_list`].  Consult the
 #'   repository for existing parameter names so that your function will follow a
 #'   similar schema (e.g. `trainer`, while not strictly required, is a common
-#'   parameter, as are any of the `arx_args_list()` parameters) these parameters
+#'   parameter, as are any of the `default_args_list()` parameters) these parameters
 #'   should be ones that will store well in a data.table; if you need more
 #'   complicated parameters, it is better to store them in separate files, and
 #'   use the filename as the parameter.
@@ -38,7 +40,7 @@
 #' @seealso some utilities for making forecasters: [format_storage],
 #'   [sanitize_args_predictors_trainer]
 #'
-#' @importFrom epipredict epi_recipe step_population_scaling frosting arx_args_list layer_population_scaling
+#' @importFrom epipredict epi_recipe step_population_scaling frosting default_args_list layer_population_scaling
 #' @importFrom tibble tibble
 #' @importFrom zeallot %<-%
 #' @importFrom recipes all_numeric
@@ -50,20 +52,17 @@ scaled_pop <- function(epi_data,
                        pop_scaling = TRUE,
                        trainer = parsnip::linear_reg(),
                        quantile_levels = covidhub_probs(),
+                       filter_source = "",
+                       filter_agg_level = "",
                        ...) {
   # perform any preprocessing not supported by epipredict
-  # this is a temp fix until a real fix gets put into epipredict
-  epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
-  # one that every forecaster will need to handle: how to manage max(time_value)
-  # that's older than the `as_of` date
-  epidataAhead <- extend_ahead(epi_data, ahead)
-  # see latency_adjusting for other examples
+  #
+  # this is for the case where there are multiple sources in the same column
+  epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   # this next part is basically unavoidable boilerplate you'll want to copy
-  epi_data <- epidataAhead[[1]]
-  effective_ahead <- epidataAhead[[2]]
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
-  if (!confirm_sufficient_data(epi_data, effective_ahead, args_input, outcome, extra_sources)) {
+  if (!confirm_sufficient_data(epi_data, ahead, args_input, outcome, extra_sources)) {
     null_result <- tibble(
       geo_value = character(),
       forecast_date = lubridate::Date(),
@@ -73,9 +72,9 @@ scaled_pop <- function(epi_data,
     )
     return(null_result)
   }
-  args_input[["ahead"]] <- effective_ahead
+  args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
-  args_list <- inject(arx_args_list(!!!args_input))
+  args_list <- inject(default_args_list(!!!args_input))
   # if you want to hardcode particular predictors in a particular forecaster
   predictors <- c(outcome, extra_sources)
   c(args_list, predictors, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
@@ -87,7 +86,7 @@ scaled_pop <- function(epi_data,
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {
     preproc %<>% step_population_scaling(
-      all_numeric(),
+      all_of(predictors),
       df = epipredict::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
@@ -96,7 +95,6 @@ scaled_pop <- function(epi_data,
     )
   }
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
-
   # postprocessing supported by epipredict
   postproc <- frosting()
   postproc %<>% arx_postprocess(trainer, args_list)
@@ -115,5 +113,6 @@ scaled_pop <- function(epi_data,
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration
+  gc()
   return(pred)
 }

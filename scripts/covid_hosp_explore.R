@@ -3,7 +3,8 @@ source("scripts/targets-exploration-common.R")
 
 # Debug mode will replace all forecasters with a fast dummy forecaster. Helps
 # with prototyping the pipeline.
-debug <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
+debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
+dummy_mode <- as.logical(Sys.getenv("DEBUG_MODE", FALSE))
 
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
 forecaster_parameter_combinations_ <- list(
@@ -29,7 +30,7 @@ forecaster_parameter_combinations_ <- list(
   )
 ) %>%
   map(function(x) {
-    if (debug) {
+    if (dummy_mode) {
       x$forecaster <- "dummy_forecaster"
     }
     x
@@ -88,7 +89,7 @@ ensemble_parameter_combinations_ <- tribble(
   )
 ) %>%
   {
-    if (debug) {
+    if (dummy_mode) {
       .$forecasters <- map(.$forecasters, function(x) {
         map(x, function(y) {
           y$forecaster <- "dummy_forecaster"
@@ -130,6 +131,9 @@ data_targets <- make_data_targets()
 # These globals are needed by the function below (and they need to persist
 # during the actual targets run, since the commands are frozen as expressions).
 date_step <- 7L
+ref_time_values <- NULL
+start_date <- NULL
+end_date <- NULL
 forecasts_and_scores <- make_forecasts_and_scores()
 
 ensembles_and_scores <- make_ensembles_and_scores()
