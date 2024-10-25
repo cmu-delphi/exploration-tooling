@@ -9,9 +9,10 @@ dummy_mode <- as.logical(Sys.getenv("DUMMY_MODE", FALSE))
 # these are locations we shouldn't take into account when deciding on latency,
 # since e.g. flusurv stopped updating, and the various geos stopped updating for
 # ILI+
+# note that this has a vector of names first, and then the list of things to exclude, because targets hates named lists and strips their names
 very_latent_locations <- list(list(
-  geo_value = c("dc", "nh", "nv", "de", "ak", "me", "nd", "ut", "wy", "nc", "id"),
-  source = c("flusurv", "ILI+")
+  c("source"),
+  c("flusurv", "ILI+")
 ))
 
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
@@ -176,6 +177,7 @@ data_targets <- list(
           agg_level %in% c("state", "nation"),
           time_value %in% eval_dates
         ) %>%
+        drop_na() %>%
         as_epi_archive(compactify = TRUE)
       new_flu_data %>%
         epix_as_of(new_flu_data$versions_end) %>%

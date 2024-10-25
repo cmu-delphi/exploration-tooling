@@ -1,4 +1,8 @@
-#' this is a hack that is a copy of arx_args_list
+#' this is a hack that is a copy of arx_args_list. The main difference is not
+#' checking the sign for ahead, and some new parameters
+#' @param keys_to_ignore instead of being a named list of vectors, the first
+#'   list is the columns used, and then it moves on to normal vectors for the
+#'   rest
 default_args_list <- function(
     lags = c(0L, 7L, 14L),
     ahead = 7L,
@@ -40,6 +44,10 @@ default_args_list <- function(
       )
     }
   }
+  # putting the first vector as the names of the list of the rest
+  key_colnames <- keys_to_ignore[[1]][[1]]
+  keys_to_ignore <- keys_to_ignore[[1]][-1]
+  names(keys_to_ignore) <- key_colnames
 
   max_lags <- max(lags)
   structure(

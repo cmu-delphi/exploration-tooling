@@ -183,7 +183,7 @@ flusion <- function(epi_data,
     )
   }
   # with all the setup done, we execute and format
-  pred %<-% run_workflow_and_format(
+  pred <- run_workflow_and_format(
     preproc, postproc,
     trainer, season_data, full_data
   )
