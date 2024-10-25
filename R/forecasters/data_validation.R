@@ -29,6 +29,9 @@ sanitize_args_predictors_trainer <- function(epi_data,
 
   if (!is.null(trainer) && !epipredict:::is_regression(trainer)) {
     cli::cli_abort("{trainer} must be a `{parsnip}` model of mode 'regression'.")
+  } else if (inherits(trainer, "rand_forest") && trainer$engine == "grf_quantiles") {
+    trainer %<>%
+      set_engine("grf_quantiles", quantiles = args_list$quantile_levels)
   } else if (inherits(trainer, "quantile_reg")) {
     # add all quantile_levels to the trainer and update args list
     quantile_levels <- sort(epipredict:::compare_quantile_args(

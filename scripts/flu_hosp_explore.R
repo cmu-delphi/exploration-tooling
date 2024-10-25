@@ -30,46 +30,46 @@ forecaster_parameter_combinations_ <- rlang::list2(
   ),
   # The covid forecaster, ported over to flu. Also likely to struggle with the
   # extra data
-  # tidyr::expand_grid(
-  #   forecaster = "smoothed_scaled",
-  #   trainer = c("quantreg", "randforest_grf"),
-  #   lags = list(
-  #     # list(smoothed, sd)
-  #     list(c(0, 7, 14, 21, 28), c(0))
-  #   ),
-  #   smooth_width = as.difftime(2, units = "weeks"),
-  #   sd_width = as.difftime(4, units = "weeks"),
-  #   sd_mean_width = as.difftime(2, units = "weeks"),
-  #   pop_scaling = c(TRUE, FALSE),
-  #   filter_source = c("", "nhsn"),
-  #   filter_agg_level = c("", "state"),
-  #   keys_to_ignore = very_latent_locations
-  # ),
-  # # the thing to beat (a simplistic baseline forecast)
-  # tidyr::expand_grid(
-  #   forecaster = "flatline_fc",
-  # ),
-  # tidyr::expand_grid(
-  #   forecaster = "flusion",
-  #   lags = list(c(0, 7, 21)),
-  #   dummy_states = FALSE,
-  #   dummy_source = c(TRUE, FALSE),
-  #   nonlin_method = c("quart_root", "none"),
-  #   derivative_estimator = c("growth_rate", "none"),
-  #   keys_to_ignore = very_latent_locations
-  # ),
-  # # another kind of baseline forecaster
-  # tidyr::expand_grid(
-  #   forecaster = "no_recent_outcome",
-  #   trainer = c("quantreg", "randforest_grf"),
-  #   scale_method = c("quantile", "none"),
-  #   nonlin_method = c("quart_root", "none"),
-  #   filter_source = c("", "nhsn"),
-  #   use_population = c(FALSE, TRUE),
-  #   use_density = c(FALSE, TRUE),
-  #   week_method = c("linear", "sine"),
-  #   keys_to_ignore = very_latent_locations
-  # )
+  tidyr::expand_grid(
+    forecaster = "smoothed_scaled",
+    trainer = c("quantreg", "randforest_grf"),
+    lags = list(
+      # list(smoothed, sd)
+      list(c(0, 7, 14, 21, 28), c(0))
+    ),
+    smooth_width = as.difftime(2, units = "weeks"),
+    sd_width = as.difftime(4, units = "weeks"),
+    sd_mean_width = as.difftime(2, units = "weeks"),
+    pop_scaling = c(TRUE, FALSE),
+    filter_source = c("", "nhsn"),
+    filter_agg_level = c("", "state"),
+    keys_to_ignore = very_latent_locations
+  ),
+  # the thing to beat (a simplistic baseline forecast)
+  tidyr::expand_grid(
+    forecaster = "flatline_fc",
+  ),
+  tidyr::expand_grid(
+    forecaster = "flusion",
+    lags = list(c(0, 7, 21)),
+    dummy_states = FALSE,
+    dummy_source = c(TRUE, FALSE),
+    nonlin_method = c("quart_root", "none"),
+    derivative_estimator = c("growth_rate", "none"),
+    keys_to_ignore = very_latent_locations
+  ),
+  # another kind of baseline forecaster
+  tidyr::expand_grid(
+    forecaster = "no_recent_outcome",
+    trainer = c("quantreg", "randforest_grf"),
+    scale_method = c("quantile", "none"),
+    nonlin_method = c("quart_root", "none"),
+    filter_source = c("", "nhsn"),
+    use_population = c(FALSE, TRUE),
+    use_density = c(FALSE, TRUE),
+    week_method = c("linear", "sine"),
+    keys_to_ignore = very_latent_locations
+  )
 ) %>%
   map(function(x) {
     if (dummy_mode) {
@@ -78,6 +78,9 @@ forecaster_parameter_combinations_ <- rlang::list2(
     x
   }) %>%
   map(add_id)
+# the full expand grid for no_recent outcome is kind of overkill; this pares it down
+forecaster_parameter_combinations_[[5]] <- forecaster_parameter_combinations_[[5]] %>% filter(((trainer == "quantreg") & (week_method == "sine")) | ((scale_method == "quantile") & (nonlin_method == "quart_root") & (filter_source == "") & (use_population == TRUE)))
+
 
 # Make sure all ids are unique.
 stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(forecaster_parameter_combinations_$id))
@@ -134,7 +137,7 @@ ensemble_parameter_combinations_ <- tribble(
     })
   ) %>%
   add_id(exclude = "forecasters")
-ensemble_parameter_combinations_ <- tibble::tibble(children_ids = character())
+#ensemble_parameter_combinations_ <- tibble::tibble(children_ids = character())
 # Check that every ensemble dependent is actually included.
 missing_forecasters <- setdiff(
   ensemble_parameter_combinations_ %>% pull(children_ids) %>% unlist() %>% unique(),
@@ -208,7 +211,7 @@ if (!exists("ref_time_values")) {
 }
 forecasts_and_scores <- make_forecasts_and_scores()
 
-# ensembles_and_scores <- make_ensembles_and_scores()
+ensembles_and_scores <- make_ensembles_and_scores()
 
 # TODO external
 
@@ -232,7 +235,7 @@ rlang::list2(
   tar_target(
     name = aheads,
     command = {
-      c(-7, 0, 7, 14, 21)
+      c(0, 7, 14, 21)
     }
   ),
   data_targets,

@@ -17,7 +17,7 @@ forecaster_lookup <- function(pattern, forecaster_grid = NULL, printing = TRUE) 
   if (printing) {
     params <- fc_row$params[[1]]
     if (!is.null(params$trainer)) {
-      params$trainer <- as_string(fc_row$trainer)
+      params$trainer <- as_string(params$trainer)
     }
     print(glue::glue("name: {fc_row %>% pull(id)}"))
     print(glue::glue("forecaster: {fc_row$forecaster[[1]]}"))

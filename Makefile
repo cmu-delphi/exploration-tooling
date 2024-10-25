@@ -12,6 +12,8 @@ run:
 
 run-nohup:
 	nohup Rscript scripts/run.R &
+run-nohup-restarting:
+	scripts/hardRestarting.sh &
 
 sync:
 	Rscript -e "source('R/sync_aws.R'); sync_aws()"

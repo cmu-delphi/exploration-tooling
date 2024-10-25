@@ -127,3 +127,32 @@ add_pop_and_density <-
       arrange(geo_value, time_value) %>%
       fill(population, density)
   }
+
+daily_to_weekly <- function(epi_arch,
+                            agg_columns,
+                            agg_method = c("total", "mean", "median"),
+                            day_of_week = 4L,
+                            day_of_week_end = 6L) {
+  keys <- key_colnames(epi_arch, exclude = "time_value")
+  ref_time_values <- epi_arch$DT$version %>% unique() %>% sort()
+  browser()
+  too_many_tibbles <- epix_slide(
+    epi_arch,
+    .before = 99999999L,
+    .versions = ref_time_values,
+    function(x, group, ref_time) {
+      x %>%
+        group_by(across(all_of(keys))) %>%
+        epi_slide_sum(agg_columns, .window_size = 5L) %>%
+        select(-all_of(agg_columns)) %>%
+        rename_with(~ gsub("slide_value_", "", .x)) %>%
+        # only keep 1/week
+        filter(wday(time_value) == day_of_week_end) %>%
+        # switch time_value to the designated day of the week
+        mutate(time_value = time_value - 7L + day_of_week) %>%
+        as_tibble()
+    }
+  )
+  too_many_tibbles %>%
+    as_epi_archive(compactify = TRUE)
+}
