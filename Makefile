@@ -11,6 +11,13 @@ test:
 run:
 	Rscript scripts/run.R
 
+get_nwss:
+	mkdir -p aux_data/nwss_covid_data; \
+	mkdir -p aux_data/nwss_flu_data; \
+	cd scripts/nwss_export_tool/; \
+	python nwss_covid_export.py; \
+	python nwss_covid_export.py
+
 run-nohup:
 	nohup Rscript scripts/run.R &
 
