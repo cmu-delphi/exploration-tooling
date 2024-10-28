@@ -17,11 +17,12 @@ library(readr)
 library(MMWRweek)
 library(rlang)
 library(vctrs)
+library(here)
 library(testthat)
 # which day of the week should represent that mmwr week?
 default_day_of_week <- 1
 
-
+suppressPackageStartupMessages(source(here("R/load_all.R")))
 
 exhaustive <- expand_grid(year = seq(2000, 2023, by = 1), week = seq(1, 53, by = 1))
 full_list <- convert_epiweek_to_season_week(exhaustive$year, exhaustive$week)
@@ -45,6 +46,8 @@ convert_epiweek_to_date <- function(epiyear, epiweek,
 ################# HHS ##########################
 # this is more or less redundant
 ################# HHS ##########################
+#### NOTE THE VERSION HERE IS SO THAT FORECASTING ON WEDNESDAY REFLECTS THE
+#### ACTUAL RELEASE SCHEDULE
 nhsn_state <- pub_covidcast(
   source = "hhs",
   signals = "confirmed_admissions_influenza_1d_prop",
@@ -95,8 +98,8 @@ expect_equal(
 )
 # is the start of every season week a Sunday?
 expect_equal(
-  nhsn %>% group_by(geo_value, version, season, season_week) %>% summarize(first_day = wday(min(time_value), label = TRUE), n = n(), .groups = "drop") %>% filter(n == 7) %>% pull(first_day) %>% unique(),
-  wday("2020-12-06", label = TRUE)
+  nhsn %>% group_by(geo_value, version, season, season_week) %>% summarize(first_day = lubridate::wday(min(time_value), label = TRUE), n = n(), .groups = "drop") %>% filter(n == 7) %>% pull(first_day) %>% unique(),
+  lubridate::wday("2020-12-06", label = TRUE)
 )
 
 ################# FluSurv ##########################
@@ -213,7 +216,7 @@ generate_flusurv_adjusted <- function(day_of_week = default_day_of_week) {
 
 flusurv_adjusted <- generate_flusurv_adjusted()
 # everything from flusurv is on sunday
-expect_equal(flusurv_adjusted$DT$time_value %>% wday() %>% unique(), 1)
+expect_equal(flusurv_adjusted$DT$time_value %>% lubridate::wday() %>% unique(), 1)
 flusurv_adjusted$DT %>%
   group_by(season) %>%
   filter(epiyear == min(epiyear)) %>%
@@ -336,7 +339,7 @@ ili_plus <- ili_states %>%
   as_epi_archive(compactify = TRUE)
 
 # is ili_plus always on a Sunday?
-expect_equal(ili_plus$DT$time_value %>% wday() %>% unique(), 1)
+expect_equal(ili_plus$DT$time_value %>% lubridate::wday() %>% unique(), 1)
 
 # is the seasonweek actually starting at the right time? yes, the season always starts at 1, and not week 52, or week 2
 ili_plus$DT %>%
@@ -379,46 +382,6 @@ rev_sum %>%
   pull(max_lag) %>%
   median()
 
-#' convert an archive from daily data to weekly data, summing where appropriate
-#' @details
-#' this function is slow, so make sure you are calling it correctly, and
-#'   consider testing it on a small portion of your archive first
-#' @param day_of_week integer, day of the week, starting from Sunday, select the
-#'   date to represent the week in the time_value column, based on it's
-#'   corresponding day of the week. The default value represents the week using
-#'   Wednesday.
-#' @param day_of_week_end integer, day of the week starting on Sunday.
-#'   Represents the last day, so the week consists of data summed to this day.
-#'   The default value `6` means that the week is summed from Sunday through
-#'   Saturday.
-daily_to_weekly <- function(epi_arch,
-                            agg_columns,
-                            agg_method = c("total", "mean", "median"),
-                            day_of_week = 4L,
-                            day_of_week_end = 6L) {
-  keys <- key_colnames(epi_arch, exclude = "time_value")
-  ref_time_values <- epi_arch$DT$version %>% unique() %>% sort()
-  browser()
-  too_many_tibbles <- epix_slide(
-    epi_arch,
-    .before = 99999999L,
-    .versions = ref_time_values,
-    function(x, group, ref_time) {
-      x %>%
-        group_by(across(all_of(keys))) %>%
-        epi_slide_sum(agg_columns, .window_size = 5L) %>%
-        select(-all_of(agg_columns)) %>%
-        rename_with(~ gsub("slide_value_", "", .x)) %>%
-        # only keep 1/week
-        filter(wday(time_value) == day_of_week_end) %>%
-        # switch time_value to the designated day of the week
-        mutate(time_value = time_value - 7L + day_of_week) %>%
-        as_tibble()
-    }
-  )
-  too_many_tibbles %>%
-    as_epi_archive(compactify = TRUE)
-}
 nhsn_weekly <- nhsn %>%
   as_epi_archive(compactify = TRUE) %>%
   daily_to_weekly("admission_rate")
@@ -476,11 +439,12 @@ flusion_merged
 
 flusion_merged <-
   flusion_merged$DT %>%
-  add_pop_and_density()
+  add_pop_and_density() %>% select(-agg_level.y) %>% rename(agg_level = agg_level.x)
 
 
 
 flusion_merged %>% qs::qsave(here::here("aux_data/flusion_data/flusion_merged"))
+q()
 source(here::here("R", "load_all.R"))
 # dropping "as" (American Samoa) because the data is terrible; there's a single point that's 80 and the rest are zero
 flusion_merged <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%

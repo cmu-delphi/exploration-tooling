@@ -130,12 +130,17 @@ add_pop_and_density <-
 
 daily_to_weekly <- function(epi_arch,
                             agg_columns,
-                            agg_method = c("total", "mean", "median"),
+                            agg_method = c("sum", "mean"),
                             day_of_week = 4L,
-                            day_of_week_end = 6L) {
+                            day_of_week_end = 7L) {
+  agg_method <- arg_match(agg_method)
   keys <- key_colnames(epi_arch, exclude = "time_value")
   ref_time_values <- epi_arch$DT$version %>% unique() %>% sort()
-  browser()
+  if (agg_method == "sum") {
+    slide_fun <- epi_slide_sum
+  } else if (agg_method == "mean") {
+    slide_fun <- epi_slide_mean
+  }
   too_many_tibbles <- epix_slide(
     epi_arch,
     .before = 99999999L,
@@ -143,7 +148,7 @@ daily_to_weekly <- function(epi_arch,
     function(x, group, ref_time) {
       x %>%
         group_by(across(all_of(keys))) %>%
-        epi_slide_sum(agg_columns, .window_size = 5L) %>%
+        slide_fun(agg_columns, .window_size = 7L) %>%
         select(-all_of(agg_columns)) %>%
         rename_with(~ gsub("slide_value_", "", .x)) %>%
         # only keep 1/week

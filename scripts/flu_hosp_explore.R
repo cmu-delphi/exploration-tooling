@@ -137,7 +137,7 @@ ensemble_parameter_combinations_ <- tribble(
     })
   ) %>%
   add_id(exclude = "forecasters")
-#ensemble_parameter_combinations_ <- tibble::tibble(children_ids = character())
+# ensemble_parameter_combinations_ <- tibble::tibble(children_ids = character())
 # Check that every ensemble dependent is actually included.
 missing_forecasters <- setdiff(
   ensemble_parameter_combinations_ %>% pull(children_ids) %>% unlist() %>% unique(),
@@ -149,32 +149,104 @@ if (length(missing_forecasters) > 0) {
 # Build targets-internal tibble to map over.
 ensemble_grid <- make_ensemble_grid(ensemble_parameter_combinations_)
 
-# These globals are needed by the function below (and they need to persist
-# during the actual targets run, since the commands are frozen as expressions).
-hhs_signal <- "confirmed_admissions_influenza_1d_prop_7dav"
-chng_signal <- "smoothed_adj_outpatient_flu"
-eval_time <- epidatr::epirange(from = "2020-01-01", to = "2024-01-01")
-training_time <- epidatr::epirange(from = "2021-01-01", to = "2023-06-01")
+# data is sufficiently different that it needs to be run separately
 fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 400)
 data_targets <- list(
   tar_target(
-    name = joined_archive_data,
+    name = flusion_data_archive,
     command = {
-      joined_archive_data <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
+      flusion_data_archive <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
         filter(
           !geo_value %in% c("as", "pr", "vi", "gu", "mp"),
           !is.na(value),
           time_value <= max(eval_dates)
         ) %>%
         rename(hhs = value) %>%
+        relocate(source, geo_value, time_value, version, hhs, agg_level, season, season_week, year, population, density) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
-      joined_archive_data
     }
   ),
   tar_target(
+    name = nssp_archive,
+    command = {
+      nssp_state_archive <- pub_covidcast(
+        source = "nssp",
+        signal = "pct_ed_visits_influenza",
+        time_type = "week",
+        geo_type = "state",
+        geo_values = "*",
+        issues = "*"
+      )
+      nssp_hhs_archive <- pub_covidcast(
+        source = "nssp",
+        signal = "pct_ed_visits_influenza",
+        time_type = "week",
+        geo_type = "hhs",
+        geo_values = "*",
+        issues = "*"
+      )
+      nssp_hhs_archive %>% select(geo_value, time_value, issue, value)
+      nssp_archive <- nssp_state_archive %>%
+        bind_rows(nssp_hhs_archive) %>%
+        select(geo_value, time_value, issue, value) %>%
+        as_epi_archive(compactify = TRUE)
+      nssp_archive
+    }
+  ),
+  tar_target(
+    name = google_symptoms_archive,
+    command = {
+      used_searches <- c(1,3,4)
+      all_of_them <- lapply(used_searches, \(search) {
+        google_symptoms_state_archive <- pub_covidcast(
+          source = "google-symptoms",
+          signal = glue::glue("s0{search}_smoothed_search"),
+          time_type = "day",
+          geo_type = "state",
+          geo_values = "*",
+          issues = "*"
+        )
+        google_symptoms_hhs_archive <- pub_covidcast(
+          source = "google-symptoms",
+          signal = glue::glue("s0{search}_smoothed_search"),
+          time_type = "day",
+          geo_type = "hhs",
+          geo_values = "*",
+          issues = "*"
+        )
+        google_symptoms_archive_min <- google_symptoms_state_archive %>%
+          bind_rows(google_symptoms_hhs_archive) %>%
+          select(geo_value, time_value, issue, value) %>%
+          as_epi_archive(compactify = TRUE) %>%
+          daily_to_weekly("value", agg_method = "mean")
+        browser()
+        google_symptoms_archive_min$DT %>%
+          mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
+          unnest(cols = "source") %>%
+          filter(!is.na(value)) %>%
+          relocate(source, geo_value, time_value, version, value) %>%
+          as_epi_archive(other_keys = "source", compactify = TRUE)
+      })
+      all_of_them[[1]]$DT %<>% rename(google_symptoms_1_cough = value)
+      all_of_them[[2]]$DT %<>% rename(google_symptoms_3_fever = value)
+      all_of_them[[3]]$DT %<>% rename(google_symptoms_4_bronchitis = value)
+      google_symptoms_archive <- epix_merge(all_of_them[[1]], all_of_them[[2]]) %>% epix_merge(all_of_them[[3]])
+     google_symptoms_archive <- google_symptoms_archive$DT %>%
+        mutate(google_symptoms = google_symptoms_1_cough + google_symptoms_3_fever + google_symptoms_4_bronchitis) %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+     google_symptoms_archive
+    }
+  ),
+  tar_target(
+    name = nwss_coarse,
+    command = {
+      read_csv(here::here("aux_data/nwss_flu_data/"))
+    }
+  )
+  tar_target(
     name = hhs_evaluation_data,
     command = {
-      new_flu_data <- joined_archive_data$DT %>%
+      new_flu_data <- flusion_data_archive$DT %>%
         filter(
           source == "nhsn",
           agg_level %in% c("state", "nation"),
@@ -197,9 +269,15 @@ data_targets <- list(
         )
     }
   )
+  tar_target(
+    name = joined_data_archive,
+    command = {
+      joined_data_archive <- flusion_data_archive %>% epix_merge(google_symptoms_archive, sync = "locf")
+      joined_data_archive
+    }
+  )
 )
-
-
+# TODO missing Alaska?
 
 # These globals are needed by the function below (and they need to persist
 # during the actual targets run, since the commands are frozen as expressions).
