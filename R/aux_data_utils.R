@@ -56,6 +56,23 @@ add_pop_and_density <-
            apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
            state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
            hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")) {
+    pops_by_state_hhs <- gen_pop_and_density_data(apportion_filename, state_code_filename, hhs_code_filename)
+    original_dataset %>%
+      mutate(year = year(time_value)) %>%
+      left_join(
+        pops_by_state_hhs,
+        by = join_by(year, geo_value)
+      ) %>%
+      # virgin islands data too limited for now
+      filter(geo_value != "vi") %>%
+      arrange(geo_value, time_value) %>%
+      fill(population, density)
+  }
+
+gen_pop_and_density_data <-
+  function(apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
+           state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
+           hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")) {
     apportionment_data <- readr::read_csv(apportion_filename, show_col_types = FALSE) %>% as_tibble()
     imputed_pop_data <- apportionment_data %>%
       filter(`Geography Type` %in% c("State", "Nation")) %>%
@@ -115,18 +132,8 @@ add_pop_and_density <-
       ) %>%
       arrange(geo_value, year) %>%
       fill(population, density)
-
-    original_dataset %>%
-      mutate(year = year(time_value)) %>%
-      left_join(
-        pops_by_state_hhs,
-        by = join_by(year, geo_value)
-      ) %>%
-      # virgin islands data too limited for now
-      filter(geo_value != "vi") %>%
-      arrange(geo_value, time_value) %>%
-      fill(population, density)
-  }
+    pops_by_state_hhs
+}
 
 daily_to_weekly <- function(epi_arch,
                             agg_columns,
