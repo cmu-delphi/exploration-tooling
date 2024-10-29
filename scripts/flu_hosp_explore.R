@@ -21,7 +21,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
   # because of the scales of the different sources
   tidyr::expand_grid(
     forecaster = "scaled_pop",
-    trainer = c("quantreg", "randforest_grf"),
+    trainer = "quantreg",
     lags = list(c(0, 7, 14, 21), c(0, 7)),
     pop_scaling = FALSE,
     filter_source = c("", "nhsn"),
@@ -29,11 +29,22 @@ forecaster_parameter_combinations_ <- rlang::list2(
     n_training = c(3, 6, Inf),
     keys_to_ignore = very_latent_locations
   ),
-  # The covid forecaster, ported over to flu. Also likely to struggle with the
-  # extra data
+  # using grf way more sparingly
+  tidyr::expand_grid(
+    forecaster = "scaled_pop",
+    trainer = "randforest_grf",
+    lags = c(0, 7, 14, 21),
+    pop_scaling = FALSE,
+    filter_source = "nhsn",
+    filter_agg_level = "state",
+    n_training = Inf,
+    keys_to_ignore = very_latent_locations
+  ),
+  ## # The covid forecaster, ported over to flu. Also likely to struggle with the
+  ## # extra data
   tidyr::expand_grid(
     forecaster = "smoothed_scaled",
-    trainer = c("quantreg", "randforest_grf"),
+    trainer = "quantreg",
     lags = list(
       # list(smoothed, sd)
       list(c(0, 7, 14, 21, 28), c(0)),
@@ -48,7 +59,22 @@ forecaster_parameter_combinations_ <- rlang::list2(
     filter_agg_level = c("", "state"),
     keys_to_ignore = very_latent_locations
   ),
-  # the thing to beat (a simplistic baseline forecast)
+  tidyr::expand_grid(
+    forecaster = "smoothed_scaled",
+    trainer = "randforest_grf",
+    lags = list(
+      # list(smoothed, sd)
+      list(c(0, 7, 14, 21, 28), c(0))
+    ),
+    smooth_width = as.difftime(2, units = "weeks"),
+    sd_width = as.difftime(4, units = "weeks"),
+    sd_mean_width = as.difftime(2, units = "weeks"),
+    pop_scaling = FALSE,
+    n_training = Inf,
+    filter_source = "nhsn",
+    filter_agg_level = "state",
+    keys_to_ignore = very_latent_locations
+  ),
   tidyr::expand_grid(
     forecaster = "flatline_fc",
   ),
