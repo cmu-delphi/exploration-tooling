@@ -40,7 +40,7 @@ df = df[
         "national_value",
     ]
 ]
-file_name = f'../../aux_data/nwss_covid_data/nwss_{dt.today().strftime("%Y%m%d")}.csv'
+file_name = f'./data/nwss_covid_{dt.today().strftime("%Y%m%d")}.csv'
 df.to_csv(file_name, index=False)
 
 print(f"Exported {df.shape[0]} rows to {file_name}")

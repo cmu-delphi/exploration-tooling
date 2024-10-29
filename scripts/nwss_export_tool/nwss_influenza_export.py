@@ -31,7 +31,7 @@ df.region_value = df.region_value.astype(np.float64)
 df.national_value = df.national_value.astype(np.float64)
 
 df = df[['time_value', 'geo_value', 'value', 'activity_level', 'region_value', 'national_value']]
-file_name = f'../../aux_data/nwss_flu_data/nwss_{dt.today().strftime("%Y%m%d")}.csv'
+file_name = f'./data/nwss_flu_{dt.today().strftime("%Y%m%d")}.csv'
 df.to_csv(file_name, index=False)
 
 print(f'Exported {df.shape[0]} rows to {file_name}')
