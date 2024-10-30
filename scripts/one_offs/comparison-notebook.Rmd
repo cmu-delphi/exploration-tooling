@@ -41,89 +41,30 @@ library(tidyr)
 ### Forecaster Name To Parameter Mapping
 
 ```{r}
-source(here::here("scripts", "flu_hosp_explore.R"))
-datatable(forecaster_parameter_combinations_[[1]])
-datatable(forecaster_parameter_combinations_[[2]])
-datatable(forecaster_parameter_combinations_[[3]])
-datatable(forecaster_parameter_combinations_[[4]])
-datatable(forecaster_parameter_combinations_[[5]])
+s3load("flu_2023_forecaster_parameter_combinations.rds", bucket = "forecasting-team-data")
+datatable(forecaster_parameter_combinations_[[params$forecaster_set]])
 ```
 
 ### Retrieving Forecast Data
 
-The forecasts are expected to have the following columns:
-
-- `ahead`: The number of days ahead the forecast is made
-- `geo_value`: The geographic unit of the forecast
-- `forecast_date`: The date the forecast was made
-- `forecaster`: The name of the forecaster
-- `target_end_date`: The date the forecast is predicting
-- `actual`: The actual value of the target
-- `wis`: The weighted interval score
-- `ae`: The absolute error
-- `cov_80`: The 80% coverage
-- `data_source`: The data source of the forecast
-- `signal`: The signal of the forecast
-- `incidence_period`: The period of the forecast
-
 ```{r}
-# Local forecaster scores (if targets actually worked)
-# tar_df <- targets::tar_manifest()
-# local_scores <- tar_df %>%
-#     filter(str_detect(name, "score_")) %>%
-#     pull(name) %>%
-#     map(~ tibble(forecaster = str_remove(.x, "score_"), tar_read_raw(.x))) %>%
-#     bind_rows() %>%
-# forecast_dates <- local_scores %>%
-#     pull(forecast_date) %>%
-#     unique()
+params <- list(
+    forecaster_set = 1
+)
+forecasters <- forecaster_parameter_combinations_[[params$forecaster_set]]$id
 
-# Load local forecaster scores
-s3load(object = "flu_2023_forecaster_scores_1.rds", bucket = "forecasting-team-data")
-local_scores <- flu_2023_forecaster_scores_1 %>%
-    # This is a correction for the fact that we forecast on Wednesdays, but labeled
-    # the forecasts as if they were made on the following Saturday.
-    mutate(forecast_date = forecast_date + 3, target_end_date = target_end_date + 3)
-forecast_dates <- local_scores %>%
+# Load forecasts and scores
+s3load(object = "flu_2023_joined_scores.rds", bucket = "forecasting-team-data")
+flu_2023_joined_scores <- flu_2023_joined_scores %>%
+    filter(forecaster %in% forecasters)
+
+forecast_dates <- flu_2023_joined_scores %>%
     pull(forecast_date) %>%
     unique()
-
-# Load ensemble and baseline data for comparison
-# s3load("flusight_scores_2022", bucket = "forecasting-team-data")
-s3load("flusight_scores_2023", bucket = "forecasting-team-data")
-
-location_data <- read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_codes_table.csv") %>%
-    select(state_code, state_id)
-flusight_scores_2023_transformed <- flusight_scores_2023 %>%
-    filter(
-        model %in% c("FluSight-baseline", "FluSight-ensemble"),
-        reference_date %in% forecast_dates
-    ) %>%
-    as.data.table() %>%
-    add_coverage(by = c("model", "reference_date", "target_end_date", "location"), ranges = c(80)) %>%
-    summarize_scores(by = c("model", "reference_date", "target_end_date", "location")) %>%
-    as_tibble() %>%
-    left_join(location_data, by = c("location" = "state_code")) %>%
-    mutate(location = state_id) %>%
-    select(
-        model,
-        geo_value = location,
-        forecast_date = reference_date,
-        target_end_date,
-        wis = interval_score,
-        ae = ae_median,
-        coverage_80
-    )
-
-scores <- local_scores %>%
-    bind_rows(flusight_scores_2023_transformed) %>%
-    select(forecaster = model, geo_value, forecast_date, target_end_date, wis, ae, coverage_80) %>%
-    mutate(ahead = as.numeric(target_end_date - forecast_date))
-
-forecasters <- scores %>%
+forecasters <- flu_2023_joined_scores %>%
     pull(forecaster) %>%
     unique()
-aheads <- scores %>%
+aheads <- flu_2023_joined_scores %>%
     pull(ahead) %>%
     unique()
 
@@ -337,9 +278,33 @@ ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
 #     # the forecasts as if they were made on the following Saturday.
 #     mutate(forecast_date = forecast_date + 3, target_end_date = target_end_date + 3)
 
-s3load(object = "flu_2023_forecaster_scores_1.rds", bucket = "forecasting-team-data")
-flu_2023_forecaster_scores_1 %>%
+s3load(object = "flu_2023_forecasts_scaled_1.rds", bucket = "forecasting-team-data")
+flu_2023_forecasts_scaled_1 %>%
     # This is a correction for the fact that we forecast on Wednesdays, but labeled
     # the forecasts as if they were made on the following Saturday.
     mutate(forecast_date = forecast_date + 3, target_end_date = target_end_date + 3)
+
+# TODO: Merge with FluSight forecasts.
+# TODO: Subselect.
+geo_vals <- c("ca", "fl", "pa", "tx")
+forecast_subset <- flu_2023_forecasts_scaled_1 %>%
+    filter(model == "forecast_ridiculous.mollies", geo_value %in% geo_vals) %>%
+    pivot_wider(names_from = quantile, values_from = prediction)
+true_data <- tar_read(hhs_evaluation_data) %>% filter(geo_value %in% geo_vals)
+
+# TODO: Fan plots.
+ggplot(data = forecast_subset, aes(x = target_end_date, group = forecast_date)) +
+    geom_ribbon(aes(ymin = `0.05`, ymax = `0.95`, fill = factor(forecast_date)), alpha = 0.4) +
+    geom_line(aes(y = `0.5`, color = factor(forecast_date)), linetype = 2L) +
+    geom_point(aes(y = `0.5`, color = factor(forecast_date)), size = 0.75) +
+    geom_line(
+        data = true_data,
+        aes(x = target_end_date, y = true_value),
+        inherit.aes = FALSE, na.rm = TRUE
+    ) +
+    facet_wrap(~geo_value) +
+    # scale_x_date(minor_breaks = "month", date_labels = "%b %y") +
+    # scale_y_continuous(expand = expansion(c(0, 0.05)))
+    labs(x = "Reference Date", y = "Forecasts") +
+    theme(legend.position = "none")
 ```

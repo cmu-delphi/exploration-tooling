@@ -118,6 +118,7 @@ forecaster_parameter_combinations_[[1]] %<>% filter((n_training == Inf) | (filte
 forecaster_parameter_combinations_[[2]] %<>% filter((n_training == Inf) | (filter_source == ""))
 
 # forecaster_parameter_combinations_[[5]] <- forecaster_parameter_combinations_[[5]] %>% filter(((trainer == "quantreg") & (week_method == "sine")) | ((scale_method == "quantile") & (nonlin_method == "quart_root") & (filter_source == "") & (use_population == TRUE)))
+s3save(forecaster_parameter_combinations_, object = "flu_2023_forecaster_parameter_combinations.rds", bucket = "forecasting-team-data")
 
 
 # Make sure all ids are unique.
