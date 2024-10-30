@@ -91,7 +91,9 @@ arx_postprocess <- function(postproc,
 #'   This may be narrowed down to exclude data we don't want to train on (such
 #'   as off season).
 #' @param full_data all of epi_df with the pre-epipredict transformations, used
-#'   to construct a test dataset (useful if train_data is excluding summers). If null, this assumes the train and test data are exactly the same
+#'   to construct a test dataset (useful if train_data is excluding summers or
+#'   otherwise restricted to a subset of the data). If null, this assumes the
+#'   train and test data are exactly the same
 #'
 #' @importFrom epipredict epi_workflow fit add_frosting get_test_data
 #' @export
@@ -109,32 +111,20 @@ run_workflow_and_format <- function(preproc,
   workflow <- epi_workflow(preproc, trainer) %>%
     fit(train_data) %>%
     add_frosting(postproc)
-
-  if (is.null(full_data)) {
-    latest <- get_test_data(recipe = preproc, x = train_data)
-    pred <- predict(workflow, latest)
-    # the forecast_date may currently be the max time_value
-    pred %<>% filter(time_value == max(time_value))
-
-    true_forecast_date <- as_of
-    return(format_storage(pred, true_forecast_date))
-  } else {
-    # filter full_data to less than full but more than we need
-    test_data <- get_oversized_test_data(full_data %||% train_data, test_data_interval, preproc)
-    # predict, and filter out those forecasts for less recent days (predict
-    # predicts for every day that has enough data)
-    pred <- predict(workflow, test_data) %>%
-      filter(time_value == max(time_value))
-    if (return_model) {
-      return(list(pred = format_storage(pred, possible_time_values), workflow = workflow))
-    } else {
-      return(format_storage(pred, possible_time_values))
-    }
-  }
+  # filter full_data to less than full but more than we need
+  test_data <- get_oversized_test_data(full_data %||% train_data, test_data_interval, preproc)
+  # predict, and filter out those forecasts for less recent days (predict
+  # predicts for every day that has enough data)
+  pred <- predict(workflow, test_data) %>%
+    filter(time_value == max(time_value))
+  return(format_storage(pred, as_of))
 }
 
+#' get_test_data is broken, this is a hack that manually sets the amount of data
+#' kept to a large interval to avoid errors/missing data
 #' @param full_data the full data to narrow down from
-#' @param test_data_interval the amount of time to go backwards from the last day
+#' @param test_data_interval the amount of time to go backwards from the last
+#'   day
 get_oversized_test_data <- function(full_data, test_data_interval, preproc) {
   # getting the max time value of data columns actually used
   non_na_indicators <- preproc$var_info %>%
