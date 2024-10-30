@@ -11,7 +11,7 @@ default_args_list <- function(
     target_date = NULL,
     adjust_latency = c("extend_lags", "locf", "none", "extend_ahead"),
     warn_latency = TRUE,
-    quantile_levels = c(0.05, 0.95),
+    quantile_levels = covidhub_probs(),
     symmetrize = TRUE,
     nonneg = TRUE,
     quantile_by_key = character(0L),
@@ -77,7 +77,7 @@ default_args_list <- function(
 # Generated from function body. Editing this file has no effect.
 default_flatline_args <- function(
     ahead = 7L, n_training = Inf, forecast_date = NULL,
-    target_date = NULL, quantile_levels = c(0.05, 0.95), symmetrize = TRUE,
+    target_date = NULL, quantile_levels = covidhub_probs(), symmetrize = TRUE,
     nonneg = TRUE, quantile_by_key = character(0L), ...) {
   rlang::check_dots_empty()
   epipredict:::arg_is_scalar(ahead, n_training)

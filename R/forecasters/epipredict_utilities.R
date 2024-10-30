@@ -102,6 +102,10 @@ run_workflow_and_format <- function(preproc,
                                     full_data = NULL,
                                     test_data_interval = as.difftime(52, units = "weeks"),
                                     return_model = FALSE) {
+  as_of <- attributes(train_data)$metadata$as_of
+  if (is.null(as_of)) {
+    as_of <- max(train_data$time_value)
+  }
   workflow <- epi_workflow(preproc, trainer) %>%
     fit(train_data) %>%
     add_frosting(postproc)
@@ -110,10 +114,8 @@ run_workflow_and_format <- function(preproc,
     latest <- get_test_data(recipe = preproc, x = train_data)
     pred <- predict(workflow, latest)
     # the forecast_date may currently be the max time_value
-    as_of <- attributes(train_data)$metadata$as_of
-    if (is.null(as_of)) {
-      as_of <- max(train_data$time_value)
-    }
+    pred %<>% filter(time_value == max(time_value))
+
     true_forecast_date <- as_of
     return(format_storage(pred, true_forecast_date))
   } else {

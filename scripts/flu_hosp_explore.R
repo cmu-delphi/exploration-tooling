@@ -22,7 +22,10 @@ forecaster_parameter_combinations_ <- rlang::list2(
   tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = "quantreg",
-    lags = list(c(0, 7, 14, 21), c(0, 7)),
+    lags = list(
+      c(0, 7, 14, 21),
+      c(0, 7)
+    ),
     pop_scaling = FALSE,
     filter_source = c("", "nhsn"),
     filter_agg_level = c("", "state"),
@@ -33,7 +36,9 @@ forecaster_parameter_combinations_ <- rlang::list2(
   tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = "randforest_grf",
-    lags = c(0, 7, 14, 21),
+    lags = list(
+      c(0, 7, 14, 21)
+    ),
     pop_scaling = FALSE,
     filter_source = "nhsn",
     filter_agg_level = "state",
