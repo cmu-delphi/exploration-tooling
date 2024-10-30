@@ -7,7 +7,7 @@
 #' - `eval_time`
 #' - `training_time`
 make_data_targets <- function() {
-  list(
+  list2(
     tar_target(
       name = hhs_latest_data,
       command = {
@@ -65,7 +65,7 @@ make_data_targets <- function() {
       }
     ),
     tar_target(
-      name = hhs_archive_data_2022,
+      name = hhs_archive_data,
       command = {
         epidatr::pub_covidcast(
           source = "hhs",
@@ -111,7 +111,7 @@ make_data_targets <- function() {
     tar_target(
       name = joined_archive_data,
       command = {
-        hhs_archive_data_2022 %<>%
+        hhs_archive_data %<>%
           select(geo_value, time_value, value, issue) %>%
           rename("hhs" := value) %>%
           rename(version = issue) %>%
@@ -129,7 +129,7 @@ make_data_targets <- function() {
             time_type = "day",
             compactify = TRUE
           )
-        epix_merge(hhs_archive_data_2022, chng_archive_data_2022, sync = "locf")$DT %>%
+        epix_merge(hhs_archive_data, chng_archive_data, sync = "locf")$DT %>%
           filter(!geo_value %in% c("as", "pr", "vi", "gu", "mp")) %>%
           epiprocess::as_epi_archive()
       }
@@ -158,7 +158,6 @@ make_forecasts_and_scores <- function() {
           epi_archive = joined_archive_data,
           outcome = "hhs",
           ahead = aheads,
-          extra_sources = "",
           forecaster = forecaster,
           n_training_pad = 30L,
           forecaster_args = params,

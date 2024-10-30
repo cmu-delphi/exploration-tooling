@@ -7,23 +7,28 @@ debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
 dummy_mode <- as.logical(Sys.getenv("DEBUG_MODE", FALSE))
 
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
-forecaster_parameter_combinations_ <- list(
+forecaster_parameter_combinations_ <- rlang::list2(
   tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = c("linreg", "quantreg"),
-    lags = list(c(0, 3, 5, 7, 14), c(0, 7, 14), c(0, 7, 14, 24)),
-    pop_scaling = c(TRUE, FALSE)
+    lags = list(c(0, 7, 14), c(0, 7, 14, 28), c(0)),
+    pop_scaling = c(TRUE, FALSE),
+    n_training = c(3, 6, Inf)
   ),
   tidyr::expand_grid(
     forecaster = "smoothed_scaled",
     trainer = c("quantreg"),
-    lags = list(
+    lags = rlang::list2(
       # list(smoothed, sd)
-      list(c(0, 3, 5, 7, 14), c(0)),
       list(c(0, 7, 14, 21, 28), c(0)),
-      list(c(0, 2, 4, 7, 14, 21, 28), c(0))
+      list(c(0, 7, 14), c(0)),
+      list(c(0, 7, 14), c(0, 7)),
     ),
-    pop_scaling = c(TRUE, FALSE)
+    smooth_width = as.difftime(2, units = "weeks"),
+    sd_width = as.difftime(4, units = "weeks"),
+    sd_mean_width = as.difftime(2, units = "weeks"),
+    pop_scaling = c(TRUE, FALSE),
+    n_training = c(3, 6, Inf)
   ),
   tidyr::expand_grid(
     forecaster = "flatline_fc",
@@ -46,15 +51,29 @@ forecaster_grid <- forecaster_parameter_combinations_ %>%
 
 scaled_pop_not_scaled <- list(
   forecaster = "scaled_pop",
-  trainer = "linreg",
+  trainer = "quantreg",
+  lags = c(0, 7, 14, 28),
   pop_scaling = FALSE,
-  lags = list(c(0, 3, 5, 7, 14))
+  n_training = Inf
 )
 scaled_pop_scaled <- list(
   forecaster = "scaled_pop",
-  trainer = "linreg",
-  pop_scaling = FALSE,
-  lags = list(c(0, 3, 5, 7, 14))
+  trainer = "quantreg",
+  lags = c(0, 7, 14, 28),
+  pop_scaling = TRUE,
+  n_training = Inf
+)
+smooth_scaled <- list(
+  forecaster = "smoothed_scaled",
+  trainer = "quantreg",
+  lags =
+    # list(smoothed, sd)
+    list(c(0, 7, 14, 21, 28), c(0)),
+  smooth_width = as.difftime(2, units = "weeks"),
+  sd_width = as.difftime(4, units = "weeks"),
+  sd_mean_width = as.difftime(2, units = "weeks"),
+  pop_scaling = TRUE,
+  n_training = Inf
 )
 # Human-readable object to be used for inspecting the ensembles in the pipeline.
 ensemble_parameter_combinations_ <- tribble(
@@ -71,7 +90,8 @@ ensemble_parameter_combinations_ <- tribble(
   list(average_type = "median"),
   list(
     scaled_pop_scaled,
-    scaled_pop_not_scaled
+    scaled_pop_not_scaled,
+    smooth_scaled
   ),
   # mean forecaster with baseline
   "ensemble_average",
@@ -121,22 +141,105 @@ ensemble_grid <- make_ensemble_grid(ensemble_parameter_combinations_)
 # These globals are needed by the function below (and they need to persist
 # during the actual targets run, since the commands are frozen as expressions).
 hhs_signal <- "confirmed_admissions_covid_1d"
-chng_signal <- "smoothed_adj_outpatient_covid"
+date_step <- 7L
 eval_time <- epidatr::epirange(from = "2020-01-01", to = "2024-01-01")
 training_time <- epidatr::epirange(from = "2020-08-01", to = "2023-12-18")
 fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 400)
-data_targets <- make_data_targets()
+data_targets <- rlang::list2(
+    tar_target(
+      name = hhs_latest_data,
+      command = {
+        epidatr::pub_covidcast(
+          source = "hhs",
+          signals = hhs_signal,
+          geo_type = "state",
+          time_type = "day",
+          geo_values = "*",
+          time_values = eval_time,
+          fetch_args = fetch_args
+        )
+      }
+    ),
+    tar_target(
+      name = hhs_evaluation_data,
+      command = {
+        hhs_latest_data %>%
+          select(
+            signal,
+            geo_value,
+            time_value,
+            value
+          ) %>%
+          daily_to_weekly(keys = c("geo_value", "signal")) %>%
+          rename(
+            true_value = value,
+            target_end_date = time_value
+          ) %>%
+          select(
+            signal,
+            geo_value,
+            target_end_date,
+            true_value
+          )
+      }
+    ),
+    tar_target(
+      name = hhs_latest_data_2022,
+      command = {
+        hhs_latest_data # %>% filter(time_value >= "2022-01-01", time_value < "2022-04-01")
+      }
+    ),
+    tar_target(
+      name = hhs_archive_data,
+      command = {
+        res <- epidatr::pub_covidcast(
+          source = "hhs",
+          signals = hhs_signal,
+          geo_type = "state",
+          time_type = "day",
+          geo_values = "*",
+          time_values = training_time,
+          issues = "*",
+          fetch_args = fetch_args
+        ) %>%
+          select(
+            geo_value,
+            time_value,
+            value,
+            issue
+          ) %>%
+          as_epi_archive(compactify = TRUE) %>%
+          daily_to_weekly_archive("value")
+      }
+    ),
+    tar_target(
+      name = joined_archive_data,
+      command = {
+        hhs_archive_data$DT %>%
+          select(geo_value, time_value, value, version) %>%
+          rename("hhs" := value) %>%
+          filter(!geo_value %in% c("as", "pr", "vi", "gu", "mp")) %>%
+          as_epi_archive(
+            compactify = TRUE
+          )
+      }
+    )
+  )
 
 
 # These globals are needed by the function below (and they need to persist
 # during the actual targets run, since the commands are frozen as expressions).
 date_step <- 7L
-ref_time_values <- NULL
-start_date <- NULL
-end_date <- NULL
+if (!exists("ref_time_values")) {
+  start_date <- as.Date("2023-10-04")
+  end_date <- as.Date("2024-04-24")
+  ref_time_values <- NULL
+}
 forecasts_and_scores <- make_forecasts_and_scores()
 
 ensembles_and_scores <- make_ensembles_and_scores()
+external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
+project_path <- Sys.getenv("TAR_PROJECT", "")
 external_names_and_scores <- make_external_names_and_scores()
 
 
@@ -160,7 +263,7 @@ rlang::list2(
   tar_target(
     name = aheads,
     command = {
-      c(1:7, 14, 21, 28)
+      c(7, 14, 21, 28)
     }
   ),
   data_targets,

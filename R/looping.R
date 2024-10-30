@@ -31,7 +31,6 @@
 slide_forecaster <- function(epi_archive,
                              outcome,
                              ahead,
-                             extra_sources = "",
                              forecaster = scaled_pop,
                              slide_training = 0,
                              n_training_pad = 5,
@@ -68,8 +67,7 @@ slide_forecaster <- function(epi_archive,
   before <- n_training + n_training_pad - 1
   forecaster_args <- rlang::dots_list(
     !!!list(
-      outcome = outcome,
-      extra_sources = extra_sources
+      outcome = outcome
     ),
     !!!forecaster_args,
     .homonyms = "last"

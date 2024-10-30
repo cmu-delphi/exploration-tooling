@@ -6,6 +6,19 @@ Makes all historical data from ILI+, nhsn, and flusurv+ available, all as rows, 
 ILI+ and flusurv+ mean that each has been adjusted so that the total for the season matches nhsn's total.
 Flusurv is taken from epidata, but ili+ was constructed by Evan and given to Richard.
 Currently looking to train on the 2023 season, so October 2023 through late April 2024.
+** Auxiliary Data
+*** Google Symptoms
+1, 3, and 4 looked to be the most correlated. I'm opting to use unversioned data, as the only thing that versioning seems to record is full outages, which is better reflected by the equivalent model, but with the source missing.
+I'm also including 1+3+4, as a summary version; it may be prefered for decreased variable count.
+Also, this has to be aggregated to the weekly level from daily data.
+*** NSSP
+Straightforward, it comes as weekly.
+We will be using finalized data because we started recording this in April 2024, so we don't have the relevant versions.
+This is somewhat a problem, because this does have revision behavior.
+Expect the results to be better than in real production.
+*** NWSS "coarse"
+I don't have a great name for this dataset; it's the wastewater data as processed by NWSS from the sample site to the state level, which I expect to not be that great a summary (e.g. likely over-representing regions which are sampled). It is currently downloaded via local script from their website.
+Like NSSP, it likely has real revision behavior that is not being represented.
 * =Flusion=
 Note that this is a description of the flusion-like model, rather than the one written up in that paper.
 This is definitely the most complicated forecaster, it adds many non-ar components.

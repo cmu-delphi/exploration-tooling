@@ -134,8 +134,18 @@ gen_pop_and_density_data <-
       fill(population, density)
     pops_by_state_hhs
 }
+daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), day_of_week = 4L, day_of_week_end = 7L, keys = "geo_value", values = c("value")) {
+  epi_df %>%
+    mutate(epiweek = epiweek(time_value), year = epiyear(time_value)) %>%
+    group_by(across(any_of(c(keys, "epiweek", "year")))) %>%
+    summarize(
+      across(all_of(values), ~sum(.x, na.rm = TRUE)),
+      time_value = floor_date(max(time_value), "weeks", week_start = 7) + 3,
+      .groups = "drop") %>%
+    select(-epiweek, -year)
+}
 
-daily_to_weekly <- function(epi_arch,
+daily_to_weekly_archive <- function(epi_arch,
                             agg_columns,
                             agg_method = c("sum", "mean"),
                             day_of_week = 4L,

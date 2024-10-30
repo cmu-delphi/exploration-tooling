@@ -384,7 +384,7 @@ rev_sum %>%
 
 nhsn_weekly <- nhsn %>%
   as_epi_archive(compactify = TRUE) %>%
-  daily_to_weekly("admission_rate")
+  daily_to_weekly_archive("admission_rate")
 
 nhsn_final <- nhsn_weekly$DT %>%
   select(geo_value, time_value, version, agg_level, value = admission_rate, season, season_week) %>%
