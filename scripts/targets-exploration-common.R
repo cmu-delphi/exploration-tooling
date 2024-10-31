@@ -178,18 +178,26 @@ make_forecasts_and_scores <- function() {
     tar_target(
       name = score,
       command = {
-        # Undo population scaling
-        forecast_scaled <- forecast %>%
-          left_join(
-            hhs_evaluation_data %>%
+        # if the data has already been scaled, hhs needs to include the population
+        if ("population" %in% colnames(hhs_evaluation_data)) {
+          # Undo population scaling
+          actual_eval_data <- hhs_evaluation_data %>%
+              select(-population)
+          forecast_scaled <- forecast %>%
+            left_join(
+              hhs_evaluation_data %>%
               select(geo_value, population) %>%
               distinct(),
-            by = "geo_value"
-          ) %>%
-          mutate(prediction = prediction * population / 10L**5)
+              by = "geo_value"
+            ) %>%
+            mutate(prediction = prediction * population / 10L**5)
+        } else {
+          forecast_scaled <- forecast
+          actual_eval_data <- hhs_evaluation_data
+        }
         evaluate_predictions(
           predictions_cards = forecast_scaled,
-          truth_data = hhs_evaluation_data %>% select(-population)
+          truth_data = actual_eval_data
         )
       }
     )
