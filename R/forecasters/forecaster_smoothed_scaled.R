@@ -61,9 +61,16 @@ smoothed_scaled <- function(epi_data,
                             sd_width = 28,
                             sd_mean_width = 14,
                             sd_cols = NULL,
+                            drop_non_seasons = FALSE,
+                            scale_method = c("none", "quantile", "std"),
+                            center_method = c("median", "mean"),
+                            nonlin_method = c("quart_root", "none"),
                             filter_source = "",
                             filter_agg_level = "",
                             ...) {
+  scale_method <- arg_match(scale_method)
+  center_method <- arg_match(center_method)
+  nonlin_method <- arg_match(nonlin_method)
   # perform any preprocessing not supported by epipredict
   #
   # this is for the case where there are multiple sources in the same column
@@ -83,12 +90,12 @@ smoothed_scaled <- function(epi_data,
       )
     return(null_result)
   }
-  if (ahead > 45) {
-    cli::cli_warn(
-      "effective_ahead is greater than 45 days; this may be too far in the future.
-      Your epi_df as_of date is {attr(jhu_csse_daily_subset, 'metadata')$as_of} and
-      the epi_df max(time_value) is {max(epi_data$time_value)}."
-    )
+  # this is to deal with grouping by source in tests that don't include it
+  adding_source <- FALSE
+  if (!("source" %in% names(epi_data))) {
+    adding_source <- TRUE
+    epi_data$source <- c("none")
+    attributes(epi_data)$metadata$other_keys <- "source"
   }
   args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
@@ -100,7 +107,24 @@ smoothed_scaled <- function(epi_data,
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
+
+
+
+  #######################
+  # robust whitening
+  #######################
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
+  }
+  # whiten to get the sources on the same scale
+  learned_params <- calculate_whitening_params(season_data, predictors, scale_method, center_method, nonlin_method)
+  epi_data %<>% data_whitening(predictors, learned_params, nonlin_method)
+
+  ###############
   # smoothing
+  ###############
   keep_mean <- !is.null(smooth_width) && !is.null(sd_mean_width) &&
     smooth_width == sd_mean_width # do we (not) need to do the mean separately?
   # since we're adding columns, we need to figure out which to exclude
@@ -182,6 +206,15 @@ smoothed_scaled <- function(epi_data,
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration
+  # reintroduce color into the value
+  pred_final <- pred %>%
+    rename({{ outcome }} := value) %>%
+    data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
+    rename(value = {{ outcome }}) %>%
+    mutate(value = pmax(0, value))
+  if (adding_source) {
+    pred_final %<>% select(-source)
+  }
   gc()
   return(pred)
 }

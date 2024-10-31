@@ -178,3 +178,28 @@ daily_to_weekly_archive <- function(epi_arch,
   too_many_tibbles %>%
     as_epi_archive(compactify = TRUE)
 }
+
+
+
+
+#' for training, we don't want off-season times or anomalous seasons, but for
+#' prediction we do
+drop_non_seasons <- function(epi_data, min_window = 12) {
+  forecast_date <- attributes(epi_data)$metadata$as_of %||% max(epi_data$time_value)
+  if (!("season_week" %in% names(epi_data))) {
+    epi_data %<>%
+      mutate(
+        epiweek = epiweek(time_value),
+        year = epiyear(time_value),
+        season_week = convert_epiweek_to_season_week(year, epiweek)
+      )
+  }
+  epi_data %>%
+    filter(
+      (season_week < 35) |
+        (forecast_date - time_value < as.difftime(min_window, units = "weeks")),
+      season != "2020/21",
+      (season != "2019/20") | (time_value < "2020-03-01"),
+      season != "2008/09"
+    )
+}

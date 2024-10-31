@@ -8,7 +8,8 @@ flusion <- function(epi_data,
                       mode = "regression"
                     ),
                     quantile_levels = covidhub_probs(),
-                    scale_method = c("quantile", "std"),
+                    drop_non_seasons = FALSE,
+                    scale_method = c("quantile", "std", "none"),
                     center_method = c("median", "mean"),
                     nonlin_method = c("quart_root", "none"),
                     dummy_states = TRUE,
@@ -77,7 +78,11 @@ flusion <- function(epi_data,
   epi_data %<>% ungroup() %>% mutate(across(where(is.character), as.factor))
   # drop between-season values for actual training; we'll need them for prediction though
   full_data <- epi_data
-  season_data <- epi_data %>% drop_non_seasons()
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
+  }
 
   # whiten to get the sources on the same scale
   learned_params <- calculate_whitening_params(season_data, predictors, scale_method, center_method, nonlin_method)
@@ -203,16 +208,3 @@ flusion <- function(epi_data,
   return(pred_final)
 }
 
-#' for training, we don't want off-season times or anomalous seasons, but for
-#' prediction we do
-drop_non_seasons <- function(epi_data, min_window = 12) {
-  forecast_date <- attributes(epi_data)$metadata$as_of %||% max(epi_data$time_value)
-  epi_data %>%
-    filter(
-      (season_week < 35) |
-        (forecast_date - time_value < as.difftime(min_window, units = "weeks")),
-      season != "2020/21",
-      (season != "2019/20") | (time_value < "2020-03-01"),
-      season != "2008/09"
-    )
-}

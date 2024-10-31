@@ -50,11 +50,18 @@ scaled_pop <- function(epi_data,
                        extra_sources = "",
                        ahead = 1,
                        pop_scaling = TRUE,
+                       drop_non_seasons = FALSE,
+                       scale_method = c("none","quantile", "std"),
+                       center_method = c("median", "mean"),
+                       nonlin_method = c("quart_root", "none"),
                        trainer = parsnip::linear_reg(),
                        quantile_levels = covidhub_probs(),
                        filter_source = "",
                        filter_agg_level = "",
                        ...) {
+  scale_method <- arg_match(scale_method)
+  center_method <- arg_match(center_method)
+  nonlin_method <- arg_match(nonlin_method)
   # perform any preprocessing not supported by epipredict
   #
   # this is for the case where there are multiple sources in the same column
@@ -72,6 +79,13 @@ scaled_pop <- function(epi_data,
     )
     return(null_result)
   }
+  # this is to deal with grouping by source in tests that don't include it
+  adding_source <- FALSE
+  if (!("source" %in% names(epi_data))) {
+    adding_source <- TRUE
+    epi_data$source <- c("none")
+    attributes(epi_data)$metadata$other_keys <- "source"
+  }
   args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
   args_list <- inject(default_args_list(!!!args_input))
@@ -81,6 +95,15 @@ scaled_pop <- function(epi_data,
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
+  }
+
+  # whiten to get the sources on the same scale
+  learned_params <- calculate_whitening_params(season_data, predictors, scale_method, center_method, nonlin_method)
+  epi_data %<>% data_whitening(predictors, learned_params, nonlin_method)
 
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
@@ -113,6 +136,15 @@ scaled_pop <- function(epi_data,
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration
+  # reintroduce color into the value
+  pred_final <- pred %>%
+    rename({{ outcome }} := value) %>%
+    data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
+    rename(value = {{ outcome }}) %>%
+    mutate(value = pmax(0, value))
+  if (adding_source) {
+    pred_final %<>% select(-source)
+  }
   gc()
   return(pred)
 }

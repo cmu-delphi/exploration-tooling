@@ -9,6 +9,7 @@ no_recent_outcome <- function(epi_data,
                               quantile_levels = covidhub_probs(),
                               use_population = FALSE,
                               use_density = FALSE,
+                              drop_non_seasons = FALSE,
                               scale_method = c("quantile", "std", "none"),
                               center_method = c("median", "mean", "none"),
                               nonlin_method = c("quart_root", "none"),
@@ -92,7 +93,11 @@ no_recent_outcome <- function(epi_data,
   }
 
   full_data <- epi_data
-  season_data <- epi_data %>% drop_non_seasons()
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
+  }
   if (scale_method != "none") {
     learned_params <- calculate_whitening_params(season_data, outcome, scale_method, center_method, nonlin_method)
     full_data %<>% data_whitening(outcome, learned_params, nonlin_method = nonlin_method)

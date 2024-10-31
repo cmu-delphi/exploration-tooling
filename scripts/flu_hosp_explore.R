@@ -27,9 +27,9 @@ forecaster_parameter_combinations_ <- rlang::list2(
       c(0, 7)
     ),
     pop_scaling = FALSE,
-    filter_source = c("", "nhsn"),
-    filter_agg_level = c("", "state"),
-    n_training = c(6, 4*4, 6*4, Inf),
+    filter_source = "nhsn",
+    filter_agg_level = "state",
+    n_training = c(3, 6, 12, 24, Inf),
     keys_to_ignore = very_latent_locations
   ),
   # using grf way more sparingly
@@ -45,9 +45,25 @@ forecaster_parameter_combinations_ <- rlang::list2(
     n_training = Inf,
     keys_to_ignore = very_latent_locations
   ),
+  scaled_pop_data_augmented = tidyr::expand_grid(
+    forecaster = "scaled_pop",
+    trainer = "quantreg",
+    lags = list(
+      c(0, 7, 14, 21),
+      c(0, 7)
+    ),
+    pop_scaling = FALSE,
+    scale_method = "quantile",
+    center_method = "median",
+    nonlin_method = c("quart_root", "none"),
+    filter_source = "",
+    filter_agg_level = "",
+    n_training = c(3, 12, Inf),
+    keys_to_ignore = very_latent_locations
+  ),
   ## # The covid forecaster, ported over to flu. Also likely to struggle with the
   ## # extra data
-  smooth_scaled_main = tidyr::expand_grid(
+  smoothed_scaled_main = tidyr::expand_grid(
     forecaster = "smoothed_scaled",
     trainer = "quantreg",
     lags = list(
@@ -59,13 +75,13 @@ forecaster_parameter_combinations_ <- rlang::list2(
     sd_width = as.difftime(4, units = "weeks"),
     sd_mean_width = as.difftime(2, units = "weeks"),
     pop_scaling = FALSE,
-    n_training = c(3, 6, 4*4, 6*4, Inf),
-    filter_source = c("", "nhsn"),
-    filter_agg_level = c("", "state"),
+    n_training = c(3, 6, 12, 24, Inf),
+    filter_source = "nhsn",
+    filter_agg_level = "state",
     keys_to_ignore = very_latent_locations
   ),
   # using grf way more sparingly
-   smooth_scaled_grf = tidyr::expand_grid(
+   smoothed_scaled_grf = tidyr::expand_grid(
     forecaster = "smoothed_scaled",
     trainer = "randforest_grf",
     lags = list(
@@ -80,80 +96,100 @@ forecaster_parameter_combinations_ <- rlang::list2(
     filter_agg_level = "state",
     keys_to_ignore = very_latent_locations
   ),
+  smoothed_scaled_data_augmented = tidyr::expand_grid(
+    forecaster = "smoothed_scaled",
+    trainer = "quantreg",
+    lags = list(
+      # list(smoothed, sd)
+      list(c(0, 7, 14, 21, 28), c(0)),
+      list(c(0, 7), c(0))
+    ),
+    smooth_width = as.difftime(2, units = "weeks"),
+    sd_width = as.difftime(4, units = "weeks"),
+    sd_mean_width = as.difftime(2, units = "weeks"),
+    pop_scaling = FALSE,
+    scale_method = "quantile",
+    center_method = "median",
+    nonlin_method = "quart_root",
+    n_training = c(3, 6, 12, 24, Inf),
+    filter_source = "",
+    filter_agg_level = "",
+    keys_to_ignore = very_latent_locations
+  ),
   # the thing to beat (a simplistic baseline forecast)
   flatline = tidyr::expand_grid(
     forecaster = "flatline_fc",
   ),
   # using exogenous variables
-  smooth_nssp = tidyr::expand_grid(
-    forecaster = "smoothed_scaled",
-    trainer = c("quantreg"),
-    extra_sources = c("nssp"),
-    lags = list(
-      list(
-        c(0, 7, 14, 21, 28), c(0), # hhs
-        c(0, 7), c(0) # nssp
-      )
-    ),
-    smooth_width = as.difftime(2, units = "weeks"),
-    sd_width = as.difftime(4, units = "weeks"),
-    sd_mean_width = as.difftime(2, units = "weeks"),
-    filter_source = "nhsn",
-    filter_agg_level = "state",
-    pop_scaling = FALSE,
-    n_training = Inf,
-    keys_to_ignore = very_latent_locations
-  ),
-   smooth_nssp_gs = tidyr::expand_grid(
-    forecaster = "smoothed_scaled",
-    trainer = c("quantreg"),
-    # b/c it's a list, it uses both as a pair rather than expanding the grid
-    extra_sources = list(c("nssp", "google_symptoms")),
-    lags = list(
-      list(
-        c(0, 7, 14, 21, 28), c(0), # hhs
-        c(0,7), c(0), # nssp
-        c(0,7), c(0) # gs
-      )
-    ),
-    smooth_width = as.difftime(2, units = "weeks"),
-    sd_width = as.difftime(4, units = "weeks"),
-    sd_mean_width = as.difftime(2, units = "weeks"),
-    filter_source = "nhsn",
-    filter_agg_level = "state",
-    pop_scaling = FALSE,
-    n_training = Inf,
-    keys_to_ignore = very_latent_locations
-  ),
-  smooth_nssp_gs_nwss = tidyr::expand_grid(
-    forecaster = "smoothed_scaled",
-    trainer = c("quantreg"),
-    extra_sources = list(c("nssp", "google_symptoms", "nwss")),
-    lags = list(
-      list(
-        c(0, 7, 14, 21, 28), c(0), # hhs
-        c(0,7), c(0), # nssp
-        c(0,7), c(0), # gs
-        c(0,7), c(0) # nwss
-      )
-    ),
-    smooth_width = as.difftime(2, units = "weeks"),
-    sd_width = as.difftime(4, units = "weeks"),
-    sd_mean_width = as.difftime(2, units = "weeks"),
-    filter_source = "nhsn",
-    filter_agg_level = "state",
-    pop_scaling = FALSE,
-    n_training = Inf,
-    keys_to_ignore = very_latent_locations
-  ),
+  ## smooth_scaled_nssp = tidyr::expand_grid(
+  ##   forecaster = "smoothed_scaled",
+  ##   trainer = c("quantreg"),
+  ##   extra_sources = c("nssp"),
+  ##   lags = list(
+  ##     list(
+  ##       c(0, 7, 14, 21, 28), c(0), # hhs
+  ##       c(0, 7), c(0) # nssp
+  ##     )
+  ##   ),
+  ##   smooth_width = as.difftime(2, units = "weeks"),
+  ##   sd_width = as.difftime(4, units = "weeks"),
+  ##   sd_mean_width = as.difftime(2, units = "weeks"),
+  ##   filter_source = "nhsn",
+  ##   filter_agg_level = "state",
+  ##   pop_scaling = FALSE,
+  ##   n_training = Inf,
+  ##   keys_to_ignore = very_latent_locations
+  ## ),
+  ##  smooth_scaled_nssp_gs = tidyr::expand_grid(
+  ##   forecaster = "smoothed_scaled",
+  ##   trainer = c("quantreg"),
+  ##   # b/c it's a list, it uses both as a pair rather than expanding the grid
+  ##   extra_sources = list(c("nssp", "google_symptoms")),
+  ##   lags = list(
+  ##     list(
+  ##       c(0, 7, 14, 21, 28), c(0), # hhs
+  ##       c(0,7), c(0), # nssp
+  ##       c(0,7), c(0) # gs
+  ##     )
+  ##   ),
+  ##   smooth_width = as.difftime(2, units = "weeks"),
+  ##   sd_width = as.difftime(4, units = "weeks"),
+  ##   sd_mean_width = as.difftime(2, units = "weeks"),
+  ##   filter_source = "nhsn",
+  ##   filter_agg_level = "state",
+  ##   pop_scaling = FALSE,
+  ##   n_training = Inf,
+  ##   keys_to_ignore = very_latent_locations
+  ## ),
+  ## smooth_scaled_nssp_gs_nwss = tidyr::expand_grid(
+  ##   forecaster = "smoothed_scaled",
+  ##   trainer = c("quantreg"),
+  ##   extra_sources = list(c("nssp", "google_symptoms", "nwss")),
+  ##   lags = list(
+  ##     list(
+  ##       c(0, 7, 14, 21, 28), c(0), # hhs
+  ##       c(0,7), c(0), # nssp
+  ##       c(0,7), c(0), # gs
+  ##       c(0,7), c(0) # nwss
+  ##     )
+  ##   ),
+  ##   smooth_width = as.difftime(2, units = "weeks"),
+  ##   sd_width = as.difftime(4, units = "weeks"),
+  ##   sd_mean_width = as.difftime(2, units = "weeks"),
+  ##   filter_source = "nhsn",
+  ##   filter_agg_level = "state",
+  ##   pop_scaling = FALSE,
+  ##   n_training = Inf,
+  ##   keys_to_ignore = very_latent_locations
+  ## ),
   flusion_quant = tidyr::expand_grid(
     forecaster = "flusion",
     trainer = "quantreg",
-    lags = list(c(0, 7, 21)),
+    lags = list(c(0, 7, 14)),
     dummy_states = FALSE,
     dummy_source = c(TRUE, FALSE),
-    nonlin_method = c("quart_root", "none"),
-    derivative_estimator = c("growth_rate", "none"),
+    nonlin_method = "quart_root",
+    derivative_estimator = "growth_rate",
     keys_to_ignore = very_latent_locations
   ),
   # variations on flusion
@@ -163,17 +199,17 @@ forecaster_parameter_combinations_ <- rlang::list2(
     lags = list(c(0, 7, 21)),
     dummy_states = FALSE,
     dummy_source = TRUE,
-    nonlin_method = c("quart_root", "none"),
-    derivative_estimator = c("growth_rate", "none"),
+    nonlin_method = "quart_root",
+    derivative_estimator = "growth_rate",
     keys_to_ignore = very_latent_locations
   ),
   ## # another kind of baseline forecaster
   no_recent_quant = tidyr::expand_grid(
     forecaster = "no_recent_outcome",
     trainer = "quantreg",
-    scale_method = c("quantile", "none"),
-    nonlin_method = c("quart_root", "none"),
-    filter_source = c("", "nhsn"),
+    scale_method = "quantile",
+    nonlin_method = "quart_root",
+    filter_source = "",
     use_population = c(FALSE, TRUE),
     use_density = c(FALSE, TRUE),
     week_method = "sine",
@@ -199,12 +235,9 @@ forecaster_parameter_combinations_ <- rlang::list2(
   }) %>%
   map(add_id)
 names(forecaster_parameter_combinations_)
-# the full expand grid for no_recent outcome is kind of overkill; this pares it down
-# if n_training is finite, filtering source is kind of irrelevant
-forecaster_parameter_combinations_$scaled_pop_main %<>% filter((n_training == Inf) | (filter_source == ""))
-forecaster_parameter_combinations_$smooth_scaled_main %<>% filter((n_training == Inf) | (filter_source == ""))
-
-forecaster_parameter_combinations_$no_recent_quant %<>% filter(((scale_method=="none") & (filter_source == "nhsn")) | (scale_method=="quantile"))
+# scale_method and filter_source being empty are exclusive
+# also population and density are exclusive
+forecaster_parameter_combinations_$no_recent_quant %>% filter(xor(scale_method =="none", filter_source == ""), xor(use_population, use_density))
 
 # Make sure all ids are unique.
 stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(forecaster_parameter_combinations_$id))
@@ -212,34 +245,34 @@ stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(f
 forecaster_grid <- forecaster_parameter_combinations_ %>%
   map(make_forecaster_grid) %>%
   bind_rows()
-
-## no_recent_outcome_params <- list(
-##   forecaster = "no_recent_outcome",
-##   trainer = "quantreg",
-##   scale_method = "quantile",
-##   nonlin_method = "quart_root",
-##   filter_source = "nhsn",
-##   use_population = TRUE,
-##   use_density = TRUE,
-##   week_method = "sine",
-##   keys_to_ignore = very_latent_locations[[1]]
-## )
+no_recent_outcome_params <- list(
+  forecaster = "no_recent_outcome",
+  trainer = "quantreg",
+  scale_method = "quantile",
+  nonlin_method = "quart_root",
+  filter_source = "nhsn",
+  use_population = TRUE,
+  use_density = TRUE,
+  week_method = "sine",
+  keys_to_ignore = very_latent_locations[[1]]
+)
 # Human-readable object to be used for inspecting the ensembles in the pipeline.
 ensemble_parameter_combinations_ <- tribble(
   ~ensemble, ~ensemble_args, ~forecasters,
   # mean forecaster
   "ensemble_average",
   list(average_type = "mean"),
-  list(
+  rlang::list2(
     no_recent_outcome_params,
     list(forecaster = "flatline_fc")
   ),
   # median forecaster
   "ensemble_average",
   list(average_type = "median"),
-  list(
+  rlang::list2(
     no_recent_outcome_params,
-    list(forecaster = "flatline_fc")
+    list(forecaster = "flatline_fc"),
+  # robust aux forecaster: nssp
   )
 ) %>%
   {
