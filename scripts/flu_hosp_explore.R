@@ -225,42 +225,42 @@ forecaster_grid <- forecaster_parameter_combinations_ %>%
 ##   keys_to_ignore = very_latent_locations[[1]]
 ## )
 # Human-readable object to be used for inspecting the ensembles in the pipeline.
-## ensemble_parameter_combinations_ <- tribble(
-##   ~ensemble, ~ensemble_args, ~forecasters,
-##   # mean forecaster
-##   "ensemble_average",
-##   list(average_type = "mean"),
-##   list(
-##     no_recent_outcome_params,
-##     list(forecaster = "flatline_fc")
-##   ),
-##   # median forecaster
-##   "ensemble_average",
-##   list(average_type = "median"),
-##   list(
-##     no_recent_outcome_params,
-##     list(forecaster = "flatline_fc")
-##   )
-## ) %>%
-##   {
-##     if (dummy_mode) {
-##       .$forecasters <- map(.$forecasters, function(x) {
-##         map(x, function(y) {
-##           y$forecaster <- "dummy_forecaster"
-##           y
-##         })
-##       })
-##     }
-##     .
-##   } %>%
-##   mutate(
-##     children_ids = map(.$forecasters, function(x) {
-##       map_chr(x, function(y) {
-##         get_single_id(y)
-##       })
-##     })
-##   ) %>%
-##   add_id(exclude = "forecasters")
+ensemble_parameter_combinations_ <- tribble(
+  ~ensemble, ~ensemble_args, ~forecasters,
+  # mean forecaster
+  "ensemble_average",
+  list(average_type = "mean"),
+  list(
+    no_recent_outcome_params,
+    list(forecaster = "flatline_fc")
+  ),
+  # median forecaster
+  "ensemble_average",
+  list(average_type = "median"),
+  list(
+    no_recent_outcome_params,
+    list(forecaster = "flatline_fc")
+  )
+) %>%
+  {
+    if (dummy_mode) {
+      .$forecasters <- map(.$forecasters, function(x) {
+        map(x, function(y) {
+          y$forecaster <- "dummy_forecaster"
+          y
+        })
+      })
+    }
+    .
+  } %>%
+  mutate(
+    children_ids = map(.$forecasters, function(x) {
+      map_chr(x, function(y) {
+        get_single_id(y)
+      })
+    })
+  ) %>%
+  add_id(exclude = "forecasters")
 ensemble_parameter_combinations_ <- tibble::tibble(id = character(), ensemble = character(), ensemble_args = character(), children_ids = character())
 # Check that every ensemble dependent is actually included.
 missing_forecasters <- setdiff(
