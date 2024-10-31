@@ -13,7 +13,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
     trainer = c("linreg", "quantreg"),
     lags = list(c(0, 7, 14), c(0, 7, 14, 28), c(0)),
     pop_scaling = c(TRUE, FALSE),
-    n_training = c(3, 6, Inf)
+    n_training = c(3, 6, 4*4, 6*4, Inf)
   ),
   tidyr::expand_grid(
     forecaster = "smoothed_scaled",

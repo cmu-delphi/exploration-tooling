@@ -95,7 +95,7 @@ smoothed_scaled <- function(epi_data,
   args_list <- inject(default_args_list(!!!args_input))
   # `extra_sources` sets which variables beyond the outcome are lagged and used as predictors
   # any which are modified by `rolling_mean` or `rolling_sd` have their original values dropped later
-  predictors <- c(outcome, extra_sources)
+  predictors <- c(outcome, extra_sources[[1]])
   predictors <- predictors[predictors != ""]
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by

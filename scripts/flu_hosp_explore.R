@@ -19,7 +19,7 @@ very_latent_locations <- list(list(
 forecaster_parameter_combinations_ <- rlang::list2(
   # just the data, possibly population scaled; likely to run into troubles
   # because of the scales of the different sources
-  tidyr::expand_grid(
+  scaled_pop_main = tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = "quantreg",
     lags = list(
@@ -29,11 +29,11 @@ forecaster_parameter_combinations_ <- rlang::list2(
     pop_scaling = FALSE,
     filter_source = c("", "nhsn"),
     filter_agg_level = c("", "state"),
-    n_training = c(3, 6, Inf),
+    n_training = c(6, 4*4, 6*4, Inf),
     keys_to_ignore = very_latent_locations
   ),
   # using grf way more sparingly
-  tidyr::expand_grid(
+  scaled_pop_grf = tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = "randforest_grf",
     lags = list(
@@ -47,7 +47,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
   ),
   ## # The covid forecaster, ported over to flu. Also likely to struggle with the
   ## # extra data
-  tidyr::expand_grid(
+  smooth_scaled_main = tidyr::expand_grid(
     forecaster = "smoothed_scaled",
     trainer = "quantreg",
     lags = list(
@@ -59,16 +59,16 @@ forecaster_parameter_combinations_ <- rlang::list2(
     sd_width = as.difftime(4, units = "weeks"),
     sd_mean_width = as.difftime(2, units = "weeks"),
     pop_scaling = FALSE,
-    n_training = c(3, 6, Inf),
+    n_training = c(3, 6, 4*4, 6*4, Inf),
     filter_source = c("", "nhsn"),
     filter_agg_level = c("", "state"),
     keys_to_ignore = very_latent_locations
   ),
-  tidyr::expand_grid(
+  # using grf way more sparingly
+   smooth_scaled_grf = tidyr::expand_grid(
     forecaster = "smoothed_scaled",
     trainer = "randforest_grf",
     lags = list(
-      # list(smoothed, sd)
       list(c(0, 7, 14, 21, 28), c(0))
     ),
     smooth_width = as.difftime(2, units = "weeks"),
@@ -80,31 +80,117 @@ forecaster_parameter_combinations_ <- rlang::list2(
     filter_agg_level = "state",
     keys_to_ignore = very_latent_locations
   ),
-  tidyr::expand_grid(
+  # the thing to beat (a simplistic baseline forecast)
+  flatline = tidyr::expand_grid(
     forecaster = "flatline_fc",
   ),
-  ## tidyr::expand_grid(
-  ##   forecaster = "flusion",
-  ##   lags = list(c(0, 7, 21)),
-  ##   dummy_states = FALSE,
-  ##   dummy_source = c(TRUE, FALSE),
-  ##   nonlin_method = c("quart_root", "none"),
-  ##   derivative_estimator = c("growth_rate", "none"),
-  ##   keys_to_ignore = very_latent_locations
-  ## ),
+  # using exogenous variables
+  smooth_nssp = tidyr::expand_grid(
+    forecaster = "smoothed_scaled",
+    trainer = c("quantreg"),
+    extra_sources = c("nssp"),
+    lags = list(
+      list(
+        c(0, 7, 14, 21, 28), c(0), # hhs
+        c(0, 7), c(0) # nssp
+      )
+    ),
+    smooth_width = as.difftime(2, units = "weeks"),
+    sd_width = as.difftime(4, units = "weeks"),
+    sd_mean_width = as.difftime(2, units = "weeks"),
+    filter_source = "nhsn",
+    filter_agg_level = "state",
+    pop_scaling = FALSE,
+    n_training = Inf,
+    keys_to_ignore = very_latent_locations
+  ),
+   smooth_nssp_gs = tidyr::expand_grid(
+    forecaster = "smoothed_scaled",
+    trainer = c("quantreg"),
+    # b/c it's a list, it uses both as a pair rather than expanding the grid
+    extra_sources = list(c("nssp", "google_symptoms")),
+    lags = list(
+      list(
+        c(0, 7, 14, 21, 28), c(0), # hhs
+        c(0,7), c(0), # nssp
+        c(0,7), c(0) # gs
+      )
+    ),
+    smooth_width = as.difftime(2, units = "weeks"),
+    sd_width = as.difftime(4, units = "weeks"),
+    sd_mean_width = as.difftime(2, units = "weeks"),
+    filter_source = "nhsn",
+    filter_agg_level = "state",
+    pop_scaling = FALSE,
+    n_training = Inf,
+    keys_to_ignore = very_latent_locations
+  ),
+  smooth_nssp_gs_nwss = tidyr::expand_grid(
+    forecaster = "smoothed_scaled",
+    trainer = c("quantreg"),
+    extra_sources = list(c("nssp", "google_symptoms", "nwss")),
+    lags = list(
+      list(
+        c(0, 7, 14, 21, 28), c(0), # hhs
+        c(0,7), c(0), # nssp
+        c(0,7), c(0), # gs
+        c(0,7), c(0) # nwss
+      )
+    ),
+    smooth_width = as.difftime(2, units = "weeks"),
+    sd_width = as.difftime(4, units = "weeks"),
+    sd_mean_width = as.difftime(2, units = "weeks"),
+    filter_source = "nhsn",
+    filter_agg_level = "state",
+    pop_scaling = FALSE,
+    n_training = Inf,
+    keys_to_ignore = very_latent_locations
+  ),
+  flusion_quant = tidyr::expand_grid(
+    forecaster = "flusion",
+    trainer = "quantreg",
+    lags = list(c(0, 7, 21)),
+    dummy_states = FALSE,
+    dummy_source = c(TRUE, FALSE),
+    nonlin_method = c("quart_root", "none"),
+    derivative_estimator = c("growth_rate", "none"),
+    keys_to_ignore = very_latent_locations
+  ),
+  # variations on flusion
+  flusion_grf = tidyr::expand_grid(
+    forecaster = "flusion",
+    trainer = c("randforest_grf"),
+    lags = list(c(0, 7, 21)),
+    dummy_states = FALSE,
+    dummy_source = TRUE,
+    nonlin_method = c("quart_root", "none"),
+    derivative_estimator = c("growth_rate", "none"),
+    keys_to_ignore = very_latent_locations
+  ),
   ## # another kind of baseline forecaster
-  ## tidyr::expand_grid(
-  ##   forecaster = "no_recent_outcome",
-  ##   trainer = c("quantreg", "randforest_grf"),
-  ##   scale_method = c("quantile", "none"),
-  ##   nonlin_method = c("quart_root", "none"),
-  ##   filter_source = c("", "nhsn"),
-  ##   use_population = c(FALSE, TRUE),
-  ##   use_density = c(FALSE, TRUE),
-  ##   week_method = c("linear", "sine"),
-  ##   keys_to_ignore = very_latent_locations
-  ## )
-) %>%
+  no_recent_quant = tidyr::expand_grid(
+    forecaster = "no_recent_outcome",
+    trainer = "quantreg",
+    scale_method = c("quantile", "none"),
+    nonlin_method = c("quart_root", "none"),
+    filter_source = c("", "nhsn"),
+    use_population = c(FALSE, TRUE),
+    use_density = c(FALSE, TRUE),
+    week_method = "sine",
+    keys_to_ignore = very_latent_locations
+    ),
+  no_recent_grf = tidyr::expand_grid(
+    forecaster = "no_recent_outcome",
+    trainer = "randforest_grf",
+    scale_method = "quantile",
+    nonlin_method = "quart_root",
+    filter_source = "",
+    use_population = TRUE,
+    use_density = FALSE,
+    week_method = "linear",
+    keys_to_ignore = very_latent_locations
+    )
+  ) %>%
   map(function(x) {
     if (dummy_mode) {
       x$forecaster <- "dummy_forecaster"
@@ -112,14 +198,13 @@ forecaster_parameter_combinations_ <- rlang::list2(
     x
   }) %>%
   map(add_id)
+names(forecaster_parameter_combinations_)
 # the full expand grid for no_recent outcome is kind of overkill; this pares it down
 # if n_training is finite, filtering source is kind of irrelevant
-forecaster_parameter_combinations_[[1]] %<>% filter((n_training == Inf) | (filter_source == ""))
-forecaster_parameter_combinations_[[2]] %<>% filter((n_training == Inf) | (filter_source == ""))
+forecaster_parameter_combinations_$scaled_pop_main %<>% filter((n_training == Inf) | (filter_source == ""))
+forecaster_parameter_combinations_$smooth_scaled_main %<>% filter((n_training == Inf) | (filter_source == ""))
 
-# forecaster_parameter_combinations_[[5]] <- forecaster_parameter_combinations_[[5]] %>% filter(((trainer == "quantreg") & (week_method == "sine")) | ((scale_method == "quantile") & (nonlin_method == "quart_root") & (filter_source == "") & (use_population == TRUE)))
-s3save(forecaster_parameter_combinations_, object = "flu_2023_forecaster_parameter_combinations.rds", bucket = "forecasting-team-data")
-
+forecaster_parameter_combinations_$no_recent_quant %<>% filter(((scale_method=="none") & (filter_source == "nhsn")) | (scale_method=="quantile"))
 
 # Make sure all ids are unique.
 stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(forecaster_parameter_combinations_$id))
@@ -190,11 +275,12 @@ ensemble_grid <- make_ensemble_grid(ensemble_parameter_combinations_)
 
 # data is sufficiently different that it needs to be run separately
 fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 400)
-data_targets <- list(
+data_targets <- rlang::list2(
   tar_target(
     name = flusion_data_archive,
     command = {
-      flusion_data_archive <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
+      flusion_data_archive <-
+        qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
         filter(
           !geo_value %in% c("as", "pr", "vi", "gu", "mp"),
           !is.na(value),
@@ -203,6 +289,125 @@ data_targets <- list(
         rename(hhs = value) %>%
         relocate(source, geo_value, time_value, version, hhs, agg_level, season, season_week, year, population, density) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
+    }
+  ),
+  tar_target(
+    name = nssp_archive,
+    command = {
+      nssp_state <- pub_covidcast(
+        source = "nssp",
+        signal = "pct_ed_visits_influenza",
+        time_type = "week",
+        geo_type = "state",
+        geo_values = "*"
+      )
+      nssp_hhs <- pub_covidcast(
+        source = "nssp",
+        signal = "pct_ed_visits_influenza",
+        time_type = "week",
+        geo_type = "hhs",
+        geo_values = "*"
+      )
+      nssp_archive <- nssp_state %>%
+        bind_rows(nssp_hhs) %>%
+        select(geo_value, time_value, issue, nssp = value) %>%
+        as_epi_archive(compactify = TRUE) %>%
+        `$`("DT") %>%
+        mutate(time_value = time_value + 3) %>%
+        mutate(version = time_value) %>%
+        mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
+        unnest(cols = "source") %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+      nssp_archive
+    }
+  ),
+  tar_target(
+    name = google_symptoms_archive,
+    command = {
+      used_searches <- c(1, 3, 4)
+      # not using actual versions here because the only revision behavior is the
+      # source going down completely, which means we're actually just comparing
+      # with the version without this source
+      all_of_them <- lapply(used_searches, \(search_name) {
+        google_symptoms_state_archive <- pub_covidcast(
+          source = "google-symptoms",
+          signal = glue::glue("s0{search_name}_smoothed_search"),
+          time_type = "day",
+          geo_type = "state",
+          geo_values = "*"
+        )
+        google_symptoms_hhs_archive <- pub_covidcast(
+          source = "google-symptoms",
+          signal = glue::glue("s0{search_name}_smoothed_search"),
+          time_type = "day",
+          geo_type = "hhs",
+          geo_values = "*"
+        )
+        google_symptoms_archive_min <-
+          google_symptoms_state_archive %>%
+          bind_rows(google_symptoms_hhs_archive) %>%
+          select(geo_value, time_value, value) %>%
+          daily_to_weekly() %>%
+          mutate(version = time_value) %>%
+          as_epi_archive(compactify = TRUE)
+        google_symptoms_archive_min$DT %>%
+          mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
+          unnest(cols = "source") %>%
+          filter(!is.na(value)) %>%
+          relocate(source, geo_value, time_value, version, value) %>%
+          as_epi_archive(other_keys = "source", compactify = TRUE)
+      })
+      all_of_them[[1]]$DT %<>% rename(google_symptoms_1_cough = value)
+      all_of_them[[2]]$DT %<>% rename(google_symptoms_3_fever = value)
+      all_of_them[[3]]$DT %<>% rename(google_symptoms_4_bronchitis = value)
+      google_symptoms_archive <- epix_merge(all_of_them[[1]], all_of_them[[2]]) %>% epix_merge(all_of_them[[3]])
+      google_symptoms_archive <- google_symptoms_archive$DT %>%
+        mutate(google_symptoms = google_symptoms_1_cough + google_symptoms_3_fever + google_symptoms_4_bronchitis) %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+      google_symptoms_archive
+    }
+  ),
+  tar_target(
+    name = nwss_coarse,
+    command = {
+      files <- file.info(list.files(here::here("aux_data/nwss_flu_data/"), full.names = TRUE))
+      most_recent <- rownames(files)[which.max(files$mtime)]
+      nwss <- readr::read_csv(most_recent)
+      state_code <- readr::read_csv(here::here("aux_data", "flusion_data", "state_codes_table.csv"), show_col_types = FALSE)
+      hhs_codes <- readr::read_csv(here::here("aux_data", "flusion_data", "state_code_hhs_table.csv"), show_col_types = FALSE)
+      state_to_hhs <- hhs_codes %>%
+        left_join(state_code, by = "state_code") %>%
+        select(hhs_region = hhs, geo_value = state_id)
+      pop_data <- gen_pop_and_density_data()
+      nwss %>%
+        add_pop_and_density() %>%
+        drop_na()
+      nwss %>% arrange(desc(time_value))
+      nwss_hhs_region <-
+        nwss %>%
+        left_join(state_to_hhs, by = "geo_value") %>%
+        mutate(year = year(time_value)) %>%
+        left_join(pop_data, by = join_by(geo_value, year)) %>%
+        select(-year, density) %>%
+        group_by(time_value, hhs_region) %>%
+        summarize(
+          value = sum(value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
+          activity_level = sum(activity_level * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
+          region_value = mean(region_value * population) / sum(population, na.rm = TRUE),
+          national_value = sum(national_value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
+          .groups = "drop"
+        ) %>%
+        mutate(agg_level = "hhs_region", hhs_region = as.character(hhs_region)) %>%
+        rename(geo_value = hhs_region)
+      nwss %>%
+        mutate(agg_level = "state") %>%
+        bind_rows(nwss_hhs_region) %>%
+        select(geo_value, time_value, nwss = value, nwss_regional = region_value, nwss_national = national_value) %>%
+        mutate(time_value = time_value - 3, version = time_value) %>%
+        arrange(geo_value, time_value) %>%
+        mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
+        unnest(cols = "source") %>%
+        as_epi_archive(other_keys = "source")
     }
   ),
   tar_target(
@@ -236,7 +441,15 @@ data_targets <- list(
   tar_target(
     name = joined_archive_data,
     command = {
-      flusion_data_archive
+      joined_archive_data <-
+        flusion_data_archive %>%
+        epix_merge(google_symptoms_archive, sync = "locf") %>%
+        epix_merge(nwss_coarse, sync = "locf") %>%
+        epix_merge(nssp_archive, sync = "locf") %>%
+        `$`("DT") %>%
+        drop_na(agg_level) %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+      joined_archive_data
     }
   )
 )
