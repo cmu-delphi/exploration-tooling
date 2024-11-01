@@ -14,8 +14,11 @@ flatline_fc <- function(epi_data,
                         ahead = 1,
                         trainer = parsnip::linear_reg(),
                         quantile_levels = covidhub_probs(),
+                        filter_source = "",
+                        filter_agg_level = "",
                         ...) {
   # perform any preprocessing not supported by epipredict
+  epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   # this is a temp fix until a real fix gets put into epipredict
   epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
   # one that every forecaster will need to handle: how to manage max(time_value)

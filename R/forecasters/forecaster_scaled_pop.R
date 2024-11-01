@@ -146,5 +146,5 @@ scaled_pop <- function(epi_data,
     pred_final %<>% select(-source)
   }
   gc()
-  return(pred)
+  return(pred_final)
 }

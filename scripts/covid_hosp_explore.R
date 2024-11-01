@@ -8,27 +8,30 @@ dummy_mode <- as.logical(Sys.getenv("DEBUG_MODE", FALSE))
 
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
 forecaster_parameter_combinations_ <- rlang::list2(
-  tidyr::expand_grid(
+  scaled_pop_main = tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = c("linreg", "quantreg"),
-    lags = list(c(0, 7, 14), c(0, 7, 14, 28), c(0)),
+    lags = list(
+      c(0, 7),
+      c(0, 7, 14),
+      c(0, 7, 14, 21)),
     pop_scaling = c(TRUE, FALSE),
-    n_training = c(3, 6, 4 * 4, 6 * 4, Inf)
+    n_training = c(6, Inf)
   ),
-  tidyr::expand_grid(
+  smoothed_scaled_main = tidyr::expand_grid(
     forecaster = "smoothed_scaled",
     trainer = c("quantreg"),
     lags = rlang::list2(
       # list(smoothed, sd)
-      list(c(0, 7, 14, 21, 28), c(0)),
+      list(c(0, 7, 14, 21), c(0)),
       list(c(0, 7, 14), c(0)),
       list(c(0, 7, 14), c(0, 7)),
     ),
-    smooth_width = as.difftime(2, units = "weeks"),
-    sd_width = as.difftime(4, units = "weeks"),
-    sd_mean_width = as.difftime(2, units = "weeks"),
+    smooth_width = as.difftime(8, units = "weeks"),
+    sd_width = as.difftime(c(NA, 4, 12), units = "weeks"),
+    sd_mean_width = as.difftime(8, units = "weeks"),
     pop_scaling = c(TRUE, FALSE),
-    n_training = c(3, 6, Inf)
+    n_training = c(6, Inf)
   ),
   tidyr::expand_grid(
     forecaster = "flatline_fc",

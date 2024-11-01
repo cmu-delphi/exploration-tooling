@@ -22,27 +22,15 @@ forecaster_parameter_combinations_ <- rlang::list2(
   scaled_pop_main = tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = "quantreg",
-    lags = list(
+    lags = list2(
+      c(0, 7),
       c(0, 7, 14, 21),
-      c(0, 7)
     ),
     pop_scaling = FALSE,
     filter_source = "nhsn",
     filter_agg_level = "state",
-    n_training = c(3, 6, 12, 24, Inf),
-    keys_to_ignore = very_latent_locations
-  ),
-  # using grf way more sparingly
-  scaled_pop_grf = tidyr::expand_grid(
-    forecaster = "scaled_pop",
-    trainer = "randforest_grf",
-    lags = list(
-      c(0, 7, 14, 21)
-    ),
-    pop_scaling = FALSE,
-    filter_source = "nhsn",
-    filter_agg_level = "state",
-    n_training = Inf,
+    n_training = c(3, 6, 24, Inf),
+    drop_non_seasons = c(TRUE, FALSE),
     keys_to_ignore = very_latent_locations
   ),
   scaled_pop_data_augmented = tidyr::expand_grid(
@@ -58,7 +46,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
     nonlin_method = c("quart_root", "none"),
     filter_source = "",
     filter_agg_level = "",
-    n_training = c(3, 12, Inf),
+    n_training = c(3, 24, Inf),
+    drop_non_seasons = c(TRUE, FALSE),
     keys_to_ignore = very_latent_locations
   ),
   ## # The covid forecaster, ported over to flu. Also likely to struggle with the
@@ -68,30 +57,14 @@ forecaster_parameter_combinations_ <- rlang::list2(
     trainer = "quantreg",
     lags = list(
       # list(smoothed, sd)
-      list(c(0, 7, 14, 21, 28), c(0)),
+      list(c(0, 7, 14, 21), c(0)),
       list(c(0, 7), c(0))
     ),
-    smooth_width = as.difftime(2, units = "weeks"),
-    sd_width = as.difftime(4, units = "weeks"),
-    sd_mean_width = as.difftime(2, units = "weeks"),
+    smooth_width = as.difftime(8, units = "weeks"),
+    sd_width = as.difftime(c(NA, 12), units = "weeks"),
+    sd_mean_width = as.difftime(8, units = "weeks"),
     pop_scaling = FALSE,
-    n_training = c(3, 6, 12, 24, Inf),
-    filter_source = "nhsn",
-    filter_agg_level = "state",
-    keys_to_ignore = very_latent_locations
-  ),
-  # using grf way more sparingly
-  smoothed_scaled_grf = tidyr::expand_grid(
-    forecaster = "smoothed_scaled",
-    trainer = "randforest_grf",
-    lags = list(
-      list(c(0, 7, 14, 21, 28), c(0))
-    ),
-    smooth_width = as.difftime(2, units = "weeks"),
-    sd_width = as.difftime(4, units = "weeks"),
-    sd_mean_width = as.difftime(2, units = "weeks"),
-    pop_scaling = FALSE,
-    n_training = Inf,
+    n_training = c(3, Inf),
     filter_source = "nhsn",
     filter_agg_level = "state",
     keys_to_ignore = very_latent_locations
@@ -101,17 +74,16 @@ forecaster_parameter_combinations_ <- rlang::list2(
     trainer = "quantreg",
     lags = list(
       # list(smoothed, sd)
-      list(c(0, 7, 14, 21, 28), c(0)),
-      list(c(0, 7), c(0))
+      list(c(0, 7, 14, 21), c(0)),
     ),
-    smooth_width = as.difftime(2, units = "weeks"),
-    sd_width = as.difftime(4, units = "weeks"),
-    sd_mean_width = as.difftime(2, units = "weeks"),
+    smooth_width = as.difftime(8, units = "weeks"),
+    sd_width = as.difftime(c(NA, 12), units = "weeks"),
+    sd_mean_width = as.difftime(8, units = "weeks"),
     pop_scaling = FALSE,
+    n_training = c(3, Inf),
     scale_method = "quantile",
     center_method = "median",
     nonlin_method = "quart_root",
-    n_training = c(3, 6, 12, 24, Inf),
     filter_source = "",
     filter_agg_level = "",
     keys_to_ignore = very_latent_locations
@@ -119,6 +91,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
   # the thing to beat (a simplistic baseline forecast)
   flatline = tidyr::expand_grid(
     forecaster = "flatline_fc",
+    filter_source = "nhsn",
+    filter_agg_level = "state"
   ),
   # using exogenous variables
   ## smooth_scaled_nssp = tidyr::expand_grid(
@@ -257,23 +231,50 @@ no_recent_outcome_params <- list(
   week_method = "sine",
   keys_to_ignore = very_latent_locations[[1]]
 )
+scaled_pop_short_window <- list(
+    forecaster = "scaled_pop",
+    trainer = "quantreg",
+    lags = c(0, 7),
+    pop_scaling = FALSE,
+    filter_source = "nhsn",
+    filter_agg_level = "state",
+    n_training = 3,
+    drop_non_seasons = FALSE,
+    keys_to_ignore = very_latent_locations
+)
+scaled_pop_long_window <- list(
+    forecaster = "scaled_pop",
+    trainer = "quantreg",
+    lags = c(0, 7, 14, 21),
+    pop_scaling = FALSE,
+    filter_source = "nhsn",
+    filter_agg_level = "state",
+    n_training = Inf,
+    drop_non_seasons = FALSE,
+    keys_to_ignore = very_latent_locations
+)
 # Human-readable object to be used for inspecting the ensembles in the pipeline.
 ensemble_parameter_combinations_ <- tribble(
   ~ensemble, ~ensemble_args, ~forecasters,
   # mean forecaster
   "ensemble_average",
   list(average_type = "mean"),
-  rlang::list2(
+  list2(
     no_recent_outcome_params,
     list(forecaster = "flatline_fc")
   ),
   # median forecaster
   "ensemble_average",
   list(average_type = "median"),
-  rlang::list2(
+  list2(
     no_recent_outcome_params,
     list(forecaster = "flatline_fc"),
-    # robust aux forecaster: nssp
+  # scaled_pop averaging long and short training windows
+  "ensemble_average",
+  list(average_type = "median"),
+  list2(
+    scaled_pop_short_window,
+    scaled_pop_long_window,
   )
 ) %>%
   {

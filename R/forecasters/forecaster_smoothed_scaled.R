@@ -153,7 +153,7 @@ smoothed_scaled <- function(epi_data,
     smooth_width <- as.difftime(smooth_width, units = paste0(time_type, "s"))
   }
 
-  if (!is.null(smooth_width) && !keep_mean) {
+  if (!is.null(smooth_width) && !is.na(smooth_width) && !keep_mean) {
     epi_data %<>% rolling_mean(
       width = smooth_width,
       cols_to_mean = smooth_cols
@@ -161,7 +161,7 @@ smoothed_scaled <- function(epi_data,
   }
 
   # measuring standard deviation
-  if (!is.null(sd_width)) {
+  if (!is.null(sd_width) && !is.na(sd_width)) {
     epi_data %<>% rolling_sd(
       sd_width = sd_width,
       mean_width = sd_mean_width,
@@ -216,5 +216,5 @@ smoothed_scaled <- function(epi_data,
     pred_final %<>% select(-source)
   }
   gc()
-  return(pred)
+  return(pred_final)
 }
