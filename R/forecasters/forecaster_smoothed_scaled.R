@@ -125,7 +125,7 @@ smoothed_scaled <- function(epi_data,
   ###############
   # smoothing
   ###############
-  keep_mean <- !is.null(smooth_width) && !is.null(sd_mean_width) &&
+  keep_mean <- !is.na(smooth_width) && !is.na(sd_width) && !is.na(sd_width) && !is.null(sd_mean_width) &&
     smooth_width == sd_mean_width # do we (not) need to do the mean separately?
   # since we're adding columns, we need to figure out which to exclude
   all_names <- get_nonkey_names(epi_data)

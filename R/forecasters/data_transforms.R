@@ -42,7 +42,7 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
   cols_to_mean <- get_trainable_names(epi_data, cols_to_mean)
   epi_data %<>% group_by(across(key_colnames(epi_data, exclude = "time_value")))
   for (col in cols_to_mean) {
-    mean_name <- paste0("slide_", col, "_m", w)
+    mean_name <- paste0("slide_", col, "_m", width)
     epi_data %<>%
       epi_slide_mean(all_of(col), .window_size = width) %>%
       rename(!!mean_name := paste0("slide_value_", col))

@@ -61,7 +61,24 @@ forecaster_parameter_combinations_ <- rlang::list2(
       list2(c(0, 7), c(0))
     ),
     smooth_width = as.difftime(8, units = "weeks"),
-    sd_width = as.difftime(c(NA, 12), units = "weeks"),
+    sd_width = as.difftime(12, units = "weeks"),
+    sd_mean_width = as.difftime(8, units = "weeks"),
+    pop_scaling = FALSE,
+    n_training = c(3, Inf),
+    filter_source = "nhsn",
+    filter_agg_level = "state",
+    keys_to_ignore = very_latent_locations
+  ),
+  smoothed_only_main = tidyr::expand_grid(
+    forecaster = "smoothed_scaled",
+    trainer = "quantreg",
+    lags = list2(
+      # list(smoothed, sd)
+      list2(c(0, 7, 14, 21)),
+      list2(c(0, 7))
+    ),
+    smooth_width = as.difftime(8, units = "weeks"),
+    sd_width = as.difftime(as.integer(NA), units = "weeks"),
     sd_mean_width = as.difftime(8, units = "weeks"),
     pop_scaling = FALSE,
     n_training = c(3, Inf),
@@ -77,7 +94,26 @@ forecaster_parameter_combinations_ <- rlang::list2(
       list2(c(0, 7, 14, 21), c(0)),
     ),
     smooth_width = as.difftime(8, units = "weeks"),
-    sd_width = as.difftime(c(NA, 12), units = "weeks"),
+    sd_width = as.difftime(12, units = "weeks"),
+    sd_mean_width = as.difftime(8, units = "weeks"),
+    pop_scaling = FALSE,
+    n_training = c(3, Inf),
+    scale_method = "quantile",
+    center_method = "median",
+    nonlin_method = "quart_root",
+    filter_source = "",
+    filter_agg_level = "",
+    keys_to_ignore = very_latent_locations
+  ),
+  smoothed_only_data_augmented = tidyr::expand_grid(
+    forecaster = "smoothed_scaled",
+    trainer = "quantreg",
+    lags = list2(
+      # list(smoothed, sd)
+      list2(c(0, 7, 14, 21)),
+    ),
+    smooth_width = as.difftime(8, units = "weeks"),
+    sd_width = as.difftime(as.integer(NA), units = "weeks"),
     sd_mean_width = as.difftime(8, units = "weeks"),
     pop_scaling = FALSE,
     n_training = c(3, Inf),
