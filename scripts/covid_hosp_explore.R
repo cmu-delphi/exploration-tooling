@@ -13,7 +13,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
     trainer = c("linreg", "quantreg"),
     lags = list(c(0, 7, 14), c(0, 7, 14, 28), c(0)),
     pop_scaling = c(TRUE, FALSE),
-    n_training = c(3, 6, 4*4, 6*4, Inf)
+    n_training = c(3, 6, 4 * 4, 6 * 4, Inf)
   ),
   tidyr::expand_grid(
     forecaster = "smoothed_scaled",
@@ -41,6 +41,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
     x
   }) %>%
   map(add_id)
+s3save(forecaster_parameter_combinations_, object = "covid_2023_forecaster_parameter_combinations.rds", bucket = "forecasting-team-data")
 
 # Make sure all ids are unique.
 stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(forecaster_parameter_combinations_$id))
@@ -67,7 +68,7 @@ smooth_scaled <- list(
   forecaster = "smoothed_scaled",
   trainer = "quantreg",
   lags =
-    # list(smoothed, sd)
+  # list(smoothed, sd)
     list(c(0, 7, 14, 21, 28), c(0)),
   smooth_width = as.difftime(2, units = "weeks"),
   sd_width = as.difftime(4, units = "weeks"),
@@ -146,85 +147,85 @@ eval_time <- epidatr::epirange(from = "2020-01-01", to = "2024-01-01")
 training_time <- epidatr::epirange(from = "2020-08-01", to = "2023-12-18")
 fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 400)
 data_targets <- rlang::list2(
-    tar_target(
-      name = hhs_latest_data,
-      command = {
-        epidatr::pub_covidcast(
-          source = "hhs",
-          signals = hhs_signal,
-          geo_type = "state",
-          time_type = "day",
-          geo_values = "*",
-          time_values = eval_time,
-          fetch_args = fetch_args
-        )
-      }
-    ),
-    tar_target(
-      name = hhs_evaluation_data,
-      command = {
-        hhs_latest_data %>%
-          select(
-            signal,
-            geo_value,
-            time_value,
-            value
-          ) %>%
-          daily_to_weekly(keys = c("geo_value", "signal")) %>%
-          rename(
-            true_value = value,
-            target_end_date = time_value
-          ) %>%
-          select(
-            signal,
-            geo_value,
-            target_end_date,
-            true_value
-          )
-      }
-    ),
-    tar_target(
-      name = hhs_latest_data_2022,
-      command = {
-        hhs_latest_data # %>% filter(time_value >= "2022-01-01", time_value < "2022-04-01")
-      }
-    ),
-    tar_target(
-      name = hhs_archive_data,
-      command = {
-        res <- epidatr::pub_covidcast(
-          source = "hhs",
-          signals = hhs_signal,
-          geo_type = "state",
-          time_type = "day",
-          geo_values = "*",
-          time_values = training_time,
-          issues = "*",
-          fetch_args = fetch_args
+  tar_target(
+    name = hhs_latest_data,
+    command = {
+      epidatr::pub_covidcast(
+        source = "hhs",
+        signals = hhs_signal,
+        geo_type = "state",
+        time_type = "day",
+        geo_values = "*",
+        time_values = eval_time,
+        fetch_args = fetch_args
+      )
+    }
+  ),
+  tar_target(
+    name = hhs_evaluation_data,
+    command = {
+      hhs_latest_data %>%
+        select(
+          signal,
+          geo_value,
+          time_value,
+          value
         ) %>%
-          select(
-            geo_value,
-            time_value,
-            value,
-            issue
-          ) %>%
-          as_epi_archive(compactify = TRUE) %>%
-          daily_to_weekly_archive("value")
-      }
-    ),
-    tar_target(
-      name = joined_archive_data,
-      command = {
-        hhs_archive_data$DT %>%
-          select(geo_value, time_value, value, version) %>%
-          rename("hhs" := value) %>%
-          filter(!geo_value %in% c("as", "pr", "vi", "gu", "mp")) %>%
-          as_epi_archive(
-            compactify = TRUE
-          )
-      }
-    )
+        daily_to_weekly(keys = c("geo_value", "signal")) %>%
+        rename(
+          true_value = value,
+          target_end_date = time_value
+        ) %>%
+        select(
+          signal,
+          geo_value,
+          target_end_date,
+          true_value
+        )
+    }
+  ),
+  tar_target(
+    name = hhs_latest_data_2022,
+    command = {
+      hhs_latest_data # %>% filter(time_value >= "2022-01-01", time_value < "2022-04-01")
+    }
+  ),
+  tar_target(
+    name = hhs_archive_data,
+    command = {
+      res <- epidatr::pub_covidcast(
+        source = "hhs",
+        signals = hhs_signal,
+        geo_type = "state",
+        time_type = "day",
+        geo_values = "*",
+        time_values = training_time,
+        issues = "*",
+        fetch_args = fetch_args
+      ) %>%
+        select(
+          geo_value,
+          time_value,
+          value,
+          issue
+        ) %>%
+        as_epi_archive(compactify = TRUE) %>%
+        daily_to_weekly_archive("value")
+    }
+  ),
+  tar_target(
+    name = joined_archive_data,
+    command = {
+      hhs_archive_data$DT %>%
+        select(geo_value, time_value, value, version) %>%
+        rename("hhs" := value) %>%
+        filter(!geo_value %in% c("as", "pr", "vi", "gu", "mp")) %>%
+        as_epi_archive(
+          compactify = TRUE
+        )
+    }
   )
+)
 
 
 # These globals are needed by the function below (and they need to persist

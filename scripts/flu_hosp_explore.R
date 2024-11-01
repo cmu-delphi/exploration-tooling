@@ -81,7 +81,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
     keys_to_ignore = very_latent_locations
   ),
   # using grf way more sparingly
-   smoothed_scaled_grf = tidyr::expand_grid(
+  smoothed_scaled_grf = tidyr::expand_grid(
     forecaster = "smoothed_scaled",
     trainer = "randforest_grf",
     lags = list(
@@ -214,7 +214,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
     use_density = c(FALSE, TRUE),
     week_method = "sine",
     keys_to_ignore = very_latent_locations
-    ),
+  ),
   no_recent_grf = tidyr::expand_grid(
     forecaster = "no_recent_outcome",
     trainer = "randforest_grf",
@@ -225,8 +225,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
     use_density = FALSE,
     week_method = "linear",
     keys_to_ignore = very_latent_locations
-    )
-  ) %>%
+  )
+) %>%
   map(function(x) {
     if (dummy_mode) {
       x$forecaster <- "dummy_forecaster"
@@ -237,7 +237,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
 names(forecaster_parameter_combinations_)
 # scale_method and filter_source being empty are exclusive
 # also population and density are exclusive
-forecaster_parameter_combinations_$no_recent_quant %>% filter(xor(scale_method =="none", filter_source == ""), xor(use_population, use_density))
+forecaster_parameter_combinations_$no_recent_quant %>% filter(xor(scale_method == "none", filter_source == ""), xor(use_population, use_density))
+s3save(forecaster_parameter_combinations_, object = "flu_2023_forecaster_parameter_combinations.rds", bucket = "forecasting-team-data")
 
 # Make sure all ids are unique.
 stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(forecaster_parameter_combinations_$id))
@@ -272,7 +273,7 @@ ensemble_parameter_combinations_ <- tribble(
   rlang::list2(
     no_recent_outcome_params,
     list(forecaster = "flatline_fc"),
-  # robust aux forecaster: nssp
+    # robust aux forecaster: nssp
   )
 ) %>%
   {

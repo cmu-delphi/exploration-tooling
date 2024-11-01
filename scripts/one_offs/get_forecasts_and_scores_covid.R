@@ -4,64 +4,77 @@
 # in .Renviron, for instance: TAR_PROJECT=flu_hosp_tiny.
 source(here::here("R", "load_all.R"))
 
+
+
 # Get the truth data used for scoring
-flu_2023_truth_data <- tar_read(hhs_evaluation_data) %>%
+covid_2023_truth_data <- tar_read(hhs_evaluation_data) %>%
   # This is a correction for the fact that we date the forecasts for the
   # Wednesday they were made, but FluSight dates the for the upcoming Saturday
-  mutate(target_end_date = target_end_date + 3)
-s3save(flu_2023_truth_data, object = "flu_2023_truth_data.rds", bucket = "forecasting-team-data")
+  mutate(target_end_date = target_end_date - 2) %>%
+  # The data has unserializable ALTREP objects that bork on S3 load without
+  # this.
+  as.data.table() %>%
+  as_tibble()
+s3save(covid_2023_truth_data, object = "covid_2023_truth_data.rds", bucket = "forecasting-team-data")
 
 
 # Get the local forecasts
-state_geo_values <- flu_2023_truth_data %>%
+state_geo_values <- covid_2023_truth_data %>%
   pull(geo_value) %>%
   unique()
 df <- tar_manifest()
-forecasts <- df %>%
-  filter(stringr::str_detect(name, "forecast_")) %>%
-  pull(name) %>%
+forecasts <- df$name %>%
+  keep(~ stringr::str_detect(., "forecast_")) %>%
   map(function(name) {
-    # Sometimes things are missing during development.
     tryCatch(
       {
         tibble(forecaster = str_remove(name, "forecast_"), tar_read_raw(name))
       },
       error = function(e) {
+        print(name)
         tibble()
       }
     )
   }) %>%
   bind_rows() %>%
   filter(geo_value %in% state_geo_values)
-cmu_flu_2023_forecasts <- forecasts %>%
-  left_join(
-    flu_2023_truth_data %>%
-      select(geo_value, population) %>%
-      distinct(),
-    by = "geo_value"
-  ) %>%
-  mutate(prediction = prediction * population / 10L**5) %>%
-  select(-source, -population) %>%
+cmu_covid_2023_forecasts <- forecasts %>%
+  # left_join(
+  #   covid_2023_truth_data %>%
+  #     select(geo_value, population) %>%
+  #     distinct(),
+  #   by = "geo_value"
+  # ) %>%
+  # # mutate(prediction = prediction * population / 10L**5) %>%
+  # select(-source, -population) %>%
   # This is a correction for the fact that we date the forecasts for the
   # Wednesday they were made, but FluSight dates the for the upcoming Saturday
-  mutate(forecast_date = forecast_date + 3, target_end_date = target_end_date + 3)
+  mutate(forecast_date = forecast_date - 2, target_end_date = target_end_date - 2)
 
-# Get the forecasts from FluSight 2023
-s3load("flusight_forecasts_2023.rds", bucket = "forecasting-team-data")
-cmu_forecast_dates <- cmu_flu_2023_forecasts %>%
+
+# Get the forecasts from Covidhub 2023
+s3load("covidhub_forecasts_2023.rds", bucket = "forecasting-team-data")
+cmu_forecast_dates <- cmu_covid_2023_forecasts %>%
   pull(forecast_date) %>%
   unique()
 
 # Join and score
-flu_2023_joined_forecasts <- bind_rows(
-  cmu_flu_2023_forecasts, flusight_forecasts_2023 %>% filter(forecast_date %in% cmu_forecast_dates)
+covid_2023_joined_forecasts <- bind_rows(
+  cmu_covid_2023_forecasts,
+  covidhub_forecasts_2023 %>%
+    filter(forecast_date %in% cmu_forecast_dates) %>%
+    mutate(prediction = prediction * 7)
 )
+s3save(covid_2023_joined_forecasts, object = "covid_2023_joined_forecasts.rds", bucket = "forecasting-team-data")
 
-flu_2023_joined_forecasts %>% filter(forecaster %in% forecasters)
+covid_2023_truth_data %>%
+  pull(target_end_date) %>%
+  unique() %>%
+  sort()
 
-flu_2023_joined_scores <- flu_2023_joined_forecasts %>%
+covid_2023_joined_scores <- covid_2023_joined_forecasts %>%
   left_join(
-    flu_2023_truth_data,
+    covid_2023_truth_data,
     by = c("geo_value", "target_end_date")
   ) %>%
   as.data.table() %>%
@@ -80,4 +93,5 @@ flu_2023_joined_scores <- flu_2023_joined_forecasts %>%
     coverage_80
   ) %>%
   mutate(ahead = as.numeric(target_end_date - forecast_date))
-s3save(flu_2023_joined_scores, object = "flu_2023_joined_scores.rds", bucket = "forecasting-team-data")
+
+s3save(covid_2023_joined_scores, object = "covid_2023_joined_scores.rds", bucket = "forecasting-team-data")
