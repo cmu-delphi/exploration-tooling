@@ -55,10 +55,10 @@ forecaster_parameter_combinations_ <- rlang::list2(
   smoothed_scaled_main = tidyr::expand_grid(
     forecaster = "smoothed_scaled",
     trainer = "quantreg",
-    lags = list(
+    lags = list2(
       # list(smoothed, sd)
-      list(c(0, 7, 14, 21), c(0)),
-      list(c(0, 7), c(0))
+      list2(c(0, 7, 14, 21), c(0)),
+      list2(c(0, 7), c(0))
     ),
     smooth_width = as.difftime(8, units = "weeks"),
     sd_width = as.difftime(c(NA, 12), units = "weeks"),
@@ -72,9 +72,9 @@ forecaster_parameter_combinations_ <- rlang::list2(
   smoothed_scaled_data_augmented = tidyr::expand_grid(
     forecaster = "smoothed_scaled",
     trainer = "quantreg",
-    lags = list(
+    lags = list2(
       # list(smoothed, sd)
-      list(c(0, 7, 14, 21), c(0)),
+      list2(c(0, 7, 14, 21), c(0)),
     ),
     smooth_width = as.difftime(8, units = "weeks"),
     sd_width = as.difftime(c(NA, 12), units = "weeks"),
@@ -275,7 +275,7 @@ ensemble_parameter_combinations_ <- tribble(
   list(average_type = "median"),
   list2(
     scaled_pop_short_window,
-    scaled_pop_long_window,
+    scaled_pop_long_window
   )
 ) %>%
   {
