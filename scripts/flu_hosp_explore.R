@@ -182,16 +182,16 @@ forecaster_parameter_combinations_ <- rlang::list2(
   ##   n_training = Inf,
   ##   keys_to_ignore = very_latent_locations
   ## ),
-  flusion_quant = tidyr::expand_grid(
-    forecaster = "flusion",
-    trainer = "quantreg",
-    lags = list(c(0, 7, 14)),
-    dummy_states = FALSE,
-    dummy_source = c(TRUE, FALSE),
-    nonlin_method = "quart_root",
-    derivative_estimator = "growth_rate",
-    keys_to_ignore = very_latent_locations
-  ),
+  # flusion_quant = tidyr::expand_grid(
+  #   forecaster = "flusion",
+  #   trainer = "quantreg",
+  #   lags = list(c(0, 7, 14)),
+  #   dummy_states = FALSE,
+  #   dummy_source = c(TRUE, FALSE),
+  #   nonlin_method = "quart_root",
+  #   derivative_estimator = "growth_rate",
+  #   keys_to_ignore = very_latent_locations
+  # ),
   # variations on flusion
   flusion_grf = tidyr::expand_grid(
     forecaster = "flusion",
