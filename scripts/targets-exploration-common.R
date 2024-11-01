@@ -182,12 +182,12 @@ make_forecasts_and_scores <- function() {
         if ("population" %in% colnames(hhs_evaluation_data)) {
           # Undo population scaling
           actual_eval_data <- hhs_evaluation_data %>%
-              select(-population)
+            select(-population)
           forecast_scaled <- forecast %>%
             left_join(
               hhs_evaluation_data %>%
-              select(geo_value, population) %>%
-              distinct(),
+                select(geo_value, population) %>%
+                distinct(),
               by = "geo_value"
             ) %>%
             mutate(prediction = prediction * population / 10L**5)

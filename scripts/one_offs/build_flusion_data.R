@@ -439,7 +439,9 @@ flusion_merged
 
 flusion_merged <-
   flusion_merged$DT %>%
-  add_pop_and_density() %>% select(-agg_level.y) %>% rename(agg_level = agg_level.x)
+  add_pop_and_density() %>%
+  select(-agg_level.y) %>%
+  rename(agg_level = agg_level.x)
 
 
 
@@ -450,44 +452,66 @@ source(here::here("R", "load_all.R"))
 flusion_merged <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
   filter(geo_value != "as") %>%
   as_epi_archive(other_keys = "source", compactify = TRUE)
-options(error=NULL)
+options(error = NULL)
 # given that 2020 is the earliest we have nhsn, let's just drop any versions
 # older than that to avoid making computing the quantiles difficult
 epi_data <- flusion_merged %>%
   epix_as_of(as.Date("2022-10-26"))
-flusion_merged$DT %>% filter(!is.na(value)) %>% group_by(source) %>% count()
+flusion_merged$DT %>%
+  filter(!is.na(value)) %>%
+  group_by(source) %>%
+  count()
 flusion_merged$DT %>% filter(time_value == "2022-10-26")
 flusion_merged %>%
-  epix_as_of(as.Date("2022-10-26")) %>% filter(!is.na(value), source=="flusurv")
-epi_data %>% filter(!is.na(value), source =="flusurv")
+  epix_as_of(as.Date("2022-10-26")) %>%
+  filter(!is.na(value), source == "flusurv")
+epi_data %>% filter(!is.na(value), source == "flusurv")
 last_value <- flusion_merged %>%
   epix_as_of(as.Date("2024-01-01")) %>%
-  filter(time_value =="2022-10-26")
+  filter(time_value == "2022-10-26")
 true_value <- flusion_merged %>%
   epix_as_of(as.Date("2024-01-01"))
 source(here::here("R", "load_all.R"))
 pred_final <- flusion(epi_data, "value", adjust_latency = "extend_lags", derivative_estimator = "growth_rate")
 
 # various plots used after
-ggplot(epi_data, aes(x=time_value, y=value, color = source)) + geom_line()
-ggplot(full_data, aes(x=time_value, y=value, color = source)) + geom_line()
-ggplot(season_data, aes(x=time_value, y=value, color = geo_value)) + geom_line() + facet_wrap(~source,ncol=1)
-ggplot(full_data, aes(x=time_value, y=value, color = geo_value)) + geom_line() + facet_wrap(~source,ncol=1, scales="free_y")
-full_data %>% filter(geo_value == "as") %>% ggplot(aes(x=time_value, y = value))
-ggplot(season_data %>% filter(year > 2019), aes(x=time_value, y=value, color = geo_value)) + geom_line() + facet_wrap(~source,ncol=1, scales="free_y")
+ggplot(epi_data, aes(x = time_value, y = value, color = source)) +
+  geom_line()
+ggplot(full_data, aes(x = time_value, y = value, color = source)) +
+  geom_line()
+ggplot(season_data, aes(x = time_value, y = value, color = geo_value)) +
+  geom_line() +
+  facet_wrap(~source, ncol = 1)
+ggplot(full_data, aes(x = time_value, y = value, color = geo_value)) +
+  geom_line() +
+  facet_wrap(~source, ncol = 1, scales = "free_y")
+full_data %>%
+  filter(geo_value == "as") %>%
+  ggplot(aes(x = time_value, y = value))
+ggplot(season_data %>% filter(year > 2019), aes(x = time_value, y = value, color = geo_value)) +
+  geom_line() +
+  facet_wrap(~source, ncol = 1, scales = "free_y")
 # end various plots
 
 pred_final %>%
-    filter(!is.na(value)) %>%
-    pull(source) %>%
-    unique()
-true_value %>% filter(source =="nhsn") %>% pull(value) %>% median
+  filter(!is.na(value)) %>%
+  pull(source) %>%
+  unique()
+true_value %>%
+  filter(source == "nhsn") %>%
+  pull(value) %>%
+  median()
 pred_final
-pred_final %>% filter(quantile == .5) %>% left_join(
+pred_final %>%
+  filter(quantile == .5) %>%
+  left_join(
     true_value %>%
       select(-agg_level, -season, -season_week, -year, -population, -density),
     by = join_by(geo_value, source, target_end_date == time_value)
-  ) %>% ggplot(aes(x = value.x, y = value.y, color = source)) + geom_point() + geom_abline()
+  ) %>%
+  ggplot(aes(x = value.x, y = value.y, color = source)) +
+  geom_point() +
+  geom_abline()
 
 calculate
 
@@ -551,10 +575,14 @@ true_value2 %>%
   group_by(source, time_value) %>%
   drop_na() %>%
   summarise(min = min(value), max = max(value), mean = mean(value), median = median(value))
-pred_final2 %>% filter(quantile==0.5) %>% arrange(desc(value))
+pred_final2 %>%
+  filter(quantile == 0.5) %>%
+  arrange(desc(value))
 pred_final2 %>% arrange(desc(value))
 epi_data2 %>% arrange(desc(value))
-true_value2 %>% filter(`source` == "ILI+") %>% arrange(desc(value))
+true_value2 %>%
+  filter(`source` == "ILI+") %>%
+  arrange(desc(value))
 true_value2 %>%
   pull(value) %>%
   summary()
@@ -671,4 +699,3 @@ flusion_final <- inner_join(flusion_merged, flusion_merged_transform_factor,
 ##   ungroup() %>%
 ##   # Center inc_trans_cs by subtracting the center factor
 ##   mutate(value_transformed_cs = value_transformed_cs - value_transformed_center_factor)
-

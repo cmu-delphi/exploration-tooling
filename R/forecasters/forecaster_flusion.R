@@ -207,4 +207,3 @@ flusion <- function(epi_data,
   gc()
   return(pred_final)
 }
-

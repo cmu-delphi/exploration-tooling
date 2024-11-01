@@ -14,10 +14,10 @@ $$\\[.4in]$$
 
 ```{r echo=FALSE}
 knitr::opts_chunk$set(
-    fig.align = "center",
-    message = FALSE,
-    warning = FALSE,
-    cache = TRUE
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = TRUE
 )
 ggplot2::theme_set(ggplot2::theme_bw())
 ```
@@ -48,14 +48,14 @@ outside_forecasters <- c("FluSight-baseline", "FluSight-ensemble")
 # Load scores and filter them, get global variables
 s3load(object = "flu_2023_joined_scores.rds", bucket = "forecasting-team-data")
 scores <- flu_2023_joined_scores %>%
-    filter(forecaster %in% c(cmu_forecasters, outside_forecasters))
+  filter(forecaster %in% c(cmu_forecasters, outside_forecasters))
 forecast_dates <- scores %>%
-    pull(forecast_date) %>%
-    unique()
+  pull(forecast_date) %>%
+  unique()
 forecasters <- c(cmu_forecasters, outside_forecasters)
 aheads <- scores %>%
-    pull(ahead) %>%
-    unique()
+  pull(ahead) %>%
+  unique()
 forecaster_family <- forecaster_parameter_combinations_[[params$forecaster_set]]$forecaster %>% unique()
 base_forecaster_name <- "FluSight-baseline"
 
@@ -81,27 +81,27 @@ The table is sorted by descending WIS and contains all the forecasters in this n
 ```{r}
 # Display the table
 param_table <- forecaster_parameter_combinations_[[params$forecaster_set]] %>%
-    select(-any_of(c("forecaster", "keys_to_ignore", "pop_scaling"))) %>%
-    {
-        if ("n_training" %in% colnames(.)) {
-            (.) %>% mutate(n_training = as.character(n_training))
-        } else {
-            .
-        }
-    } %>%
-    full_join(
-        scores %>%
-            group_by(forecaster) %>%
-            summarize(
-                mean_wis = round(mean(wis, na.rm = TRUE), 2),
-                mean_ae = round(mean(ae, na.rm = TRUE), 2),
-                mean_coverage_80 = round(mean(coverage_80, na.rm = TRUE), 2)
-            ) %>%
-            rename(
-                id = forecaster
-            )
-    ) %>%
-    arrange(mean_wis)
+  select(-any_of(c("forecaster", "keys_to_ignore", "pop_scaling"))) %>%
+  {
+    if ("n_training" %in% colnames(.)) {
+      (.) %>% mutate(n_training = as.character(n_training))
+    } else {
+      .
+    }
+  } %>%
+  full_join(
+    scores %>%
+      group_by(forecaster) %>%
+      summarize(
+        mean_wis = round(mean(wis, na.rm = TRUE), 2),
+        mean_ae = round(mean(ae, na.rm = TRUE), 2),
+        mean_coverage_80 = round(mean(coverage_80, na.rm = TRUE), 2)
+      ) %>%
+      rename(
+        id = forecaster
+      )
+  ) %>%
+  arrange(mean_wis)
 datatable(param_table)
 ```
 
@@ -121,60 +121,60 @@ group_cols <- c("forecaster", "forecast_date", "ahead")
 
 # Aggregate metric across groups
 df <- scores %>%
-    select(all_of(c(group_cols, var))) %>%
-    drop_na(!!sym(var)) %>%
-    summarize(!!var := GeoMean(!!sym(var)), .by = all_of(group_cols)) %>%
-    filter(ahead >= 0)
+  select(all_of(c(group_cols, var))) %>%
+  drop_na(!!sym(var)) %>%
+  summarize(!!var := GeoMean(!!sym(var)), .by = all_of(group_cols)) %>%
+  filter(ahead >= 0)
 
 # Make sure we don't divide by zero
 if (
-    df %>%
-        filter(forecaster == base_forecaster_name & near(!!sym(var), 0)) %>%
-        nrow() > 0
+  df %>%
+    filter(forecaster == base_forecaster_name & near(!!sym(var), 0)) %>%
+    nrow() > 0
 ) {
-    warning("scale_by_forecaster will divide by zero in column ", var)
+  warning("scale_by_forecaster will divide by zero in column ", var)
 }
 
 # Normalize the metric by the baseline
 normalized_df <- df %>%
-    pivot_wider(names_from = forecaster, names_prefix = var, values_from = !!sym(var)) %>%
-    mutate(across(starts_with(var), ~ .x / !!sym(paste0(var, base_forecaster_name)))) %>%
-    pivot_longer(cols = starts_with(var), names_to = "forecaster", values_to = var) %>%
-    mutate(forecaster = stringr::str_remove(forecaster, var)) %>%
-    filter(forecaster != base_forecaster_name)
+  pivot_wider(names_from = forecaster, names_prefix = var, values_from = !!sym(var)) %>%
+  mutate(across(starts_with(var), ~ .x / !!sym(paste0(var, base_forecaster_name)))) %>%
+  pivot_longer(cols = starts_with(var), names_to = "forecaster", values_to = var) %>%
+  mutate(forecaster = stringr::str_remove(forecaster, var)) %>%
+  filter(forecaster != base_forecaster_name)
 
 facets.label <- str_glue("{aheads} days ahead")
 names(facets.label) <- aheads
 subtitle <- sprintf(
-    "Forecasts made over %s to %s",
-    format(min(forecast_dates), "%B %d, %Y"),
-    format(max(forecast_dates), "%B %d, %Y")
+  "Forecasts made over %s to %s",
+  format(min(forecast_dates), "%B %d, %Y"),
+  format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-    normalized_df %>% filter(forecaster != "FluSight-ensemble"),
-    aes(x = forecast_date, y = !!sym(var))
+  normalized_df %>% filter(forecaster != "FluSight-ensemble"),
+  aes(x = forecast_date, y = !!sym(var))
 ) +
-    geom_line(aes(color = forecaster, group = forecaster)) +
-    geom_point(aes(color = forecaster, group = forecaster)) +
-    geom_line(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
-        aes(x = forecast_date, y = !!sym(var)),
-        color = "black", linetype = 2
-    ) +
-    geom_point(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
-        aes(x = forecast_date, y = !!sym(var)),
-        color = "black", shape = 21, fill = "white"
-    ) +
-    facet_grid(rows = vars(ahead)) +
-    facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
-    scale_y_log10() +
-    scale_color_discrete() +
-    guides(color = guide_legend(ncol = 2)) +
-    labs(title = subtitle, x = "Forecast Dates", y = "Geometric Mean WIS")
+  geom_line(aes(color = forecaster, group = forecaster)) +
+  geom_point(aes(color = forecaster, group = forecaster)) +
+  geom_line(
+    data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+    aes(x = forecast_date, y = !!sym(var)),
+    color = "black", linetype = 2
+  ) +
+  geom_point(
+    data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+    aes(x = forecast_date, y = !!sym(var)),
+    color = "black", shape = 21, fill = "white"
+  ) +
+  facet_grid(rows = vars(ahead)) +
+  facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
+  scale_y_log10() +
+  scale_color_discrete() +
+  guides(color = guide_legend(ncol = 2)) +
+  labs(title = subtitle, x = "Forecast Dates", y = "Geometric Mean WIS")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
-    layout(hoverlabel = list(bgcolor = "white"))
+  layout(hoverlabel = list(bgcolor = "white"))
 ```
 
 #### WIS by Ahead
@@ -185,52 +185,52 @@ group_cols <- c("forecaster", "ahead")
 
 # Aggregate metric across groups
 df <- scores %>%
-    select(all_of(c(group_cols, var))) %>%
-    drop_na(!!sym(var)) %>%
-    summarize(!!var := GeoMean(!!sym(var)), .by = all_of(group_cols)) %>%
-    filter(ahead >= 0)
+  select(all_of(c(group_cols, var))) %>%
+  drop_na(!!sym(var)) %>%
+  summarize(!!var := GeoMean(!!sym(var)), .by = all_of(group_cols)) %>%
+  filter(ahead >= 0)
 
 # Make sure we don't divide by zero
 if (df %>% filter(forecaster == base_forecaster_name & near(!!sym(var), 0)) %>% nrow() > 0) {
-    warning("scale_by_forecaster will divide by zero in column ", var)
+  warning("scale_by_forecaster will divide by zero in column ", var)
 }
 
 # Normalize the metric by the baseline
 normalized_df <- df %>%
-    pivot_wider(names_from = forecaster, names_prefix = var, values_from = !!sym(var)) %>%
-    mutate(across(starts_with(var), ~ .x / !!sym(paste0(var, base_forecaster_name)))) %>%
-    pivot_longer(cols = starts_with(var), names_to = "forecaster", values_to = var) %>%
-    mutate(forecaster = stringr::str_remove(forecaster, var)) %>%
-    filter(forecaster != base_forecaster_name)
+  pivot_wider(names_from = forecaster, names_prefix = var, values_from = !!sym(var)) %>%
+  mutate(across(starts_with(var), ~ .x / !!sym(paste0(var, base_forecaster_name)))) %>%
+  pivot_longer(cols = starts_with(var), names_to = "forecaster", values_to = var) %>%
+  mutate(forecaster = stringr::str_remove(forecaster, var)) %>%
+  filter(forecaster != base_forecaster_name)
 
 subtitle <- sprintf(
-    "Forecasts made over %s to %s",
-    format(min(forecast_dates), "%B %d, %Y"),
-    format(max(forecast_dates), "%B %d, %Y")
+  "Forecasts made over %s to %s",
+  format(min(forecast_dates), "%B %d, %Y"),
+  format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-    normalized_df %>% filter(forecaster != "FluSight-ensemble"),
-    aes(x = ahead, y = !!sym(var))
+  normalized_df %>% filter(forecaster != "FluSight-ensemble"),
+  aes(x = ahead, y = !!sym(var))
 ) +
-    geom_line(aes(color = forecaster, group = forecaster)) +
-    geom_point(aes(color = forecaster, group = forecaster)) +
-    geom_line(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
-        aes(x = ahead, y = !!sym(var)),
-        color = "black", linetype = 2
-    ) +
-    geom_point(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
-        aes(x = ahead, y = !!sym(var)),
-        color = "black", shape = 21, fill = "white"
-    ) +
-    scale_y_log10() +
-    scale_color_discrete() +
-    guides(color = guide_legend(ncol = 2)) +
-    labs(title = subtitle, x = "Days ahead", y = "Geometric Mean WIS")
+  geom_line(aes(color = forecaster, group = forecaster)) +
+  geom_point(aes(color = forecaster, group = forecaster)) +
+  geom_line(
+    data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+    aes(x = ahead, y = !!sym(var)),
+    color = "black", linetype = 2
+  ) +
+  geom_point(
+    data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+    aes(x = ahead, y = !!sym(var)),
+    color = "black", shape = 21, fill = "white"
+  ) +
+  scale_y_log10() +
+  scale_color_discrete() +
+  guides(color = guide_legend(ncol = 2)) +
+  labs(title = subtitle, x = "Days ahead", y = "Geometric Mean WIS")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
-    layout(hoverlabel = list(bgcolor = "white"))
+  layout(hoverlabel = list(bgcolor = "white"))
 ```
 
 #### Absolute Error by Forecast Date
@@ -241,60 +241,60 @@ group_cols <- c("forecaster", "forecast_date", "ahead")
 
 # Aggregate metric across groups
 df <- scores %>%
-    select(all_of(c(group_cols, var))) %>%
-    drop_na(!!sym(var)) %>%
-    summarize(!!var := Mean(!!sym(var)), .by = all_of(group_cols)) %>%
-    filter(ahead >= 0)
+  select(all_of(c(group_cols, var))) %>%
+  drop_na(!!sym(var)) %>%
+  summarize(!!var := Mean(!!sym(var)), .by = all_of(group_cols)) %>%
+  filter(ahead >= 0)
 
 # Make sure we don't divide by zero
 if (
-    df %>%
-        filter(forecaster == base_forecaster_name & near(!!sym(var), 0)) %>%
-        nrow() > 0
+  df %>%
+    filter(forecaster == base_forecaster_name & near(!!sym(var), 0)) %>%
+    nrow() > 0
 ) {
-    warning("scale_by_forecaster will divide by zero in column ", var)
+  warning("scale_by_forecaster will divide by zero in column ", var)
 }
 
 # Normalize the metric by the baseline
 normalized_df <- df %>%
-    pivot_wider(names_from = forecaster, names_prefix = var, values_from = !!sym(var)) %>%
-    mutate(across(starts_with(var), ~ .x / !!sym(paste0(var, base_forecaster_name)))) %>%
-    pivot_longer(cols = starts_with(var), names_to = "forecaster", values_to = var) %>%
-    mutate(forecaster = stringr::str_remove(forecaster, var)) %>%
-    filter(forecaster != base_forecaster_name)
+  pivot_wider(names_from = forecaster, names_prefix = var, values_from = !!sym(var)) %>%
+  mutate(across(starts_with(var), ~ .x / !!sym(paste0(var, base_forecaster_name)))) %>%
+  pivot_longer(cols = starts_with(var), names_to = "forecaster", values_to = var) %>%
+  mutate(forecaster = stringr::str_remove(forecaster, var)) %>%
+  filter(forecaster != base_forecaster_name)
 
 facets.label <- str_glue("{aheads} days ahead")
 names(facets.label) <- aheads
 subtitle <- sprintf(
-    "Forecasts made over %s to %s",
-    format(min(forecast_dates), "%B %d, %Y"),
-    format(max(forecast_dates), "%B %d, %Y")
+  "Forecasts made over %s to %s",
+  format(min(forecast_dates), "%B %d, %Y"),
+  format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-    normalized_df %>% filter(forecaster != "FluSight-ensemble"),
-    aes(x = forecast_date, y = !!sym(var))
+  normalized_df %>% filter(forecaster != "FluSight-ensemble"),
+  aes(x = forecast_date, y = !!sym(var))
 ) +
-    geom_line(aes(color = forecaster, group = forecaster)) +
-    geom_point(aes(color = forecaster, group = forecaster)) +
-    geom_line(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
-        aes(x = forecast_date, y = !!sym(var)),
-        color = "black", linetype = 2
-    ) +
-    geom_point(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
-        aes(x = forecast_date, y = !!sym(var)),
-        color = "black", shape = 21, fill = "white"
-    ) +
-    facet_grid(rows = vars(ahead)) +
-    facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
-    scale_y_log10() +
-    scale_color_discrete() +
-    guides(color = guide_legend(ncol = 2)) +
-    labs(title = subtitle, x = "Forecast Dates", y = "Geometric Mean WIS")
+  geom_line(aes(color = forecaster, group = forecaster)) +
+  geom_point(aes(color = forecaster, group = forecaster)) +
+  geom_line(
+    data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+    aes(x = forecast_date, y = !!sym(var)),
+    color = "black", linetype = 2
+  ) +
+  geom_point(
+    data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+    aes(x = forecast_date, y = !!sym(var)),
+    color = "black", shape = 21, fill = "white"
+  ) +
+  facet_grid(rows = vars(ahead)) +
+  facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
+  scale_y_log10() +
+  scale_color_discrete() +
+  guides(color = guide_legend(ncol = 2)) +
+  labs(title = subtitle, x = "Forecast Dates", y = "Geometric Mean WIS")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
-    layout(hoverlabel = list(bgcolor = "white"))
+  layout(hoverlabel = list(bgcolor = "white"))
 ```
 
 #### Absolute Error by Ahead
@@ -305,52 +305,52 @@ group_cols <- c("forecaster", "ahead")
 
 # Aggregate metric across groups
 df <- scores %>%
-    select(all_of(c(group_cols, var))) %>%
-    drop_na(!!sym(var)) %>%
-    summarize(!!var := Mean(!!sym(var)), .by = all_of(group_cols)) %>%
-    filter(ahead >= 0)
+  select(all_of(c(group_cols, var))) %>%
+  drop_na(!!sym(var)) %>%
+  summarize(!!var := Mean(!!sym(var)), .by = all_of(group_cols)) %>%
+  filter(ahead >= 0)
 
 # Make sure we don't divide by zero
 if (df %>% filter(forecaster == base_forecaster_name & near(!!sym(var), 0)) %>% nrow() > 0) {
-    warning("scale_by_forecaster will divide by zero in column ", var)
+  warning("scale_by_forecaster will divide by zero in column ", var)
 }
 
 # Normalize the metric by the baseline
 normalized_df <- df %>%
-    pivot_wider(names_from = forecaster, names_prefix = var, values_from = !!sym(var)) %>%
-    mutate(across(starts_with(var), ~ .x / !!sym(paste0(var, base_forecaster_name)))) %>%
-    pivot_longer(cols = starts_with(var), names_to = "forecaster", values_to = var) %>%
-    mutate(forecaster = stringr::str_remove(forecaster, var)) %>%
-    filter(forecaster != base_forecaster_name)
+  pivot_wider(names_from = forecaster, names_prefix = var, values_from = !!sym(var)) %>%
+  mutate(across(starts_with(var), ~ .x / !!sym(paste0(var, base_forecaster_name)))) %>%
+  pivot_longer(cols = starts_with(var), names_to = "forecaster", values_to = var) %>%
+  mutate(forecaster = stringr::str_remove(forecaster, var)) %>%
+  filter(forecaster != base_forecaster_name)
 
 subtitle <- sprintf(
-    "Forecasts made over %s to %s",
-    format(min(forecast_dates), "%B %d, %Y"),
-    format(max(forecast_dates), "%B %d, %Y")
+  "Forecasts made over %s to %s",
+  format(min(forecast_dates), "%B %d, %Y"),
+  format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-    normalized_df %>% filter(forecaster != "FluSight-ensemble"),
-    aes(x = ahead, y = !!sym(var))
+  normalized_df %>% filter(forecaster != "FluSight-ensemble"),
+  aes(x = ahead, y = !!sym(var))
 ) +
-    geom_line(aes(color = forecaster, group = forecaster)) +
-    geom_point(aes(color = forecaster, group = forecaster)) +
-    geom_line(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
-        aes(x = ahead, y = !!sym(var)),
-        color = "black", linetype = 2
-    ) +
-    geom_point(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
-        aes(x = ahead, y = !!sym(var)),
-        color = "black", shape = 21, fill = "white"
-    ) +
-    scale_y_log10() +
-    scale_color_discrete() +
-    guides(color = guide_legend(ncol = 2)) +
-    labs(title = subtitle, x = "Days ahead", y = "Geometric Mean WIS")
+  geom_line(aes(color = forecaster, group = forecaster)) +
+  geom_point(aes(color = forecaster, group = forecaster)) +
+  geom_line(
+    data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+    aes(x = ahead, y = !!sym(var)),
+    color = "black", linetype = 2
+  ) +
+  geom_point(
+    data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+    aes(x = ahead, y = !!sym(var)),
+    color = "black", shape = 21, fill = "white"
+  ) +
+  scale_y_log10() +
+  scale_color_discrete() +
+  guides(color = guide_legend(ncol = 2)) +
+  labs(title = subtitle, x = "Days ahead", y = "Geometric Mean WIS")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
-    layout(hoverlabel = list(bgcolor = "white"))
+  layout(hoverlabel = list(bgcolor = "white"))
 ```
 
 #### % Coverage by Forecast Date
@@ -361,42 +361,42 @@ group_cols <- c("forecaster", "forecast_date", "ahead")
 
 # Aggregate metric across groups
 df <- scores %>%
-    drop_na(!!sym(var)) %>%
-    summarize(!!var := Mean(!!sym(var)), .by = all_of(group_cols)) %>%
-    filter(ahead >= 0)
+  drop_na(!!sym(var)) %>%
+  summarize(!!var := Mean(!!sym(var)), .by = all_of(group_cols)) %>%
+  filter(ahead >= 0)
 
 facets.label <- str_glue("{aheads} days ahead")
 names(facets.label) <- aheads
 subtitle <- sprintf(
-    "Forecasts made over %s to %s",
-    format(min(forecast_dates), "%B %d, %Y"),
-    format(max(forecast_dates), "%B %d, %Y")
+  "Forecasts made over %s to %s",
+  format(min(forecast_dates), "%B %d, %Y"),
+  format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-    df %>% filter(forecaster != "FluSight-ensemble"),
-    aes(x = forecast_date, y = !!sym(var))
+  df %>% filter(forecaster != "FluSight-ensemble"),
+  aes(x = forecast_date, y = !!sym(var))
 ) +
-    geom_line(aes(color = forecaster, group = forecaster)) +
-    geom_point(aes(color = forecaster, group = forecaster)) +
-    geom_line(
-        data = df %>% filter(forecaster == "FluSight-ensemble"),
-        aes(x = forecast_date, y = !!sym(var)),
-        color = "black", linetype = 2
-    ) +
-    geom_point(
-        data = df %>% filter(forecaster == "FluSight-ensemble"),
-        aes(x = forecast_date, y = !!sym(var)),
-        color = "black", shape = 21, fill = "white"
-    ) +
-    geom_hline(yintercept = .8, linetype = 1, color = "black") +
-    facet_grid(rows = vars(ahead)) +
-    facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
-    scale_color_discrete() +
-    guides(color = guide_legend(ncol = 2)) +
-    labs(title = subtitle, x = "Forecast Dates", y = "Mean 80% Coverage")
+  geom_line(aes(color = forecaster, group = forecaster)) +
+  geom_point(aes(color = forecaster, group = forecaster)) +
+  geom_line(
+    data = df %>% filter(forecaster == "FluSight-ensemble"),
+    aes(x = forecast_date, y = !!sym(var)),
+    color = "black", linetype = 2
+  ) +
+  geom_point(
+    data = df %>% filter(forecaster == "FluSight-ensemble"),
+    aes(x = forecast_date, y = !!sym(var)),
+    color = "black", shape = 21, fill = "white"
+  ) +
+  geom_hline(yintercept = .8, linetype = 1, color = "black") +
+  facet_grid(rows = vars(ahead)) +
+  facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
+  scale_color_discrete() +
+  guides(color = guide_legend(ncol = 2)) +
+  labs(title = subtitle, x = "Forecast Dates", y = "Mean 80% Coverage")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
-    layout(hoverlabel = list(bgcolor = "white"))
+  layout(hoverlabel = list(bgcolor = "white"))
 ```
 
 #### % Coverage by Ahead
@@ -407,39 +407,39 @@ id_cols <- c("forecaster", "ahead")
 
 # Aggregate metric across groups
 df <- scores %>%
-    select(all_of(c(id_cols, var))) %>%
-    drop_na(!!sym(var)) %>%
-    summarize(!!var := Mean(!!sym(var)), .by = all_of(id_cols)) %>%
-    filter(ahead >= 0)
+  select(all_of(c(id_cols, var))) %>%
+  drop_na(!!sym(var)) %>%
+  summarize(!!var := Mean(!!sym(var)), .by = all_of(id_cols)) %>%
+  filter(ahead >= 0)
 
 subtitle <- sprintf(
-    "Forecasts made over %s to %s",
-    format(min(forecast_dates), "%B %d, %Y"),
-    format(max(forecast_dates), "%B %d, %Y")
+  "Forecasts made over %s to %s",
+  format(min(forecast_dates), "%B %d, %Y"),
+  format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-    df %>% filter(forecaster != "FluSight-ensemble"),
-    aes(x = ahead, y = !!sym(var))
+  df %>% filter(forecaster != "FluSight-ensemble"),
+  aes(x = ahead, y = !!sym(var))
 ) +
-    geom_line(aes(color = forecaster, group = forecaster)) +
-    geom_point(aes(color = forecaster, group = forecaster)) +
-    geom_line(
-        data = df %>% filter(forecaster == "FluSight-ensemble"),
-        aes(x = ahead, y = !!sym(var)),
-        color = "black", linetype = 2
-    ) +
-    geom_point(
-        data = df %>% filter(forecaster == "FluSight-ensemble"),
-        aes(x = ahead, y = !!sym(var)),
-        color = "black", shape = 21, fill = "white"
-    ) +
-    geom_hline(yintercept = .8, linetype = 1, color = "black") +
-    scale_color_discrete() +
-    guides(color = guide_legend(ncol = 2)) +
-    labs(title = subtitle, x = "Days ahead", y = "Mean 80% Coverage")
+  geom_line(aes(color = forecaster, group = forecaster)) +
+  geom_point(aes(color = forecaster, group = forecaster)) +
+  geom_line(
+    data = df %>% filter(forecaster == "FluSight-ensemble"),
+    aes(x = ahead, y = !!sym(var)),
+    color = "black", linetype = 2
+  ) +
+  geom_point(
+    data = df %>% filter(forecaster == "FluSight-ensemble"),
+    aes(x = ahead, y = !!sym(var)),
+    color = "black", shape = 21, fill = "white"
+  ) +
+  geom_hline(yintercept = .8, linetype = 1, color = "black") +
+  scale_color_discrete() +
+  guides(color = guide_legend(ncol = 2)) +
+  labs(title = subtitle, x = "Days ahead", y = "Mean 80% Coverage")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
-    layout(hoverlabel = list(bgcolor = "white"))
+  layout(hoverlabel = list(bgcolor = "white"))
 ```
 
 ### Fan plots
@@ -455,35 +455,35 @@ s3load(object = "flu_2023_truth_data.rds", bucket = "forecasting-team-data")
 plot_dates <- seq.Date(as.Date("2023-10-07"), by = "4 weeks", length.out = 8)
 geo_vals <- c("ca", "fl", "pa", "tx")
 forecast_subset <- flu_2023_joined_forecasts %>%
-    filter(
-        forecaster %in% c(cmu_forecasters, outside_forecasters),
-        geo_value %in% geo_vals,
-        forecast_date %in% plot_dates
-    ) %>%
-    mutate(quantile = as.character(quantile)) %>%
-    pivot_wider(names_from = "quantile", values_from = "prediction") %>%
-    mutate(ahead = as.numeric(target_end_date - forecast_date)) %>%
-    inner_join(
-        param_table %>% rename(forecaster = id) %>% select(forecaster, mean_wis)
-    ) %>%
-    arrange(mean_wis)
+  filter(
+    forecaster %in% c(cmu_forecasters, outside_forecasters),
+    geo_value %in% geo_vals,
+    forecast_date %in% plot_dates
+  ) %>%
+  mutate(quantile = as.character(quantile)) %>%
+  pivot_wider(names_from = "quantile", values_from = "prediction") %>%
+  mutate(ahead = as.numeric(target_end_date - forecast_date)) %>%
+  inner_join(
+    param_table %>% rename(forecaster = id) %>% select(forecaster, mean_wis)
+  ) %>%
+  arrange(mean_wis)
 
 p <- ggplot(
-    data = forecast_subset,
-    aes(x = target_end_date, group = forecast_date)
+  data = forecast_subset,
+  aes(x = target_end_date, group = forecast_date)
 ) +
-    geom_ribbon(aes(ymin = `0.05`, ymax = `0.95`, fill = forecast_date), alpha = 0.3) +
-    geom_line(aes(y = `0.5`, color = forecast_date), linetype = 2L) +
-    geom_point(aes(y = `0.5`, color = forecast_date), size = 0.75) +
-    geom_line(
-        data = flu_2023_truth_data %>% filter(geo_value %in% geo_vals),
-        aes(x = target_end_date, y = true_value),
-        inherit.aes = FALSE, na.rm = TRUE,
-        color = "black", linetype = 1
-    ) +
-    facet_grid(forecaster ~ geo_value) +
-    labs(x = "Reference Date", y = "Forecasts")
+  geom_ribbon(aes(ymin = `0.05`, ymax = `0.95`, fill = forecast_date), alpha = 0.3) +
+  geom_line(aes(y = `0.5`, color = forecast_date), linetype = 2L) +
+  geom_point(aes(y = `0.5`, color = forecast_date), size = 0.75) +
+  geom_line(
+    data = flu_2023_truth_data %>% filter(geo_value %in% geo_vals),
+    aes(x = target_end_date, y = true_value),
+    inherit.aes = FALSE, na.rm = TRUE,
+    color = "black", linetype = 1
+  ) +
+  facet_grid(forecaster ~ geo_value) +
+  labs(x = "Reference Date", y = "Forecasts")
 
 ggplotly(p, tooltip = "text", height = 3000, width = 1000) %>%
-    layout(hoverlabel = list(bgcolor = "white"))
+  layout(hoverlabel = list(bgcolor = "white"))
 ```

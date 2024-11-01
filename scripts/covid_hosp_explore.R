@@ -14,7 +14,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
     lags = list(
       c(0, 7),
       c(0, 7, 14),
-      c(0, 7, 14, 21)),
+      c(0, 7, 14, 21)
+    ),
     pop_scaling = c(TRUE, FALSE),
     n_training = c(6, Inf)
   ),

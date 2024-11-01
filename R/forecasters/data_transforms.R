@@ -43,9 +43,9 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
   epi_data %<>% group_by(across(key_colnames(epi_data, exclude = "time_value")))
   for (col in cols_to_mean) {
     mean_name <- paste0("slide_", col, "_m", w)
-      epi_data %<>%
-        epi_slide_mean(all_of(col), .window_size = width) %>%
-        rename(!!mean_name := paste0("slide_value_", col))
+    epi_data %<>%
+      epi_slide_mean(all_of(col), .window_size = width) %>%
+      rename(!!mean_name := paste0("slide_value_", col))
   }
   epi_data %<>% ungroup()
   return(epi_data)
@@ -181,7 +181,7 @@ get_poly_coefs <- function(values, degree, n_points) {
 
 #' get the mean and median used to whiten epi_data on a per source-geo_value basis
 #' note that we can't just use step_boxcox or step yeo-johnson because it doesn't allow for grouping
-calculate_whitening_params <- function(epi_data, colname, scale_method = c("quantile", "quantile_upper", "std", "none"), center_method = c("median", "mean"), nonlin_method = c("quart_root","none")) {
+calculate_whitening_params <- function(epi_data, colname, scale_method = c("quantile", "quantile_upper", "std", "none"), center_method = c("median", "mean"), nonlin_method = c("quart_root", "none")) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
@@ -189,8 +189,8 @@ calculate_whitening_params <- function(epi_data, colname, scale_method = c("quan
     return(NULL)
   }
   if (nonlin_method == "quart_root") {
-  scaled_data <- epi_data %>%
-    mutate(across(all_of(colname), \(x) (x + 0.01)^0.25))
+    scaled_data <- epi_data %>%
+      mutate(across(all_of(colname), \(x) (x + 0.01)^0.25))
   } else if (nonlin_method == "none") {
     scaled_data <- epi_data
   }

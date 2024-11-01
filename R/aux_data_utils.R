@@ -133,26 +133,29 @@ gen_pop_and_density_data <-
       arrange(geo_value, year) %>%
       fill(population, density)
     pops_by_state_hhs
-}
+  }
 daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), day_of_week = 4L, day_of_week_end = 7L, keys = "geo_value", values = c("value")) {
   epi_df %>%
     mutate(epiweek = epiweek(time_value), year = epiyear(time_value)) %>%
     group_by(across(any_of(c(keys, "epiweek", "year")))) %>%
     summarize(
-      across(all_of(values), ~sum(.x, na.rm = TRUE)),
+      across(all_of(values), ~ sum(.x, na.rm = TRUE)),
       time_value = floor_date(max(time_value), "weeks", week_start = 7) + 3,
-      .groups = "drop") %>%
+      .groups = "drop"
+    ) %>%
     select(-epiweek, -year)
 }
 
 daily_to_weekly_archive <- function(epi_arch,
-                            agg_columns,
-                            agg_method = c("sum", "mean"),
-                            day_of_week = 4L,
-                            day_of_week_end = 7L) {
+                                    agg_columns,
+                                    agg_method = c("sum", "mean"),
+                                    day_of_week = 4L,
+                                    day_of_week_end = 7L) {
   agg_method <- arg_match(agg_method)
   keys <- key_colnames(epi_arch, exclude = "time_value")
-  ref_time_values <- epi_arch$DT$version %>% unique() %>% sort()
+  ref_time_values <- epi_arch$DT$version %>%
+    unique() %>%
+    sort()
   if (agg_method == "sum") {
     slide_fun <- epi_slide_sum
   } else if (agg_method == "mean") {
@@ -199,7 +202,7 @@ drop_non_seasons <- function(epi_data, min_window = 12) {
       (season_week < 35) |
         (forecast_date - time_value < as.difftime(min_window, units = "weeks")),
       season != "2020/21",
-      #season != "2021/22", # keeping this because whitening otherwise gets really bad with the single season of data
+      # season != "2021/22", # keeping this because whitening otherwise gets really bad with the single season of data
       (season != "2019/20") | (time_value < "2020-03-01"),
       season != "2008/09"
     )

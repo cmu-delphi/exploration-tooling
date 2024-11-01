@@ -232,26 +232,26 @@ no_recent_outcome_params <- list(
   keys_to_ignore = very_latent_locations[[1]]
 )
 scaled_pop_short_window <- list(
-    forecaster = "scaled_pop",
-    trainer = "quantreg",
-    lags = c(0, 7),
-    pop_scaling = FALSE,
-    filter_source = "nhsn",
-    filter_agg_level = "state",
-    n_training = 3,
-    drop_non_seasons = FALSE,
-    keys_to_ignore = very_latent_locations
+  forecaster = "scaled_pop",
+  trainer = "quantreg",
+  lags = c(0, 7),
+  pop_scaling = FALSE,
+  filter_source = "nhsn",
+  filter_agg_level = "state",
+  n_training = 3,
+  drop_non_seasons = FALSE,
+  keys_to_ignore = very_latent_locations
 )
 scaled_pop_long_window <- list(
-    forecaster = "scaled_pop",
-    trainer = "quantreg",
-    lags = c(0, 7, 14, 21),
-    pop_scaling = FALSE,
-    filter_source = "nhsn",
-    filter_agg_level = "state",
-    n_training = Inf,
-    drop_non_seasons = FALSE,
-    keys_to_ignore = very_latent_locations
+  forecaster = "scaled_pop",
+  trainer = "quantreg",
+  lags = c(0, 7, 14, 21),
+  pop_scaling = FALSE,
+  filter_source = "nhsn",
+  filter_agg_level = "state",
+  n_training = Inf,
+  drop_non_seasons = FALSE,
+  keys_to_ignore = very_latent_locations
 )
 # Human-readable object to be used for inspecting the ensembles in the pipeline.
 ensemble_parameter_combinations_ <- tribble(
@@ -269,6 +269,7 @@ ensemble_parameter_combinations_ <- tribble(
   list2(
     no_recent_outcome_params,
     list(forecaster = "flatline_fc"),
+  ),
   # scaled_pop averaging long and short training windows
   "ensemble_average",
   list(average_type = "median"),

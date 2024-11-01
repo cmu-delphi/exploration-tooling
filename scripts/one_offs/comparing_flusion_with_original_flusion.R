@@ -107,4 +107,3 @@ scores %>%
   geom_boxplot()
 ggsave(here::here("scripts/one_offs/comparing_various_Feb.png"))
 scores %>% filter(!is.na(interval_score))
-
