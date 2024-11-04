@@ -115,8 +115,13 @@ run_workflow_and_format <- function(preproc,
   test_data <- get_oversized_test_data(full_data %||% train_data, test_data_interval, preproc)
   # predict, and filter out those forecasts for less recent days (predict
   # predicts for every day that has enough data)
-  pred <- predict(workflow, test_data) %>%
-    filter(time_value == max(time_value))
+  pred <- predict(workflow, test_data)
+  # keeping only the last time_value for any given location/key
+  pred %<>%
+    group_by(across(all_of(key_colnames(train_data, exclude = "time_value")))) %>%
+    arrange(time_value) %>%
+    filter(row_number() == n()) %>%
+    ungroup()
   return(format_storage(pred, as_of))
 }
 
