@@ -257,7 +257,6 @@ forecaster_parameter_combinations_ <- rlang::list2(
     x
   }) %>%
   map(add_id)
-names(forecaster_parameter_combinations_)
 # scale_method and filter_source being empty are exclusive
 # also population and density are exclusive
 forecaster_parameter_combinations_$no_recent_quant %>% filter(xor(scale_method == "none", filter_source == ""), xor(use_population, use_density))
