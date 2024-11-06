@@ -95,6 +95,9 @@ scaled_pop <- function(epi_data,
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
+
+
+  # if we're dropping non-seasonal and data from the years when flu wasn't active
   if (drop_non_seasons) {
     season_data <- epi_data %>% drop_non_seasons()
   } else {
@@ -104,6 +107,12 @@ scaled_pop <- function(epi_data,
   # whiten to get the sources on the same scale
   learned_params <- calculate_whitening_params(season_data, predictors, scale_method, center_method, nonlin_method)
   epi_data %<>% data_whitening(predictors, learned_params, nonlin_method)
+
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
+  }
 
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
@@ -132,7 +141,7 @@ scaled_pop <- function(epi_data,
     )
   }
   # with all the setup done, we execute and format
-  pred <- run_workflow_and_format(preproc, postproc, trainer, epi_data)
+  pred <- run_workflow_and_format(preproc, postproc, trainer, season_data, epi_data)
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration

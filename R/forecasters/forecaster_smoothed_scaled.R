@@ -169,6 +169,12 @@ smoothed_scaled <- function(epi_data,
       keep_mean = keep_mean
     )
   }
+  # need to make a version with the non seasonal and problematic flu seasons removed
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
+  }
 
   # and need to make sure we exclude the original variables as predictors
   all_names <- get_nonkey_names(epi_data)
@@ -202,7 +208,8 @@ smoothed_scaled <- function(epi_data,
     )
   }
   # with all the setup done, we execute and format
-  pred <- run_workflow_and_format(preproc, postproc, trainer, epi_data)
+  pred <- run_workflow_and_format(preproc, postproc, trainer,
+                                  season_data, epi_data)
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration

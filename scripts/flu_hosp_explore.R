@@ -131,67 +131,80 @@ forecaster_parameter_combinations_ <- rlang::list2(
     filter_agg_level = "state"
   ),
   # using exogenous variables
-  ## smooth_scaled_nssp = tidyr::expand_grid(
-  ##   forecaster = "smoothed_scaled",
-  ##   trainer = c("quantreg"),
-  ##   extra_sources = c("nssp"),
-  ##   lags = list(
-  ##     list(
-  ##       c(0, 7, 14, 21, 28), c(0), # hhs
-  ##       c(0, 7), c(0) # nssp
-  ##     )
-  ##   ),
-  ##   smooth_width = as.difftime(2, units = "weeks"),
-  ##   sd_width = as.difftime(4, units = "weeks"),
-  ##   sd_mean_width = as.difftime(2, units = "weeks"),
-  ##   filter_source = "nhsn",
-  ##   filter_agg_level = "state",
-  ##   pop_scaling = FALSE,
-  ##   n_training = Inf,
-  ##   keys_to_ignore = very_latent_locations
-  ## ),
-  ##  smooth_scaled_nssp_gs = tidyr::expand_grid(
-  ##   forecaster = "smoothed_scaled",
-  ##   trainer = c("quantreg"),
-  ##   # b/c it's a list, it uses both as a pair rather than expanding the grid
-  ##   extra_sources = list(c("nssp", "google_symptoms")),
-  ##   lags = list(
-  ##     list(
-  ##       c(0, 7, 14, 21, 28), c(0), # hhs
-  ##       c(0,7), c(0), # nssp
-  ##       c(0,7), c(0) # gs
-  ##     )
-  ##   ),
-  ##   smooth_width = as.difftime(2, units = "weeks"),
-  ##   sd_width = as.difftime(4, units = "weeks"),
-  ##   sd_mean_width = as.difftime(2, units = "weeks"),
-  ##   filter_source = "nhsn",
-  ##   filter_agg_level = "state",
-  ##   pop_scaling = FALSE,
-  ##   n_training = Inf,
-  ##   keys_to_ignore = very_latent_locations
-  ## ),
-  ## smooth_scaled_nssp_gs_nwss = tidyr::expand_grid(
-  ##   forecaster = "smoothed_scaled",
-  ##   trainer = c("quantreg"),
-  ##   extra_sources = list(c("nssp", "google_symptoms", "nwss")),
-  ##   lags = list(
-  ##     list(
-  ##       c(0, 7, 14, 21, 28), c(0), # hhs
-  ##       c(0,7), c(0), # nssp
-  ##       c(0,7), c(0), # gs
-  ##       c(0,7), c(0) # nwss
-  ##     )
-  ##   ),
-  ##   smooth_width = as.difftime(2, units = "weeks"),
-  ##   sd_width = as.difftime(4, units = "weeks"),
-  ##   sd_mean_width = as.difftime(2, units = "weeks"),
-  ##   filter_source = "nhsn",
-  ##   filter_agg_level = "state",
-  ##   pop_scaling = FALSE,
-  ##   n_training = Inf,
-  ##   keys_to_ignore = very_latent_locations
-  ## ),
+  scaled_pop_one_exogenous = expand_grid(
+    forecaster = "scaled_pop",
+    trainer = "quantreg",
+    # since it's a list, this gets expanded out to a single one in each row
+    extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_regional"),
+    lags = list2(
+      list2(
+        c(0, 7, 14, 21), # hhs
+        c(0, 7) # exogenous feature
+      )
+    ),
+    pop_scaling = FALSE,
+    scale_method = "quantile",
+    center_method = "median",
+    nonlin_method = "quart_root",
+    filter_source = "",
+    filter_agg_level = "",
+    n_training = Inf,
+    drop_non_seasons = TRUE,
+    keys_to_ignore = very_latent_locations,
+  ),
+  scaled_pop_two_exogenous = expand_grid(
+    forecaster = "scaled_pop",
+    trainer = "quantreg",
+    extra_sources = list2(
+      c("nssp", "google_symptoms"),
+      c("nssp", "nwss"),
+      c("nssp", "nwss_regional"),
+      c("google_symptoms", "nwss"),
+      c("google_symptoms", "nwss_regional"),
+      c("nwss", "nwss_regional")
+    ),
+    lags = list2(
+      list2(
+        c(0, 7, 14, 21), # hhs
+        c(0, 7), # first feature
+        c(0, 7) # second feature
+      )
+    ),
+    pop_scaling = FALSE,
+    scale_method = "quantile",
+    center_method = "median",
+    nonlin_method = "quart_root",
+    filter_source = "",
+    filter_agg_level = "",
+    n_training = Inf,
+    drop_non_seasons = TRUE,
+    keys_to_ignore = very_latent_locations,
+  ),
+  scaled_pop_all_exogenous = expand_grid(
+    forecaster = "scaled_pop",
+    trainer = "quantreg",
+    extra_sources = list2(
+      c("nssp", "google_symptoms", "nwss", "nwss_regional"),
+    ),
+    lags = list2(
+      list2(
+        c(0, 7, 14, 21), # hhs
+        c(0, 7), # nssp
+        c(0, 7), # google symptoms
+        c(0, 7), # nwss
+        c(0, 7) # nwss regional
+      )
+    ),
+    pop_scaling = FALSE,
+    scale_method = "quantile",
+    center_method = "median",
+    nonlin_method = "quart_root",
+    filter_source = "",
+    filter_agg_level = "",
+    n_training = Inf,
+    drop_non_seasons = TRUE,
+    keys_to_ignore = very_latent_locations,
+  ),
   # flusion_quant = tidyr::expand_grid(
   #   forecaster = "flusion",
   #   trainer = "quantreg",
@@ -267,17 +280,9 @@ no_recent_outcome_params <- list(
   week_method = "sine",
   keys_to_ignore = very_latent_locations[[1]]
 )
-scaled_pop_short_window <- list(
-  forecaster = "scaled_pop",
-  trainer = "quantreg",
-  lags = c(0, 7),
-  pop_scaling = FALSE,
-  filter_source = "nhsn",
-  filter_agg_level = "state",
-  n_training = 3,
-  drop_non_seasons = FALSE,
-  keys_to_ignore = very_latent_locations
-)
+# this is the 3 lag, infinite training window
+best_scaled_pop <- forecaster_parameter_combinations_$scaled_pop_main %>% filter(id == "majestic.schnauzer") %>% as.list()
+scaled_pop_short_window <- forecaster_parameter_combinations_$scaled_pop_main %>% filter(id == "sensualist.papillon") %>% as.list()
 scaled_pop_long_window <- list(
   forecaster = "scaled_pop",
   trainer = "quantreg",
@@ -312,7 +317,20 @@ ensemble_parameter_combinations_ <- tribble(
   list2(
     scaled_pop_short_window,
     scaled_pop_long_window
-  )
+  ),
+  # ensembling the auxilary data examples with their underlying forecaster
+  # insures we're forecasting something at every location, regardless of whether
+  # we have exogenous data for that location
+  ## "ensemble_average",
+  ## list(average_type = "median"),
+  ## expand_grid(list(best_scaled_pop), map(1:6, \(ii) forecaster_parameter_combinations_$scaled_pop_two_exogenous[ii,] %>% as.list)) %>% as.list %>% unname,
+  ## "ensemble_average",
+  ## list(average_type = "median"),
+  ## expand_grid(list(best_scaled_pop), map(1:4, \(ii) forecaster_parameter_combinations_$scaled_pop_one_exogenous[ii,] %>% as.list)) %>% as.list %>% unname,
+  ## "ensemble_average",
+  ## list(average_type = "median"),
+  ## list(best_scaled_pop,
+  ##      list(forecaster_parameter_combinations_$scaled_pop_all_exogenous %>% as.list)),
 ) %>%
   {
     if (dummy_mode) {
