@@ -208,8 +208,8 @@ scaled_pop_seasonal <- function(epi_data,
     seasonal_features <- seasonal_features %>%
       mutate(PC1 = jitter(PC1), PC2 = jitter(PC2)) %>%
       {
-        if ("PC1" %in% predictors) {
-          (.) %>% select(-PC1)
+        if ("PC3" %in% predictors) {
+          (.) %>% mutate(PC3 = jitter(PC3))
         } else {
           .
         }
@@ -217,6 +217,7 @@ scaled_pop_seasonal <- function(epi_data,
     epi_data <- epi_data %>% left_join(seasonal_features, by = "season_week")
   }
 
+  browser()
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {
