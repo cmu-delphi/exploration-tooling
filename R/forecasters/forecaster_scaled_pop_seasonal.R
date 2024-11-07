@@ -136,25 +136,24 @@ scaled_pop_seasonal <- function(epi_data,
 
         # Read the flusion data
         stopifnot(file.exists("aux_data/flusion_data/flusion_merged"))
-        eval_dates <- seq.Date(as.Date("2023-10-04"), as.Date("2024-04-24"), by = 7)
         flusion_data_archive <-
           qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
           filter(
             !geo_value %in% c("as", "pr", "vi", "gu", "mp"),
             !is.na(value),
-            time_value <= max(eval_dates)
+            time_value <= "2024-04-24"
           ) %>%
           rename(hhs = value) %>%
           relocate(source, geo_value, time_value, version, hhs, agg_level, season, season_week, year, population, density) %>%
           as_epi_archive(other_keys = "source", compactify = TRUE)
 
-        # Get a late 2023 snapshot
-        flusion_snapshot <- flusion_data_archive %>%
-          epix_as_of(as.Date("2023-09-01")) %>%
-          drop_non_seasons()
         # Whiten the data and get the PCA
-        learned_params <- flusion_snapshot %>% calculate_whitening_params("hhs")
-        pca <- flusion_snapshot %>%
+        learned_params <- flusion_data_archive %>%
+          epix_as_of(as.Date("2023-09-01")) %>%
+          drop_non_seasons() %>%
+          calculate_whitening_params("hhs")
+        pca <- flusion_data_archive %>%
+          epix_as_of(as.Date("2023-09-01")) %>%
           data_whitening("hhs", learned_params) %>%
           select(geo_value, season, source, season_week, hhs) %>%
           filter(!is.na(season_week), !is.na(hhs)) %>%
@@ -182,7 +181,8 @@ scaled_pop_seasonal <- function(epi_data,
           time_type = "day",
           time_values = epirange(20210801, 20240501)
         ) %>%
-          select(geo_value, time_value, hosp = value)
+          select(geo_value, time_value, hosp = value) %>%
+          filter(geo_value %nin% c("as", "pr", "vi", "gu", "mp"))
         pca <- seasonal_data %>%
           mutate(
             epiweek = epiweek(time_value),
