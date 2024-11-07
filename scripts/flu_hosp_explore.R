@@ -295,8 +295,12 @@ no_recent_outcome_params <- list(
   keys_to_ignore = very_latent_locations[[1]]
 )
 # this is the 3 lag, infinite training window
-best_scaled_pop <- forecaster_parameter_combinations_$scaled_pop_main %>% filter(id == "majestic.schnauzer") %>% as.list()
-scaled_pop_short_window <- forecaster_parameter_combinations_$scaled_pop_main %>% filter(id == "sensualist.papillon") %>% as.list()
+best_scaled_pop <- forecaster_parameter_combinations_$scaled_pop_main %>%
+  filter(id == "majestic.schnauzer") %>%
+  as.list()
+scaled_pop_short_window <- forecaster_parameter_combinations_$scaled_pop_main %>%
+  filter(id == "sensualist.papillon") %>%
+  as.list()
 scaled_pop_long_window <- list(
   forecaster = "scaled_pop",
   trainer = "quantreg",

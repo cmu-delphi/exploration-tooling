@@ -44,8 +44,7 @@ scaled_pop_seasonal <- function(epi_data,
                                 scale_method = c("none", "quantile", "std"),
                                 center_method = c("median", "mean"),
                                 nonlin_method = c("quart_root", "none"),
-                                seasonal_pca = c("none", "flu", "covid"),
-                                peak_indicator = FALSE,
+                                seasonal_pca = c("none", "flu", "covid", "indicator"),
                                 trainer = parsnip::linear_reg(),
                                 quantile_levels = covidhub_probs(),
                                 filter_source = "",
@@ -96,7 +95,7 @@ scaled_pop_seasonal <- function(epi_data,
         (.) %>%
           distinct(epiweek, epiyear) %>%
           mutate(
-            season_year = convert_epiweek_to_season(epiyear, epiweek),
+            season = convert_epiweek_to_season(epiyear, epiweek),
             season_week = convert_epiweek_to_season_week(epiyear, epiweek)
           ),
         by = c("epiweek", "epiyear")
@@ -178,17 +177,17 @@ scaled_pop_seasonal <- function(epi_data,
             (.) %>%
               distinct(epiyear, epiweek) %>%
               mutate(
-                season_year = convert_epiweek_to_season(epiyear, epiweek),
+                season = convert_epiweek_to_season(epiyear, epiweek),
                 season_week = convert_epiweek_to_season_week(epiyear, epiweek)
               ),
             by = c("epiyear", "epiweek")
           ) %>%
-          group_by(geo_value, season_year, season_week) %>%
+          group_by(geo_value, season, season_week) %>%
           summarise(hosp = sum(hosp), .groups = "drop") %>%
           mutate(hr = case_when(hosp == 0 ~ NA, TRUE ~ hosp)) %>%
-          select(geo_value, season_year, season_week, hosp) %>%
+          select(geo_value, season, season_week, hosp) %>%
           mutate(hosp = hosp^(1 / 4)) |>
-          pivot_wider(names_from = c(geo_value, season_year), values_from = hosp) |>
+          pivot_wider(names_from = c(geo_value, season), values_from = hosp) |>
           fill(-season_week, .direction = "downup") %>%
           select(-season_week) %>%
           as.matrix() %>%
@@ -205,19 +204,9 @@ scaled_pop_seasonal <- function(epi_data,
       args_list$lags <- c(args_list$lags, 0, 0)
     }
 
-    seasonal_features <- seasonal_features %>%
-      mutate(PC1 = jitter(PC1), PC2 = jitter(PC2)) %>%
-      {
-        if ("PC3" %in% predictors) {
-          (.) %>% mutate(PC3 = jitter(PC3))
-        } else {
-          .
-        }
-      }
     epi_data <- epi_data %>% left_join(seasonal_features, by = "season_week")
   }
 
-  browser()
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {
@@ -230,13 +219,19 @@ scaled_pop_seasonal <- function(epi_data,
       by = c("geo_value" = "abbr")
     )
   }
-  if (peak_indicator) {
+  if (seasonal_pca == "indicator") {
     stopifnot("season_week" %in% names(epi_data))
     preproc %<>%
       step_mutate(before_peak = (season_week < 16), role = "pre-predictor") %>%
       step_mutate(after_peak = (season_week > 20), role = "pre-predictor")
   }
+  for (pppp in c("PC1", "PC2", "PC3", "before_peak", "after_peak")) {
+    if (pppp %in% predictors) {
+      preproc %<>% step_epi_ahead(!!pppp, ahead = ahead, role = "predictor")
+    }
+  }
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
+
   # postprocessing supported by epipredict
   postproc <- frosting()
   postproc %<>% arx_postprocess(trainer, args_list)
@@ -250,6 +245,7 @@ scaled_pop_seasonal <- function(epi_data,
       by = c("geo_value" = "abbr")
     )
   }
+  # browser()
   # with all the setup done, we execute and format
   pred <- run_workflow_and_format(preproc, postproc, trainer, epi_data)
   # now pred has the columns
@@ -265,5 +261,6 @@ scaled_pop_seasonal <- function(epi_data,
     pred_final %<>% select(-source)
   }
   gc()
-  return(pred)
+
+  return(pred_final)
 }
