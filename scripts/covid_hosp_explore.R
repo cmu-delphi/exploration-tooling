@@ -35,7 +35,16 @@ forecaster_parameter_combinations_ <- rlang::list2(
   ),
   tidyr::expand_grid(
     forecaster = "flatline_fc",
-  )
+  ),
+  # tidyr::expand_grid(
+  #   forecaster = "scaled_pop_seasonal",
+  #   trainer = "quantreg",
+  #   lags = list(c(0, 7, 14), c(0, 7, 14, 28), c(0)),
+  #   pop_scaling = c(TRUE, FALSE),
+  #   n_training = c(6, 4 * 4, 6 * 4, Inf),
+  #   seasonal_pca = "covid",
+  #   peak_indicator = c(TRUE, FALSE),
+  # )
 ) %>%
   map(function(x) {
     if (dummy_mode) {

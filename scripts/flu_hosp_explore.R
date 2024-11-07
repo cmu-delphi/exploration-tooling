@@ -248,7 +248,22 @@ forecaster_parameter_combinations_ <- rlang::list2(
     use_density = FALSE,
     week_method = "linear",
     keys_to_ignore = very_latent_locations
-  )
+  ),
+  # scaled_pop_seasonal_pca = tidyr::expand_grid(
+  #   forecaster = "scaled_pop_seasonal",
+  #   trainer = "quantreg",
+  #   lags = list(
+  #     c(0, 7, 14, 21),
+  #     c(0, 7)
+  #   ),
+  #   seasonal_pca = "flu",
+  #   peak_indicator = c(TRUE, FALSE),
+  #   pop_scaling = FALSE,
+  #   filter_source = "nhsn",
+  #   filter_agg_level = "state",
+  #   n_training = c(6, 12, 24, Inf),
+  #   keys_to_ignore = very_latent_locations
+  # )
 ) %>%
   map(function(x) {
     if (dummy_mode) {
