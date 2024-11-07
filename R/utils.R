@@ -9,6 +9,7 @@
 #' @export
 forecaster_lookup <- function(pattern, forecaster_grid = NULL, printing = TRUE) {
   if (is.null(forecaster_grid)) {
+    cli::cli_warn("Reading `forecaster_param_combinations` target. If it's not up to date, results will be off. Update with `tar_make(forecaster_parameter_combinations)`.")
     forecaster_grid <- tar_read_raw("forecaster_parameter_combinations") %>%
       map(make_forecaster_grid) %>%
       bind_rows()
@@ -150,3 +151,5 @@ get_exclusions <- function(
   }
   return("")
 }
+
+`%nin%` <- function(x, y) !(x %in% y)
