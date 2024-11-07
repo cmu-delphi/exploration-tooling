@@ -46,7 +46,6 @@ scaled_pop_seasonal <- function(epi_data,
                                 nonlin_method = c("quart_root", "none"),
                                 seasonal_pca = c("none", "flu", "covid"),
                                 peak_indicator = FALSE,
-                                fourth_root_scaling = TRUE,
                                 trainer = parsnip::linear_reg(),
                                 quantile_levels = covidhub_probs(),
                                 filter_source = "",
@@ -121,19 +120,6 @@ scaled_pop_seasonal <- function(epi_data,
   if (seasonal_pca %in% c("flu", "covid")) {
     if (seasonal_pca == "flu") {
       if (!file.exists("aux_data/pca_data/flu_seasonal_pcs")) {
-        # seasonal_data <- pub_covidcast(
-        #   "hhs", "confirmed_admissions_influenza_1d_prop_7dav",
-        #   geo_type = "state",
-        #   geo_values = "*",
-        #   time_type = "day",
-        #   time_values = epirange(20210801, 20240501)
-        # ) %>%
-        #   select(geo_value, time_value, hosp = value) %>%
-        #   filter(
-        #     geo_value %nin% c("as", "vi"),
-        #     time_value < "2023-06-01"
-        #   )
-
         # Read the flusion data
         stopifnot(file.exists("aux_data/flusion_data/flusion_merged"))
         flusion_data_archive <-
@@ -219,10 +205,18 @@ scaled_pop_seasonal <- function(epi_data,
       args_list$lags <- c(args_list$lags, 0, 0)
     }
 
+    seasonal_features <- seasonal_features %>%
+      mutate(PC1 = jitter(PC1), PC2 = jitter(PC2)) %>%
+      {
+        if ("PC1" %in% predictors) {
+          (.) %>% select(-PC1)
+        } else {
+          .
+        }
+      }
     epi_data <- epi_data %>% left_join(seasonal_features, by = "season_week")
   }
 
-  browser()
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {
