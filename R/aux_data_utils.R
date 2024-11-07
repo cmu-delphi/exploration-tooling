@@ -23,8 +23,6 @@ convert_epiweek_to_season_week <- function(epiyear, epiweek, season_start = 39) 
     return(season_week)
   }
   # last year's # of epiweeks determines which week in the season we're at at
-  season_week[update_inds] +
-    sapply(epiyear[update_inds] - 1, epiweeks_in_year)
   # the beginning of the year
   season_week[update_inds] <- season_week[update_inds] +
     sapply(epiyear[update_inds] - 1, epiweeks_in_year)
