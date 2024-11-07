@@ -154,7 +154,6 @@ scaled_pop_seasonal <- function(epi_data,
       } else {
         seasonal_features <- qs::qread("aux_data/seasonal_features/flu")
       }
-      predictors <- c(predictors, "PC1", "PC2", "PC3")
       args_list$lags <- c(args_list$lags, 0, 0, 0)
     }
     if (seasonal_pca == "covid") {
@@ -200,7 +199,6 @@ scaled_pop_seasonal <- function(epi_data,
       } else {
         seasonal_features <- qs::qread("aux_data/seasonal_features/covid")
       }
-      predictors <- c(predictors, "PC1", "PC2")
       args_list$lags <- c(args_list$lags, 0, 0)
     }
 
@@ -223,12 +221,11 @@ scaled_pop_seasonal <- function(epi_data,
     stopifnot("season_week" %in% names(epi_data))
     preproc %<>%
       step_mutate(before_peak = (season_week < 16), role = "pre-predictor") %>%
-      step_mutate(after_peak = (season_week > 20), role = "pre-predictor")
-  }
-  for (pppp in c("PC1", "PC2", "PC3", "before_peak", "after_peak")) {
-    if (pppp %in% predictors) {
-      preproc %<>% step_epi_ahead(!!pppp, ahead = ahead, role = "predictor")
-    }
+      step_mutate(after_peak = (season_week > 20), role = "pre-predictor") %>%
+      step_epi_ahead(before_peak, after_peak, ahead = ahead, role = "predictor")
+  } else if (seasonal_pca != "none") {
+    preproc %<>%
+      step_epi_ahead(PC1, PC2, PC3, ahead = ahead, role = "predictor")
   }
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
 
@@ -247,7 +244,7 @@ scaled_pop_seasonal <- function(epi_data,
   }
   # browser()
   # with all the setup done, we execute and format
-  pred <- run_workflow_and_format(preproc, postproc, trainer, epi_data)
+  pred <- run_workflow_and_format(preproc, postproc, trainer, season_data, epi_data)
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration
