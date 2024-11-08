@@ -43,8 +43,10 @@ serial_controller <- crew_controller_local(
 debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", "FALSE"))
 if (debug_mode) {
   controllers <- crew_controller_group(serial_controller)
+  on_error <- "stop"
 } else {
   controllers <- crew_controller_group(main_controller, serial_controller)
+  on_error <- "trim"
 }
 
 tar_option_set(
@@ -58,6 +60,7 @@ tar_option_set(
     )
   ),
   memory = "transient",
+  error = on_error,
   garbage_collection = TRUE,
   storage = "worker",
   retrieval = "worker" # this may need to go back to main
