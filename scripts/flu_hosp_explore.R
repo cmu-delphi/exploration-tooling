@@ -216,16 +216,16 @@ forecaster_parameter_combinations_ <- rlang::list2(
   #   keys_to_ignore = very_latent_locations
   # ),
   # variations on flusion
-  flusion_grf = tidyr::expand_grid(
-    forecaster = "flusion",
-    trainer = c("randforest_grf"),
-    lags = list(c(0, 7, 21)),
-    dummy_states = FALSE,
-    dummy_source = TRUE,
-    nonlin_method = "quart_root",
-    derivative_estimator = "growth_rate",
-    keys_to_ignore = very_latent_locations
-  ),
+  ## flusion_grf = tidyr::expand_grid(
+  ##   forecaster = "flusion",
+  ##   trainer = c("randforest_grf"),
+  ##   lags = list(c(0, 7, 21)),
+  ##   dummy_states = FALSE,
+  ##   dummy_source = TRUE,
+  ##   nonlin_method = "quart_root",
+  ##   derivative_estimator = "growth_rate",
+  ##   keys_to_ignore = very_latent_locations
+  ## ),
   ## # another kind of baseline forecaster
   no_recent_quant = tidyr::expand_grid(
     forecaster = "no_recent_outcome",
@@ -238,17 +238,17 @@ forecaster_parameter_combinations_ <- rlang::list2(
     week_method = "sine",
     keys_to_ignore = very_latent_locations
   ),
-  no_recent_grf = tidyr::expand_grid(
-    forecaster = "no_recent_outcome",
-    trainer = "randforest_grf",
-    scale_method = "quantile",
-    nonlin_method = "quart_root",
-    filter_source = "",
-    use_population = TRUE,
-    use_density = FALSE,
-    week_method = "linear",
-    keys_to_ignore = very_latent_locations
-  ),
+  ## no_recent_grf = tidyr::expand_grid(
+  ##   forecaster = "no_recent_outcome",
+  ##   trainer = "randforest_grf",
+  ##   scale_method = "quantile",
+  ##   nonlin_method = "quart_root",
+  ##   filter_source = "",
+  ##   use_population = TRUE,
+  ##   use_density = FALSE,
+  ##   week_method = "linear",
+  ##   keys_to_ignore = very_latent_locations
+  ## ),
   scaled_pop_season = tidyr::expand_grid(
     forecaster = "scaled_pop_seasonal",
     trainer = "quantreg",
