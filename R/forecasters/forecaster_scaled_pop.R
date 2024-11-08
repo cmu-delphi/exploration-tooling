@@ -119,7 +119,7 @@ scaled_pop <- function(epi_data,
   if (pop_scaling) {
     preproc %<>% step_population_scaling(
       all_of(predictors),
-      df = epipredict::state_census,
+      df = epidatasets::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
       rate_rescaling = 1e5,
@@ -133,7 +133,7 @@ scaled_pop <- function(epi_data,
   if (pop_scaling) {
     postproc %<>% layer_population_scaling(
       .pred, .pred_distn,
-      df = epipredict::state_census,
+      df = epidatasets::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
       rate_rescaling = 1e5,

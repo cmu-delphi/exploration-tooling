@@ -205,12 +205,20 @@ scaled_pop_seasonal <- function(epi_data,
     epi_data <- epi_data %>% left_join(seasonal_features, by = "season_week")
   }
 
+  # TODO Really jank way of accounting for ahead.
+  object <- list(
+    shift_grid = tibble(PC1 = c(), PC2 = c(), PC3 = c())
+  )
+  epi_data %>% mutate(
+    add_shifted_columns(!!pppp, ahead = ahead, role = "predictor")
+  )
+
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {
     preproc %<>% step_population_scaling(
       all_of(predictors),
-      df = epipredict::state_census,
+      df = epidatasets::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
       rate_rescaling = 1e5,
@@ -220,12 +228,12 @@ scaled_pop_seasonal <- function(epi_data,
   if (seasonal_pca == "indicator") {
     stopifnot("season_week" %in% names(epi_data))
     preproc %<>%
-      step_mutate(before_peak = (season_week < 16), role = "pre-predictor") %>%
-      step_mutate(after_peak = (season_week > 20), role = "pre-predictor") %>%
-      step_epi_ahead(before_peak, after_peak, ahead = ahead, role = "predictor")
+      # TODO Really jank way of accounting for ahead.
+      step_mutate(before_peak = (season_week - ahead < 16), role = "predictor") %>%
+      step_mutate(after_peak = (season_week - ahead > 20), role = "predictor")
   } else if (seasonal_pca != "none") {
     preproc %<>%
-      step_epi_ahead(PC1, PC2, PC3, ahead = ahead, role = "predictor")
+      add_role(PC1, PC2, PC3, role = "predictor")
   }
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
 
@@ -235,7 +243,7 @@ scaled_pop_seasonal <- function(epi_data,
   if (pop_scaling) {
     postproc %<>% layer_population_scaling(
       .pred, .pred_distn,
-      df = epipredict::state_census,
+      df = epidatasets::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
       rate_rescaling = 1e5,

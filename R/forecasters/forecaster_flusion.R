@@ -138,7 +138,7 @@ flusion <- function(epi_data,
   if (pop_scaling && !is.null(sources_to_pop_scale)) {
     preproc %<>% step_population_scaling(
       sources_to_pop_scale,
-      df = epipredict::state_census,
+      df = epidatasets::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
       rate_rescaling = 1e5,
@@ -180,7 +180,7 @@ flusion <- function(epi_data,
   if (pop_scaling) {
     postproc %<>% layer_population_scaling(
       .pred, .pred_distn,
-      df = epipredict::state_census,
+      df = epidatasets::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
       rate_rescaling = 1e5,

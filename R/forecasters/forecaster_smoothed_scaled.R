@@ -24,7 +24,7 @@
 #'   done on the rate scale. When specifying predictor lags, note that rate
 #'   variables will use the same names as and overwrite the count variables.
 #'   Rates here will be counts per 100k population, based on
-#'   `epipredict::state_census`.
+#'   `epidatasets::state_census`.
 #' @param trainer optional; parsnip model specification to use for the core
 #'   fitting & prediction (the `spec` of the internal
 #'   [`epipredict::epi_workflow`]).  Default is `parsnip::linear_reg()`.
@@ -185,7 +185,7 @@ smoothed_scaled <- function(epi_data,
   if (pop_scaling) {
     preproc %<>% step_population_scaling(
       all_numeric(),
-      df = epipredict::state_census,
+      df = epidatasets::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
       rate_rescaling = 1e5,
@@ -200,7 +200,7 @@ smoothed_scaled <- function(epi_data,
   if (pop_scaling) {
     postproc %<>% layer_population_scaling(
       .pred, .pred_distn,
-      df = epipredict::state_census,
+      df = epidatasets::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
       rate_rescaling = 1e5,
@@ -208,8 +208,10 @@ smoothed_scaled <- function(epi_data,
     )
   }
   # with all the setup done, we execute and format
-  pred <- run_workflow_and_format(preproc, postproc, trainer,
-                                  season_data, epi_data)
+  pred <- run_workflow_and_format(
+    preproc, postproc, trainer,
+    season_data, epi_data
+  )
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration

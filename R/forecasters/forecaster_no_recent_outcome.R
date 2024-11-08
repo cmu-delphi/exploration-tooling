@@ -129,7 +129,7 @@ no_recent_outcome <- function(epi_data,
   if (pop_scaling) {
     postproc %<>% layer_population_scaling(
       .pred, .pred_distn,
-      df = epipredict::state_census,
+      df = epidatasets::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
       rate_rescaling = 1e5,
