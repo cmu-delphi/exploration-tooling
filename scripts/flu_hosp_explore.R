@@ -260,6 +260,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
     pop_scaling = FALSE,
     filter_source = "nhsn",
     filter_agg_level = "state",
+    drop_non_seasons = TRUE,
     n_training = Inf,
     keys_to_ignore = very_latent_locations
   ),

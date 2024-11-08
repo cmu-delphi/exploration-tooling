@@ -111,9 +111,11 @@ scaled_pop_seasonal <- function(epi_data,
     season_data <- epi_data
   }
 
+  # browser()
   # whiten to get the sources on the same scale
-  learned_params <- calculate_whitening_params(season_data, predictors, scale_method, center_method, nonlin_method)
-  epi_data %<>% data_whitening(predictors, learned_params, nonlin_method)
+  # TODO Jank way to avoid having hhs_region get centered
+  learned_params <- calculate_whitening_params(season_data, setdiff(predictors, "hhs_region"), scale_method, center_method, nonlin_method)
+  epi_data %<>% data_whitening(setdiff(predictors, "hhs_region"), learned_params, nonlin_method)
 
   # get the seasonal features
   if (seasonal_pca %in% c("flu", "covid")) {
@@ -206,12 +208,38 @@ scaled_pop_seasonal <- function(epi_data,
   }
 
   # TODO Really jank way of accounting for ahead.
-  object <- list(
-    shift_grid = tibble(PC1 = c(), PC2 = c(), PC3 = c())
-  )
-  epi_data %>% mutate(
-    add_shifted_columns(!!pppp, ahead = ahead, role = "predictor")
-  )
+  if (seasonal_pca == "flu") {
+    object <- list2(
+      shift_grid = tribble(
+        ~col, ~shift_val, ~newname,
+        "PC1", -ahead, "PC1_",
+        "PC2", -ahead, "PC2_",
+        "PC3", -ahead, "PC3_"
+      ),
+    )
+    object$keys <- key_colnames(epi_data)
+    epi_data <- epi_data %>% epipredict:::add_shifted_columns(object)
+    if (drop_non_seasons) {
+      season_data <- epi_data %>% drop_non_seasons()
+    } else {
+      season_data <- epi_data
+    }
+  } else if (seasonal_pca == "covid") {
+    object <- list2(
+      shift_grid = tribble(
+        ~col, ~shift_val, ~newname,
+        "PC1", -ahead, "PC1_",
+        "PC2", -ahead, "PC2_"
+      ),
+    )
+    object$keys <- key_colnames(epi_data)
+    epi_data <- epi_data %>% epipredict:::add_shifted_columns(object)
+    if (drop_non_seasons) {
+      season_data <- epi_data %>% drop_non_seasons()
+    } else {
+      season_data <- epi_data
+    }
+  }
 
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
@@ -231,9 +259,10 @@ scaled_pop_seasonal <- function(epi_data,
       # TODO Really jank way of accounting for ahead.
       step_mutate(before_peak = (season_week - ahead < 16), role = "predictor") %>%
       step_mutate(after_peak = (season_week - ahead > 20), role = "predictor")
-  } else if (seasonal_pca != "none") {
-    preproc %<>%
-      add_role(PC1, PC2, PC3, role = "predictor")
+  } else if (seasonal_pca == "flu") {
+    preproc %<>% add_role(PC1, PC2, PC3, new_role = "predictor")
+  } else if (seasonal_pca == "covid") {
+    preproc %<>% add_role(PC1, PC2, new_role = "predictor")
   }
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
 
