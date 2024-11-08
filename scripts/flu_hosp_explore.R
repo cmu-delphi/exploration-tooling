@@ -249,21 +249,61 @@ forecaster_parameter_combinations_ <- rlang::list2(
     week_method = "linear",
     keys_to_ignore = very_latent_locations
   ),
-  # scaled_pop_seasonal_pca = tidyr::expand_grid(
-  #   forecaster = "scaled_pop_seasonal",
-  #   trainer = "quantreg",
-  #   lags = list(
-  #     c(0, 7, 14, 21),
-  #     c(0, 7)
-  #   ),
-  #   seasonal_pca = "flu",
-  #   peak_indicator = c(TRUE, FALSE),
-  #   pop_scaling = FALSE,
-  #   filter_source = "nhsn",
-  #   filter_agg_level = "state",
-  #   n_training = c(6, 12, 24, Inf),
-  #   keys_to_ignore = very_latent_locations
-  # )
+  scaled_pop_season = tidyr::expand_grid(
+    forecaster = "scaled_pop_seasonal",
+    trainer = "quantreg",
+    lags = list(
+      c(0, 7, 14, 21),
+      c(0, 7)
+    ),
+    seasonal_pca = c("flu", "indicator"),
+    pop_scaling = FALSE,
+    filter_source = "nhsn",
+    filter_agg_level = "state",
+    n_training = Inf,
+    keys_to_ignore = very_latent_locations
+  ),
+  scaled_pop_season_data_augmented = tidyr::expand_grid(
+    forecaster = "scaled_pop_seasonal",
+    trainer = "quantreg",
+    lags = list(
+      c(0, 7, 14, 21),
+      c(0, 7)
+    ),
+    seasonal_pca = c("flu", "indicator"),
+    pop_scaling = FALSE,
+    scale_method = "quantile",
+    center_method = "median",
+    nonlin_method = "quart_root",
+    filter_source = "",
+    filter_agg_level = "",
+    n_training = Inf,
+    drop_non_seasons = TRUE,
+    keys_to_ignore = very_latent_locations
+  ),
+  # using exogenous variables
+  scaled_pop_season_data_augmented_geo_region = expand_grid(
+    forecaster = "scaled_pop_seasonal",
+    trainer = "quantreg",
+    # since it's a list, this gets expanded out to a single one in each row
+    extra_sources = list2("hhs_region"),
+    lags = list2(
+      list2(
+        c(0, 7, 14, 21), # hhs
+        c(0) # exogenous feature
+      )
+    ),
+    seasonal_pca = c("flu", "indicator"),
+    pop_scaling = FALSE,
+    scale_method = "quantile",
+    center_method = "median",
+    nonlin_method = "quart_root",
+    filter_source = "",
+    filter_agg_level = "",
+    n_training = Inf,
+    drop_non_seasons = TRUE,
+    keys_to_ignore = very_latent_locations,
+  ),
 ) %>%
   map(function(x) {
     if (dummy_mode) {
@@ -519,6 +559,16 @@ data_targets <- rlang::list2(
     }
   ),
   tar_target(
+    name = hhs_region,
+    command = {
+      hhs_region <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_code_hhs_table.csv")
+      state_id <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_codes_table.csv")
+      hhs_region %>%
+        left_join(state_id, by = "state_code") %>%
+        select(hhs_region = hhs, geo_value = state_id)
+    }
+  ),
+  tar_target(
     name = hhs_evaluation_data,
     command = {
       new_flu_data <- flusion_data_archive$DT %>%
@@ -556,6 +606,7 @@ data_targets <- rlang::list2(
         epix_merge(nssp_archive, sync = "locf") %>%
         `$`("DT") %>%
         drop_na(agg_level) %>%
+        left_join(hhs_region, by = "geo_value") %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
       joined_archive_data
     }
