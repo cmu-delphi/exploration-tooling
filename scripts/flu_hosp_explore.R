@@ -135,7 +135,15 @@ forecaster_parameter_combinations_ <- rlang::list2(
     forecaster = "scaled_pop",
     trainer = "quantreg",
     # since it's a list, this gets expanded out to a single one in each row
-    extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_regional"),
+    extra_sources = list2(
+      "nssp",
+      "google_symptoms",
+      "nwss",
+      "nwss_rate",
+      "nwss_region",
+      "nwss_rate_region",
+      "hhs_region"
+    ),
     lags = list2(
       list2(
         c(0, 7, 14, 21), # hhs
@@ -158,10 +166,13 @@ forecaster_parameter_combinations_ <- rlang::list2(
     extra_sources = list2(
       c("nssp", "google_symptoms"),
       c("nssp", "nwss"),
-      c("nssp", "nwss_regional"),
+      c("nssp", "nwss_rate"),
+      c("nssp", "nwss_region"),
       c("google_symptoms", "nwss"),
-      c("google_symptoms", "nwss_regional"),
-      c("nwss", "nwss_regional")
+      c("google_symptoms", "nwss_rate"),
+      c("google_symptoms", "nwss_region"),
+      c("nwss", "nwss_region"),
+      c("nssp", "hhs_region")
     ),
     lags = list2(
       list2(
@@ -184,15 +195,16 @@ forecaster_parameter_combinations_ <- rlang::list2(
     forecaster = "scaled_pop",
     trainer = "quantreg",
     extra_sources = list2(
-      c("nssp", "google_symptoms", "nwss", "nwss_regional"),
+      c("nssp", "google_symptoms", "nwss_rate", "nwss_rate_region", "hhs_region"),
     ),
     lags = list2(
       list2(
         c(0, 7, 14, 21), # hhs
         c(0, 7), # nssp
         c(0, 7), # google symptoms
-        c(0, 7), # nwss
-        c(0, 7) # nwss regional
+        c(0, 7), # nwss_rate
+        c(0, 7), # nwss_rate region
+        c(0, 7) # hhs region
       )
     ),
     pop_scaling = FALSE,
@@ -528,10 +540,15 @@ data_targets <- rlang::list2(
         left_join(state_code, by = "state_code") %>%
         select(hhs_region = hhs, geo_value = state_id)
       pop_data <- gen_pop_and_density_data()
-      nwss %>%
+      nwss %<>%
         add_pop_and_density() %>%
-        drop_na()
-      nwss %>% arrange(desc(time_value))
+        mutate(
+          nwss_rate = value / population * 100000,
+          nwss_region_rate = region_value / population * 100000,
+          nwss_national_rate = national_value / population * 100000
+        ) %>%
+        drop_na() %>%
+        select(-agg_level, -year, -agg_level, -population, -density)
       nwss_hhs_region <-
         nwss %>%
         left_join(state_to_hhs, by = "geo_value") %>%
@@ -541,6 +558,7 @@ data_targets <- rlang::list2(
         group_by(time_value, hhs_region) %>%
         summarize(
           value = sum(value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
+          nwss_rate = sum(nwss_rate * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
           activity_level = sum(activity_level * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
           region_value = mean(region_value * population) / sum(population, na.rm = TRUE),
           national_value = sum(national_value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
@@ -551,7 +569,14 @@ data_targets <- rlang::list2(
       nwss %>%
         mutate(agg_level = "state") %>%
         bind_rows(nwss_hhs_region) %>%
-        select(geo_value, time_value, nwss = value, nwss_regional = region_value, nwss_national = national_value) %>%
+        select(
+          geo_value,
+          time_value,
+          nwss = value,
+          nwss_rate,
+          nwss_region = region_value,
+          nwss_national = national_value
+        ) %>%
         mutate(time_value = time_value - 3, version = time_value) %>%
         arrange(geo_value, time_value) %>%
         mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
