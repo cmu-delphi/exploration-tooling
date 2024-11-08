@@ -29,8 +29,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
     pop_scaling = FALSE,
     filter_source = "nhsn",
     filter_agg_level = "state",
-    n_training = c(3, 6, 24, Inf),
-    drop_non_seasons = c(TRUE, FALSE),
+    n_training = Inf,
+    drop_non_seasons = TRUE,
     keys_to_ignore = very_latent_locations
   ),
   scaled_pop_data_augmented = tidyr::expand_grid(
@@ -46,8 +46,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
     nonlin_method = c("quart_root", "none"),
     filter_source = "",
     filter_agg_level = "",
-    n_training = c(3, 24, Inf),
-    drop_non_seasons = c(TRUE, FALSE),
+    n_training = Inf,
+    drop_non_seasons = TRUE,
     keys_to_ignore = very_latent_locations
   ),
   ## # The covid forecaster, ported over to flu. Also likely to struggle with the
@@ -64,7 +64,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
     sd_width = as.difftime(12, units = "weeks"),
     sd_mean_width = as.difftime(8, units = "weeks"),
     pop_scaling = FALSE,
-    n_training = c(3, Inf),
+    n_training = Inf,
     filter_source = "nhsn",
     filter_agg_level = "state",
     keys_to_ignore = very_latent_locations
@@ -81,7 +81,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
     sd_width = as.difftime(as.integer(NA), units = "weeks"),
     sd_mean_width = as.difftime(8, units = "weeks"),
     pop_scaling = FALSE,
-    n_training = c(3, Inf),
+    n_training = Inf,
     filter_source = "nhsn",
     filter_agg_level = "state",
     keys_to_ignore = very_latent_locations
@@ -135,15 +135,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
     forecaster = "scaled_pop",
     trainer = "quantreg",
     # since it's a list, this gets expanded out to a single one in each row
-    extra_sources = list2(
-      "nssp",
-      "google_symptoms",
-      "nwss",
-      "nwss_rate",
-      "nwss_region",
-      "nwss_rate_region",
-      "hhs_region"
-    ),
+    extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_rate", "nwss_regional", "nwss_rate_region", "hhs_region"),
     lags = list2(
       list2(
         c(0, 7, 14, 21), # hhs
@@ -293,30 +285,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
     n_training = Inf,
     drop_non_seasons = TRUE,
     keys_to_ignore = very_latent_locations
-  ),
-  # using exogenous variables
-  scaled_pop_season_data_augmented_geo_region = expand_grid(
-    forecaster = "scaled_pop_seasonal",
-    trainer = "quantreg",
-    # since it's a list, this gets expanded out to a single one in each row
-    extra_sources = list2("hhs_region"),
-    lags = list2(
-      list2(
-        c(0, 7, 14, 21), # hhs
-        c(0) # exogenous feature
-      )
-    ),
-    seasonal_pca = c("flu", "indicator"),
-    pop_scaling = FALSE,
-    scale_method = "quantile",
-    center_method = "median",
-    nonlin_method = "quart_root",
-    filter_source = "",
-    filter_agg_level = "",
-    n_training = Inf,
-    drop_non_seasons = TRUE,
-    keys_to_ignore = very_latent_locations,
-  ),
+  )
 ) %>%
   map(function(x) {
     if (dummy_mode) {
@@ -591,7 +560,8 @@ data_targets <- rlang::list2(
       state_id <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_codes_table.csv")
       hhs_region %>%
         left_join(state_id, by = "state_code") %>%
-        select(hhs_region = hhs, geo_value = state_id)
+        select(hhs_region = hhs, geo_value = state_id) %>%
+        mutate(hhs_region = as.character(hhs_region))
     }
   ),
   tar_target(
@@ -633,8 +603,30 @@ data_targets <- rlang::list2(
         `$`("DT") %>%
         drop_na(agg_level) %>%
         left_join(hhs_region, by = "geo_value") %>%
+        mutate(hhs_region = ifelse(agg_level == "hhs_region", geo_value, hhs_region)) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
-      joined_archive_data
+
+      # Jank adding of hhs_region column to the data
+      hhs_region_agg_state <- joined_archive_data$DT %>%
+        tibble() %>%
+        group_by(agg_level, time_value, source, version, hhs_region) %>%
+        summarize(hhs_sum = sum(hhs), .groups = "drop") %>%
+        right_join(
+          tar_read(hhs_region) %>%
+            bind_rows(tibble(hhs_region = as.character(1:10), geo_value = as.character(1:10))),
+          by = "hhs_region",
+          relationship = "many-to-many"
+        ) %>%
+        select(agg_level, time_value, source, version, geo_value, hhs_sum)
+      dt2 <- dt1 %>%
+        left_join(
+          hhs_region_agg_state,
+          by = c("time_value", "source", "version", "geo_value", "agg_level"),
+        ) %>%
+        mutate(hhs_sum = ifelse(agg_level == "nation", hhs, hhs_sum)) %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+
+      dt2
     }
   )
 )
