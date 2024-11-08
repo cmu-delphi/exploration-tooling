@@ -257,8 +257,8 @@ scaled_pop_seasonal <- function(epi_data,
     stopifnot("season_week" %in% names(epi_data))
     preproc %<>%
       # TODO Really jank way of accounting for ahead.
-      step_mutate(before_peak = (season_week - ahead < 16), role = "predictor") %>%
-      step_mutate(after_peak = (season_week - ahead > 20), role = "predictor")
+      step_mutate(before_peak = (season_week - (ahead / 7) < 16), role = "predictor") %>%
+      step_mutate(after_peak = (season_week - (ahead / 7) > 20), role = "predictor")
   } else if (seasonal_pca == "flu") {
     preproc %<>% add_role(PC1, PC2, PC3, new_role = "predictor")
   } else if (seasonal_pca == "covid") {
