@@ -120,7 +120,7 @@ scaled_pop_seasonal <- function(epi_data,
   # get the seasonal features
   if (seasonal_pca %in% c("flu", "covid")) {
     if (seasonal_pca == "flu") {
-      if (!file.exists("aux_data/pca_data/flu_seasonal_pcs")) {
+      if (!file.exists("aux_data/seasonal_features/flu")) {
         # Read the flusion data
         stopifnot(file.exists("aux_data/flusion_data/flusion_merged"))
         flusion_data_archive <-
@@ -159,7 +159,7 @@ scaled_pop_seasonal <- function(epi_data,
       args_list$lags <- c(args_list$lags, 0, 0, 0)
     }
     if (seasonal_pca == "covid") {
-      if (!file.exists("aux_data/pca_data/covid_pcs")) {
+      if (!file.exists("aux_data/seasonal_features/covid")) {
         seasonal_data <- pub_covidcast(
           "hhs", "confirmed_admissions_covid_1d_prop_7dav",
           geo_type = "state",
