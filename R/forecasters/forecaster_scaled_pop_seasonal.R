@@ -123,8 +123,7 @@ scaled_pop_seasonal <- function(epi_data,
       if (!file.exists("aux_data/seasonal_features/flu")) {
         # Read the flusion data
         stopifnot(file.exists("aux_data/flusion_data/flusion_merged"))
-        flusion_data_archive <-
-          qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
+        flusion_data_archive <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
           filter(
             !geo_value %in% c("as", "pr", "vi", "gu", "mp"),
             !is.na(value),
@@ -138,20 +137,28 @@ scaled_pop_seasonal <- function(epi_data,
         learned_params <- flusion_data_archive %>%
           epix_as_of(as.Date("2023-09-01")) %>%
           drop_non_seasons() %>%
-          calculate_whitening_params("hhs")
-        pca <- flusion_data_archive %>%
+          calculate_whitening_params("hhs", scale_method, center_method, nonlin_method)
+
+        wide <- flusion_data_archive %>%
           epix_as_of(as.Date("2023-09-01")) %>%
-          data_whitening("hhs", learned_params) %>%
+          data_whitening("hhs", learned_params, nonlin_method) %>%
           select(geo_value, season, source, season_week, hhs) %>%
           filter(!is.na(season_week), !is.na(hhs)) %>%
-          pivot_wider(names_from = c(geo_value, season, source), values_from = hhs, values_fn = mean) |>
-          fill(-season_week, .direction = "downup") %>%
+          pivot_wider(names_from = c(geo_value, season, source), values_from = hhs) %>%
+          arrange(season_week) %>%
+          fill(-season_week, .direction = "downup")
+
+        pca <- wide %>%
+          keep(~ !all(near(diff(.x), 0))) %>%
+          arrange(season_week) %>%
           select(-season_week) %>%
           as.matrix() %>%
-          prcomp()
+          prcomp(scale. = TRUE)
+
         # Using the top 3 PCs, since they all look reasonable
         seasonal_features <- as_tibble(predict(pca)[, 1:3])
         seasonal_features$season_week <- 1:nrow(seasonal_features)
+
         qs::qsave(seasonal_features, "aux_data/seasonal_features/flu")
       } else {
         seasonal_features <- qs::qread("aux_data/seasonal_features/flu")
