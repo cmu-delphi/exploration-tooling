@@ -52,78 +52,78 @@ forecaster_parameter_combinations_ <- rlang::list2(
   ),
   ## # The covid forecaster, ported over to flu. Also likely to struggle with the
   ## # extra data
-  smoothed_scaled_main = tidyr::expand_grid(
-    forecaster = "smoothed_scaled",
-    trainer = "quantreg",
-    lags = list2(
-      # list(smoothed, sd)
-      list2(c(0, 7, 14, 21), c(0)),
-      list2(c(0, 7), c(0))
-    ),
-    smooth_width = as.difftime(8, units = "weeks"),
-    sd_width = as.difftime(12, units = "weeks"),
-    sd_mean_width = as.difftime(8, units = "weeks"),
-    pop_scaling = FALSE,
-    n_training = Inf,
-    filter_source = "nhsn",
-    filter_agg_level = "state",
-    keys_to_ignore = very_latent_locations
-  ),
-  smoothed_only_main = tidyr::expand_grid(
-    forecaster = "smoothed_scaled",
-    trainer = "quantreg",
-    lags = list2(
-      # list(smoothed, sd)
-      list2(c(0, 7, 14, 21)),
-      list2(c(0, 7))
-    ),
-    smooth_width = as.difftime(8, units = "weeks"),
-    sd_width = as.difftime(as.integer(NA), units = "weeks"),
-    sd_mean_width = as.difftime(8, units = "weeks"),
-    pop_scaling = FALSE,
-    n_training = Inf,
-    filter_source = "nhsn",
-    filter_agg_level = "state",
-    keys_to_ignore = very_latent_locations
-  ),
-  smoothed_scaled_data_augmented = tidyr::expand_grid(
-    forecaster = "smoothed_scaled",
-    trainer = "quantreg",
-    lags = list2(
-      # list(smoothed, sd)
-      list2(c(0, 7, 14, 21), c(0)),
-    ),
-    smooth_width = as.difftime(8, units = "weeks"),
-    sd_width = as.difftime(12, units = "weeks"),
-    sd_mean_width = as.difftime(8, units = "weeks"),
-    pop_scaling = FALSE,
-    n_training = c(3, Inf),
-    scale_method = "quantile",
-    center_method = "median",
-    nonlin_method = "quart_root",
-    filter_source = "",
-    filter_agg_level = "",
-    keys_to_ignore = very_latent_locations
-  ),
-  smoothed_only_data_augmented = tidyr::expand_grid(
-    forecaster = "smoothed_scaled",
-    trainer = "quantreg",
-    lags = list2(
-      # list(smoothed, sd)
-      list2(c(0, 7, 14, 21)),
-    ),
-    smooth_width = as.difftime(8, units = "weeks"),
-    sd_width = as.difftime(as.integer(NA), units = "weeks"),
-    sd_mean_width = as.difftime(8, units = "weeks"),
-    pop_scaling = FALSE,
-    n_training = c(3, Inf),
-    scale_method = "quantile",
-    center_method = "median",
-    nonlin_method = "quart_root",
-    filter_source = "",
-    filter_agg_level = "",
-    keys_to_ignore = very_latent_locations
-  ),
+  # smoothed_scaled_main = tidyr::expand_grid(
+  #   forecaster = "smoothed_scaled",
+  #   trainer = "quantreg",
+  #   lags = list2(
+  #     # list(smoothed, sd)
+  #     list2(c(0, 7, 14, 21), c(0)),
+  #     list2(c(0, 7), c(0))
+  #   ),
+  #   smooth_width = as.difftime(8, units = "weeks"),
+  #   sd_width = as.difftime(12, units = "weeks"),
+  #   sd_mean_width = as.difftime(8, units = "weeks"),
+  #   pop_scaling = FALSE,
+  #   n_training = Inf,
+  #   filter_source = "nhsn",
+  #   filter_agg_level = "state",
+  #   keys_to_ignore = very_latent_locations
+  # ),
+  # smoothed_only_main = tidyr::expand_grid(
+  #   forecaster = "smoothed_scaled",
+  #   trainer = "quantreg",
+  #   lags = list2(
+  #     # list(smoothed, sd)
+  #     list2(c(0, 7, 14, 21)),
+  #     list2(c(0, 7))
+  #   ),
+  #   smooth_width = as.difftime(8, units = "weeks"),
+  #   sd_width = as.difftime(as.integer(NA), units = "weeks"),
+  #   sd_mean_width = as.difftime(8, units = "weeks"),
+  #   pop_scaling = FALSE,
+  #   n_training = Inf,
+  #   filter_source = "nhsn",
+  #   filter_agg_level = "state",
+  #   keys_to_ignore = very_latent_locations
+  # ),
+  # smoothed_scaled_data_augmented = tidyr::expand_grid(
+  #   forecaster = "smoothed_scaled",
+  #   trainer = "quantreg",
+  #   lags = list2(
+  #     # list(smoothed, sd)
+  #     list2(c(0, 7, 14, 21), c(0)),
+  #   ),
+  #   smooth_width = as.difftime(8, units = "weeks"),
+  #   sd_width = as.difftime(12, units = "weeks"),
+  #   sd_mean_width = as.difftime(8, units = "weeks"),
+  #   pop_scaling = FALSE,
+  #   n_training = Inf,
+  #   scale_method = "quantile",
+  #   center_method = "median",
+  #   nonlin_method = "quart_root",
+  #   filter_source = "",
+  #   filter_agg_level = "",
+  #   keys_to_ignore = very_latent_locations
+  # ),
+  # smoothed_only_data_augmented = tidyr::expand_grid(
+  #   forecaster = "smoothed_scaled",
+  #   trainer = "quantreg",
+  #   lags = list2(
+  #     # list(smoothed, sd)
+  #     list2(c(0, 7, 14, 21)),
+  #   ),
+  #   smooth_width = as.difftime(8, units = "weeks"),
+  #   sd_width = as.difftime(as.integer(NA), units = "weeks"),
+  #   sd_mean_width = as.difftime(8, units = "weeks"),
+  #   pop_scaling = FALSE,
+  #   n_training = Inf,
+  #   scale_method = "quantile",
+  #   center_method = "median",
+  #   nonlin_method = "quart_root",
+  #   filter_source = "",
+  #   filter_agg_level = "",
+  #   keys_to_ignore = very_latent_locations
+  # ),
   # the thing to beat (a simplistic baseline forecast)
   flatline = tidyr::expand_grid(
     forecaster = "flatline_fc",
@@ -131,83 +131,84 @@ forecaster_parameter_combinations_ <- rlang::list2(
     filter_agg_level = "state"
   ),
   # using exogenous variables
-  scaled_pop_one_exogenous = expand_grid(
-    forecaster = "scaled_pop",
-    trainer = "quantreg",
-    # since it's a list, this gets expanded out to a single one in each row
-    extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_rate", "nwss_regional", "nwss_rate_region", "hhs_region"),
-    lags = list2(
-      list2(
-        c(0, 7, 14, 21), # hhs
-        c(0, 7) # exogenous feature
-      )
+  scaled_pop_exogenous = bind_rows(
+    expand_grid(
+      forecaster = "scaled_pop",
+      trainer = "quantreg",
+      # since it's a list, this gets expanded out to a single one in each row
+      extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_rate", "nwss_regional", "nwss_rate_region"),
+      lags = list2(
+        list2(
+          c(0, 7, 14, 21), # hhs
+          c(0, 7) # exogenous feature
+        )
+      ),
+      pop_scaling = FALSE,
+      scale_method = "quantile",
+      center_method = "median",
+      nonlin_method = "quart_root",
+      filter_source = "",
+      filter_agg_level = "",
+      n_training = Inf,
+      drop_non_seasons = TRUE,
+      keys_to_ignore = very_latent_locations,
     ),
-    pop_scaling = FALSE,
-    scale_method = "quantile",
-    center_method = "median",
-    nonlin_method = "quart_root",
-    filter_source = "",
-    filter_agg_level = "",
-    n_training = Inf,
-    drop_non_seasons = TRUE,
-    keys_to_ignore = very_latent_locations,
-  ),
-  scaled_pop_two_exogenous = expand_grid(
-    forecaster = "scaled_pop",
-    trainer = "quantreg",
-    extra_sources = list2(
-      c("nssp", "google_symptoms"),
-      c("nssp", "nwss"),
-      c("nssp", "nwss_rate"),
-      c("nssp", "nwss_region"),
-      c("google_symptoms", "nwss"),
-      c("google_symptoms", "nwss_rate"),
-      c("google_symptoms", "nwss_region"),
-      c("nwss", "nwss_region"),
-      c("nssp", "hhs_region")
+    expand_grid(
+      forecaster = "scaled_pop",
+      trainer = "quantreg",
+      extra_sources = list2(
+        c("nssp", "google_symptoms"),
+        c("nssp", "nwss"),
+        c("nssp", "nwss_rate"),
+        c("nssp", "nwss_region"),
+        c("google_symptoms", "nwss"),
+        c("google_symptoms", "nwss_rate"),
+        c("google_symptoms", "nwss_region"),
+        c("nwss", "nwss_region")
+      ),
+      lags = list2(
+        list2(
+          c(0, 7, 14, 21), # hhs
+          c(0, 7), # first feature
+          c(0, 7) # second feature
+        )
+      ),
+      pop_scaling = FALSE,
+      scale_method = "quantile",
+      center_method = "median",
+      nonlin_method = "quart_root",
+      filter_source = "",
+      filter_agg_level = "",
+      n_training = Inf,
+      drop_non_seasons = TRUE,
+      keys_to_ignore = very_latent_locations,
     ),
-    lags = list2(
-      list2(
-        c(0, 7, 14, 21), # hhs
-        c(0, 7), # first feature
-        c(0, 7) # second feature
-      )
-    ),
-    pop_scaling = FALSE,
-    scale_method = "quantile",
-    center_method = "median",
-    nonlin_method = "quart_root",
-    filter_source = "",
-    filter_agg_level = "",
-    n_training = Inf,
-    drop_non_seasons = TRUE,
-    keys_to_ignore = very_latent_locations,
-  ),
-  scaled_pop_all_exogenous = expand_grid(
-    forecaster = "scaled_pop",
-    trainer = "quantreg",
-    extra_sources = list2(
-      c("nssp", "google_symptoms", "nwss_rate", "nwss_rate_region", "hhs_region"),
-    ),
-    lags = list2(
-      list2(
-        c(0, 7, 14, 21), # hhs
-        c(0, 7), # nssp
-        c(0, 7), # google symptoms
-        c(0, 7), # nwss_rate
-        c(0, 7), # nwss_rate region
-        c(0, 7) # hhs region
-      )
-    ),
-    pop_scaling = FALSE,
-    scale_method = "quantile",
-    center_method = "median",
-    nonlin_method = "quart_root",
-    filter_source = "",
-    filter_agg_level = "",
-    n_training = Inf,
-    drop_non_seasons = TRUE,
-    keys_to_ignore = very_latent_locations,
+    expand_grid(
+      forecaster = "scaled_pop",
+      trainer = "quantreg",
+      extra_sources = list2(
+        c("nssp", "google_symptoms", "nwss", "nwss_regional"),
+      ),
+      lags = list2(
+        list2(
+          c(0, 7, 14, 21), # hhs
+          c(0, 7), # nssp
+          c(0, 7), # google symptoms
+          c(0, 7), # nwss_rate
+          c(0, 7), # nwss_rate region
+          c(0, 7) # hhs region
+        )
+      ),
+      pop_scaling = FALSE,
+      scale_method = "quantile",
+      center_method = "median",
+      nonlin_method = "quart_root",
+      filter_source = "",
+      filter_agg_level = "",
+      n_training = Inf,
+      drop_non_seasons = TRUE,
+      keys_to_ignore = very_latent_locations,
+    )
   ),
   # flusion_quant = tidyr::expand_grid(
   #   forecaster = "flusion",
@@ -298,6 +299,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
 # also population and density are exclusive
 forecaster_parameter_combinations_$no_recent_quant %>% filter(xor(scale_method == "none", filter_source == ""), xor(use_population, use_density))
 s3save(forecaster_parameter_combinations_, object = "flu_2023_forecaster_parameter_combinations.rds", bucket = "forecasting-team-data")
+
+forecaster_parameter_combinations_$scaled_pop_all_exogenous
 
 # Make sure all ids are unique.
 stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(forecaster_parameter_combinations_$id))
@@ -443,8 +446,10 @@ data_targets <- rlang::list2(
         select(geo_value, time_value, issue, nssp = value) %>%
         as_epi_archive(compactify = TRUE) %>%
         `$`("DT") %>%
+        # End of week to midweek correction.
         mutate(time_value = time_value + 3) %>%
-        mutate(version = time_value) %>%
+        # Artifically add in a one-week latency.
+        mutate(version = time_value + 7) %>%
         mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
         unnest(cols = "source") %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
