@@ -59,18 +59,7 @@ nhsn_state <- pub_covidcast(
   select(geo_value, time_value, admission_rate = value, version = issue) %>%
   mutate(agg_level = "state")
 # as_epi_archive(compactify = FALSE)
-
-nhsn_hhs_region <- pub_covidcast(
-  source = "hhs",
-  signals = "confirmed_admissions_influenza_1d_prop",
-  time_type = "day",
-  geo_type = "hhs",
-  issues = epirange(20000101, 20251231)
-) %>%
-  select(geo_value, time_value, admission_rate = value, version = issue) %>%
-  mutate(agg_level = "hhs_region")
-# as_epi_archive(compactify = FALSE)
-
+# region was dropped in the interest of not polluting the dataset with values that don't matter
 nhsn_nation <- pub_covidcast(
   source = "hhs",
   signals = "confirmed_admissions_influenza_1d_prop",
@@ -83,7 +72,7 @@ nhsn_nation <- pub_covidcast(
 # as_epi_archive(compactify = FALSE)
 
 # Combine agg_level
-nhsn <- bind_rows(nhsn_state, nhsn_hhs_region, nhsn_nation) %>% drop_na()
+nhsn <- bind_rows(nhsn_state, nhsn_nation) %>% drop_na()
 
 # Additional column: season, season_week
 nhsn <- nhsn %>%
@@ -316,6 +305,7 @@ ili_states <- ili_plus %>%
     geo_value = abb, time_value, version, agg_level, value, season,
     season_week, `PERCENT POSITIVE`, `% WEIGHTED ILI`, source, epiyear, epiweek
   )
+
 # aggregate NYC and NY state
 ili_plus <- ili_states %>%
   filter(geo_value == "ny") %>%
@@ -353,6 +343,13 @@ ili_plus_nation_latest <- ili_plus %>%
   as_tibble() %>%
   filter(agg_level == "nation")
 
+
+ggplot(ili_plus_nation_latest, aes(x = time_value)) +
+  geom_line(aes(y = value, color = "adjusted"), linetype = "solid", size = 0.5) +
+  geom_line(aes(y = `% WEIGHTED ILI`, color = "raw"), linetype = "dashed", size = 0.5) +
+  scale_color_manual(name = "Legend", values = c("raw" = "orange", "adjusted" = "blue")) +
+  labs(x = "Time", y = "ILI+ Rate", title = "Raw ILI Rate vs Adjusted ILI+ Rate over Time") +
+  theme_minimal()
 ggplot(ili_plus_nation_latest, aes(x = time_value)) +
   geom_line(aes(y = value, color = "adjusted"), linetype = "solid", size = 0.5) +
   geom_line(aes(y = `% WEIGHTED ILI`, color = "raw"), linetype = "dashed", size = 0.5) +
@@ -396,11 +393,30 @@ flusurv_final <-
   mutate(source = "flusurv") %>%
   select(geo_value, time_value, version, value = adj_hosp_rate, source, agg_level, season, season_week)
 
+# this data does a terrible job of distinguishing between zero values and NA's,
+# so we're dropping all values that are close to zero (0.0001) and all that are
+# NA
 ili_final <-
   ili_plus$DT %>%
+  drop_na() %>%
+  filter(value > 0.0001) %>%
   mutate(time_value = time_value + 3) %>%
   select(geo_value, time_value, version, value, source, agg_level, season, season_week)
-
+# beyond the above, we're also dropping values from seasons that are mostly not
+# actually present; a season is ~ 29 weeks, so we're dropping ones that are
+# missing at least ~1/3rd of the season
+to_keep <-
+  ili_final %>%
+  group_by(geo_value, season) %>%
+  summarize(total_count = length(value), .groups = "drop") %>%
+  filter(total_count >= 20) %>%
+  select(geo_value, season)
+ili_final <- to_keep %>%
+  left_join(
+    ili_final,
+    by = join_by(geo_value, season),
+    relationship = "many-to-many"
+  )
 
 flusion_merged <- bind_rows(ili_final, flusurv_final, nhsn_final) %>% as_epi_archive(compactify = TRUE, other_keys = "source")
 
@@ -447,6 +463,35 @@ flusion_merged <-
 
 flusion_merged %>% qs::qsave(here::here("aux_data/flusion_data/flusion_merged"))
 q()
+
+# half cooked plot demonstrating the distribution of growth rates for nhsn
+flusion_growth_rate <- flusion_merged_latest %>%
+  as_epi_archive(other_keys = "source", compactify = TRUE) %>%
+  filter(source == "nhsn") %>%
+  drop_na() %>%
+  group_by(geo_value, source) %>%
+  mutate(growth = growth_rate(x = time_value, y = value, method = "trend_filter", na_rm = TRUE, dup_rm = TRUE))
+flusion_growth_rate %>% glimpse()
+flusion_growth_rate %>%
+  drop_na() %>%
+  ggplot(aes(x = growth)) +
+  geom_histogram(binwidth = .01)
+library(ggplot2)
+library(gridExtra)
+quantiles <- flusion_growth_rate %>%
+  pull(growth) %>%
+  quantile(na.rm = TRUE)
+flusion_growth_rate %>%
+  drop_na() %>%
+  ggplot(aes(x = growth)) +
+  geom_histogram(binwidth = .01) +
+  xlim(c(-0.5, 0.5)) +
+  labs(title = "nhsn data smooth_spline growth rate (cut off at .5)") +
+  annotation_custom(tableGrob(quantiles), xmin = .25, xmax = .5)
+mydata <- data.frame(a = 1:50, b = rnorm(50))
+mytable <- cbind(sites = c("site 1", "site 2", "site 3", "site 4"), mydata[10:13, ])
+
+
 source(here::here("R", "load_all.R"))
 # dropping "as" (American Samoa) because the data is terrible; there's a single point that's 80 and the rest are zero
 flusion_merged <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
