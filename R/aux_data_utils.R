@@ -205,3 +205,29 @@ drop_non_seasons <- function(epi_data, min_window = 12) {
       season != "2008/09"
     )
 }
+
+
+add_hhs_region_sum <- function(archive_data_raw, hhs_region_table) {
+  need_agg_level <- !("agg_level" %in% names(archive_data_raw))
+  if (need_agg_level) {
+    archive_data_raw %<>% mutate(agg_level = "state")
+  }
+  hhs_region_agg_state <-
+    archive_data_raw %>%
+    left_join(hhs_region_table, by = "geo_value") %>%
+    filter(agg_level == "state") %>%
+    as_tibble() %>%
+    group_by(across(c(setdiff(data.table::key(archive_data_raw), "geo_value"), "hhs_region"))) %>%
+    reframe(hhs_region = sum(hhs), across(everything(), ~.x)) %>%
+    relocate(version, time_value, geo_value)
+  archive_data_raw %>%
+    filter(agg_level != "state") %>%
+    mutate(hhs_region = hhs) %>%
+    bind_rows(
+      hhs_region_agg_state
+    )
+  if (need_agg_level) {
+    archive_data_raw %<>% select(-agg_level)
+  }
+  archive_data_raw
+}

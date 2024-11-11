@@ -406,6 +406,18 @@ if (length(missing_forecasters) > 0) {
 # Build targets-internal tibble to map over.
 ensemble_grid <- make_ensemble_grid(ensemble_parameter_combinations_)
 
+
+# These globals are needed by the make_forecasts_and_scores (and they need to persist
+# during the actual targets run, since the commands are frozen as expressions).
+if (!exists("ref_time_values")) {
+  start_date <- as.Date("2023-10-04")
+  end_date <- as.Date("2024-04-24")
+  ref_time_values <- NULL
+  date_step <- 7L
+}
+
+
+
 # data is sufficiently different that it needs to be run separately
 fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 400)
 data_targets <- rlang::list2(
@@ -607,44 +619,32 @@ data_targets <- rlang::list2(
         epix_merge(nssp_archive, sync = "locf") %>%
         `$`("DT") %>%
         drop_na(agg_level) %>%
-        left_join(hhs_region, by = "geo_value") %>%
-        mutate(hhs_region = ifelse(agg_level == "hhs_region", geo_value, hhs_region)) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
-
       # Jank adding of hhs_region column to the data
-      hhs_region_agg_state <- joined_archive_data$DT %>%
-        tibble() %>%
-        group_by(agg_level, time_value, source, version, hhs_region) %>%
-        summarize(hhs_sum = sum(hhs), .groups = "drop") %>%
-        right_join(
-          tar_read(hhs_region) %>%
-            bind_rows(tibble(hhs_region = as.character(1:10), geo_value = as.character(1:10))),
-          by = "hhs_region",
-          relationship = "many-to-many"
-        ) %>%
-        select(agg_level, time_value, source, version, geo_value, hhs_sum)
-      dt2 <- dt1 %>%
-        left_join(
-          hhs_region_agg_state,
-          by = c("time_value", "source", "version", "geo_value", "agg_level"),
-        ) %>%
-        mutate(hhs_sum = ifelse(agg_level == "nation", hhs, hhs_sum)) %>%
-        as_epi_archive(other_keys = "source", compactify = TRUE)
-
-      dt2
+      joined_archive_data <- joined_archive_data$DT %>%
+        add_hhs_region_sum(hhs_region) %>%
+        as_epi_archive(other_keys = "source")
+      # make the data cache via the dummy forecaster not expected to be returned
+      slide_forecaster(
+        epi_archive = joined_archive_data,
+        outcome = "hhs",
+        ahead = 0,
+        forecaster = dummy_forecaster,
+        n_training_pad = 30L,
+        forecaster_args = list(),
+        forecaster_args_names = list(),
+        ref_time_values = ref_time_values,
+        start_date = start_date,
+        end_date = end_date,
+        date_range_step_size = date_step,
+        cache_key = "joined_archive_data"
+      )
+      joined_archive_data
     }
   )
 )
 # TODO missing Alaska?
 
-# These globals are needed by the function below (and they need to persist
-# during the actual targets run, since the commands are frozen as expressions).
-if (!exists("ref_time_values")) {
-  start_date <- as.Date("2023-10-04")
-  end_date <- as.Date("2024-04-24")
-  ref_time_values <- NULL
-  date_step <- 7L
-}
 forecasts_and_scores <- make_forecasts_and_scores()
 
 ensembles_and_scores <- make_ensembles_and_scores()

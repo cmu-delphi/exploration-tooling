@@ -37,12 +37,12 @@ forecaster_parameter_combinations_ <- rlang::list2(
     forecaster = "flatline_fc",
   ),
   tidyr::expand_grid(
-    forecaster = "scaled_pop_seasonal",
-    trainer = "quantreg",
-    lags = list(c(0, 7, 14, 21)),
-    pop_scaling = TRUE,
-    n_training = Inf,
-    seasonal_pca = c("covid", "indicator"),
+           forecaster = "scaled_pop_seasonal",
+           trainer = "quantreg",
+           lags = list(c(0, 7, 14, 21)),
+           pop_scaling = TRUE,
+           n_training = Inf,
+           seasonal_pca = c("covid", "indicator")
   )
 ) %>%
   map(function(x) {
@@ -199,6 +199,192 @@ data_targets <- rlang::list2(
     name = hhs_latest_data_2022,
     command = {
       hhs_latest_data # %>% filter(time_value >= "2022-01-01", time_value < "2022-04-01")
+    }
+  ),
+  tar_target(
+    name = nssp_archive,
+    command = {
+      nssp_state <- pub_covidcast(
+        source = "nssp",
+        signal = "pct_ed_visits_covid",
+        time_type = "week",
+        geo_type = "state",
+        geo_values = "*"
+      )
+      nssp_hhs <- pub_covidcast(
+        source = "nssp",
+        signal = "pct_ed_visits_covid",
+        time_type = "week",
+        geo_type = "hhs",
+        geo_values = "*"
+      )
+      nssp_archive <- nssp_state %>%
+        bind_rows(nssp_hhs) %>%
+        select(geo_value, time_value, issue, nssp = value) %>%
+        as_epi_archive(compactify = TRUE) %>%
+        `$`("DT") %>%
+        mutate(time_value = time_value + 3) %>%
+        mutate(version = time_value) %>%
+        mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
+        unnest(cols = "source") %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+      nssp_archive
+    }
+  ),
+  tar_target(
+    name = google_symptoms_archive,
+    command = {
+      used_searches <- c(4, 5)
+      # not using actual versions here because the only revision behavior is the
+      # source going down completely, which means we're actually just comparing
+      # with the version without this source
+      all_of_them <- lapply(used_searches, \(search_name) {
+        google_symptoms_state_archive <- pub_covidcast(
+          source = "google-symptoms",
+          signal = glue::glue("s0{search_name}_smoothed_search"),
+          time_type = "day",
+          geo_type = "state",
+          geo_values = "*"
+        )
+        google_symptoms_hhs_archive <- pub_covidcast(
+          source = "google-symptoms",
+          signal = glue::glue("s0{search_name}_smoothed_search"),
+          time_type = "day",
+          geo_type = "hhs",
+          geo_values = "*"
+        )
+        google_symptoms_archive_min <-
+          google_symptoms_state_archive %>%
+          bind_rows(google_symptoms_hhs_archive) %>%
+          select(geo_value, time_value, value) %>%
+          daily_to_weekly() %>%
+          mutate(version = time_value) %>%
+          as_epi_archive(compactify = TRUE)
+        google_symptoms_archive_min$DT %>%
+          mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
+          unnest(cols = "source") %>%
+          filter(!is.na(value)) %>%
+          relocate(source, geo_value, time_value, version, value) %>%
+          as_epi_archive(other_keys = "source", compactify = TRUE)
+      })
+      all_of_them[[1]]$DT %<>% rename(google_symptoms_4_bronchitis = value)
+      all_of_them[[2]]$DT %<>% rename(google_symptoms_5_ageusia = value)
+      google_symptoms_archive <- epix_merge(all_of_them[[1]], all_of_them[[2]])
+      google_symptoms_archive <- google_symptoms_archive$DT %>%
+        mutate(google_symptoms = google_symptoms_4_bronchitis + google_symptoms_5_aguesia + google_symptoms_4_bronchitis) %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+      google_symptoms_archive
+    }
+  ),
+  tar_target(
+    name = doctor_visits_archive_raw,
+    command = {
+      all_of_them <- lapply(years, \(year) {
+        time_values1 <- epidatr::epirange(20200102 + year,20200601 + year)
+        time_values2 <- epidatr::epirange(20200602 + year,20210101 + year)
+        dr_visits1 <- pub_covidcast(
+          source = "doctor-visits",
+          signal = "smoothed_cli",
+          time_type = "day",
+          time_values = time_values1,
+          geo_type = "state",
+          geo_values = "*",
+          issues = "*"
+        )
+        dr_visits2 <- pub_covidcast(
+          source = "doctor-visits",
+          signal = "smoothed_cli",
+          time_type = "day",
+          time_values = time_values2,
+          geo_type = "state",
+          geo_values = "*",
+          issues = "*"
+        )
+        bind_rows(
+          dr_visits1,
+          dr_visits2
+        ) %>%
+          select(
+            geo_value, time_value, issue, value
+          )
+      })
+      dr_visits_full <- all_of_them %>%
+        bind_rows()
+    }
+  )
+        ex <- dr_visits_2021 %>%
+          select(geo_value, time_value, issue, value) %>%
+        as_epi_archive(compactify = TRUE) %>%
+        daily_to_weekly_archive("value")
+      ex
+      pop_data <- gen_pop_and_density_data()
+      learned_params <- dr_visits_full$DT %>% epix_as_of("2023-09-01") %>% calculate_whitening_params("value")
+
+      dr_visits_full$DT %>%
+        left_join(pop_data, by = join_by(geo_value, year)) %>%
+        mutate(value = value / pop_data)
+
+      google_symptoms_archive_min <-
+          google_symptoms_state_archive %>%
+          bind_rows(google_symptoms_hhs_archive) %>%
+          select(geo_value, time_value, value) %>%
+          daily_to_weekly() %>%
+          mutate(version = time_value) %>%
+          as_epi_archive(compactify = TRUE)
+        google_symptoms_archive_min$DT %>%
+          mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
+          unnest(cols = "source") %>%
+          filter(!is.na(value)) %>%
+          relocate(source, geo_value, time_value, version, value) %>%
+          as_epi_archive(other_keys = "source", compactify = TRUE)
+      })
+      all_of_them[[1]]$DT %<>% rename(google_symptoms_4_bronchitis = value)
+      all_of_them[[2]]$DT %<>% rename(google_symptoms_5_ageusia = value)
+      google_symptoms_archive <- epix_merge(all_of_them[[1]], all_of_them[[2]])
+      google_symptoms_archive <- google_symptoms_archive$DT %>%
+        mutate(google_symptoms = google_symptoms_4_bronchitis + google_symptoms_5_aguesia + google_symptoms_4_bronchitis) %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+      google_symptoms_archive
+    }
+  ),
+  tar_target(
+    name = nwss_coarse,
+    command = {
+      files <- file.info(list.files(here::here("aux_data/nwss_covid_data/"), full.names = TRUE))
+      most_recent <- rownames(files)[which.max(files$mtime)]
+      nwss <- readr::read_csv(most_recent) %>%
+        rename(value = state_med_conc)
+      state_code <- readr::read_csv(here::here("aux_data", "flusion_data", "state_codes_table.csv"), show_col_types = FALSE)
+      hhs_codes <- readr::read_csv(here::here("aux_data", "flusion_data", "state_code_hhs_table.csv"), show_col_types = FALSE)
+      state_to_hhs <- hhs_codes %>%
+        left_join(state_code, by = "state_code") %>%
+        select(hhs_region = hhs, geo_value = state_id)
+      pop_data <- gen_pop_and_density_data()
+      nwss_hhs_region <-
+        nwss %>%
+        left_join(state_to_hhs, by = "geo_value") %>%
+        mutate(year = year(time_value)) %>%
+        left_join(pop_data, by = join_by(geo_value, year)) %>%
+        select(-year, density) %>%
+        group_by(time_value, hhs_region) %>%
+        summarize(
+          value = sum(value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
+          activity_level = sum(activity_level * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
+          region_value = mean(region_value * population) / sum(population, na.rm = TRUE),
+          national_value = sum(national_value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
+          .groups = "drop"
+        ) %>%
+        mutate(agg_level = "hhs_region", hhs_region = as.character(hhs_region)) %>%
+        rename(geo_value = hhs_region)
+      nwss %>%
+        mutate(agg_level = "state") %>%
+        bind_rows(nwss_hhs_region) %>%
+        select(geo_value, time_value, nwss = value, nwss_regional = region_value, nwss_national = national_value) %>%
+        mutate(time_value = time_value - 3, version = time_value) %>%
+        arrange(geo_value, time_value) %>%
+        mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
+        unnest(cols = "source") %>%
+        as_epi_archive(other_keys = "source")
     }
   ),
   tar_target(

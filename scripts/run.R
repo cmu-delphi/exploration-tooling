@@ -83,6 +83,18 @@ restart_loop <- function() {
 tar_manifest()
 if (debug_mode) {
   tar_make(callr_function = NULL, use_crew = FALSE)
+
+  tar_make(forecast_immediate.dunlin, callr_function = NULL, use_crew = FALSE)
+
+  nssp_state <- pub_covidcast(
+    source = "nssp",
+    signal = "pct_ed_visits_influenza",
+    time_type = "week",
+    geo_type = "state",
+    geo_values = "*",
+    issues = "*"
+  )
+  nssp_state %>% select(geo_value, time_value, issue, value) %>% filter(time_value >= min(issue))
 } else {
   tar_make()
   # restart_loop()

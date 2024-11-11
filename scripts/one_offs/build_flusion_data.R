@@ -482,6 +482,10 @@ quantiles <- flusion_growth_rate %>%
   pull(growth) %>%
   quantile(na.rm = TRUE)
 flusion_growth_rate %>%
+  mutate(greq = growth > 0, leq = growth < 0) %>%
+  ungroup() %>%
+  summarize(leq = sum(leq), greq = sum(greq))
+flusion_growth_rate %>%
   drop_na() %>%
   ggplot(aes(x = growth)) +
   geom_histogram(binwidth = .01) +
