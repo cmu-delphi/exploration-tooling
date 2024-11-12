@@ -509,6 +509,13 @@ data_targets <- rlang::list2(
       google_symptoms_archive <- google_symptoms_archive$DT %>%
         mutate(google_symptoms = google_symptoms_1_cough + google_symptoms_3_fever + google_symptoms_4_bronchitis) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
+      pre_pipeline <- google_symptoms_archive %>%
+        epix_as_of(as.Date("2023-10-04"))
+      colnames <- c("google_symptoms_1_cough", "google_symptoms_3_fever", "google_symptoms_4_bronchitis", "google_symptoms")
+      for (colname in colnames) {
+        learned_params <- calculate_whitening_params(pre_pipeline, colname = colname)
+        google_symptoms_archive$DT %<>% data_whitening(colname = colname, learned_params, join_cols = c("geo_value", "source"))
+      }
       google_symptoms_archive
     }
   ),
