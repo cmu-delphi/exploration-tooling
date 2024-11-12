@@ -424,6 +424,7 @@ data_targets <- rlang::list2(
   tar_target(
     name = flusion_data_archive,
     command = {
+      a <- 1
       flusion_data_archive <-
         qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
         filter(

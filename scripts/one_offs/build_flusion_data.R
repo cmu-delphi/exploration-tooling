@@ -77,8 +77,12 @@ nhsn <- bind_rows(nhsn_state, nhsn_nation) %>% drop_na()
 # Additional column: season, season_week
 nhsn <- nhsn %>%
   mutate(epiyear = epiyear(time_value), epiweek = epiweek(time_value)) %>%
-  mutate(season = convert_epiweek_to_season(epiyear, epiweek)) %>%
-  mutate(season_week = convert_epiweek_to_season_week(epiyear, epiweek))
+  left_join(
+    (.) %>%
+      distinct(epiyear, epiweek) %>%
+      mutate(season = convert_epiweek_to_season(epiyear, epiweek)) %>%
+      mutate(season_week = convert_epiweek_to_season_week(epiyear, epiweek))
+  )
 
 # are there any season_weeks with more than 7 days? no
 expect_equal(
@@ -748,3 +752,44 @@ flusion_final <- inner_join(flusion_merged, flusion_merged_transform_factor,
 ##   ungroup() %>%
 ##   # Center inc_trans_cs by subtracting the center factor
 ##   mutate(value_transformed_cs = value_transformed_cs - value_transformed_center_factor)
+
+
+# Verifying matchup between hhs_evaluation_data and archive to archive weekly sum
+nhsn_weekly_manual_latest <- nhsn_state %>%
+  group_by(geo_value, time_value) %>%
+  filter(version == max(version)) %>%
+  filter(!is.na(admission_rate)) %>%
+  left_join(
+    tar_read(hhs_evaluation_data) %>% distinct(geo_value, population)
+  ) %>%
+  mutate(
+    admission_rate = admission_rate * population / 10L**5
+  ) %>%
+  as_epi_df() %>%
+  group_by(geo_value) %>%
+  epi_slide_sum(admission_rate, .window_size = 7) %>%
+  mutate(value = slide_value_admission_rate) %>%
+  mutate(time_value = time_value - 3L)
+nhsn_weekly_redone_ca <- nhsn_state %>%
+  filter(geo_value == "ca") %>%
+  as_epi_archive(compactify = TRUE) %>%
+  daily_to_weekly_archive("admission_rate")
+nhsn_weekly_redone_ca_latest <- nhsn_weekly_redone_ca %>%
+  epix_as_of(version = nhsn_weekly$versions_end) %>%
+  left_join(
+    tar_read(hhs_evaluation_data) %>% distinct(geo_value, population)
+  ) %>%
+  mutate(value = admission_rate * population / 10L**5)
+nhsn_weekly_old_latest <- tar_read(hhs_evaluation_data) %>%
+  rename(value = true_value, time_value = target_end_date)
+dates <- nhsn_weekly_old_latest$time_value %>% unique()
+bind_rows(
+  tibble(source = "old", nhsn_weekly_old_latest),
+  tibble(source = "old_redone", nhsn_weekly_redone_ca_latest %>% filter(time_value %in% dates)),
+  tibble(source = "manual", nhsn_weekly_manual_latest %>% filter(time_value %in% dates)),
+) %>%
+  filter(geo_value == "ca") %>%
+  ggplot(aes(x = time_value, y = value)) +
+  geom_line(aes(y = value, color = source)) +
+  labs(title = "HHS vs NHSN") +
+  theme_minimal()
