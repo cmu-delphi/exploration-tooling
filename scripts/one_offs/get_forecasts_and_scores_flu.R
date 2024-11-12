@@ -32,6 +32,7 @@ forecasts <- df$name %>%
       },
       error = function(e) {
         print(name)
+        print(e)
         tibble()
       }
     )
