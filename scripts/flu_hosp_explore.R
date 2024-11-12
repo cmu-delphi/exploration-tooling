@@ -136,7 +136,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       forecaster = "scaled_pop",
       trainer = "quantreg",
       # since it's a list, this gets expanded out to a single one in each row
-      extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_rate", "nwss_region", "nwss_rate_region"),
+      extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region"),
       lags = list2(
         list2(
           c(0, 7, 14, 21), # hhs
@@ -159,10 +159,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
       extra_sources = list2(
         c("nssp", "google_symptoms"),
         c("nssp", "nwss"),
-        c("nssp", "nwss_rate"),
         c("nssp", "nwss_region"),
         c("google_symptoms", "nwss"),
-        c("google_symptoms", "nwss_rate"),
         c("google_symptoms", "nwss_region"),
         c("nwss", "nwss_region")
       ),
@@ -194,9 +192,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
           c(0, 7, 14, 21), # hhs
           c(0, 7), # nssp
           c(0, 7), # google symptoms
-          c(0, 7), # nwss_rate
-          c(0, 7), # nwss_rate region
-          c(0, 7) # hhs region
+          c(0, 7), # nwss
+          c(0, 7), # nwss_region
         )
       ),
       pop_scaling = FALSE,
@@ -261,7 +258,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       c(0, 7, 14, 21),
       c(0, 7)
     ),
-    seasonal_method = c("flu", "indicator", "window"),
+    seasonal_method = c("flu", "indicator"),
     pop_scaling = FALSE,
     filter_source = "nhsn",
     filter_agg_level = "state",
@@ -300,7 +297,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
 forecaster_parameter_combinations_$no_recent_quant %>% filter(xor(scale_method == "none", filter_source == ""), xor(use_population, use_density))
 s3save(forecaster_parameter_combinations_, object = "flu_2023_forecaster_parameter_combinations.rds", bucket = "forecasting-team-data")
 
-forecaster_parameter_combinations_$scaled_pop_all_exogenous
+forecaster_parameter_combinations_$scaled_pop_exogenous
 
 # Make sure all ids are unique.
 stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(forecaster_parameter_combinations_$id))

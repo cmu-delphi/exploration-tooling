@@ -228,6 +228,11 @@ scaled_pop_seasonal <- function(epi_data,
       season_week <= current_season_week + 3
     )
   }
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
+  }
 
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
