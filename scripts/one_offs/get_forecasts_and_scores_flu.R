@@ -40,12 +40,12 @@ forecasts <- df$name %>%
   filter(geo_value %in% state_geo_values)
 cmu_flu_2023_forecasts <- forecasts %>%
   filter(source == "nhsn") %>%
-left_join(
-  flu_2023_truth_data %>%
-    select(geo_value, population) %>%
-    distinct(),
-  by = "geo_value"
-) %>%
+  left_join(
+    flu_2023_truth_data %>%
+      select(geo_value, population) %>%
+      distinct(),
+    by = "geo_value"
+  ) %>%
   mutate(prediction = prediction * population / 10L**5) %>%
   select(-source, -population) %>%
   # This is a correction for the fact that we date the forecasts for the

@@ -136,7 +136,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       forecaster = "scaled_pop",
       trainer = "quantreg",
       # since it's a list, this gets expanded out to a single one in each row
-      extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_rate", "nwss_regional", "nwss_rate_region"),
+      extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_rate", "nwss_region", "nwss_rate_region"),
       lags = list2(
         list2(
           c(0, 7, 14, 21), # hhs
@@ -187,7 +187,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       forecaster = "scaled_pop",
       trainer = "quantreg",
       extra_sources = list2(
-        c("nssp", "google_symptoms", "nwss", "nwss_regional"),
+        c("nssp", "google_symptoms", "nwss", "nwss_region"),
       ),
       lags = list2(
         list2(
@@ -261,7 +261,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       c(0, 7, 14, 21),
       c(0, 7)
     ),
-    seasonal_pca = c("flu", "indicator"),
+    seasonal_method = c("flu", "indicator", "window"),
     pop_scaling = FALSE,
     filter_source = "nhsn",
     filter_agg_level = "state",
@@ -276,7 +276,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       c(0, 7, 14, 21),
       c(0, 7)
     ),
-    seasonal_pca = c("flu", "indicator"),
+    seasonal_method = c("flu", "indicator", "window"),
     pop_scaling = FALSE,
     scale_method = "quantile",
     center_method = "median",

@@ -42,7 +42,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
            lags = list(c(0, 7, 14, 21)),
            pop_scaling = TRUE,
            n_training = Inf,
-           seasonal_pca = c("covid", "indicator")
+           seasonal_method = c("covid", "indicator")
   )
 ) %>%
   map(function(x) {
@@ -379,7 +379,7 @@ data_targets <- rlang::list2(
       nwss %>%
         mutate(agg_level = "state") %>%
         bind_rows(nwss_hhs_region) %>%
-        select(geo_value, time_value, nwss = value, nwss_regional = region_value, nwss_national = national_value) %>%
+        select(geo_value, time_value, nwss = value, nwss_region = region_value, nwss_national = national_value) %>%
         mutate(time_value = time_value - 3, version = time_value) %>%
         arrange(geo_value, time_value) %>%
         mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%

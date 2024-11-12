@@ -44,7 +44,7 @@ scaled_pop_seasonal <- function(epi_data,
                                 scale_method = c("none", "quantile", "std"),
                                 center_method = c("median", "mean"),
                                 nonlin_method = c("quart_root", "none"),
-                                seasonal_pca = c("none", "flu", "covid", "indicator"),
+                                seasonal_method = c("none", "flu", "covid", "indicator", "window"),
                                 trainer = parsnip::linear_reg(),
                                 quantile_levels = covidhub_probs(),
                                 filter_source = "",
@@ -53,7 +53,7 @@ scaled_pop_seasonal <- function(epi_data,
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
-  seasonal_pca <- arg_match(seasonal_pca)
+  seasonal_method <- arg_match(seasonal_method)
   # perform any preprocessing not supported by epipredict
   #
   # this is for the case where there are multiple sources in the same column
@@ -103,23 +103,11 @@ scaled_pop_seasonal <- function(epi_data,
   }
 
   # end of the copypasta
-  # finally, any other pre-processing (e.g. smoothing) that isn't performed by
-  # epipredict
-  if (drop_non_seasons) {
-    season_data <- epi_data %>% drop_non_seasons()
-  } else {
-    season_data <- epi_data
-  }
 
-  # browser()
-  # whiten to get the sources on the same scale
-  # TODO Jank way to avoid having hhs_region get centered
-  learned_params <- calculate_whitening_params(season_data, setdiff(predictors, "hhs_region"), scale_method, center_method, nonlin_method)
-  epi_data %<>% data_whitening(setdiff(predictors, "hhs_region"), learned_params, nonlin_method)
 
   # get the seasonal features
-  if (seasonal_pca %in% c("flu", "covid")) {
-    if (seasonal_pca == "flu") {
+  if (seasonal_method %in% c("flu", "covid")) {
+    if (seasonal_method == "flu") {
       if (!file.exists("aux_data/seasonal_features/flu")) {
         # Read the flusion data
         stopifnot(file.exists("aux_data/flusion_data/flusion_merged"))
@@ -165,7 +153,7 @@ scaled_pop_seasonal <- function(epi_data,
       }
       args_list$lags <- c(args_list$lags, 0, 0, 0)
     }
-    if (seasonal_pca == "covid") {
+    if (seasonal_method == "covid") {
       if (!file.exists("aux_data/seasonal_features/covid")) {
         seasonal_data <- pub_covidcast(
           "hhs", "confirmed_admissions_covid_1d_prop_7dav",
@@ -211,41 +199,34 @@ scaled_pop_seasonal <- function(epi_data,
       args_list$lags <- c(args_list$lags, 0, 0)
     }
 
+    # A jank way to account for aheads
+    seasonal_features <- seasonal_features %>%
+      mutate(season_week = shift(season_week, -ahead / 7, type = "cyclic"))
     epi_data <- epi_data %>% left_join(seasonal_features, by = "season_week")
   }
 
-  # TODO Really jank way of accounting for ahead.
-  if (seasonal_pca == "flu") {
-    object <- list2(
-      shift_grid = tribble(
-        ~col, ~shift_val, ~newname,
-        "PC1", -ahead, "PC1_",
-        "PC2", -ahead, "PC2_",
-        "PC3", -ahead, "PC3_"
-      ),
+  # whiten to get the sources on the same scale
+  # TODO Jank way to avoid having hhs_region get centered
+  # finally, any other pre-processing (e.g. smoothing) that isn't performed by
+  # epipredict
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
+  }
+  learned_params <- calculate_whitening_params(season_data, setdiff(predictors, "hhs_region"), scale_method, center_method, nonlin_method)
+  epi_data %<>% data_whitening(setdiff(predictors, "hhs_region"), learned_params, nonlin_method)
+
+  # This method simply filters the training data to similar season weeks in the past
+  if (seasonal_method == "window") {
+    current_season_week <- epi_data %>%
+      filter(time_value == max(time_value)) %>%
+      pull(season_week) %>%
+      max()
+    epi_data <- epi_data %>% filter(
+      season_week >= current_season_week - 3,
+      season_week <= current_season_week + 3
     )
-    object$keys <- key_colnames(epi_data)
-    epi_data <- epi_data %>% epipredict:::add_shifted_columns(object)
-    if (drop_non_seasons) {
-      season_data <- epi_data %>% drop_non_seasons()
-    } else {
-      season_data <- epi_data
-    }
-  } else if (seasonal_pca == "covid") {
-    object <- list2(
-      shift_grid = tribble(
-        ~col, ~shift_val, ~newname,
-        "PC1", -ahead, "PC1_",
-        "PC2", -ahead, "PC2_"
-      ),
-    )
-    object$keys <- key_colnames(epi_data)
-    epi_data <- epi_data %>% epipredict:::add_shifted_columns(object)
-    if (drop_non_seasons) {
-      season_data <- epi_data %>% drop_non_seasons()
-    } else {
-      season_data <- epi_data
-    }
   }
 
   # preprocessing supported by epipredict
@@ -260,15 +241,15 @@ scaled_pop_seasonal <- function(epi_data,
       by = c("geo_value" = "abbr")
     )
   }
-  if (seasonal_pca == "indicator") {
+  if (seasonal_method == "indicator") {
     stopifnot("season_week" %in% names(epi_data))
     preproc %<>%
-      # TODO Really jank way of accounting for ahead.
+      # Really jank way of accounting for ahead.
       step_mutate(before_peak = (season_week - (ahead / 7) < 16), role = "predictor") %>%
       step_mutate(after_peak = (season_week - (ahead / 7) > 20), role = "predictor")
-  } else if (seasonal_pca == "flu") {
+  } else if (seasonal_method == "flu") {
     preproc %<>% add_role(PC1, PC2, PC3, new_role = "predictor")
-  } else if (seasonal_pca == "covid") {
+  } else if (seasonal_method == "covid") {
     preproc %<>% add_role(PC1, PC2, new_role = "predictor")
   }
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
@@ -286,7 +267,6 @@ scaled_pop_seasonal <- function(epi_data,
       by = c("geo_value" = "abbr")
     )
   }
-  # browser()
   # with all the setup done, we execute and format
   pred <- run_workflow_and_format(preproc, postproc, trainer, season_data, epi_data)
   # now pred has the columns
