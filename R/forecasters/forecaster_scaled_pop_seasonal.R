@@ -223,15 +223,14 @@ scaled_pop_seasonal <- function(epi_data,
       filter(time_value == max(time_value)) %>%
       pull(season_week) %>%
       max()
-    epi_data <- epi_data %>% filter(
-      season_week >= current_season_week - 3,
-      season_week <= current_season_week + 3
-    )
-  }
-  if (drop_non_seasons) {
-    season_data <- epi_data %>% drop_non_seasons()
-  } else {
-    season_data <- epi_data
+    date_ranges <- epi_data %>%
+      filter(season_week == current_season_week) %>%
+      pull(time_value) %>%
+      unique() %>%
+      map(~ c(.x - 1:5 * 7, .x + 0:3 * 7)) %>%
+      unlist() %>%
+      as.Date()
+    epi_data <- epi_data %>% filter(time_value %in% unlist(date_ranges))
   }
 
   # preprocessing supported by epipredict
