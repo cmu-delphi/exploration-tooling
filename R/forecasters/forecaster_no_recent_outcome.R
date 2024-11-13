@@ -16,17 +16,12 @@ no_recent_outcome <- function(epi_data,
                               week_method = c("linear", "sine"),
                               filter_source = "",
                               filter_agg_level = "",
-                              smooth_width = 3,
-                              smooth_cols = NULL,
                               sources_to_pop_scale = c(),
                               ...) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
   week_method <- arg_match(week_method)
-  if (is.null(smooth_cols)) {
-    smooth_cols <- extra_sources
-  }
   # this is for the case where there are multiple sources in the same column
   epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   args_input <- list(...)
@@ -54,12 +49,17 @@ no_recent_outcome <- function(epi_data,
     epi_data %<>%
       mutate(
         epiweek = epiweek(time_value),
-        year = epiyear(time_value),
-        season_week = convert_epiweek_to_season_week(year, epiweek)
+        epiyear = epiyear(time_value)
+      ) %>%
+      left_join(
+        (.) %>%
+          distinct(epiweek, epiyear) %>%
+          mutate(
+            season = convert_epiweek_to_season(epiyear, epiweek),
+            season_week = convert_epiweek_to_season_week(epiyear, epiweek)
+          ),
+        by = c("epiweek", "epiyear")
       )
-  }
-  if (!("season" %in% names(epi_data))) {
-    epi_data %<>% mutate(season = convert_epiweek_to_season(year, epiweek))
   }
   if (!("population" %in% names(epi_data))) {
     epi_data %<>% add_pop_and_density()
@@ -83,14 +83,6 @@ no_recent_outcome <- function(epi_data,
   #
   epi_data %<>% ungroup() %>% mutate(across(where(is.character), as.factor))
   keys <- key_colnames(epi_data, exclude = "time_value")
-  # add the slightly smoothed values beforehand; this is about speed, since step_epi_slide isn't ready yet
-  if (any(predictors != "")) {
-    epi_data %<>%
-      rolling_mean(
-        width = smooth_width,
-        cols_to_mean = predictors
-      )
-  }
 
   full_data <- epi_data
   if (drop_non_seasons) {
@@ -105,15 +97,15 @@ no_recent_outcome <- function(epi_data,
   season_data <- full_data %>% drop_non_seasons()
   # preprocessing supported by epipredict
   preproc <- epi_recipe(season_data)
-  # slide is currently done before for efficiency reasons, added as predictors here
-  if (any(predictors != "")) {
-    preproc %>%
-      add_role(starts_with("slide_"), new_role = "pre-predictor")
-  }
-  if (use_population == TRUE) {
-    # population and density
+  if (use_population) {
+    # population
     preproc %<>%
-      add_role(population, density, new_role = "pre-predictor")
+      add_role(population, new_role = "pre-predictor")
+  }
+  if (use_density) {
+    # density
+    preproc %<>%
+      add_role(population, new_role = "pre-predictor")
   }
   # week of the season
   if (week_method == "linear") {

@@ -235,10 +235,83 @@ forecaster_parameter_combinations_ <- rlang::list2(
     scale_method = "quantile",
     nonlin_method = "quart_root",
     filter_source = "",
-    use_population = c(FALSE, TRUE),
-    use_density = c(FALSE, TRUE),
+    use_population = c(TRUE, FALSE),
+    use_density = c(TRUE, FALSE),
     week_method = "sine",
     keys_to_ignore = very_latent_locations
+  ),
+  no_recent_but_exogenous = bind_rows(
+    expand_grid(
+      forecaster = "no_recent_outcome",
+      trainer = "quantreg",
+      # since it's a list, this gets expanded out to a single one in each row
+      extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region"),
+      lags = list2(
+        list2(
+          c(0, 7, 14, 21), # hhs
+          c(0, 7) # exogenous feature
+        )
+      ),
+      scale_method = "quantile",
+      nonlin_method = "quart_root",
+      filter_source = "",
+      use_population = TRUE,
+      use_density = FALSE,
+      week_method = "sine",
+      n_training = Inf,
+      keys_to_ignore = very_latent_locations
+    ),
+    expand_grid(
+      forecaster = "no_recent_outcome",
+      trainer = "quantreg",
+      extra_sources = list2(
+        c("nssp", "google_symptoms"),
+        c("nssp", "nwss"),
+        c("nssp", "nwss_region"),
+        c("google_symptoms", "nwss"),
+        c("google_symptoms", "nwss_region"),
+        c("nwss", "nwss_region")
+      ),
+      lags = list2(
+        list2(
+          c(0, 7, 14, 21), # hhs
+          c(0, 7), # first feature
+          c(0, 7) # second feature
+        )
+      ),
+      scale_method = "quantile",
+      nonlin_method = "quart_root",
+      filter_source = "",
+      use_population = TRUE,
+      use_density = FALSE,
+      week_method = "sine",
+      n_training = Inf,
+      keys_to_ignore = very_latent_locations
+    ),
+    expand_grid(
+      forecaster = "no_recent_outcome",
+      trainer = "quantreg",
+      extra_sources = list2(
+        c("nssp", "google_symptoms", "nwss", "nwss_region"),
+      ),
+      lags = list2(
+        list2(
+          c(0, 7, 14, 21), # hhs
+          c(0, 7), # nssp
+          c(0, 7), # google symptoms
+          c(0, 7), # nwss
+          c(0, 7), # nwss_region
+        )
+      ),
+      scale_method = "quantile",
+      nonlin_method = "quart_root",
+      filter_source = "",
+      use_population = TRUE,
+      use_density = FALSE,
+      week_method = "sine",
+      n_training = Inf,
+      keys_to_ignore = very_latent_locations
+    )
   ),
   ## no_recent_grf = tidyr::expand_grid(
   ##   forecaster = "no_recent_outcome",

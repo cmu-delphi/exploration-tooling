@@ -482,20 +482,24 @@ flusion_growth_rate %>%
   geom_histogram(binwidth = .01)
 library(ggplot2)
 library(gridExtra)
-quantiles <- flusion_growth_rate %>%
+quantile_values <- flusion_growth_rate %>%
   pull(growth) %>%
   quantile(na.rm = TRUE)
-flusion_growth_rate %>%
-  mutate(greq = growth > 0, leq = growth < 0) %>%
+quantiles <- tibble(quantiles = c("0%", "25%", "50%", "75%", "100%"), values = quantile_values)
+leqgreq <- flusion_growth_rate %>%
+  mutate(leq = growth < 0, eq0 = growth == 0, greq = growth > 0) %>%
   ungroup() %>%
-  summarize(leq = sum(leq), greq = sum(greq))
+  summarize(leq = sum(leq), eq0 = sum(eq0), greq = sum(greq)) %>%
+  pivot_longer(cols = c(leq, eq0, greq), values_to = "count") %>%
+  mutate(name = c("less than 0", "equal to 0", "greater than 0"))
 flusion_growth_rate %>%
   drop_na() %>%
   ggplot(aes(x = growth)) +
   geom_histogram(binwidth = .01) +
   xlim(c(-0.5, 0.5)) +
   labs(title = "nhsn data smooth_spline growth rate (cut off at .5)") +
-  annotation_custom(tableGrob(quantiles), xmin = .25, xmax = .5)
+  annotation_custom(tableGrob(quantiles), xmin = .25, xmax = .5) +
+  annotation_custom(tableGrob(leqgreq), xmin = -.5, xmax = -.25)
 mydata <- data.frame(a = 1:50, b = rnorm(50))
 mytable <- cbind(sites = c("site 1", "site 2", "site 3", "site 4"), mydata[10:13, ])
 
