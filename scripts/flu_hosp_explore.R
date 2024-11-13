@@ -248,7 +248,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region"),
       lags = list2(
         list2(
-          c(0, 7, 14, 21), # hhs
+          # no hhs
           c(0, 7) # exogenous feature
         )
       ),
@@ -274,7 +274,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       ),
       lags = list2(
         list2(
-          c(0, 7, 14, 21), # hhs
+          # no hhs
           c(0, 7), # first feature
           c(0, 7) # second feature
         )
@@ -296,7 +296,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       ),
       lags = list2(
         list2(
-          c(0, 7, 14, 21), # hhs
+          # no hhs
           c(0, 7), # nssp
           c(0, 7), # google symptoms
           c(0, 7), # nwss
