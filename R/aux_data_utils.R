@@ -207,6 +207,8 @@ drop_non_seasons <- function(epi_data, min_window = 12) {
 }
 
 
+#' add a column summing the values in the hhs region
+#' @param hhs_region_table the region table
 add_hhs_region_sum <- function(archive_data_raw, hhs_region_table) {
   need_agg_level <- !("agg_level" %in% names(archive_data_raw))
   if (need_agg_level) {
@@ -230,4 +232,70 @@ add_hhs_region_sum <- function(archive_data_raw, hhs_region_table) {
     archive_data_raw %<>% select(-agg_level)
   }
   archive_data_raw
+}
+
+#' hhs data in covidcast currently
+get_health_data <- function(as_of, disease = c("covid", "flu")) {
+  as_of <- as.Date(as_of)
+  disease <- arg_match(disease)
+  checkmate::assert_date(as_of, min.len = 1, max.len = 1)
+
+  cache_path <- here::here("aux_data", "healthdata")
+  if (!dir.exists(cache_path)) {
+    dir.create(cache_path, recursive = TRUE)
+  }
+
+  metadata_path <- here::here(cache_path, "metadata.csv")
+  if (!file.exists(metadata_path)) {
+    meta_data <- readr::read_csv("https://healthdata.gov/resource/qqte-vkut.csv?$query=SELECT%20update_date%2C%20days_since_update%2C%20user%2C%20rows%2C%20row_change%2C%20columns%2C%20column_change%2C%20metadata_published%2C%20metadata_updates%2C%20column_level_metadata%2C%20column_level_metadata_updates%2C%20archive_link%20ORDER%20BY%20update_date%20DESC%20LIMIT%2010000")
+    readr::write_csv(meta_data, metadata_path)
+  } else {
+    meta_data <- readr::read_csv(metadata_path)
+  }
+
+  most_recent_row <- meta_data %>%
+    # update_date is actually a time, so we need to filter for the day after.
+    filter(update_date <= as_of + 1) %>%
+    arrange(desc(update_date)) %>%
+    slice(1)
+
+  if (nrow(most_recent_row) == 0) {
+    cli::cli_abort("No data available for the given date.")
+  }
+
+  data_filepath <- here::here(cache_path, sprintf("g62h-syeh-%s.csv", as.Date(most_recent_row$update_date)))
+  if (!file.exists(data_filepath)) {
+    data <- readr::read_csv(most_recent_row$archive_link)
+    readr::write_csv(data, data_filepath)
+  } else {
+    data <- readr::read_csv(data_filepath)
+  }
+  if (disease == "covid") {
+    data %<>% mutate(
+      hhs = previous_day_admission_adult_covid_confirmed +
+        previous_day_admission_adult_covid_suspected +
+        previous_day_admission_pediatric_covid_confirmed +
+        previous_day_admission_pediatric_covid_suspected
+    )
+  } else if (disease == "flu") {
+    data %<>% mutate(hhs = previous_day_admission_influenza_confirmed)
+  }
+  # Minor data adjustments and column renames. The date also needs to be dated
+  # back one, since the columns we use report previous day hospitalizations.
+  data %>%
+    mutate(
+      geo_value = tolower(state),
+      time_value = date - 1L,
+      hhs = hhs,
+      .keep = "none"
+    ) %>%
+    # API seems to complete state level with 0s in some cases rather than NAs.
+    # Get something sort of compatible with that by summing to national with
+    # na.omit = TRUE. As otherwise we have some NAs from probably territories
+    # propagated to US level.
+    bind_rows(
+      (.) %>%
+        group_by(time_value) %>%
+        summarize(geo_value = "us", hhs = sum(hhs, na.rm = TRUE))
+    )
 }
