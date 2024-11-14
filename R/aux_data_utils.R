@@ -59,7 +59,7 @@ add_pop_and_density <-
       mutate(year = year(time_value)) %>%
       left_join(
         pops_by_state_hhs,
-        by = join_by(year, geo_value)
+        by = join_by(year, geo_value, agg_level)
       ) %>%
       # virgin islands data too limited for now
       filter(geo_value != "vi") %>%

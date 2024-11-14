@@ -457,12 +457,15 @@ data_targets <- rlang::list2(
             distinct(epiyear, epiweek) %>%
             mutate(season = convert_epiweek_to_season(epiyear, epiweek)) %>%
             mutate(season_week = convert_epiweek_to_season_week(epiyear, epiweek))
-          )%>%
+        ) %>%
+        mutate(agg_level = ifelse(grepl("[0-9]{2}", geo_value), "hhs_region", ifelse("us" == geo_value, "nation", "state"))) %>%
         add_pop_and_density() %>%
         mutate(hhs = hhs / population * 10L^5) %>%
         mutate(source = "nhsn") %>%
         mutate(agg_level = ifelse(geo_value == "us", "nation", "state")) %>%
-        as_epi_archive(other_keys = "source", compactify = TRUE)
+        as_epi_archive(other_keys = "source", compactify = TRUE) %>%
+        `$`("DT") %>%
+        select(geo_value, time_value, version, hhs, source, agg_level, season, season_week)
     }
   ),
   tar_target(
@@ -470,7 +473,7 @@ data_targets <- rlang::list2(
     command = {
       flusurv_adjusted <- generate_flusurv_adjusted()
       flusurv_adjusted$DT %>%
-        mutate(time_value = time_value + 3, version = time_value) %>%
+        mutate(time_value = time_value + 3, version = version + 3) %>%
         mutate(source = "flusurv") %>%
         select(geo_value, time_value, version, hhs = adj_hosp_rate, source, agg_level, season, season_week)
     }
@@ -496,13 +499,17 @@ data_targets <- rlang::list2(
           by = join_by(geo_value, season),
           relationship = "many-to-many"
         ) %>%
-        as_epi_archive(other_keys = "source", compactify = TRUE)
+        as_epi_archive(other_keys = "source", compactify = TRUE) %>%
+        `$`("DT")
     }
   ),
   tar_target(
     name = flusion_data_archive,
     command = {
-      flusion_data_archive <- bind_rows(ili_plus$DT, flusurv, hhs_archive$DT) %>% as_epi_archive(compactify = TRUE, other_keys = "source")
+      flusion_data_archive <-
+        bind_rows(ili_plus, flusurv, hhs_archive) %>%
+        add_pop_and_density() %>%
+        as_epi_archive(compactify = TRUE, other_keys = "source")
       flusion_data_archive <- flusion_data_archive$DT %>%
         filter(
           !geo_value %in% c("as", "pr", "vi", "gu", "mp"),
