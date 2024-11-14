@@ -470,7 +470,7 @@ data_targets <- rlang::list2(
     command = {
       flusurv_adjusted <- generate_flusurv_adjusted()
       flusurv_adjusted$DT %>%
-        mutate(time_value = time_value + 3) %>%
+        mutate(time_value = time_value + 3, version = time_value) %>%
         mutate(source = "flusurv") %>%
         select(geo_value, time_value, version, hhs = adj_hosp_rate, source, agg_level, season, season_week)
     }
@@ -482,7 +482,7 @@ data_targets <- rlang::list2(
       ili_plus <- ili_plus$DT %>%
         drop_na() %>%
         filter(hhs > 0.0001) %>%
-        mutate(time_value = time_value + 3) %>%
+        mutate(time_value = time_value + 3, version = time_value) %>%
         select(geo_value, time_value, version, hhs, source, agg_level, season, season_week)
       to_keep <-
         ili_plus %>%
