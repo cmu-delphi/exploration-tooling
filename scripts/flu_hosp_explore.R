@@ -456,7 +456,8 @@ data_targets <- rlang::list2(
           (.) %>%
             distinct(epiyear, epiweek) %>%
             mutate(season = convert_epiweek_to_season(epiyear, epiweek)) %>%
-            mutate(season_week = convert_epiweek_to_season_week(epiyear, epiweek)) %>%
+            mutate(season_week = convert_epiweek_to_season_week(epiyear, epiweek))
+          )%>%
         add_pop_and_density() %>%
         mutate(hhs = hhs / population * 10L^5) %>%
         mutate(source = "nhsn") %>%
