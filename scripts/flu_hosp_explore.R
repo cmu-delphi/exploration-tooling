@@ -619,6 +619,7 @@ data_targets <- rlang::list2(
         select(hhs_region = hhs, geo_value = state_id)
       pop_data <- gen_pop_and_density_data()
       nwss %<>%
+        mutate(agg_level = ifelse(grepl("[0-9]{2}", geo_value), "hhs_region", ifelse("us" == geo_value, "nation", "state"))) %>%
         add_pop_and_density() %>%
         mutate(
           nwss_rate = value / population * 100000,
