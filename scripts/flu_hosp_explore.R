@@ -428,7 +428,7 @@ nhsn_map <- tar_map(
     name = hhs_archive_data_asof,
     command = {
       date_ref <- as.Date(ref_time_value)
-      get_health_data(ref_time_value) %>%
+      get_health_data(ref_time_value, disease = "flu") %>%
         mutate(version = as.Date(ref_time_value))
     }
   )
@@ -456,8 +456,9 @@ data_targets <- rlang::list2(
           (.) %>%
             distinct(epiyear, epiweek) %>%
             mutate(season = convert_epiweek_to_season(epiyear, epiweek)) %>%
-            mutate(season_week = convert_epiweek_to_season_week(epiyear, epiweek))
-        ) %>%
+            mutate(season_week = convert_epiweek_to_season_week(epiyear, epiweek)) %>%
+        add_pop_and_density() %>%
+        mutate(hhs = hhs / population * 10L^5) %>%
         mutate(source = "nhsn") %>%
         mutate(agg_level = ifelse(geo_value == "us", "nation", "state")) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
@@ -502,7 +503,6 @@ data_targets <- rlang::list2(
     command = {
       flusion_data_archive <- bind_rows(ili_plus$DT, flusurv, hhs_archive$DT) %>% as_epi_archive(compactify = TRUE, other_keys = "source")
       flusion_data_archive <- flusion_data_archive$DT %>%
-        add_pop_and_density() %>%
         select(-agg_level.y) %>%
         rename(agg_level = agg_level.x) %>%
         filter(
