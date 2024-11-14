@@ -261,7 +261,7 @@ nhsn_map <- tar_map(
   tar_target(
     name = hhs_archive_data_asof,
     command = {
-      res <- get_health_data(ref_time_value)
+      date_ref <- as.Date(ref_time_value)
       get_health_data(ref_time_value) %>%
         mutate(version = as.Date(ref_time_value))
     }
@@ -274,7 +274,8 @@ data_targets <- rlang::list2(
     command = {
       bind_rows(!!!.x) %>%
         relocate(geo_value, time_value, version, hhs) %>%
-        as_epi_archive(compactify = TRUE)
+        as_epi_archive(compactify = TRUE) %>%
+        daily_to_weekly_archive(agg_columns = "hhs")
     }
   ),
   tar_target(
@@ -603,6 +604,7 @@ rlang::list2(
       c(7, 14, 21, 28)
     }
   ),
+  nhsn_map,
   data_targets,
   forecasts_and_scores,
   ensembles_and_scores,

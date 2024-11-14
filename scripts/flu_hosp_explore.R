@@ -52,78 +52,6 @@ forecaster_parameter_combinations_ <- rlang::list2(
   ),
   ## # The covid forecaster, ported over to flu. Also likely to struggle with the
   ## # extra data
-  # smoothed_scaled_main = tidyr::expand_grid(
-  #   forecaster = "smoothed_scaled",
-  #   trainer = "quantreg",
-  #   lags = list2(
-  #     # list(smoothed, sd)
-  #     list2(c(0, 7, 14, 21), c(0)),
-  #     list2(c(0, 7), c(0))
-  #   ),
-  #   smooth_width = as.difftime(8, units = "weeks"),
-  #   sd_width = as.difftime(12, units = "weeks"),
-  #   sd_mean_width = as.difftime(8, units = "weeks"),
-  #   pop_scaling = FALSE,
-  #   n_training = Inf,
-  #   filter_source = "nhsn",
-  #   filter_agg_level = "state",
-  #   keys_to_ignore = very_latent_locations
-  # ),
-  # smoothed_only_main = tidyr::expand_grid(
-  #   forecaster = "smoothed_scaled",
-  #   trainer = "quantreg",
-  #   lags = list2(
-  #     # list(smoothed, sd)
-  #     list2(c(0, 7, 14, 21)),
-  #     list2(c(0, 7))
-  #   ),
-  #   smooth_width = as.difftime(8, units = "weeks"),
-  #   sd_width = as.difftime(as.integer(NA), units = "weeks"),
-  #   sd_mean_width = as.difftime(8, units = "weeks"),
-  #   pop_scaling = FALSE,
-  #   n_training = Inf,
-  #   filter_source = "nhsn",
-  #   filter_agg_level = "state",
-  #   keys_to_ignore = very_latent_locations
-  # ),
-  # smoothed_scaled_data_augmented = tidyr::expand_grid(
-  #   forecaster = "smoothed_scaled",
-  #   trainer = "quantreg",
-  #   lags = list2(
-  #     # list(smoothed, sd)
-  #     list2(c(0, 7, 14, 21), c(0)),
-  #   ),
-  #   smooth_width = as.difftime(8, units = "weeks"),
-  #   sd_width = as.difftime(12, units = "weeks"),
-  #   sd_mean_width = as.difftime(8, units = "weeks"),
-  #   pop_scaling = FALSE,
-  #   n_training = Inf,
-  #   scale_method = "quantile",
-  #   center_method = "median",
-  #   nonlin_method = "quart_root",
-  #   filter_source = "",
-  #   filter_agg_level = "",
-  #   keys_to_ignore = very_latent_locations
-  # ),
-  # smoothed_only_data_augmented = tidyr::expand_grid(
-  #   forecaster = "smoothed_scaled",
-  #   trainer = "quantreg",
-  #   lags = list2(
-  #     # list(smoothed, sd)
-  #     list2(c(0, 7, 14, 21)),
-  #   ),
-  #   smooth_width = as.difftime(8, units = "weeks"),
-  #   sd_width = as.difftime(as.integer(NA), units = "weeks"),
-  #   sd_mean_width = as.difftime(8, units = "weeks"),
-  #   pop_scaling = FALSE,
-  #   n_training = Inf,
-  #   scale_method = "quantile",
-  #   center_method = "median",
-  #   nonlin_method = "quart_root",
-  #   filter_source = "",
-  #   filter_agg_level = "",
-  #   keys_to_ignore = very_latent_locations
-  # ),
   # the thing to beat (a simplistic baseline forecast)
   flatline = tidyr::expand_grid(
     forecaster = "flatline_fc",
@@ -207,27 +135,6 @@ forecaster_parameter_combinations_ <- rlang::list2(
       keys_to_ignore = very_latent_locations,
     )
   ),
-  # flusion_quant = tidyr::expand_grid(
-  #   forecaster = "flusion",
-  #   trainer = "quantreg",
-  #   lags = list(c(0, 7, 14)),
-  #   dummy_states = FALSE,
-  #   dummy_source = c(TRUE, FALSE),
-  #   nonlin_method = "quart_root",
-  #   derivative_estimator = "growth_rate",
-  #   keys_to_ignore = very_latent_locations
-  # ),
-  # variations on flusion
-  ## flusion_grf = tidyr::expand_grid(
-  ##   forecaster = "flusion",
-  ##   trainer = c("randforest_grf"),
-  ##   lags = list(c(0, 7, 21)),
-  ##   dummy_states = FALSE,
-  ##   dummy_source = TRUE,
-  ##   nonlin_method = "quart_root",
-  ##   derivative_estimator = "growth_rate",
-  ##   keys_to_ignore = very_latent_locations
-  ## ),
   ## # another kind of baseline forecaster
   no_recent_quant = tidyr::expand_grid(
     forecaster = "no_recent_outcome",
@@ -313,17 +220,6 @@ forecaster_parameter_combinations_ <- rlang::list2(
       keys_to_ignore = very_latent_locations
     )
   ),
-  ## no_recent_grf = tidyr::expand_grid(
-  ##   forecaster = "no_recent_outcome",
-  ##   trainer = "randforest_grf",
-  ##   scale_method = "quantile",
-  ##   nonlin_method = "quart_root",
-  ##   filter_source = "",
-  ##   use_population = TRUE,
-  ##   use_density = FALSE,
-  ##   week_method = "linear",
-  ##   keys_to_ignore = very_latent_locations
-  ## ),
   scaled_pop_season = bind_rows(
     tidyr::expand_grid(
       forecaster = "scaled_pop_seasonal",
@@ -521,29 +417,105 @@ ensemble_grid <- make_ensemble_grid(ensemble_parameter_combinations_)
 if (!exists("ref_time_values")) {
   start_date <- as.Date("2023-10-04")
   end_date <- as.Date("2024-04-24")
-  ref_time_values <- NULL
+  ref_time_values <- seq.Date(start_date, start_date, by = 7L)
+  # ref_time_values <- seq.Date(start_date, end_date, by = 7L)
   date_step <- 7L
 }
 
-
+ref_time_values_for_map <- tibble(ref_time_value = ref_time_values)
+nhsn_map <- tar_map(
+  values = ref_time_values_for_map,
+  tar_target(
+    name = hhs_archive_data_asof,
+    command = {
+      date_ref <- as.Date(ref_time_value)
+      get_health_data(ref_time_value) %>%
+        mutate(version = as.Date(ref_time_value))
+    }
+  )
+)
 
 # data is sufficiently different that it needs to be run separately
 fetch_args <- epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 400)
 data_targets <- rlang::list2(
+  tar_combine(
+    name = hhs_archive_data_raw,
+    nhsn_map[["hhs_archive_data_asof"]],
+    command = {
+      bind_rows(!!!.x) %>%
+        relocate(geo_value, time_value, version, hhs) %>%
+        as_epi_archive(compactify = TRUE) %>%
+        daily_to_weekly_archive(agg_columns = "hhs")
+    }
+  ),
+  tar_target(
+    name = hhs_archive,
+    command = {
+      hhs_archive_data_raw$DT %>%
+        mutate(epiyear = epiyear(time_value), epiweek = epiweek(time_value)) %>%
+        left_join(
+          (.) %>%
+            distinct(epiyear, epiweek) %>%
+            mutate(season = convert_epiweek_to_season(epiyear, epiweek)) %>%
+            mutate(season_week = convert_epiweek_to_season_week(epiyear, epiweek))
+        ) %>%
+        mutate(source = "nhsn") %>%
+        mutate(agg_level = ifelse(geo_value == "us", "nation", "state")) %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+    }
+  ),
+  tar_target(
+    name = flusurv,
+    command = {
+      flusurv_adjusted <- generate_flusurv_adjusted()
+      flusurv_adjusted$DT %>%
+        mutate(time_value = time_value + 3) %>%
+        mutate(source = "flusurv") %>%
+        select(geo_value, time_value, version, hhs = adj_hosp_rate, source, agg_level, season, season_week)
+    }
+  ),
+  tar_target(
+    name = ili_plus,
+    command = {
+      a
+      ili_plus <- gen_ili_data()
+      ili_plus <- ili_plus$DT %>%
+        drop_na() %>%
+        filter(hhs > 0.0001) %>%
+        mutate(time_value = time_value + 3) %>%
+        select(geo_value, time_value, version, hhs, source, agg_level, season, season_week)
+      to_keep <-
+        ili_plus %>%
+        group_by(geo_value, season) %>%
+        summarize(total_count = length(hhs), .groups = "drop") %>%
+        filter(total_count >= 20) %>%
+        select(geo_value, season)
+      to_keep %>%
+        left_join(
+          ili_plus,
+          by = join_by(geo_value, season),
+          relationship = "many-to-many"
+        ) %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+    }
+  ),
   tar_target(
     name = flusion_data_archive,
     command = {
-      a <- 1
-      flusion_data_archive <-
-        qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
+      browser()
+      flusion_data_archive <- bind_rows(ili_plus$DT, flusurv, hhs_archive$DT) %>% as_epi_archive(compactify = TRUE, other_keys = "source")
+      flusion_data_archive <- flusion_data_archive$DT %>%
+        add_pop_and_density() %>%
+        select(-agg_level.y) %>%
+        rename(agg_level = agg_level.x) %>%
         filter(
           !geo_value %in% c("as", "pr", "vi", "gu", "mp"),
-          !is.na(value),
+          !is.na(hhs),
           time_value <= max(eval_dates)
         ) %>%
-        rename(hhs = value) %>%
         relocate(source, geo_value, time_value, version, hhs, agg_level, season, season_week, year, population, density) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
+      flusion_data_archive
     }
   ),
   tar_target(
@@ -737,6 +709,7 @@ data_targets <- rlang::list2(
         `$`("DT") %>%
         drop_na(agg_level) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
+
       # Jank adding of hhs_region column to the data
       joined_archive_data <- joined_archive_data$DT %>%
         add_hhs_region_sum(hhs_region) %>%
@@ -791,6 +764,7 @@ rlang::list2(
       c(0, 7, 14, 21)
     }
   ),
+  nhsn_map,
   data_targets,
   forecasts_and_scores,
   # ensembles_and_scores
