@@ -417,8 +417,7 @@ ensemble_grid <- make_ensemble_grid(ensemble_parameter_combinations_)
 if (!exists("ref_time_values")) {
   start_date <- as.Date("2023-10-04")
   end_date <- as.Date("2024-04-24")
-  ref_time_values <- seq.Date(start_date, start_date, by = 7L)
-  # ref_time_values <- seq.Date(start_date, end_date, by = 7L)
+  ref_time_values <- seq.Date(start_date, end_date, by = 7L)
   date_step <- 7L
 }
 
