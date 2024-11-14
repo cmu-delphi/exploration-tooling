@@ -72,9 +72,9 @@ no_recent_outcome <- function(epi_data,
   args_input[["quantile_levels"]] <- quantile_levels
   args_list <- do.call(default_args_list, args_input)
   # if you want to hardcode particular predictors in a particular forecaster
-  predictors <- extra_sources
+  predictors <- extra_sources[[1]]
   # TODO: Partial match quantile_level coming from here (on Dmitry's machine)
-  c(args_list, tmp_pred, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, outcome, trainer, args_list)
+  c(args_list, tmp_pred, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
 
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by

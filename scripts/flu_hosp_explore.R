@@ -207,7 +207,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
           c(0, 7), # nssp
           c(0, 7), # google symptoms
           c(0, 7), # nwss
-          c(0, 7), # nwss_region
+          c(0, 7) # nwss_region
         )
       ),
       scale_method = "quantile",
