@@ -476,7 +476,6 @@ data_targets <- rlang::list2(
   tar_target(
     name = ili_plus,
     command = {
-      a
       ili_plus <- gen_ili_data()
       ili_plus <- ili_plus$DT %>%
         drop_na() %>%
@@ -501,7 +500,6 @@ data_targets <- rlang::list2(
   tar_target(
     name = flusion_data_archive,
     command = {
-      browser()
       flusion_data_archive <- bind_rows(ili_plus$DT, flusurv, hhs_archive$DT) %>% as_epi_archive(compactify = TRUE, other_keys = "source")
       flusion_data_archive <- flusion_data_archive$DT %>%
         add_pop_and_density() %>%
