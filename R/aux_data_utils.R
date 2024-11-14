@@ -323,7 +323,7 @@ get_health_data <- function(as_of, disease = c("covid", "flu")) {
 
 calculate_burden_adjustment <- function(flusurv_latest) {
   # get burden data
-  burden <- read_csv(here::here("aux_data", "flusion_data", "flu_burden.csv"), show_col_types = FALSE) %>%
+  burden <- readr::read_csv(here::here("aux_data", "flusion_data", "flu_burden.csv"), show_col_types = FALSE) %>%
     separate(Season, into = c("StartYear", "season"), sep = "-") %>%
     select(season, contains("Estimate")) %>%
     mutate(season = as.double(season)) %>%
@@ -331,7 +331,7 @@ calculate_burden_adjustment <- function(flusurv_latest) {
       as.character(season - 1), "/", substr(season, 3, 4)
     ))
   # get population data
-  us_population <- read_csv(here::here("aux_data", "flusion_data", "us_pop.csv"), show_col_types = FALSE) %>%
+  us_population <- readr::read_csv(here::here("aux_data", "flusion_data", "us_pop.csv"), show_col_types = FALSE) %>%
     rename(us_pop = POPTOTUSA647NWDB) %>%
     mutate(season = year(DATE)) %>%
     filter((season >= 2011) & (season <= 2020)) %>%
@@ -441,18 +441,18 @@ generate_flusurv_adjusted <- function(day_of_week = 1) {
 
 
 process_who_nrevss <- function(filename1, filename2, filename3) {
-  clinical_lab_pos <- read_csv(
+  clinical_lab_pos <- readr::read_csv(
     here::here("aux_data", "flusion_data", filename1),
     skip = 1, show_col_types = FALSE
   ) %>%
     select("REGION TYPE", "REGION", "YEAR", "WEEK", "PERCENT POSITIVE")
-  combined_pos <- read_csv(
+  combined_pos <- readr::read_csv(
     here::here("aux_data", "flusion_data", filename2),
     skip = 1, show_col_types = FALSE
   ) %>%
     select("REGION TYPE", "REGION", "YEAR", "WEEK", "PERCENT POSITIVE")
   pos_state <- bind_rows(clinical_lab_pos, combined_pos)
-  ili_state <- read_csv(
+  ili_state <- readr::read_csv(
     here::here("aux_data", "flusion_data", filename3),
     skip = 1, show_col_types = FALSE
   ) %>%
