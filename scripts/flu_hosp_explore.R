@@ -504,8 +504,6 @@ data_targets <- rlang::list2(
     command = {
       flusion_data_archive <- bind_rows(ili_plus$DT, flusurv, hhs_archive$DT) %>% as_epi_archive(compactify = TRUE, other_keys = "source")
       flusion_data_archive <- flusion_data_archive$DT %>%
-        select(-agg_level.y) %>%
-        rename(agg_level = agg_level.x) %>%
         filter(
           !geo_value %in% c("as", "pr", "vi", "gu", "mp"),
           !is.na(hhs),
