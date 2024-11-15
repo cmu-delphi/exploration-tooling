@@ -109,27 +109,24 @@ scaled_pop_seasonal <- function(epi_data,
   # get the seasonal features
   if (seasonal_method %in% c("flu", "covid")) {
     if (seasonal_method == "flu") {
-      if (!file.exists("aux_data/seasonal_features/flu")) {
-        # Read the flusion data
-        stopifnot(file.exists("aux_data/flusion_data/flusion_merged"))
-        flusion_data_archive <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
-          filter(
-            !geo_value %in% c("as", "pr", "vi", "gu", "mp"),
-            !is.na(value),
-            time_value <= "2024-04-24"
-          ) %>%
-          rename(hhs = value) %>%
-          relocate(source, geo_value, time_value, version, hhs, agg_level, season, season_week, year, population, density) %>%
-          as_epi_archive(other_keys = "source", compactify = TRUE)
-
+      cache_file_path <- paste0(
+        "aux_data/seasonal_features/flu",
+        drop_non_seasons,
+        scale_method,
+        center_method,
+        nonlin_method,
+        tar_timestamp(flusion_data_archive),
+        sep = "_"
+      )
+      if (!file.exists(cache_file_path)) {
         # Whiten the data and get the PCA
-        learned_params <- flusion_data_archive %>%
-          epix_as_of(as.Date("2023-09-01")) %>%
+        learned_params <- qs::qread("flu_hosp_explore/objects/flusion_data_archive") %>%
+          epix_as_of(as.Date("2024-03-01")) %>%
           drop_non_seasons() %>%
           calculate_whitening_params("hhs", scale_method, center_method, nonlin_method)
 
-        wide <- flusion_data_archive %>%
-          epix_as_of(as.Date("2023-09-01")) %>%
+        wide <- qs::qread("flu_hosp_explore/objects/flusion_data_archive") %>%
+          epix_as_of(as.Date("2024-03-01")) %>%
           data_whitening("hhs", learned_params, nonlin_method) %>%
           select(geo_value, season, source, season_week, hhs) %>%
           filter(!is.na(season_week), !is.na(hhs)) %>%
@@ -142,19 +139,23 @@ scaled_pop_seasonal <- function(epi_data,
           arrange(season_week) %>%
           select(-season_week) %>%
           as.matrix() %>%
-          prcomp(scale. = TRUE)
+          prcomp()
 
         # Using the top 3 PCs, since they all look reasonable
-        seasonal_features <- as_tibble(predict(pca)[, 1])
+        seasonal_features <- as_tibble(predict(pca)[, 1:3]) %>% select(PC1)
         seasonal_features$season_week <- 1:nrow(seasonal_features)
-        qs::qsave(seasonal_features, "aux_data/seasonal_features/flu")
+        qs::qsave(seasonal_features, cache_file_path)
       } else {
-        seasonal_features <- qs::qread("aux_data/seasonal_features/flu")
+        seasonal_features <- qs::qread(cache_file_path)
       }
       args_list$lags <- c(args_list$lags, 0, 0, 0)
     }
     if (seasonal_method == "covid") {
-      if (!file.exists("aux_data/seasonal_features/covid")) {
+      cache_file_path <- paste0(
+        "aux_data/seasonal_features/covid",
+        sep = "_"
+      )
+      if (!file.exists(cache_file_path)) {
         seasonal_data <- pub_covidcast(
           "hhs", "confirmed_admissions_covid_1d_prop_7dav",
           geo_type = "state",
@@ -192,9 +193,9 @@ scaled_pop_seasonal <- function(epi_data,
         # Only using the first two, because the third looks like noise
         seasonal_features <- as_tibble(predict(pca)[, 1])
         seasonal_features$season_week <- 1:nrow(seasonal_features)
-        qs::qsave(seasonal_features, "aux_data/seasonal_features/covid")
+        qs::qsave(seasonal_features, cache_file_path)
       } else {
-        seasonal_features <- qs::qread("aux_data/seasonal_features/covid")
+        seasonal_features <- qs::qread(cache_file_path)
       }
       args_list$lags <- c(args_list$lags, 0, 0)
     }
