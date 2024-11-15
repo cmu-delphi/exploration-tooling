@@ -99,6 +99,7 @@ smoothed_scaled <- function(epi_data,
   }
   args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
+  args_input[["nonneg"]] <- scale_method == "none"
   args_list <- inject(default_args_list(!!!args_input))
   # `extra_sources` sets which variables beyond the outcome are lagged and used as predictors
   # any which are modified by `rolling_mean` or `rolling_sd` have their original values dropped later

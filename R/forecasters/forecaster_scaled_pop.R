@@ -88,6 +88,7 @@ scaled_pop <- function(epi_data,
   }
   args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
+  args_input[["nonneg"]] <- scale_method == "none"
   args_list <- inject(default_args_list(!!!args_input))
   # if you want to hardcode particular predictors in a particular forecaster
   predictors <- c(outcome, extra_sources[[1]])

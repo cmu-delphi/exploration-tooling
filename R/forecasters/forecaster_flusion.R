@@ -61,7 +61,7 @@ flusion <- function(epi_data,
   }
   time_type <- attributes(epi_data)$metadata$time_type
   # because we're whitening, we don't want to threshold the predictions inside epipredict
-  args_input[["nonneg"]] <- FALSE
+  args_input[["nonneg"]] <- scale_method == "none"
   args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
   args_list <- do.call(default_args_list, args_input)
