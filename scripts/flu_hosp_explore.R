@@ -19,7 +19,8 @@ very_latent_locations <- list(list(
 forecaster_parameter_combinations_ <- rlang::list2(
   # just the data, possibly population scaled; likely to run into troubles
   # because of the scales of the different sources
-  scaled_pop_main = tidyr::expand_grid(
+  scaled_pop_main = bind_rows(
+    tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = "quantreg",
     lags = list2(
@@ -33,6 +34,23 @@ forecaster_parameter_combinations_ <- rlang::list2(
     drop_non_seasons = TRUE,
     keys_to_ignore = very_latent_locations
   ),
+  tidyr::expand_grid(
+           forecaster = "scaled_pop",
+           trainer = "quantreg",
+            lags = list2(
+              c(0, 7),
+              c(0, 7, 14, 21),
+            ),
+            pop_scaling = FALSE,
+            filter_source = "nhsn",
+            filter_agg_level = "state",
+           scale_method = "quantile",
+      center_method = "median",
+      nonlin_method = "quart_root",
+            n_training = Inf,
+            drop_non_seasons = TRUE,
+            keys_to_ignore = very_latent_locations
+  )),
   scaled_pop_data_augmented = tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = "quantreg",
@@ -75,8 +93,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
       scale_method = "quantile",
       center_method = "median",
       nonlin_method = "quart_root",
-      filter_source = "",
-      filter_agg_level = "",
+      filter_source = "nhsn",
+      filter_agg_level = "state",
       n_training = Inf,
       drop_non_seasons = TRUE,
       keys_to_ignore = very_latent_locations,
@@ -103,8 +121,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
       scale_method = "quantile",
       center_method = "median",
       nonlin_method = "quart_root",
-      filter_source = "",
-      filter_agg_level = "",
+      filter_source = "nhsn",
+      filter_agg_level = "state",
       n_training = Inf,
       drop_non_seasons = TRUE,
       keys_to_ignore = very_latent_locations,
@@ -128,25 +146,25 @@ forecaster_parameter_combinations_ <- rlang::list2(
       scale_method = "quantile",
       center_method = "median",
       nonlin_method = "quart_root",
-      filter_source = "",
-      filter_agg_level = "",
+      filter_source = "nhsn",
+      filter_agg_level = "state",
       n_training = Inf,
       drop_non_seasons = TRUE,
       keys_to_ignore = very_latent_locations,
     )
   ),
   ## # another kind of baseline forecaster
-  no_recent_quant = tidyr::expand_grid(
-    forecaster = "no_recent_outcome",
-    trainer = "quantreg",
-    scale_method = "quantile",
-    nonlin_method = "quart_root",
-    filter_source = "",
-    use_population = c(TRUE, FALSE),
-    use_density = c(TRUE, FALSE),
-    week_method = "sine",
-    keys_to_ignore = very_latent_locations
-  ),
+  ## no_recent_quant = tidyr::expand_grid(
+  ##   forecaster = "no_recent_outcome",
+  ##   trainer = "quantreg",
+  ##   scale_method = "quantile",
+  ##   nonlin_method = "quart_root",
+  ##   filter_source = "",
+  ##   use_population = c(TRUE, FALSE),
+  ##   use_density = c(TRUE, FALSE),
+  ##   week_method = "sine",
+  ##   keys_to_ignore = very_latent_locations
+  ## ),
   no_recent_but_exogenous = bind_rows(
     expand_grid(
       forecaster = "no_recent_outcome",
@@ -161,7 +179,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       ),
       scale_method = "quantile",
       nonlin_method = "quart_root",
-      filter_source = "",
+      filter_source = c("", "nhsn"),
       use_population = TRUE,
       use_density = FALSE,
       week_method = "sine",
@@ -188,7 +206,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       ),
       scale_method = "quantile",
       nonlin_method = "quart_root",
-      filter_source = "",
+      filter_source = c("", "nhsn"),
       use_population = TRUE,
       use_density = FALSE,
       week_method = "sine",
@@ -212,7 +230,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       ),
       scale_method = "quantile",
       nonlin_method = "quart_root",
-      filter_source = "",
+      filter_source = c("", "nhsn"),
       use_population = TRUE,
       use_density = FALSE,
       week_method = "sine",
