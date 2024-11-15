@@ -30,6 +30,9 @@ forecaster_parameter_combinations_ <- rlang::list2(
     pop_scaling = FALSE,
     filter_source = "nhsn",
     filter_agg_level = "state",
+    scale_method = "none",
+    center_method = "median",
+    nonlin_method = c("quart_root", "none"),
     n_training = Inf,
     drop_non_seasons = TRUE,
     keys_to_ignore = very_latent_locations
@@ -45,8 +48,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
             filter_source = "nhsn",
             filter_agg_level = "state",
            scale_method = "quantile",
-      center_method = "median",
-      nonlin_method = "quart_root",
+           center_method = "median",
+           nonlin_method = "quart_root",
             n_training = Inf,
             drop_non_seasons = TRUE,
             keys_to_ignore = very_latent_locations
