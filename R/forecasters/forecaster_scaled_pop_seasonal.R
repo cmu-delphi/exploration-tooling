@@ -41,7 +41,7 @@ scaled_pop_seasonal <- function(epi_data,
                                 ahead = 1,
                                 pop_scaling = TRUE,
                                 drop_non_seasons = FALSE,
-                                scale_method = c("none", "quantile", "std"),
+                                scale_method = c("quantile", "std", "none"),
                                 center_method = c("median", "mean"),
                                 nonlin_method = c("quart_root", "none"),
                                 seasonal_method = c("none", "flu", "covid", "indicator", "window"),
@@ -144,9 +144,8 @@ scaled_pop_seasonal <- function(epi_data,
           prcomp(scale. = TRUE)
 
         # Using the top 3 PCs, since they all look reasonable
-        seasonal_features <- as_tibble(predict(pca)[, 1:3])
+        seasonal_features <- as_tibble(predict(pca)[, 1])
         seasonal_features$season_week <- 1:nrow(seasonal_features)
-
         qs::qsave(seasonal_features, "aux_data/seasonal_features/flu")
       } else {
         seasonal_features <- qs::qread("aux_data/seasonal_features/flu")
@@ -190,7 +189,7 @@ scaled_pop_seasonal <- function(epi_data,
           prcomp()
 
         # Only using the first two, because the third looks like noise
-        seasonal_features <- as_tibble(predict(pca)[, 1:2])
+        seasonal_features <- as_tibble(predict(pca)[, 1])
         seasonal_features$season_week <- 1:nrow(seasonal_features)
         qs::qsave(seasonal_features, "aux_data/seasonal_features/covid")
       } else {
@@ -200,9 +199,10 @@ scaled_pop_seasonal <- function(epi_data,
     }
 
     # A jank way to account for aheads
-    seasonal_features <- seasonal_features %>%
-      mutate(season_week = shift(season_week, -ahead / 7, type = "cyclic"))
-    epi_data <- epi_data %>% left_join(seasonal_features, by = "season_week")
+    epi_data <- epi_data %>% left_join(
+      seasonal_features %>% mutate(season_week = shift(season_week, ahead / 7, type = "cyclic")),
+      by = "season_week"
+    )
   }
 
   # whiten to get the sources on the same scale
@@ -252,9 +252,9 @@ scaled_pop_seasonal <- function(epi_data,
       step_mutate(before_peak = (season_week - (ahead / 7) < 16), role = "predictor") %>%
       step_mutate(after_peak = (season_week - (ahead / 7) > 20), role = "predictor")
   } else if (seasonal_method == "flu") {
-    preproc %<>% add_role(PC1, PC2, PC3, new_role = "predictor")
+    preproc %<>% add_role(PC1, new_role = "predictor")
   } else if (seasonal_method == "covid") {
-    preproc %<>% add_role(PC1, PC2, new_role = "predictor")
+    preproc %<>% add_role(PC1, new_role = "predictor")
   }
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
 

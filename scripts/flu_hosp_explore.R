@@ -21,39 +21,40 @@ forecaster_parameter_combinations_ <- rlang::list2(
   # because of the scales of the different sources
   scaled_pop_main = bind_rows(
     tidyr::expand_grid(
-    forecaster = "scaled_pop",
-    trainer = "quantreg",
-    lags = list2(
-      c(0, 7),
-      c(0, 7, 14, 21),
+      forecaster = "scaled_pop",
+      trainer = "quantreg",
+      lags = list2(
+        c(0, 7),
+        c(0, 7, 14, 21),
+      ),
+      pop_scaling = FALSE,
+      filter_source = "nhsn",
+      filter_agg_level = "state",
+      scale_method = "none",
+      center_method = "median",
+      nonlin_method = c("quart_root", "none"),
+      n_training = Inf,
+      drop_non_seasons = TRUE,
+      keys_to_ignore = very_latent_locations
     ),
-    pop_scaling = FALSE,
-    filter_source = "nhsn",
-    filter_agg_level = "state",
-    scale_method = "none",
-    center_method = "median",
-    nonlin_method = c("quart_root", "none"),
-    n_training = Inf,
-    drop_non_seasons = TRUE,
-    keys_to_ignore = very_latent_locations
+    tidyr::expand_grid(
+      forecaster = "scaled_pop",
+      trainer = "quantreg",
+      lags = list2(
+        c(0, 7),
+        c(0, 7, 14, 21),
+      ),
+      pop_scaling = FALSE,
+      filter_source = "nhsn",
+      filter_agg_level = "state",
+      scale_method = "quantile",
+      center_method = "median",
+      nonlin_method = "quart_root",
+      n_training = Inf,
+      drop_non_seasons = TRUE,
+      keys_to_ignore = very_latent_locations
+    )
   ),
-  tidyr::expand_grid(
-           forecaster = "scaled_pop",
-           trainer = "quantreg",
-            lags = list2(
-              c(0, 7),
-              c(0, 7, 14, 21),
-            ),
-            pop_scaling = FALSE,
-            filter_source = "nhsn",
-            filter_agg_level = "state",
-           scale_method = "quantile",
-           center_method = "median",
-           nonlin_method = "quart_root",
-            n_training = Inf,
-            drop_non_seasons = TRUE,
-            keys_to_ignore = very_latent_locations
-  )),
   scaled_pop_data_augmented = tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = "quantreg",
@@ -253,7 +254,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       pop_scaling = FALSE,
       filter_source = "nhsn",
       filter_agg_level = "state",
-      drop_non_seasons = TRUE,
+      drop_non_seasons = c(TRUE, FALSE),
       n_training = Inf,
       keys_to_ignore = very_latent_locations
     ),
@@ -265,7 +266,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
         c(0, 7, 14, 21),
         c(0, 7)
       ),
-      seasonal_method = c("window"),
+      seasonal_method = "window",
       pop_scaling = FALSE,
       filter_source = "nhsn",
       filter_agg_level = "state",
@@ -273,46 +274,46 @@ forecaster_parameter_combinations_ <- rlang::list2(
       n_training = Inf,
       keys_to_ignore = very_latent_locations
     )
-  ),
-  scaled_pop_season_data_augmented = bind_rows(
-    tidyr::expand_grid(
-      forecaster = "scaled_pop_seasonal",
-      trainer = "quantreg",
-      lags = list(
-        c(0, 7, 14, 21),
-        c(0, 7)
-      ),
-      seasonal_method = c("flu", "indicator"),
-      pop_scaling = FALSE,
-      scale_method = "quantile",
-      center_method = "median",
-      nonlin_method = "quart_root",
-      filter_source = "",
-      filter_agg_level = "",
-      n_training = Inf,
-      drop_non_seasons = TRUE,
-      keys_to_ignore = very_latent_locations
-    ),
-    # Window-based seasonal method shouldn't drop non-seasons
-    tidyr::expand_grid(
-      forecaster = "scaled_pop_seasonal",
-      trainer = "quantreg",
-      lags = list(
-        c(0, 7, 14, 21),
-        c(0, 7)
-      ),
-      seasonal_method = c("window"),
-      pop_scaling = FALSE,
-      scale_method = "quantile",
-      center_method = "median",
-      nonlin_method = "quart_root",
-      filter_source = "",
-      filter_agg_level = "",
-      n_training = Inf,
-      drop_non_seasons = FALSE,
-      keys_to_ignore = very_latent_locations
-    )
   )
+  # scaled_pop_season_data_augmented = bind_rows(
+  #   tidyr::expand_grid(
+  #     forecaster = "scaled_pop_seasonal",
+  #     trainer = "quantreg",
+  #     lags = list(
+  #       c(0, 7, 14, 21),
+  #       c(0, 7)
+  #     ),
+  #     seasonal_method = c("flu", "indicator"),
+  #     pop_scaling = FALSE,
+  #     scale_method = "quantile",
+  #     center_method = "median",
+  #     nonlin_method = "quart_root",
+  #     filter_source = "",
+  #     filter_agg_level = "",
+  #     n_training = Inf,
+  #     drop_non_seasons = TRUE,
+  #     keys_to_ignore = very_latent_locations
+  #   ),
+  #   # Window-based seasonal method shouldn't drop non-seasons
+  #   tidyr::expand_grid(
+  #     forecaster = "scaled_pop_seasonal",
+  #     trainer = "quantreg",
+  #     lags = list(
+  #       c(0, 7, 14, 21),
+  #       c(0, 7)
+  #     ),
+  #     seasonal_method = c("window"),
+  #     pop_scaling = FALSE,
+  #     scale_method = "quantile",
+  #     center_method = "median",
+  #     nonlin_method = "quart_root",
+  #     filter_source = "",
+  #     filter_agg_level = "",
+  #     n_training = Inf,
+  #     drop_non_seasons = FALSE,
+  #     keys_to_ignore = very_latent_locations
+  #   )
+  # )
 ) %>%
   map(function(x) {
     if (dummy_mode) {
@@ -323,7 +324,6 @@ forecaster_parameter_combinations_ <- rlang::list2(
   map(add_id)
 # scale_method and filter_source being empty are exclusive
 # also population and density are exclusive
-forecaster_parameter_combinations_$no_recent_quant %>% filter(xor(scale_method == "none", filter_source == ""), xor(use_population, use_density))
 s3save(forecaster_parameter_combinations_, object = "flu_2023_forecaster_parameter_combinations.rds", bucket = "forecasting-team-data")
 
 forecaster_parameter_combinations_$scaled_pop_exogenous
