@@ -87,7 +87,7 @@ plot_forecasts <- function(predictions_cards, forecast_date, exclude_geos, geo_t
   g <- g + theme(legend.position = "top", legend.text = element_text(size = 7))
 
   # add highlights for the training regions
-  if (is.null(relevant_period)) {
+  if (!is.null(relevant_period)) {
     g <- g + geom_rect(data = relevant_period, inherit.aes = FALSE, aes(xmin = start, xmax = stop, ymin = -Inf, ymax = Inf), color = "transparent", fill = "orange", alpha = 0.3)
   }
   return(g)
