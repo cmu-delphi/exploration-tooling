@@ -27,8 +27,9 @@ if (FALSE) {
   effective_ahead
 }
 
-climatological_model <- function(epi_data, forecast_date, ahead, window_size = 3, recent_window = 3, quantile_method = c("baseR", "epipredict"), quant_type = 8, geo_agg = FALSE) {
+climatological_model <- function(epi_data, forecast_date, ahead, window_size = 3, recent_window = 3, quantile_method = c("baseR", "epipredict"), quant_type = 8, geo_agg = FALSE, disease = c("flu", "covid")) {
   quantile_method <- arg_match(quantile_method)
+  disease <- arg_match(disease)
   forecast_week <- epiweek(forecast_date)
   last_week_data <- epi_data %>%
     filter(time_value > "2024-08-01") %>%
@@ -44,11 +45,13 @@ climatological_model <- function(epi_data, forecast_date, ahead, window_size = 3
   }
   filtered <-
     epi_data %>%
-    filter(!is.na(nhsn)) %>%
+    filter(!is.na(nhsn))
     # drop weird years
-    filter((season != "2020/21") & (season != "2021/22")) %>%
+  if (disease == "flu") {
+    filtered %<>% filter((season != "2020/21") & (season != "2021/22"))
+  }
     # keep data either within the window, or within the past window weeks
-    filter(
+    filtered %<>% filter(
       (abs(forecast_week + ahead - epiweek) <= window_size) |
         (last_date_data - time_value <= recent_window * 7)
     )
@@ -96,36 +99,4 @@ climatological_model <- function(epi_data, forecast_date, ahead, window_size = 3
       arrange(geo_value, forecast_date, target_end_date)
   }
   naive_preds %>% mutate(value = pmax(0, value))
-}
-if (FALSE) {
-  debugonce(climatological_model)
-  climatological_model(epi_data, forecast_date, -1, quantile_method = "epipredict", geo_agg = TRUE)
-  bind_rows(
-    lapply(-1:3, \(ahead) climatological_model(epi_data, forecast_date, ahead)) %>%
-    bind_rows() %>%
-    mutate(geo_type = "state", forecaster = "quantile basic"),
-    lapply(-1:3, \(ahead) climatological_model(epi_data, forecast_date, ahead, quantile_method = "epipredict")) %>% bind_rows() %>%
-    mutate(geo_type = "state", forecaster = "epipred quantile"),
-    lapply(-1:3, \(ahead) climatological_model(epi_data, forecast_date, ahead, geo_agg = TRUE)) %>%
-    bind_rows() %>%
-    mutate(geo_type = "state", forecaster = "geo_aggregated")
-    ) %>%
-    filter(geo_value %in% c("ak", "al", "mn", "ca", "pa", "usa", "ri", "vt")) %>%
-    plot_forecasts(forecast_date, geo_type = "state", truth_data = epi_data %>% mutate(value = nhsn, target_end_date = time_value, forecaster = "climatological") %>% filter(geo_value %in% c("ak", "al", "mn", "ca", "pa", "usa", "ri", "vt")))
-  lapply(-1:3, \(ahead) climatological_model(epi_data, forecast_date, ahead, quantile_method = "epipredict")) %>%
-    bind_rows() %>%
-    mutate(geo_type = "state", forecaster = "climatological") %>%
-    filter(geo_value %in% c("ak", "al", "mn", "ca", "pa", "usa", "ri", "vt")) %>%
-    plot_forecasts(forecast_date, geo_type = "state", truth_data = epi_data %>% mutate(value = nhsn, target_end_date = time_value, forecaster = "climatological") %>% filter(geo_value %in% c("ak", "al", "mn", "ca", "pa", "usa", "ri", "vt")))
-
-  naive_preds %>% ggplot()
-
-  covidhub_probs()
-  epi_data %>%
-    # drop weird years
-    filter((season != "2020/21") & (season != "2021/22")) %>%
-    filter(abs(forecast_week + ahead - epiweek) <= 2) %>%
-    filter(geo_value == "ca") %>%
-    pull(nhsn) %>%
-    quantile(probs = covidhub_probs(), na.rm = TRUE, type = 8)
 }

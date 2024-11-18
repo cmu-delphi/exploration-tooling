@@ -21,7 +21,7 @@ get_default_truth_data <- function(exclued_geos, geo_type) {
     mutate(data_source = "hhs", forecaster = "hhs hosp truth")
 }
 
-plot_forecasts <- function(predictions_cards, forecast_date, exclude_geos, geo_type, truth_data, quantiles = c(0.75, 0.95), alphas = c(0.4, 0.2)) {
+plot_forecasts <- function(predictions_cards, forecast_date, exclude_geos, geo_type, truth_data, quantiles = c(0.75, 0.95), alphas = c(0.4, 0.2), relevant_period = NULL) {
   if (is.null(truth_data)) {
     truth_data <- get_default_truth_data(exclude_geos, geo_type)
   }
@@ -86,5 +86,9 @@ plot_forecasts <- function(predictions_cards, forecast_date, exclude_geos, geo_t
   }
   g <- g + theme(legend.position = "top", legend.text = element_text(size = 7))
 
+  # add highlights for the training regions
+  if (is.null(relevant_period)) {
+    g <- g + geom_rect(data = relevant_period, inherit.aes = FALSE, aes(xmin = start, xmax = stop, ymin = -Inf, ymax = Inf), color = "transparent", fill = "orange", alpha = 0.3)
+  }
   return(g)
 }
