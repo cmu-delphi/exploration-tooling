@@ -73,7 +73,8 @@ plot_forecasts <- function(predictions_cards, forecast_date, exclude_geos, geo_t
         y = .data$value,
         group = interaction(.data$forecast_date, .data$forecaster)
       ),
-      size = 0.125
+      size = 0.25,
+      color = "black"
     )
   # Add lines, facet, and theme
   if ((geo_type == "state") && (length(unique(predictions_cards$forecaster)) > 1)) {
