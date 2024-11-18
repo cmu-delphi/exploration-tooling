@@ -51,14 +51,6 @@ plot_forecasts <- function(predictions_cards, forecast_date, exclude_geos, geo_t
           as.factor()
       ) %>%
       pivot_wider(names_from = "quantile", values_from = "value")
-    predictions_cards %>%
-      filter(near(.data$quantile, q) | near(.data$quantile, 1 - q)) %>%
-      mutate(
-        quantile = ifelse(near(.data$quantile, q), "upper", "lower") %>%
-          as.factor()
-      ) %>% group_by(geo_value)
-    predictions_cards %>% filter(geo_value == "ak", target_end_date == "2024-11-13") %>% print(n=31)
-    quantile_data %>% select(-geo_type)
     g <- g +
       geom_ribbon(
         data = quantile_data,
