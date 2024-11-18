@@ -1,0 +1,190 @@
+---
+title: Evaluation of Hospitalization Forecasters 2024-2025
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+params:
+  forecaster_set: 1
+editor_options:
+  chunk_output_type: console
+---
+
+$$\\[.4in]$$
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(MMWRweek)
+library(readr)
+library(rlang)
+library(magrittr)
+library(aws.s3)
+library(data.table)
+library(dplyr)
+library(DT)
+library(ggplot2)
+library(plotly)
+library(readr)
+library(stringr)
+library(tidyr)
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+forecast_date <- as.Date("2024-11-20")
+epi_data <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfflunewadm")
+epi_data <- epi_data %>%
+  mutate(
+    epiweek = epiweek(weekendingdate),
+    epiyear = epiyear(weekendingdate)
+  ) %>%
+  left_join(
+    (.) %>%
+      distinct(epiweek, epiyear) %>%
+      mutate(
+        season = convert_epiweek_to_season(epiyear, epiweek),
+        season_week = convert_epiweek_to_season_week(epiyear, epiweek)
+      ),
+    by = c("epiweek", "epiyear")
+  )
+epi_data <- epi_data %>%
+  mutate(time_value = as.Date(weekendingdate), geo_value = tolower(jurisdiction), nhsn = totalconfflunewadm) %>%
+  select(-weekendingdate, -jurisdiction, -totalconfflunewadm)
+ahead <- 0
+window_size <- 3
+recent_window <- 3
+geos_to_plot <- epi_data %>% pull(geo_value) %>% unique() %>% setdiff(c("as", "mp", "vi")) #c("ak", "al", "mn", "ca", "pa", "usa", "ri", "vt") # 
+truth_data <- epi_data %>%
+  mutate(value = nhsn, target_end_date = time_value, forecaster = "nhsn") %>%
+  filter(geo_value %in% geos_to_plot, time_value > "2022-09-01")
+```
+
+
+# Comparing a couple of methods
+* `quantile_basic` uses base R's quantile's, each geo separately, using a window of 7 weeks (3 before and after the target date), and the 3 weeks before the last week of data
+* `quantile type 7` uses the default R quantile size
+* `epipred quantile` is more or less the same, but using the quantile extrapolation in epipredict after fitting the quantiles .25, .5, and .75. The main difference is that the tails are more extreme and can be outside the range of previously seen values for that location.
+* `geo aggregated` is a global fit, that first puts everything on a rate scale, and then does a single global forecast, and then returns to the original scales
+
+The intervals here are the 75th and 95th quantiles. Some notes:
+* ga, wi, emphasize the difference between the methods, in part because they had an unusual flu season in 22/23 or 23/24. If we added historical data this effect may go away
+```{r}
+quantile_basic <- lapply(-1:3, \(ahead) climatological_model(epi_data, forecast_date, ahead)) %>%
+    bind_rows() %>%
+    mutate(geo_type = "state", forecaster = "quantile basic") %>%
+  filter(geo_value %in% geos_to_plot)
+
+quantile_7 <- lapply(-1:3, \(ahead) climatological_model(epi_data, forecast_date, ahead, quant_type = 7)) %>%
+    bind_rows() %>%
+    mutate(geo_type = "state", forecaster = "quantile_7") %>%
+  filter(geo_value %in% geos_to_plot)
+
+epipred_extrapolation <- lapply(-1:3, \(ahead) climatological_model(epi_data, forecast_date, ahead, quantile_method = "epipredict")) %>% bind_rows() %>%
+    mutate(geo_type = "state", forecaster = "epipred quantile") %>%
+  filter(geo_value %in% geos_to_plot)
+
+geo_aggregate <- lapply(-1:3, \(ahead) climatological_model(epi_data, forecast_date, ahead, geo_agg = TRUE)) %>% bind_rows() %>%
+    mutate(geo_type = "state", forecaster = "geo aggregated") %>%
+  filter(geo_value %in% geos_to_plot)
+
+all_results <-  bind_rows(
+  geo_aggregate,
+  quantile_basic,
+  epipred_extrapolation
+)
+the_plot <- all_results %>%
+  plot_forecasts(forecast_date, geo_type = "state", truth_data = truth_data)
+
+ggplotly(the_plot, tooltip = "text", height = 3000, width = 1700) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+```
+## Mean Averaging
+These are
+* the mean of the geo aggregated and the `epipredict quantile` above
+* the mean of the geo aggregated and the `quantile basic` above
+* the mean of all 3
+```{r}
+mean_climatological <-
+  all_results %>%
+  filter((forecaster == "geo aggregated") | (forecaster == "epipred quantile")) %>%
+  # for some reason, the quantiles have different float values
+  mutate(quantile = round(quantile, digits = 2)) %>%
+  group_by(geo_value, forecast_date, target_end_date, geo_type, quantile) %>%
+  summarise(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+  mutate(forecaster = "epipred quantile") %>%
+  bind_rows(
+    all_results %>%
+    # for some reason, the quantiles have different float values
+    mutate(quantile = round(quantile, digits = 2)) %>%
+    group_by(geo_value, forecast_date, target_end_date, geo_type, quantile) %>%
+    summarise(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+    mutate(forecaster = "quantile basic"),
+    all_results %>%
+    filter((forecaster == "geo aggregated") | (forecaster == "quantile basic")) %>%
+    # for some reason, the quantiles have different float values
+    mutate(quantile = round(quantile, digits = 2)) %>%
+    group_by(geo_value, forecast_date, target_end_date, geo_type, quantile) %>%
+    summarise(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+    mutate(forecaster = "all three")
+  )
+the_plot <- mean_climatological %>%
+  plot_forecasts(forecast_date, geo_type = "state", truth_data = truth_data)
+
+ggplotly(the_plot, tooltip = "text", height = 5000, width = 1200) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+```
+## Geo-mean Averaging
+Since the dynamics are exponential, averaging on the log scale is probably a better method. That way, if the national is predicting something an order of magnitude higher that won't swamp the local information. This is the same set using the geomean instead of the arithmetic mean.
+
+* `"all three"`the mean of all 3
+* `"epipred quantile"`the mean of the geo aggregated and the `quantile basic` above
+* `"quantile_basic"`the mean of the geo aggregated and the `epipredict quantile` above
+
+```{r}
+geomean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+mean_climatological <-
+  all_results %>%
+  filter((forecaster == "geo aggregated") | (forecaster == "epipred quantile")) %>%
+  # for some reason, the quantiles have different float values
+  mutate(quantile = round(quantile, digits = 2)) %>%
+  group_by(geo_value, forecast_date, target_end_date, geo_type, quantile) %>%
+  summarise(value = geomean(value, na.rm = TRUE), .groups = "drop") %>%
+  mutate(forecaster = "epipred quantile") %>%
+  bind_rows(
+    all_results %>%
+    # for some reason, the quantiles have different float values
+    mutate(quantile = round(quantile, digits = 2)) %>%
+    group_by(geo_value, forecast_date, target_end_date, geo_type, quantile) %>%
+    summarise(value = geomean(value, na.rm = TRUE), .groups = "drop") %>%
+    mutate(forecaster = "quantile basic"),
+    all_results %>%
+    filter((forecaster == "geo aggregated") | (forecaster == "quantile basic")) %>%
+    # for some reason, the quantiles have different float values
+    mutate(quantile = round(quantile, digits = 2)) %>%
+    group_by(geo_value, forecast_date, target_end_date, geo_type, quantile) %>%
+    summarise(value = geomean(value, na.rm = TRUE), .groups = "drop") %>%
+    mutate(forecaster = "all three")
+  )
+the_plot <- mean_climatological %>%
+  plot_forecasts(forecast_date, geo_type = "state", truth_data = truth_data)
+
+ggplotly(the_plot, tooltip = "text", height = 5000, width = 1200) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+```
+
+
+
+
+
+

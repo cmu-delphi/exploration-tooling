@@ -81,6 +81,7 @@ restart_loop <- function() {
 }
 
 tar_manifest()
+print(Sys.time())
 if (debug_mode) {
   tar_make(callr_function = NULL, use_crew = FALSE)
 

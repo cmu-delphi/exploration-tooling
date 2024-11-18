@@ -55,6 +55,29 @@ add_pop_and_density <-
            state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
            hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")) {
     pops_by_state_hhs <- gen_pop_and_density_data(apportion_filename, state_code_filename, hhs_code_filename)
+    # if the dataset uses "usa" instead of "us", substitute that
+    if ("usa" %in% unique(original_dataset)$geo_value) {
+      pops_by_state_hhs %<>%
+        mutate(
+          geo_value = ifelse(geo_value == "us", "usa", geo_value),
+          agg_level = ifelse(grepl("[0-9]{2}", geo_value),
+                             "hhs_region",
+                      ifelse(("us" == geo_value) | ("usa" == geo_value), "nation", "state"))
+        )
+    }
+    if (!("agg_level" %in% names(original_dataset))) {
+      original_dataset %<>%
+        mutate(agg_level = ifelse(grepl("[0-9]{2}", geo_value), "hhs_region", ifelse(("us" == geo_value) | ("usa" == geo_value), "nation", "state")))
+    }
+    original_dataset %>% filter(geo_value == "usa")
+    pops_by_state_hhs %>% filter(geo_value == "usa")
+    original_dataset %>%
+      mutate(year = year(time_value)) %>%
+      left_join(
+        pops_by_state_hhs,
+        by = join_by(year, geo_value, agg_level)
+      ) %>%
+      filter(geo_value == "usa") %>% select(-epiweek, -epiyear)
     original_dataset %>%
       mutate(year = year(time_value)) %>%
       left_join(
