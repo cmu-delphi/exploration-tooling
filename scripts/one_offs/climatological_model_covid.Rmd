@@ -86,7 +86,7 @@ The model used is specified [here](https://github.com/cmu-delphi/exploration-too
 For flu, the data for the 2020/21 and 2021/22 seasons are dropped, while for covid we've done versions both including and excluding.
 
 # Comparing a couple of methods {.tabset}
-* `quantile_basic` uses base R's quantile's, each geo separately, using a window of 7 weeks (3 before and after the target date), and the 3 weeks before the last week of data
+* `quantile_basic` uses base R's quantile's, each geo separately, using a window of 7 weeks (3 before and after the target date), and the 3 weeks before the last week of data.
 * `epipred quantile` is more or less the same, but using the quantile extrapolation in epipredict after fitting the quantiles .25, .5, and .75. The main difference is that the tails are more extreme and can be outside the range of previously seen values for that location.
 * `geo aggregated` is a global fit, that first puts everything on a rate scale, and then does a single global forecast, and then returns to the original scales. It is just using base R quantiles.
 

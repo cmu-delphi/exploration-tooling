@@ -6,7 +6,7 @@
 
 source("scripts/targets-common.R")
 
-insufficient_data_geos <- c("as", "gu", "mp", "vi")
+insufficient_data_geos <- c("as", "mp", "vi")
 forecast_generation_date <- as.character(seq.Date(as.Date("2023-10-01"), as.Date("2023-10-01") + 30, by = "1 week"))
 bad_forecast_exclusions <- map(forecast_generation_date, get_exclusions)
 forecaster_fns <- list(
@@ -25,7 +25,7 @@ rlang::list2(
   tar_target(
     aheads,
     command = {
-      1:28
+      -1:3
     }
   ),
   tar_target(
