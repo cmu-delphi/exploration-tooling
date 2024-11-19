@@ -326,7 +326,9 @@ forecaster_parameter_combinations_ <- rlang::list2(
 # also population and density are exclusive
 s3save(forecaster_parameter_combinations_, object = "flu_2023_forecaster_parameter_combinations.rds", bucket = "forecasting-team-data")
 
-forecaster_parameter_combinations_$scaled_pop_exogenous
+forecaster_parameter_combinations_$scaled_pop_season %>%
+  slice(1) %>%
+  select(id)
 
 # Make sure all ids are unique.
 stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(forecaster_parameter_combinations_$id))
