@@ -66,15 +66,19 @@ geos_to_plot <- c("mn", "ca", "pa", "usa", "ri") #epi_data %>% pull(geo_value) %
 all_geos_to_plot <- epi_data %>% pull(geo_value) %>% unique() %>% setdiff(c("as", "mp", "vi"))
 plot_quantiles <- c(0.6, 0.75, 0.95, 0.99)
 quantile_alphas <- c(0.9, 0.6, 0.4, 0.3)
+min_plot_quantiles <- c(0.75, 0.90)
+min_quantile_alphas <- c(0.9, 0.3)
 ```
 
+The model used is specified [here](https://github.com/cmu-delphi/exploration-tooling/tree/c36c7ddf9a0568426fef7ce5ef0ef6712e6faedf/R/forecasters/climatological_model.R).
+For flu, the data for the 2020/21 and 2021/22 seasons are dropped, while for covid we've done versions both including and excluding.
 
 # Comparing a couple of methods {.tabset}
 * `quantile_basic` uses base R's quantile's, each geo separately, using a window of 7 weeks (3 before and after the target date), and the 3 weeks before the last week of data
 * `epipred quantile` is more or less the same, but using the quantile extrapolation in epipredict after fitting the quantiles .25, .5, and .75. The main difference is that the tails are more extreme and can be outside the range of previously seen values for that location.
 * `geo aggregated` is a global fit, that first puts everything on a rate scale, and then does a single global forecast, and then returns to the original scales. It is just using base R quantiles.
 
-The intervals here are the 75th, 95th, and 99th quantiles. Some notes:
+The intervals here are the 75th and 90th quantiles (more quantiles uses 60th, 75, 95, and 99th). Some notes:
 
 * ga, wi, emphasize the difference between the methods, in part because they had an unusual flu season in 22/23 or 23/24. If we added historical data this effect may go away
 * `quantile_basic`'s upper 99th quantile is frequently indistinguishable from it's 95th quantile.
@@ -106,6 +110,24 @@ all_results <-  bind_rows(
 small_truth_data <- epi_data %>%
   mutate(value = nhsn, target_end_date = time_value, forecaster = "nhsn") %>%
   filter(geo_value %in% geos_to_plot, time_value > "2022-09-01")
+```
+
+```{r}
+the_plot <-
+  all_results %>%
+  filter(geo_value %in% geos_to_plot) %>%
+  plot_forecasts(forecast_date, geo_type = "state", truth_data = small_truth_data, quantiles = min_plot_quantiles, alphas = min_quantile_alphas)
+
+ggplotly(the_plot, tooltip = "text", height = 1500, width = 1600) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+```
+
+
+## Small set of states, more quantiles
+```{r}
+small_truth_data <- epi_data %>%
+  mutate(value = nhsn, target_end_date = time_value, forecaster = "nhsn") %>%
+  filter(geo_value %in% geos_to_plot, time_value > "2022-09-01")
 
 ```{r}
 the_plot <-
@@ -118,6 +140,21 @@ ggplotly(the_plot, tooltip = "text", height = 1500, width = 1600) %>%
 ```
 
 ## Full set of states
+```{r}
+
+full_truth_data <- epi_data %>%
+  mutate(value = nhsn, target_end_date = time_value, forecaster = "nhsn") %>%
+  filter(geo_value %in% all_geos_to_plot, time_value > "2022-09-01")
+the_plot <-
+  all_results %>%
+  filter(geo_value %in% all_geos_to_plot) %>%
+  plot_forecasts(forecast_date, geo_type = "state", truth_data = full_truth_data, quantiles = min_plot_quantiles, alphas = min_quantile_alphas)
+
+ggplotly(the_plot, tooltip = "text", height = 5000, width = 1700) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+```
+
+## Full set of states, more quantiles
 ```{r}
 
 full_truth_data <- epi_data %>%
@@ -166,6 +203,15 @@ mean_climatological <-
 ```{r}
 the_plot <- mean_climatological %>%
   filter(geo_value %in% geos_to_plot) %>%
+  plot_forecasts(forecast_date, geo_type = "state", truth_data = small_truth_data, quantiles = min_plot_quantiles, alphas = min_quantile_alphas)
+ggplotly(the_plot, tooltip = "text", height = 1500, width = 1600) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+```
+
+## Small set of states, more quantiles
+```{r}
+the_plot <- mean_climatological %>%
+  filter(geo_value %in% geos_to_plot) %>%
   plot_forecasts(forecast_date, geo_type = "state", truth_data = small_truth_data, quantiles = plot_quantiles, alphas = quantile_alphas)
 ggplotly(the_plot, tooltip = "text", height = 1500, width = 1600) %>%
   layout(hoverlabel = list(bgcolor = "white"))
@@ -175,11 +221,22 @@ ggplotly(the_plot, tooltip = "text", height = 1500, width = 1600) %>%
 ```{r}
 the_plot <- mean_climatological %>%
   filter(geo_value %in% all_geos_to_plot) %>%
+  plot_forecasts(forecast_date, geo_type = "state", truth_data = full_truth_data, quantiles = min_plot_quantiles, alphas = min_quantile_alphas)
+
+ggplotly(the_plot, tooltip = "text", height = 5000, width = 1600) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+```
+
+## Full set of states, more quantiles
+```{r}
+the_plot <- mean_climatological %>%
+  filter(geo_value %in% all_geos_to_plot) %>%
   plot_forecasts(forecast_date, geo_type = "state", truth_data = full_truth_data, quantiles = plot_quantiles, alphas = quantile_alphas)
 
 ggplotly(the_plot, tooltip = "text", height = 5000, width = 1600) %>%
   layout(hoverlabel = list(bgcolor = "white"))
 ```
+
 # Geo Mean Averaging {.tabset}
 Since the dynamics are exponential, averaging on the log scale is probably a better method. That way, if the national is predicting something an order of magnitude higher that won't swamp the local information. This is the same set using the geomean instead of the arithmetic mean.
 
@@ -220,12 +277,33 @@ mean_climatological <-
 ```{r}
 the_plot <- mean_climatological %>%
   filter(geo_value %in% geos_to_plot) %>%
+  plot_forecasts(forecast_date, geo_type = "state", truth_data = small_truth_data, quantiles = min_plot_quantiles, alphas = min_quantile_alphas)
+ggplotly(the_plot, tooltip = "text", height = 1500, width = 1600) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+```
+
+## Small set of states, more quantiles
+```{r}
+the_plot <- mean_climatological %>%
+  filter(geo_value %in% geos_to_plot) %>%
   plot_forecasts(forecast_date, geo_type = "state", truth_data = small_truth_data, quantiles = plot_quantiles, alphas = quantile_alphas)
 ggplotly(the_plot, tooltip = "text", height = 1500, width = 1600) %>%
   layout(hoverlabel = list(bgcolor = "white"))
 ```
 
+
 ## Full set of states
+```{r}
+the_plot <- mean_climatological %>%
+  filter(geo_value %in% all_geos_to_plot) %>%
+  plot_forecasts(forecast_date, geo_type = "state", truth_data = full_truth_data, quantiles = min_plot_quantiles, alphas = min_quantile_alphas)
+
+ggplotly(the_plot, tooltip = "text", height = 5000, width = 1600) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+```
+ 
+
+## Full set of states more quantiles
 ```{r}
 the_plot <- mean_climatological %>%
   filter(geo_value %in% all_geos_to_plot) %>%
@@ -234,3 +312,4 @@ the_plot <- mean_climatological %>%
 ggplotly(the_plot, tooltip = "text", height = 5000, width = 1600) %>%
   layout(hoverlabel = list(bgcolor = "white"))
 ```
+ 
