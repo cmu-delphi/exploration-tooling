@@ -35,6 +35,7 @@ Simple model:
 - Get back to the original scale.
 
 ```{r}
+# params <- list(disease = "flu")
 source("R/load_all.R")
 library(ggplot2)
 library(plotly)
@@ -58,8 +59,17 @@ subset_geos <- epi_data$geo_value %>% unique()
 quantile_forecast <- forecaster_baseline_linear(epi_data) %>% filter(geo_value %in% subset_geos)
 truth_data <- epi_data %>%
     mutate(forecaster = "", target_end_date = time_value) %>%
-    filter(geo_value %in% subset_geos, time_value > forecast_date - 90)
+    filter(geo_value %in% subset_geos, time_value > forecast_date - 90, time_value <= forecast_date - 30)
 
-p <- plot_forecasts(quantile_forecast, forecast_date, geo_type = "state", truth_data = truth_data)
+# TODO: Train data in black
+p <- plot_forecasts(quantile_forecast, forecast_date, geo_type = "state", truth_data = truth_data) +
+    geom_line(
+        data = epi_data %>%
+            mutate(forecaster = "", target_end_date = time_value) %>%
+            filter(geo_value %in% subset_geos, time_value > forecast_date - 30),
+        aes(x = time_value, y = value),
+        color = "black"
+    )
+p
 ggplotly(p, tooltip = "text", height = 5000, width = 1700)
 ```
