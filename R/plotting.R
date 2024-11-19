@@ -27,17 +27,14 @@ plot_forecasts <- function(predictions_cards, forecast_date, exclude_geos, geo_t
   }
   assertthat::assert_that(nrow(predictions_cards) > 0)
   assertthat::assert_that(geo_type %in% c("state", "nation"))
-  predictions_cards %<>% mutate(is_prediction = TRUE)
-  truth_data %<>% mutate(is_prediction = FALSE)
   # make a row of truth_data for every forecaster
   truth_data %<>% select(-forecaster) %>% expand_grid(forecaster = unique(predictions_cards$forecaster))
   # Setup plot
   g <- ggplot(truth_data, mapping = aes(
     x = .data$target_end_date,
-    color = .data$is_prediction,
-    fill = .data$forecaster
+    fill = .data$forecaster,
   )) +
-    geom_line(mapping = aes(y = .data$value))
+    geom_line(mapping = aes(y = .data$value), color = "red")
 
   # Plot (symmetric) quantiles
   for (i in seq_along(quantiles)) {
@@ -58,8 +55,9 @@ plot_forecasts <- function(predictions_cards, forecast_date, exclude_geos, geo_t
           ymin = .data$lower,
           ymax = .data$upper,
           group = interaction(.data$forecast_date, .data$forecaster),
-          color = NULL
+          color = NULL,
         ),
+        fill = "#22bd22",
         alpha = a
       )
   }

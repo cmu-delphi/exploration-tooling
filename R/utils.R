@@ -153,3 +153,8 @@ get_exclusions <- function(
 }
 
 `%nin%` <- function(x, y) !(x %in% y)
+
+get_population_data <- function() {
+  readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv") %>%
+    rename(population = pop)
+}
