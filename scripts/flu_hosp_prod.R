@@ -106,7 +106,8 @@ rlang::list2(
                                    here::here("scripts", "flu_geo_exclusions.json"))) %>%
           format_flusight(disease = "covid") %>%
           write_submission_file(as.Date(forecast_generation_date), submission_directory)
-      }
+      },
+      cue = tar_cue(mode = "always")
     ),
     tar_target(
       name = truth_data,
@@ -139,7 +140,8 @@ rlang::list2(
           ) %>%
           mutate(value = value * rel_max_value) %>% select(-rel_max_value)
         truth_data %>% bind_rows(nssp_renormalized)
-      }
+      },
+      cue = tar_cue(mode = "always")
     ),
     tar_target(
       notebook,
@@ -159,7 +161,8 @@ rlang::list2(
             truth_data = truth_data
           )
         )
-      }
+      },
+      cue = tar_cue(mode = "always")
     )
   ),
 )

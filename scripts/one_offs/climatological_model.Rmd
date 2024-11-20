@@ -178,7 +178,7 @@ mean_climatological <-
   all_results %>%
   filter((forecaster == "geo aggregated") | (forecaster == "epipred quantile")) %>%
   # for some reason, the quantiles have different float values
-  mutate(quantile = round(quantile, digits = 2)) %>%
+  mutate(quantile = round(quantile, digits = 3)) %>%
   group_by(geo_value, forecast_date, target_end_date, geo_type, quantile) %>%
   summarise(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
   mutate(forecaster = "epipred quantile") %>%
