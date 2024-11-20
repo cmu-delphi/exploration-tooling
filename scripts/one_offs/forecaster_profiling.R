@@ -5,7 +5,7 @@
 source("scripts/targets-common.R")
 
 # Forecaster profiling.
-d <- tar_read(joined_archive_data_2022, store = "covid_hosp_explore")
+d <- tar_read(joined_archive_data, store = "covid_hosp_explore")
 p <- profvis::profvis({
   slide_forecaster(
     epi_archive = d,
@@ -21,7 +21,7 @@ p <- profvis::profvis({
     ),
     forecaster_args_names = c("lags", "pop_scaling", "trainer"),
     date_range_step_size = 7,
-    cache_key = "joined_archive_data_2022"
+    cache_key = "joined_archive_data"
   )
 })
 htmlwidgets::saveWidget(p, glue::glue("profvis_{Sys.time()}.html"), selfcontained = TRUE)

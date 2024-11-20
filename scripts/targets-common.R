@@ -18,7 +18,9 @@ main_controller <- crew_controller_local(
   # called {mirai}, where workers mysteriously stop working. The settings below
   # are an attempt to mitigate that.
   seconds_idle = 60L,
-  seconds_timeout = 7 * 24 * 60 * 60L,
+  seconds_timeout = 7 * 24 * 60 * 60L, # 7 days is probably enough
+  garbage_collection = TRUE,
+  options_local = crew_options_local(log_directory = "local_logs"),
   tasks_max = 1L,
   launch_max = 10000L
 )
@@ -29,9 +31,10 @@ main_controller <- crew_controller_local(
 serial_controller <- crew_controller_local(
   name = "serial_controller",
   workers = 1L,
-  local_log_directory = "local_logs",
+  options_local = crew_options_local(log_directory = "local_logs"),
   seconds_idle = 60L,
   seconds_timeout = 7 * 24 * 60 * 60L,
+  garbage_collection = TRUE,
   tasks_max = 1L,
   launch_max = 10000L
 )
@@ -40,8 +43,10 @@ serial_controller <- crew_controller_local(
 debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", "FALSE"))
 if (debug_mode) {
   controllers <- crew_controller_group(serial_controller)
+  on_error <- "stop"
 } else {
   controllers <- crew_controller_group(main_controller, serial_controller)
+  on_error <- "trim"
 }
 
 tar_option_set(
@@ -55,10 +60,12 @@ tar_option_set(
     )
   ),
   memory = "transient",
+  error = on_error,
   garbage_collection = TRUE,
   storage = "worker",
-  retrieval = "main"
+  retrieval = "worker" # this may need to go back to main
 )
 
 linreg <- parsnip::linear_reg()
 quantreg <- epipredict::quantile_reg()
+randforest_grf <- rand_forest(engine = "grf_quantiles", mode = "regression")

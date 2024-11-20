@@ -3,17 +3,30 @@
 #' @param preproc an [`epipredict::epi_recipe`]
 #' @param outcome a character of the column to be predicted
 #' @param predictors a character vector of the columns used as predictors
-#' @param args_list an [`epipredict::arx_args_list`]
+#' @param args_list an [`epipredict::default_args_list`]
 #' @seealso [arx_postprocess] for the layer equivalent
 #'
 #' @importFrom epipredict step_epi_lag step_epi_ahead step_epi_naomit step_training_window
 #' @export
 arx_preprocess <- function(preproc, outcome, predictors, args_list) {
   # input already validated
+  if (args_list$adjust_latency != "none") {
+    preproc %<>% step_adjust_latency(
+      method = args_list$adjust_latency,
+      keys_to_ignore = args_list$keys_to_ignore
+    )
+    if (args_list$adjust_latency == "extend_lags") {
+      # this is a bit of a hack to make sure that *all* predictors are present at the correct lag
+      preproc %<>% step_epi_lag(has_role("pre-predictor"), lag = 0, role = "predictor")
+    }
+  }
+
   lags <- args_list$lags
-  for (l in seq_along(lags)) {
-    p <- predictors[l]
-    preproc %<>% step_epi_lag(!!p, lag = lags[[l]])
+  if (any(predictors != "")) {
+    for (l in seq_along(predictors)) {
+      p <- predictors[l]
+      preproc %<>% step_epi_lag(!!p, lag = lags[[l]])
+    }
   }
   preproc %<>%
     step_epi_ahead(!!outcome, ahead = args_list$ahead) %>%
@@ -26,7 +39,7 @@ arx_preprocess <- function(preproc, outcome, predictors, args_list) {
 #'
 #' @param postproc an [`epipredict::frosting`]
 #' @param trainer the trainer used (e.g. linear_reg() or quantile_reg())
-#' @param args_list an [`epipredict::arx_args_list`]
+#' @param args_list an [`epipredict::default_args_list`]
 #' @param forecast_date the date from which the forecast was made. defaults to
 #'   the default of `layer_add_forecast_date`, which is currently the max
 #'   time_value present in the data
@@ -45,7 +58,7 @@ arx_postprocess <- function(postproc,
                             forecast_date = NULL,
                             target_date = NULL) {
   postproc %<>% layer_predict()
-  if (inherits(trainer, "quantile_reg")) {
+  if (inherits(trainer, "quantile_reg") || trainer$engine == "grf_quantiles") {
     postproc %<>%
       layer_quantile_distn(quantile_levels = args_list$quantile_levels) %>%
       layer_point_from_distn()
@@ -61,7 +74,8 @@ arx_postprocess <- function(postproc,
 
   postproc %<>%
     layer_naomit(dplyr::starts_with(".pred")) %>%
-    layer_add_target_date(target_date = target_date)
+    layer_add_target_date() %>%
+    layer_add_forecast_date()
   return(postproc)
 }
 
@@ -72,21 +86,60 @@ arx_postprocess <- function(postproc,
 #' @param preproc the preprocessing steps
 #' @param postproc the postprocessing frosting
 #' @param trainer the parsnip trainer
-#' @param epi_data the actual epi_df to train on
+#' @param train_data the actual epi_df to train on; this is after any
+#'   transformations that epipredict can't apply (e.g. whitening, smoothing).
+#'   This may be narrowed down to exclude data we don't want to train on (such
+#'   as off season).
+#' @param full_data all of epi_df with the pre-epipredict transformations, used
+#'   to construct a test dataset (useful if train_data is excluding summers or
+#'   otherwise restricted to a subset of the data). If null, this assumes the
+#'   train and test data are exactly the same
 #'
 #' @importFrom epipredict epi_workflow fit add_frosting get_test_data
 #' @export
-run_workflow_and_format <- function(preproc, postproc, trainer, epi_data) {
-  workflow <- epi_workflow(preproc, trainer) %>%
-    fit(epi_data) %>%
-    add_frosting(postproc)
-  latest <- get_test_data(recipe = preproc, x = epi_data)
-  pred <- predict(workflow, latest)
-  # the forecast_date may currently be the max time_value
-  as_of <- attributes(epi_data)$metadata$as_of
+run_workflow_and_format <- function(preproc,
+                                    postproc,
+                                    trainer,
+                                    train_data,
+                                    full_data = NULL,
+                                    test_data_interval = as.difftime(52, units = "weeks"),
+                                    return_model = FALSE) {
+  as_of <- attributes(train_data)$metadata$as_of
   if (is.null(as_of)) {
-    as_of <- max(epi_data$time_value)
+    as_of <- max(train_data$time_value)
   }
-  true_forecast_date <- as_of
-  return(format_storage(pred, true_forecast_date))
+  workflow <- epi_workflow(preproc, trainer) %>%
+    fit(train_data) %>%
+    add_frosting(postproc)
+  # filter full_data to less than full but more than we need
+  test_data <- get_oversized_test_data(full_data %||% train_data, test_data_interval, preproc)
+  # predict, and filter out those forecasts for less recent days (predict
+  # predicts for every day that has enough data)
+  pred <- predict(workflow, test_data)
+  # keeping only the last time_value for any given location/key
+  pred %<>%
+    group_by(across(all_of(key_colnames(train_data, exclude = "time_value")))) %>%
+    arrange(time_value) %>%
+    filter(row_number() == n()) %>%
+    ungroup()
+  return(format_storage(pred, as_of))
+}
+
+#' get_test_data is broken, this is a hack that manually sets the amount of data
+#' kept to a large interval to avoid errors/missing data
+#' @param full_data the full data to narrow down from
+#' @param test_data_interval the amount of time to go backwards from the last
+#'   day
+get_oversized_test_data <- function(full_data, test_data_interval, preproc) {
+  # getting the max time value of data columns actually used
+  non_na_indicators <- preproc$var_info %>%
+    filter(role == "pre-predictor") %>%
+    pull(variable)
+  max_time_value <- full_data %>%
+    na.omit(non_na_indicators) %>%
+    pull(time_value) %>%
+    max()
+  full_data %>%
+    filter((max_time_value - time_value) < test_data_interval) %>%
+    arrange(time_value)
 }

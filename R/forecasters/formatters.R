@@ -15,13 +15,12 @@
 format_storage <- function(pred, true_forecast_date, target_end_date) {
   pred %>%
     mutate(
-      forecast_date = true_forecast_date,
       .dstn = nested_quantiles(.pred_distn)
     ) %>%
     unnest(.dstn) %>%
     select(-any_of(c(".pred_distn", ".pred", "time_value"))) %>%
-    rename(quantile = quantile_levels, value = values, target_end_date = target_date) %>%
-    relocate(geo_value, forecast_date, target_end_date, quantile, value)
+    rename(quantile = quantile_levels, value = values) %>%
+    relocate(where(is.character), where(is.factor), forecast_date, target_end_date = target_date, quantile, value)
 }
 
 #' Format for the COVID-19 Forecast Hub
@@ -55,6 +54,28 @@ format_covidhub <- function(pred, true_forecast_date, target_end_date, quantile_
   forecasts$data_source <- source
   forecasts$signal <- signal
   epipredict_forecast <- rbind(epipredict_forecast, forecasts)
+}
+
+#' Expects columns: geo_value, forecast_date, target_end_date, quantile, value
+#' Returns columns: reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value
+format_flusight <- function(pred, disease = c("flu", "covid")) {
+  disease <- arg_match(disease)
+  pred %>%
+    mutate(
+      reference_date = MMWRweek::MMWRweek2Date(epiyear(forecast_date), epiweek(forecast_date)),
+      target = glue::glue("wk inc {disease} hosp"),
+      horizon = (target_end_date - reference_date) / 7,
+      output_type = "quantile",
+      output_type_id = quantile,
+      value = value
+    ) %>%
+    left_join(
+      get_population_data() %>%
+        distinct(state_code, state_id),
+      by = c("geo_value" = "state_id")
+    ) %>%
+    mutate(location = state_code) %>%
+    select(reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value)
 }
 
 #' The quantile levels used by the covidhub repository

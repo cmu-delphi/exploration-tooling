@@ -4,7 +4,7 @@ test_that("sanitize_args_predictors_trainer", {
   epi_data <- epipredict::case_death_rate_subset
   # don't need to test validate_forecaster_inputs as that's inherited
   # testing args_list inheritance
-  ex_args <- arx_args_list()
+  ex_args <- default_args_list()
   expect_error(sanitize_args_predictors_trainer(epi_data, "case_rate", c("case_rate"), 5, ex_args))
   argsPredictors <- sanitize_args_predictors_trainer(
     epi_data, "case_rate", c("case_rate", ""), parsnip::linear_reg(), ex_args
@@ -36,7 +36,7 @@ test_that("id generation works", {
   expect_equal(same_ids[[3]]$id, same_ids[[4]]$id)
   # Same as above, but direct calls into get_single_id
   for (i in 1:4) {
-    expect_equal(simple_ex[[i]] %>% transpose() %>% pluck(1) %>% get_single_id(), same_ids[[i]]$id)
+    expect_equal(simple_ex[[i]] %>% purrr::transpose() %>% pluck(1) %>% get_single_id(), same_ids[[i]]$id)
   }
 })
 
@@ -47,11 +47,11 @@ test_that("forecaster lookup selects the right rows", {
     lags = list(NULL, c(0, 7, 14)),
     pop_scale = c(FALSE, TRUE),
   )
-  expect_equal(param_grid_ex %>% forecaster_lookup("monarchist"), tribble(
+  expect_equal(param_grid_ex %>% forecaster_lookup("monarchist", ., printing = FALSE), tribble(
     ~id, ~forecaster, ~lags, ~pop_scale,
     "monarchist.thrip", "scaled_pop", c(0, 7, 14), TRUE,
   ))
-  expect_equal(param_grid_ex %>% forecaster_lookup("irish"), tribble(
+  expect_equal(param_grid_ex %>% forecaster_lookup("irish", ., printing = FALSE), tribble(
     ~id, ~forecaster, ~lags, ~pop_scale,
     "simian.irishsetter", "scaled_pop", NULL, FALSE,
   ))

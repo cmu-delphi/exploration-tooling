@@ -24,7 +24,7 @@
 #'   done on the rate scale. When specifying predictor lags, note that rate
 #'   variables will use the same names as and overwrite the count variables.
 #'   Rates here will be counts per 100k population, based on
-#'   `epipredict::state_census`.
+#'   `epidatasets::state_census`.
 #' @param trainer optional; parsnip model specification to use for the core
 #'   fitting & prediction (the `spec` of the internal
 #'   [`epipredict::epi_workflow`]).  Default is `parsnip::linear_reg()`.
@@ -39,12 +39,12 @@
 #' @param sd_cols the names of the columns to smooth. If `NULL` its includes
 #'   the sd of everything
 #' @param quantile_levels The quantile levels to predict. Defaults to those
-#' @param ... any additional arguments as used by [arx_args_list]
+#' @param ... any additional arguments as used by [default_args_list]
 #'   required by covidhub.
 #' @seealso some utilities for making forecasters: [format_storage],
 #'   [sanitize_args_predictors_trainer]
 #'
-#' @importFrom epipredict epi_recipe step_population_scaling frosting arx_args_list layer_population_scaling
+#' @importFrom epipredict epi_recipe step_population_scaling frosting default_args_list layer_population_scaling
 #' @importFrom tibble tibble
 #' @importFrom recipes all_numeric
 #' @importFrom zeallot %<-%
@@ -61,17 +61,26 @@ smoothed_scaled <- function(epi_data,
                             sd_width = 28,
                             sd_mean_width = 14,
                             sd_cols = NULL,
+                            drop_non_seasons = FALSE,
+                            scale_method = c("none", "quantile", "std"),
+                            center_method = c("median", "mean"),
+                            nonlin_method = c("quart_root", "none"),
+                            filter_source = "",
+                            filter_agg_level = "",
                             ...) {
+  scale_method <- arg_match(scale_method)
+  center_method <- arg_match(center_method)
+  nonlin_method <- arg_match(nonlin_method)
   # perform any preprocessing not supported by epipredict
+  #
+  # this is for the case where there are multiple sources in the same column
+  epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   # this is a temp fix until a real fix gets put into epipredict
   epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
-  # One that every forecaster will need to handle: how to manage max(time_value)
-  # that's older than the `as_of` date
-  c(epi_data, effective_ahead) %<-% extend_ahead(epi_data, ahead)
   # see latency_adjusting for other examples
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
-  if (!confirm_sufficient_data(epi_data, effective_ahead, args_input, outcome, extra_sources)) {
+  if (!confirm_sufficient_data(epi_data, ahead, args_input, outcome, extra_sources)) {
     null_result <- epi_data[0L, c("geo_value", attr(epi_data, "metadata", exact = TRUE)[["other_keys"]])] %>%
       mutate(
         forecast_date = epi_data$time_value[0],
@@ -81,25 +90,43 @@ smoothed_scaled <- function(epi_data,
       )
     return(null_result)
   }
-  if (effective_ahead > 45) {
-    cli::cli_warn(
-      "effective_ahead is greater than 45 days; this may be too far in the future.
-      Your epi_df as_of date is {attr(jhu_csse_daily_subset, 'metadata')$as_of} and
-      the epi_df max(time_value) is {max(epi_data$time_value)}."
-    )
+  # this is to deal with grouping by source in tests that don't include it
+  adding_source <- FALSE
+  if (!("source" %in% names(epi_data))) {
+    adding_source <- TRUE
+    epi_data$source <- c("none")
+    attributes(epi_data)$metadata$other_keys <- "source"
   }
-  args_input[["ahead"]] <- effective_ahead
+  args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
-  args_list <- inject(arx_args_list(!!!args_input))
+  args_input[["nonneg"]] <- scale_method == "none"
+  args_list <- inject(default_args_list(!!!args_input))
   # `extra_sources` sets which variables beyond the outcome are lagged and used as predictors
   # any which are modified by `rolling_mean` or `rolling_sd` have their original values dropped later
-  predictors <- c(outcome, extra_sources)
+  predictors <- c(outcome, extra_sources[[1]])
   predictors <- predictors[predictors != ""]
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
+
+
+
+  #######################
+  # robust whitening
+  #######################
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
+  }
+  # whiten to get the sources on the same scale
+  learned_params <- calculate_whitening_params(season_data, predictors, scale_method, center_method, nonlin_method)
+  epi_data %<>% data_whitening(predictors, learned_params, nonlin_method)
+
+  ###############
   # smoothing
-  keep_mean <- !is.null(smooth_width) && !is.null(sd_mean_width) &&
+  ###############
+  keep_mean <- !is.na(smooth_width) && !is.na(sd_width) && !is.na(sd_width) && !is.null(sd_mean_width) &&
     smooth_width == sd_mean_width # do we (not) need to do the mean separately?
   # since we're adding columns, we need to figure out which to exclude
   all_names <- get_nonkey_names(epi_data)
@@ -118,7 +145,16 @@ smoothed_scaled <- function(epi_data,
     unused_columns <- c(unused_columns, sd_cols[!(sd_cols %in% unused_columns)])
   }
 
-  if (!is.null(smooth_width) && !keep_mean) {
+
+  # make sure that sd_width etc have the right units; the process of going through targets strips the type
+  time_type <- attributes(epi_data)$metadata$time_type
+  if (time_type != "day") {
+    sd_width <- as.difftime(sd_width, units = paste0(time_type, "s"))
+    sd_mean_width <- as.difftime(sd_mean_width, units = paste0(time_type, "s"))
+    smooth_width <- as.difftime(smooth_width, units = paste0(time_type, "s"))
+  }
+
+  if (!is.null(smooth_width) && !is.na(smooth_width) && !keep_mean) {
     epi_data %<>% rolling_mean(
       width = smooth_width,
       cols_to_mean = smooth_cols
@@ -126,13 +162,19 @@ smoothed_scaled <- function(epi_data,
   }
 
   # measuring standard deviation
-  if (!is.null(sd_width)) {
+  if (!is.null(sd_width) && !is.na(sd_width)) {
     epi_data %<>% rolling_sd(
       sd_width = sd_width,
       mean_width = sd_mean_width,
       cols_to_sd = sd_cols,
       keep_mean = keep_mean
     )
+  }
+  # need to make a version with the non seasonal and problematic flu seasons removed
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
   }
 
   # and need to make sure we exclude the original variables as predictors
@@ -144,7 +186,7 @@ smoothed_scaled <- function(epi_data,
   if (pop_scaling) {
     preproc %<>% step_population_scaling(
       all_numeric(),
-      df = epipredict::state_census,
+      df = epidatasets::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
       rate_rescaling = 1e5,
@@ -159,7 +201,7 @@ smoothed_scaled <- function(epi_data,
   if (pop_scaling) {
     postproc %<>% layer_population_scaling(
       .pred, .pred_distn,
-      df = epipredict::state_census,
+      df = epidatasets::state_census,
       df_pop_col = "pop",
       create_new = FALSE,
       rate_rescaling = 1e5,
@@ -167,9 +209,22 @@ smoothed_scaled <- function(epi_data,
     )
   }
   # with all the setup done, we execute and format
-  pred <- run_workflow_and_format(preproc, postproc, trainer, epi_data)
+  pred <- run_workflow_and_format(
+    preproc, postproc, trainer,
+    season_data, epi_data
+  )
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration
-  return(pred)
+  # reintroduce color into the value
+  pred_final <- pred %>%
+    rename({{ outcome }} := value) %>%
+    data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
+    rename(value = {{ outcome }}) %>%
+    mutate(value = pmax(0, value))
+  if (adding_source) {
+    pred_final %<>% select(-source)
+  }
+  gc()
+  return(pred_final)
 }

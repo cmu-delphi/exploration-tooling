@@ -1,4 +1,5 @@
 #!/usr/bin/env Rscript
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 # This is a helper script to run the pipeline. Choose how to execute the
 # pipeline below. See https://books.ropensci.org/targets/hpc.html to learn
@@ -25,7 +26,7 @@
 #   )
 #   # Save to disk
 #   saveRDS(scorecards, "exploration-scorecards-2023-10-04.RDS")
-
+print(glue::glue("starting a run at {Sys.time()}"))
 tar_project <- Sys.getenv("TAR_PROJECT", "covid_hosp_explore")
 external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
 debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
@@ -80,8 +81,21 @@ restart_loop <- function() {
 }
 
 tar_manifest()
+print(Sys.time())
 if (debug_mode) {
   tar_make(callr_function = NULL, use_crew = FALSE)
+
+  tar_make(forecast_immediate.dunlin, callr_function = NULL, use_crew = FALSE)
+
+  nssp_state <- pub_covidcast(
+    source = "nssp",
+    signal = "pct_ed_visits_influenza",
+    time_type = "week",
+    geo_type = "state",
+    geo_values = "*",
+    issues = "*"
+  )
+  nssp_state %>% select(geo_value, time_value, issue, value) %>% filter(time_value >= min(issue))
 } else {
   tar_make()
   # restart_loop()

@@ -17,7 +17,7 @@ arx_postprocess(
 
 \item{trainer}{the trainer used (e.g. linear_reg() or quantile_reg())}
 
-\item{args_list}{an \code{\link[epipredict:arx_args_list]{epipredict::arx_args_list}}}
+\item{args_list}{an \code{\link[epipredict:default_args_list]{epipredict::default_args_list}}}
 
 \item{forecast_date}{the date from which the forecast was made. defaults to
 the default of \code{layer_add_forecast_date}, which is currently the max

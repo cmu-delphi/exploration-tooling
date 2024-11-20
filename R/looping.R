@@ -31,12 +31,14 @@
 slide_forecaster <- function(epi_archive,
                              outcome,
                              ahead,
-                             extra_sources = "",
                              forecaster = scaled_pop,
                              slide_training = 0,
                              n_training_pad = 5,
                              forecaster_args = list(),
                              forecaster_args_names = list(),
+                             ref_time_values = NULL,
+                             start_date = NULL,
+                             end_date = NULL,
                              date_range_step_size = 1L,
                              cache_key = NULL) {
   if (length(forecaster_args) > 0) {
@@ -50,59 +52,48 @@ slide_forecaster <- function(epi_archive,
     n_training <- Inf
     net_slide_training <- slide_training + n_training_pad
   }
-  # restrict the dataset to areas where training is possible
-  start_date <- min(epi_archive$DT$time_value) + net_slide_training
-  end_date <- max(epi_archive$DT$time_value) - forecaster_args$ahead
-  valid_predict_dates <- seq.Date(from = start_date, to = end_date, by = date_range_step_size)
+  if (is.null(ref_time_values)) {
+    # restrict the dataset to areas where training is possible
+    if (is.null(start_date)) {
+      start_date <- min(epi_archive$DT$time_value) + net_slide_training
+    }
+    if (is.null(end_date)) {
+      end_date <- max(epi_archive$DT$time_value) - forecaster_args$ahead
+    }
+    ref_time_values <- seq.Date(from = start_date, to = end_date, by = date_range_step_size)
+  }
 
   # first generate the forecasts
   before <- n_training + n_training_pad - 1
   forecaster_args <- rlang::dots_list(
     !!!list(
-      outcome = outcome,
-      extra_sources = extra_sources
+      outcome = outcome
     ),
     !!!forecaster_args,
     .homonyms = "last"
   )
   forecaster_wrapper <- function(x) {
-    tryCatch(
-      {
-        inject(forecaster(epi_data = x, !!!forecaster_args))
-      },
-      error = function(e) {
-        if (interactive()) {
-          browser()
-        } else {
-          dump_vars <- list(
-            epi_data = x,
-            forecaster = forecaster,
-            forecaster_args = forecaster_args,
-            e = e
-          )
-          saveRDS(dump_vars, "slide_forecaster_error.rds")
-          e
-        }
-      }
-    )
+    rlang::inject(forecaster(epi_data = x, !!!forecaster_args))
   }
   epix_slide_simple(
     epi_archive,
     forecaster_wrapper,
-    valid_predict_dates,
+    ref_time_values,
     before,
     cache_key = cache_key
   )
 }
 
 epix_slide_simple <- function(epi_archive, forecaster, ref_time_values, before, cache_key = NULL) {
+  # this is so that changing the object without changing the name doesn't result in pulling the wrong cache
+  cache_hash <- rlang::hash(epi_archive)
+  dir.create(".exploration_cache/slide_cache", showWarnings = FALSE, recursive = TRUE)
   purrr::map(ref_time_values, function(tv) {
     if (is.null(cache_key)) {
       epi_df <- epi_archive %>%
         epix_as_of(tv, min_time_value = tv - before)
     } else {
-      dir.create(".exploration_cache/slide_cache", showWarnings = FALSE, recursive = TRUE)
-      file_path <- glue::glue(".exploration_cache/slide_cache/{cache_key}_{before}_{tv}.parquet")
+      file_path <- glue::glue(".exploration_cache/slide_cache/{cache_key}_{cache_hash}_{before}_{tv}.parquet")
       if (file.exists(file_path)) {
         epi_df <- qs::qread(file_path)
       } else {

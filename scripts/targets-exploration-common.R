@@ -5,9 +5,9 @@
 #' - `chng_signal`
 #' - `fetch_args`
 #' - `eval_time`
-#' - `traing_time`
+#' - `training_time`
 make_data_targets <- function() {
-  list(
+  list2(
     tar_target(
       name = hhs_latest_data,
       command = {
@@ -65,7 +65,7 @@ make_data_targets <- function() {
       }
     ),
     tar_target(
-      name = hhs_archive_data_2022,
+      name = hhs_archive_data,
       command = {
         epidatr::pub_covidcast(
           source = "hhs",
@@ -109,9 +109,9 @@ make_data_targets <- function() {
       }
     ),
     tar_target(
-      name = joined_archive_data_2022,
+      name = joined_archive_data,
       command = {
-        hhs_archive_data_2022 %<>%
+        hhs_archive_data %<>%
           select(geo_value, time_value, value, issue) %>%
           rename("hhs" := value) %>%
           rename(version = issue) %>%
@@ -129,7 +129,7 @@ make_data_targets <- function() {
             time_type = "day",
             compactify = TRUE
           )
-        epix_merge(hhs_archive_data_2022, chng_archive_data_2022, sync = "locf")$DT %>%
+        epix_merge(hhs_archive_data, chng_archive_data, sync = "locf")$DT %>%
           filter(!geo_value %in% c("as", "pr", "vi", "gu", "mp")) %>%
           epiprocess::as_epi_archive()
       }
@@ -140,6 +140,12 @@ make_data_targets <- function() {
 #' Relies on the following globals:
 #' - `forecaster_grid`
 #' - `date_step`
+#' - `ref_time-values` (can be NULL)
+#' - `start_date` (can be NULL)
+#' - `end_date` (can be NULL)
+#' Relies on the following targets:
+#' - joined_archive_data: the target data, it needs the outcome column to be hhs
+#' - hhs_evaluation_data: the true values of the target data
 make_forecasts_and_scores <- function() {
   tar_map(
     values = forecaster_grid,
@@ -148,32 +154,62 @@ make_forecasts_and_scores <- function() {
     tar_target(
       name = forecast,
       command = {
-        slide_forecaster(
-          epi_archive = joined_archive_data_2022,
+        slid <- slide_forecaster(
+          epi_archive = joined_archive_data,
           outcome = "hhs",
           ahead = aheads,
-          extra_sources = "",
           forecaster = forecaster,
           n_training_pad = 30L,
           forecaster_args = params,
           forecaster_args_names = param_names,
+          ref_time_values = ref_time_values,
+          start_date = start_date,
+          end_date = end_date,
           date_range_step_size = date_step,
-          cache_key = "joined_archive_data_2022"
-        ) %>% rename(prediction = value)
+          cache_key = "joined_archive_data"
+        ) %>%
+          rename(prediction = value) %>%
+          mutate(ahead = as.numeric(target_end_date - forecast_date))
+        gc()
+        return(slid)
       },
       pattern = map(aheads)
-    ),
-    tar_target(
-      name = score,
-      command = {
-        evaluate_predictions(predictions_cards = forecast, truth_data = hhs_evaluation_data)
-      }
     )
+    # Disabling scores, since we score elsewhere right now.
+    # tar_target(
+    #   name = score,
+    #   command = {
+    #     # if the data has already been scaled, hhs needs to include the population
+    #     if ("population" %in% colnames(hhs_evaluation_data)) {
+    #       # Undo population scaling
+    #       actual_eval_data <- hhs_evaluation_data %>%
+    #         select(-population)
+    #       forecast_scaled <- forecast %>%
+    #         left_join(
+    #           hhs_evaluation_data %>%
+    #             select(geo_value, population) %>%
+    #             distinct(),
+    #           by = "geo_value"
+    #         ) %>%
+    #         mutate(prediction = prediction * population / 10L**5)
+    #     } else {
+    #       forecast_scaled <- forecast
+    #       actual_eval_data <- hhs_evaluation_data
+    #     }
+    #     evaluate_predictions(
+    #       predictions_cards = forecast_scaled,
+    #       truth_data = actual_eval_data
+    #     )
+    #   }
+    # )
   )
 }
 
 #' Relies on the following globals:
 #' - `ensemble_grid`
+#' Relies on the following targets:
+#' - joined_archive_data: the target data, it needs the outcome column to be hhs
+#' - hhs_evaluation_data: the true values of the target data
 make_ensembles_and_scores <- function() {
   tar_map(
     values = ensemble_grid,
@@ -182,7 +218,7 @@ make_ensembles_and_scores <- function() {
       name = ensemble_forecast,
       command = {
         ensemble(
-          joined_archive_data_2022,
+          joined_archive_data,
           children_ids,
           "hhs",
           extra_sources = "chng",

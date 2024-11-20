@@ -1,7 +1,6 @@
 install:
 	Rscript -e "install.packages(c('renv', 'pak', 'rspm'))"
 	Rscript -e "renv::restore()"
-	Rscript -e 'renv::install(".")'
 
 .PHONY: all test test-forecasters run run-nohup sync download upload dashboard
 
@@ -20,19 +19,24 @@ get_nwss:
 
 run-nohup:
 	nohup Rscript scripts/run.R &
+run-nohup-restarting:
+	scripts/hardRestarting.sh &
 
 sync:
-	Rscript -e "source('R/utils.R'); sync_aws()"
+	Rscript -e "source('R/sync_aws.R'); sync_aws()"
 
 pull:
-	Rscript -e "source('R/utils.R'); sync_aws(direction = 'download')"
+	Rscript -e "source('R/sync_aws.R'); sync_aws(direction = 'download')"
 
 download:pull
 
 push:
-	Rscript -e "source('R/utils.R'); sync_aws(direction = 'upload')"
+	Rscript -e "source('R/sync_aws.R'); sync_aws(direction = 'upload')"
 
 upload: push
 
 dashboard:
 	Rscript scripts/dashboard.R
+
+netlify:
+	netlify deploy --prod
