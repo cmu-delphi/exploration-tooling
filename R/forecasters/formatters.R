@@ -56,6 +56,43 @@ format_covidhub <- function(pred, true_forecast_date, target_end_date, quantile_
   epipredict_forecast <- rbind(epipredict_forecast, forecasts)
 }
 
+#' Expects columns: geo_value, forecast_date, target_end_date, quantile, value
+#' Returns columns: reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value
+format_flusight <- function(pred) {
+  pred %>%
+    mutate(
+      reference_date = MMWRweek::MMWRweek2Date(epiyear(forecast_date), epiweek(forecast_date)),
+      target = "wk inc flu hosp",
+      horizon = target_end_date - reference_date,
+      output_type = "quantile",
+      output_type_id = quantile,
+      value = value
+    ) %>%
+    left_join(
+      get_population_data() %>%
+        distinct(state_code, state_id),
+      by = c("geo_value" = "state_id")
+    ) %>%
+    mutate(location = state_code) %>%
+    select(reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value)
+}
+
+#'
+write_submission_file <- function(pred, forecast_reference_date, submission_directory) {
+  file_path <- file.path(submission_directory, sprintf("%s-CMU-TimeSeries.csv", forecast_reference_date))
+  if (file.exists(file_path)) {
+    cli::cli_warn(c("Overwriting existing file in", file_path), call = rlang::current_call())
+    file.remove(file_path)
+  }
+  write_csv(pred, file_path)
+}
+
+#' Utility to get the reference date for a given date. This is the last day of
+#' the epiweek that the date falls in.
+get_forecast_reference_date <- function(date) {
+  MMWRweek::MMWRweek2Date(epiyear(date), epiweek(date)) + 6
+}
+
 #' The quantile levels used by the covidhub repository
 #'
 #' @param type either standard or inc_case, with inc_case being a small subset of the standard

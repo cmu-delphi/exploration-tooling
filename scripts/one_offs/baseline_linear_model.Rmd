@@ -92,7 +92,7 @@ Filter geo recommendations: `r paste(filter_geos, collapse = ", ")`.
 (Based on throwing out forecasts that trend down, forecasts where the median exceeds all prior peaks, and forecasts where the 75th percentile exceeds all prior peaks at 2 ahead.)
 
 ```{r}
-p <- plot_forecasts(quantile_forecast, forecast_date, geo_type = "state", truth_data = truth_data, relevant_period = train_data) +
+p <- plot_forecasts(quantile_forecast, forecast_date, geo_type = "state", truth_data = truth_data, relevant_period = train_data, quantiles = c(0.8)) +
     geom_point(data = train_fit, mapping = aes(x = time_value, y = value), size = 0.25)
 
 ggplotly(p, tooltip = "text", height = 5000, width = 1700)
@@ -123,7 +123,7 @@ Filter geo recommendations: `r paste(filter_geos, collapse = ", ")`.
 (Based on throwing out forecasts that trend down, forecasts where the median exceeds all prior peaks, and forecasts where the 75th percentile exceeds all prior peaks at 2 ahead.)
 
 ```{r}
-p <- plot_forecasts(quantile_forecast, forecast_date, geo_type = "state", truth_data = truth_data, relevant_period = train_data) +
+p <- plot_forecasts(quantile_forecast, forecast_date, geo_type = "state", truth_data = truth_data, relevant_period = train_data, quantiles = c(0.8)) +
     geom_point(data = train_fit, mapping = aes(x = time_value, y = value), size = 0.25)
 
 ggplotly(p, tooltip = "text", height = 5000, width = 1700)
