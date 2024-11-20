@@ -7,19 +7,37 @@
 source("scripts/targets-common.R")
 
 insufficient_data_geos <- c("as", "mp", "vi")
-forecast_generation_date <- as.character(seq.Date(as.Date("2023-10-01"), as.Date("2023-10-01") + 30, by = "1 week"))
+forecast_generation_date <- as.character(seq.Date(as.Date("2024-11-20"), as.Date("2024-11-20"), by = "1 week"))
 bad_forecast_exclusions <- map(forecast_generation_date, get_exclusions)
-forecaster_fns <- list(
-  function(...) {
-    smoothed_scaled(
+forecaster_fns <- list2(
+  ## linear = function(...) {
+  ##   browser()
+  ##   foob <- list2(...)
+  ##   foob[[1]]
+  ##   forecasts <- forecaster_baseline_linear(...)
+  ##   forecasts %>% group_by(geo_value, )
+  ## },
+  climate_base = function(...) {
+    climatological_model(
       ...,
-      outcome = "hhs",
-      pop_scaling = TRUE,
-      trainer = epipredict::quantile_reg(),
-      lags = list(c(0, 7, 14, 21, 28), c(0))
     )
-  }
+  },
+  climate_geo_agged = function(...) {
+    climatological_model(
+      ...,
+      geo_agg = TRUE
+    )
+  },
+  climate_quantile_extrapolated = function(...) {
+    climatological_model(
+      ...,
+      quantile_method = "epipredict"
+    )
+  },
 )
+
+
+
 
 rlang::list2(
   tar_target(
@@ -43,40 +61,40 @@ rlang::list2(
     ),
     names = "forecast_generation_date",
     tar_target(
-      hhs_latest_data,
+      nhsn_latest_data,
       command = {
-        epidatr::pub_covidcast(
-          source = "hhs",
-          signals = "confirmed_admissions_covid_1d",
-          geo_type = "state",
-          time_type = "day",
-          geo_values = "*",
-          time_values = epidatr::epirange(from = "2020-01-01", to = forecast_generation_date),
-          as_of = forecast_generation_date,
-          fetch_args = epidatr::fetch_args_list(return_empty = TRUE, timeout_seconds = 400)
-        ) %>%
-          select(geo_value, time_value, value, issue) %>%
-          rename("hhs" := value) %>%
-          rename(version = issue) %>%
-          filter(!geo_value %in% insufficient_data_geos)
+        nhsn_archive <- s3readRDS(object = "nhsn_archive.rds", bucket = "forecasting-team-data")
+        nhsn_archive %>%
+          epix_as_of(nhsn_archive$versions_end) %>%
+          filter(disease == "nhsn_covid") %>% select(-disease)
       }
     ),
     tar_target(
-      forecast,
+      forecast_res,
       command = {
-        hhs_latest_data %>%
-          as_epi_df() %>%
+        nhsn_latest_data %>%
+          as_epi_df(as_of = forecast_generation_date) %>%
           forecaster_fns[[forecasters]](ahead = aheads) %>%
           mutate(
-            forecaster = sprintf("epipredict_%s", forecasters),
+            forecaster = names(forecaster_fns[forecasters]),
             geo_value = as.factor(geo_value)
           )
       },
       pattern = cross(aheads, forecasters)
     ),
     tar_target(
+      name = ensemble_res,
+      command = {
+        forecast_res %>%
+          group_by(geo_value, quantile, forecast_date, target_end_date) %>%
+          mutate(quantile = round(quantile, digits = 2)) %>%
+          summarize(value = mean(value, na.rm = TRUE), .groups = "drop")
+      }
+    ),
+    tar_target(
       notebook,
       command = {
+        4
         if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
         rmarkdown::render(
           "scripts/covid_hosp_prod.Rmd",
@@ -85,11 +103,14 @@ rlang::list2(
             sprintf("covid_hosp_prod_%s.html", forecast_generation_date)
           ),
           params = list(
-            forecast = forecast,
-            bad_forecast_exclusions = bad_forecast_exclusions
+            forecast_res = forecast_res,
+            ensemble_res = ensemble_res,
+            bad_forecast_exclusions = bad_forecast_exclusions,
+            forecast_generation_date = forecast_generation_date,
+            truth_data = nhsn_latest_data
           )
         )
       }
     )
-  )
+  ),
 )

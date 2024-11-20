@@ -8,9 +8,11 @@ output:
     # self_contained: False
     # lib_dir: libs
 params:
-  forecast_generation_date: !r Sys.Date()
-  forecast: !r ""
+  forecast_res: !r ""
   bad_forecast_exclusions: !r ""
+  ensemble_res: !r ""
+  forecast_generation_date: !r ""
+  truth_data: !r ""
 ---
 
 ```{css, echo=FALSE}
@@ -27,41 +29,97 @@ body .main-container {
 }
 ```
 
+```{r echo=FALSE}
+knitr::opts_chunk$set(
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
 ```{r setup, include=FALSE}
 library(dplyr)
 library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(MMWRweek)
+library(readr)
+library(rlang)
+library(magrittr)
+library(aws.s3)
+library(data.table)
+library(dplyr)
+library(DT)
+library(ggplot2)
+library(plotly)
+library(readr)
+library(stringr)
+library(tidyr)
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 source(here::here("R", "plotting.R"))
 ```
 
-## epipredict states
+## epipredict states {.tabset}
 
-Fan displays 5/25/50/75/95% quantiles.
+Fan displays 10/25/50/75/90% quantiles.
 
+### main
 ```{r, fig.height = 60, fig.width = 12, echo=FALSE}
-plot_forecasts(
-  params$forecast %>% filter(geo_value != "us"),
+the_plot <- plot_forecasts(
+  params$forecast_res %>% bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")),
   params$forecast_generation_date,
   params$bad_forecast_exclusions,
-  "state"
+  "state",
+  params$truth_data %>% mutate(target_end_date = time_value, forecaster = "nhsn") %>% filter(time_value > "2023-09-01"),
+  quantiles = c(0.75, 0.9)
 ) %>%
   suppressMessages() %>%
   suppressWarnings()
+
+ggplotly(the_plot, tooltip = "text", height = 9000, width = 2000) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
 ```
 
-## epipredict national
-
-```{r, fig.width = 12, echo=FALSE}
-plot_forecasts(
-  params$forecast %>%
-    summarise(
-      value = sum(value),
-      .by = c("forecaster", "forecast_date", "target_end_date", "quantile")
-    ) %>%
-    mutate(geo_value = "us"),
+### extreme quantiles
+```{r, fig.height = 60, fig.width = 12, echo=FALSE}
+the_plot <- plot_forecasts(
+  params$forecast_res %>% bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")),
   params$forecast_generation_date,
   params$bad_forecast_exclusions,
-  "nation"
+  "state",
+  params$truth_data %>% mutate(target_end_date = time_value, forecaster = "nhsn") %>% filter(time_value > "2023-09-01"),
+  quantiles = c(0.75, 0.90, 0.99),
+  alphas = c(0.9, 0.6, 0.2)
 ) %>%
   suppressMessages() %>%
   suppressWarnings()
+
+ggplotly(the_plot, tooltip = "text", height = 9000, width = 2000) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
 ```
+
+<!-- ## epipredict national -->
+
+<!-- ```{r, fig.width = 12, echo=FALSE} -->
+<!-- the_plot <- plot_forecasts( -->
+<!--   params$forecast_res %>% -->
+<!--   bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")) %>% -->
+<!--   filter(geo_value != "usa") %>% -->
+<!--   summarise( -->
+<!--     value = sum(value), -->
+<!--     .by = c("forecaster", "forecast_date", "target_end_date", "quantile") -->
+<!--   ), -->
+<!--   params$forecast_generation_date, -->
+<!--   params$bad_forecast_exclusions, -->
+<!--   "nation", -->
+<!--   params$truth_data %>% mutate(target_end_date = time_value, forecaster = "nhsn") %>% filter(geo_value == "usa") %>% filter(time_value > "2023-09-01") -->
+<!-- ) %>% -->
+<!--   suppressMessages() %>% -->
+<!--   suppressWarnings() -->
+
+<!-- ggplotly(the_plot, tooltip = "text", height = 400, width = 1200) %>% -->
+<!--   layout(hoverlabel = list(bgcolor = "white")) -->
+<!-- ``` -->

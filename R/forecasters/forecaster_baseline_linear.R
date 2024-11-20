@@ -1,7 +1,6 @@
 #' epi_data is expected to have: geo_value, time_value, and value columns.
 forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALSE) {
   forecast_date <- attributes(epi_data)$metadata$as_of
-
   df_processed <- epi_data %>%
     mutate(epiweek = epiweek(time_value), epiyear = epiyear(time_value)) %>%
     left_join(
