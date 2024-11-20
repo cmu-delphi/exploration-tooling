@@ -58,11 +58,12 @@ format_covidhub <- function(pred, true_forecast_date, target_end_date, quantile_
 
 #' Expects columns: geo_value, forecast_date, target_end_date, quantile, value
 #' Returns columns: reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value
-format_flusight <- function(pred) {
+format_flusight <- function(pred, disease = c("flu", "covid")) {
+  disease <- arg_match(disease)
   pred %>%
     mutate(
       reference_date = MMWRweek::MMWRweek2Date(epiyear(forecast_date), epiweek(forecast_date)),
-      target = "wk inc flu hosp",
+      target = glue::glue("wk inc {disease} hosp"),
       horizon = target_end_date - reference_date,
       output_type = "quantile",
       output_type_id = quantile,

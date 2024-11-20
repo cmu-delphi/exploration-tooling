@@ -6,6 +6,7 @@
 
 source("scripts/targets-common.R")
 
+submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi")
 forecast_generation_date <- as.character(seq.Date(as.Date("2024-11-20"), as.Date("2024-11-20"), by = "1 week"))
 bad_forecast_exclusions <- map(forecast_generation_date, get_exclusions)
@@ -89,6 +90,19 @@ rlang::list2(
           group_by(geo_value, quantile, forecast_date, target_end_date) %>%
           mutate(quantile = round(quantile, digits = 2)) %>%
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop")
+      }
+    ),
+    tar_target(
+      name = make_submission_csv,
+      command = {
+        res <-ensemble_res
+        browser()
+        res
+        debugonce(write_submission_file)
+        res %>%
+          filter(geo_value %nin% bad_forecast_exclusions) %>%
+          format_flusight(disease ="covid") %>%
+          write_submission_file(forecast_generation_date, submission_directory)
       }
     ),
     tar_target(
