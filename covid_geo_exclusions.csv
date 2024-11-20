@@ -1,4 +1,4 @@
-date,forecaster,geo,weight
+forecast_date,forecaster,geo_value,weight
 "2024-11-20", "linear", "all", 2,
 "2024-11-20", "linearlog", "all", 0,
 "2024-11-20", "climate_base", "all", 1,
