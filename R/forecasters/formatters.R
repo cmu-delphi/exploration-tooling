@@ -64,7 +64,7 @@ format_flusight <- function(pred, disease = c("flu", "covid")) {
     mutate(
       reference_date = MMWRweek::MMWRweek2Date(epiyear(forecast_date), epiweek(forecast_date)),
       target = glue::glue("wk inc {disease} hosp"),
-      horizon = (target_end_date - reference_date) / 7,
+      horizon = floor((target_end_date - reference_date) / 7),
       output_type = "quantile",
       output_type_id = quantile,
       value = value

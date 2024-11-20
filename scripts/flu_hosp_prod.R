@@ -77,7 +77,7 @@ rlang::list2(
           filter(geo_value %nin% get_exclusions(
                                    as.Date(forecast_generation_date),
                                    names(forecaster_fns[forecasters]),
-                                   here::here("scripts", "flu_geo_exclusions.json"))) %>%
+                                   here::here("scripts", "flu_geo_exclusions.json")))
       },
       pattern = cross(aheads, forecasters)
     ),
@@ -100,7 +100,7 @@ rlang::list2(
                                    "global",
                                    here::here("scripts", "flu_geo_exclusions.json"))) %>%
           format_flusight(disease = "covid") %>%
-          write_submission_file(forecast_generation_date, submission_directory)
+          write_submission_file(as.Date(forecast_generation_date), submission_directory)
       }
     ),
     tar_target(
