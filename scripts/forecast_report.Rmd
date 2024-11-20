@@ -1,6 +1,6 @@
 ---
-title: COVID Forecaster Predictions
-author: COVID Forecast Team
+title: Forecaster Predictions
+author: Delphi Forecast Team
 date: "Rendered: `r format(Sys.time(), '%d %B %Y')`"
 output:
   html_document:
@@ -8,8 +8,8 @@ output:
     # self_contained: False
     # lib_dir: libs
 params:
+  disease: "covid"
   forecast_res: !r ""
-  bad_forecast_exclusions: !r ""
   ensemble_res: !r ""
   forecast_generation_date: !r ""
   truth_data: !r ""
@@ -62,6 +62,8 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 source(here::here("R", "plotting.R"))
 ```
 
+# Forecaster Predictions for `r params$disease`
+
 ## epipredict states {.tabset}
 
 Fan displays 10/25/50/75/90% quantiles.
@@ -71,7 +73,6 @@ Fan displays 10/25/50/75/90% quantiles.
 the_plot <- plot_forecasts(
   params$forecast_res %>% bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")),
   params$forecast_generation_date,
-  params$bad_forecast_exclusions,
   "state",
   params$truth_data %>% mutate(target_end_date = time_value, forecaster = "nhsn") %>% filter(time_value > "2023-09-01"),
   quantiles = c(0.75, 0.9)
@@ -88,7 +89,6 @@ ggplotly(the_plot, tooltip = "text", height = 9000, width = 2000) %>%
 the_plot <- plot_forecasts(
   params$forecast_res %>% bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")),
   params$forecast_generation_date,
-  params$bad_forecast_exclusions,
   "state",
   params$truth_data %>% mutate(target_end_date = time_value, forecaster = "nhsn") %>% filter(time_value > "2023-09-01"),
   quantiles = c(0.75, 0.90, 0.99),
@@ -113,7 +113,6 @@ ggplotly(the_plot, tooltip = "text", height = 9000, width = 2000) %>%
 <!--     .by = c("forecaster", "forecast_date", "target_end_date", "quantile") -->
 <!--   ), -->
 <!--   params$forecast_generation_date, -->
-<!--   params$bad_forecast_exclusions, -->
 <!--   "nation", -->
 <!--   params$truth_data %>% mutate(target_end_date = time_value, forecaster = "nhsn") %>% filter(geo_value == "usa") %>% filter(time_value > "2023-09-01") -->
 <!-- ) %>% -->

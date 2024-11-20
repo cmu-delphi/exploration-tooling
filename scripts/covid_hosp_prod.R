@@ -69,7 +69,7 @@ rlang::list2(
       forecast_res,
       command = {
         nhsn_latest_data %>%
-          as_epi_df(as_of = forecast_generation_date) %>%
+          as_epi_df(as_of = as.Date(forecast_generation_date)) %>%
           forecaster_fns[[forecasters]](ahead = aheads) %>%
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
@@ -97,7 +97,7 @@ rlang::list2(
         res %>%
           filter(geo_value %nin% bad_forecast_exclusions) %>%
           format_flusight(disease = "covid") %>%
-          write_submission_file(get_forecast_reference_date(forecast_generation_date), submission_directory)
+          write_submission_file(get_forecast_reference_date(as.Date(forecast_generation_date)), submission_directory)
       }
     ),
     tar_target(
@@ -106,16 +106,16 @@ rlang::list2(
         4
         if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
         rmarkdown::render(
-          "scripts/covid_hosp_prod.Rmd",
+          "scripts/forecast_report.Rmd",
           output_file = here::here(
             "reports",
-            sprintf("covid_hosp_prod_%s.html", as.Date(forecast_generation_date))
+            sprintf("covid_forecast_report_%s.html", as.Date(forecast_generation_date))
           ),
           params = list(
+            disease = "covid",
             forecast_res = forecast_res,
             ensemble_res = ensemble_res,
-            bad_forecast_exclusions = bad_forecast_exclusions,
-            forecast_generation_date = forecast_generation_date,
+            forecast_generation_date = as.Date(forecast_generation_date),
             truth_data = nhsn_latest_data
           )
         )
