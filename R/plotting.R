@@ -28,13 +28,19 @@ plot_forecasts <- function(predictions_cards, forecast_date, truth_data, exclude
   assertthat::assert_that(nrow(predictions_cards) > 0)
   geo_type <- rlang::arg_match(geo_type)
   # Setup plot
-  g <- ggplot(truth_data, mapping = aes(
-    x = .data$target_end_date
-  ))
   if ("source" %in% names(truth_data)) {
-    g <- g + geom_line(mapping = aes(y = .data$value), color = source)
+    g <- ggplot(truth_data,
+      mapping = aes(
+        x = .data$target_end_date,
+        color = .data$source
+      )
+    ) +
+      geom_line(mapping = aes(y = .data$value))
   } else {
-    g <- g + geom_line(mapping = aes(y = .data$value), color = "red")
+    g <- ggplot(truth_data, mapping = aes(
+      x = .data$target_end_date
+    )) +
+      geom_line(mapping = aes(y = .data$value), color = "red")
   }
 
   # Plot (symmetric) quantiles

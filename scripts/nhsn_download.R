@@ -70,16 +70,19 @@ earlier_results <- s3readRDS(object = "nhsn_archive.rds", bucket = "forecasting-
 new_results_main <- dedupe(epi_arch, earlier_results)
 new_results_prelim <- dedupe(earlier_results, epi_arch_prelim)
 if (nrow(new_results_main$DT) > nrow(new_results_prelim$DT)) {
-  new_results <- new_results_main
+  new_archive <- new_results_main
 } else {
-  new_results <- new_results_prelim
+  new_archive <- new_results_prelim
 }
 
-qs::qsave(new_archive, file_path)
 s3saveRDS(new_archive, object = "nhsn_archive.rds", bucket = "forecasting-team-data")
+qs::qsave(new_archive, file_path)
 print("########################################")
 print("Script Finished at")
 print(Sys.time())
 print("########################################")
 print()
 print()
+
+new_results$DT %>% filter(version =="2024-11-20") %>% filter(time_value < "2024-11-09")
+new_results$DT %>% filter(time_value %in% "2024-11-02") %>% filter(time_value < "2024-11-09")

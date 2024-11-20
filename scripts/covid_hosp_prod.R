@@ -8,6 +8,8 @@ source("scripts/targets-common.R")
 
 submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
+# date to cut the truth data off at, so we don't have too much of the past
+truth_data_date <- "2023-09-01"
 forecast_generation_date <- Sys.Date()
 forecaster_fns <- list2(
   linear = function(...) {
@@ -104,6 +106,39 @@ rlang::list2(
       }
     ),
     tar_target(
+      name = truth_data,
+      command = {
+        nssp_state <- pub_covidcast(
+          source = "nssp",
+          signal = "pct_ed_visits_covid",
+          time_type = "week",
+          geo_type = "state",
+          geo_values = "*",
+          fetch_args = epidatr::fetch_args_list(timeout_seconds = 400)
+        ) %>%
+          select(geo_value, source, target_end_date = time_value, value) %>%
+          filter(target_end_date > truth_data_date, geo_value %nin% insufficient_data_geos) %>%
+          mutate(target_end_date = target_end_date + 6)
+        truth_data <- nhsn_latest_data %>% mutate(target_end_date = time_value) %>% filter(time_value > truth_data_date) %>% mutate(source = "nhsn") %>% select(geo_value, target_end_date, source, value)
+        nssp_renormalized <-
+          nssp_state %>%
+          left_join(
+            nssp_state %>%
+            rename(nssp = value) %>%
+            full_join(
+              truth_data %>%
+              select(geo_value, target_end_date, value),
+              by = join_by(geo_value, target_end_date)
+            ) %>%
+            group_by(geo_value) %>%
+            summarise(rel_max_value = max(value, na.rm = TRUE) / max(nssp, na.rm = TRUE)),
+            by = join_by(geo_value)
+          ) %>%
+          mutate(value = value * rel_max_value) %>% select(-rel_max_value)
+        truth_data %>% bind_rows(nssp_renormalized)
+      }
+    ),
+    tar_target(
       notebook,
       command = {
         4
@@ -119,7 +154,7 @@ rlang::list2(
             forecast_res = forecast_res,
             ensemble_res = ensemble_res,
             forecast_generation_date = as.Date(forecast_generation_date),
-            truth_data = nhsn_latest_data
+            truth_data = truth_data
           )
         )
       }

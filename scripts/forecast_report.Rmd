@@ -72,7 +72,7 @@ Fan displays 20-80 quantiles for coverage.
 the_plot <- plot_forecasts(
   params$forecast_res %>% bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")),
   params$forecast_generation_date,
-  params$truth_data %>% mutate(target_end_date = time_value) %>% filter(time_value > "2023-09-01"),
+  params$truth_data,
   quantiles = c(0.8),
   alphas = c(0.7)
 ) %>%
@@ -91,7 +91,7 @@ Fan displays 20-80, 5-95, and 1-99 quantiles.
 the_plot <- plot_forecasts(
   params$forecast_res %>% bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")),
   params$forecast_generation_date,
-  params$truth_data %>% mutate(target_end_date = time_value) %>% filter(time_value > "2023-09-01"),
+  params$truth_data,
   quantiles = c(0.8, 0.95, 0.99),
   alphas = c(0.9, 0.6, 0.2)
 ) %>%
