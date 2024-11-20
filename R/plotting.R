@@ -30,8 +30,12 @@ plot_forecasts <- function(predictions_cards, forecast_date, truth_data, exclude
   # Setup plot
   g <- ggplot(truth_data, mapping = aes(
     x = .data$target_end_date
-  )) +
-    geom_line(mapping = aes(y = .data$value), color = "red")
+  ))
+  if ("source" %in% names(truth_data)) {
+    g <- g + geom_line(mapping = aes(y = .data$value), color = source)
+  } else {
+    g <- g + geom_line(mapping = aes(y = .data$value), color = "red")
+  }
 
   # Plot (symmetric) quantiles
   for (i in seq_along(quantiles)) {
