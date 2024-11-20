@@ -76,7 +76,7 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
   # Dan's fit a 2 component normal mixture model
   if (!log) {
     sink("/dev/null")
-    library(mixtools)
+    suppressPackageStartupMessages(library(mixtools))
     out <- normalmixEM(residuals, k = 2, mean.constr = c(0, 0))
     sink()
     bigvarcomp <- which.max(out$sigma)
