@@ -205,3 +205,20 @@ filter_forecast_geos <- function(forecasts, truth_data) {
       pull(geo_value)
   ) %>% unique()
 }
+
+
+#' Write a submission file. pred is assumed to be in the correct submission format.
+write_submission_file <- function(pred, forecast_reference_date, submission_directory) {
+  file_path <- file.path(submission_directory, sprintf("%s-CMU-TimeSeries.csv", forecast_reference_date))
+  if (file.exists(file_path)) {
+    cli::cli_warn(c("Overwriting existing file in", file_path), call = rlang::current_call())
+    file.remove(file_path)
+  }
+  write_csv(pred, file_path)
+}
+
+#' Utility to get the reference date for a given date. This is the last day of
+#' the epiweek that the date falls in.
+get_forecast_reference_date <- function(date) {
+  MMWRweek::MMWRweek2Date(epiyear(date), epiweek(date)) + 6
+}

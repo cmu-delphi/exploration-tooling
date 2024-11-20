@@ -7,17 +7,13 @@
 source("scripts/targets-common.R")
 
 submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
-insufficient_data_geos <- c("as", "mp", "vi")
-forecast_generation_date <- as.character(seq.Date(as.Date("2024-11-20"), as.Date("2024-11-20"), by = "1 week"))
+insufficient_data_geos <- c("as", "mp", "vi", "gu")
+forecast_generation_date <- Sys.Date()
 bad_forecast_exclusions <- map(forecast_generation_date, get_exclusions)
 forecaster_fns <- list2(
-  ## linear = function(...) {
-  ##   browser()
-  ##   foob <- list2(...)
-  ##   foob[[1]]
-  ##   forecasts <- forecaster_baseline_linear(...)
-  ##   forecasts %>% group_by(geo_value, )
-  ## },
+  linear = function(...) {
+    forecaster_baseline_linear(...)
+  },
   climate_base = function(...) {
     climatological_model(
       ...,
@@ -36,8 +32,6 @@ forecaster_fns <- list2(
     )
   },
 )
-
-
 
 
 rlang::list2(
@@ -67,7 +61,8 @@ rlang::list2(
         nhsn_archive <- s3readRDS(object = "nhsn_archive.rds", bucket = "forecasting-team-data")
         nhsn_archive %>%
           epix_as_of(nhsn_archive$versions_end) %>%
-          filter(disease == "nhsn_covid") %>% select(-disease)
+          filter(disease == "nhsn_covid") %>%
+          select(-disease)
       }
     ),
     tar_target(
@@ -95,13 +90,13 @@ rlang::list2(
     tar_target(
       name = make_submission_csv,
       command = {
-        res <-ensemble_res
+        res <- ensemble_res
         browser()
         res
         debugonce(write_submission_file)
         res %>%
           filter(geo_value %nin% bad_forecast_exclusions) %>%
-          format_flusight(disease ="covid") %>%
+          format_flusight(disease = "covid") %>%
           write_submission_file(forecast_generation_date, submission_directory)
       }
     ),
@@ -114,7 +109,7 @@ rlang::list2(
           "scripts/covid_hosp_prod.Rmd",
           output_file = here::here(
             "reports",
-            sprintf("covid_hosp_prod_%s.html", forecast_generation_date)
+            sprintf("covid_hosp_prod_%s.html", as.Date(forecast_generation_date))
           ),
           params = list(
             forecast_res = forecast_res,

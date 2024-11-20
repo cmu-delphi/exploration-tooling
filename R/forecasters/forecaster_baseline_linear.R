@@ -2,16 +2,23 @@
 forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALSE) {
   forecast_date <- attributes(epi_data)$metadata$as_of
   df_processed <- epi_data %>%
-    mutate(epiweek = epiweek(time_value), epiyear = epiyear(time_value)) %>%
-    left_join(
-      (.) %>%
-        distinct(epiweek, epiyear) %>%
-        mutate(
-          season = convert_epiweek_to_season(epiyear, epiweek),
-          season_week = convert_epiweek_to_season_week(epiyear, epiweek)
-        ),
-      by = c("epiweek", "epiyear")
-    ) %>%
+    {
+      if ("season_week" %nin% names(.)) {
+        (.) %>%
+          mutate(epiweek = epiweek(time_value), epiyear = epiyear(time_value)) %>%
+          left_join(
+            (.) %>%
+              distinct(epiweek, epiyear) %>%
+              mutate(
+                season = convert_epiweek_to_season(epiyear, epiweek),
+                season_week = convert_epiweek_to_season_week(epiyear, epiweek)
+              ),
+            by = c("epiweek", "epiyear")
+          )
+      } else {
+        .
+      }
+    } %>%
     left_join(
       get_population_data() %>% rename(geo_value = state_id) %>% distinct(geo_value, population),
       by = "geo_value"

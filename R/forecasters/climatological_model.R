@@ -43,7 +43,7 @@ climatological_model <- function(epi_data, ahead, window_size = 3, recent_window
     ) %>%
     mutate(
       forecast_date = forecast_date,
-      target_end_date = forecast_date + ahead * 7,
+      target_end_date = get_forecast_reference_date(forecast_date) + ahead * 7,
       quantile = as.numeric(sub("%", "", quantile)) / 100
     )
   if (!geo_agg) {
@@ -69,5 +69,5 @@ climatological_model <- function(epi_data, ahead, window_size = 3, recent_window
   }
   naive_preds %>%
     mutate(value = pmax(0, value)) %>%
-    ungroup()                                               
+    ungroup()
 }
