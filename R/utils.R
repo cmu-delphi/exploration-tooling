@@ -225,3 +225,37 @@ write_submission_file <- function(pred, forecast_reference_date, submission_dire
 get_forecast_reference_date <- function(date) {
   MMWRweek::MMWRweek2Date(epiyear(date), epiweek(date)) + 6
 }
+
+copy_report <- function(report_date = NULL) {
+  library(fs)
+  # Define the directories
+  reports_dir <- "reports"
+  site_dir <- "_site"
+
+  # Create the _site directory if it doesn't exist
+  if (!dir_exists(site_dir)) {
+    dir_create(site_dir)
+  }
+
+  if (is.null(report_date)) {
+    # Get the list of files in the reports directory
+    report_files <- dir_ls(reports_dir, regexp = "covid_forecast_report_.*\\.html")
+
+    # Find the most recent report file
+    report_file <- report_files[which.max(file_info(report_files)$modification_time)]
+  } else {
+    # Define the report file path
+    report_file <- path(reports_dir, sprintf("covid_forecast_report_%s.html", report_date))
+
+    # Check if the report file exists
+    if (!file_exists(report_file)) {
+      stop("Report file does not exist.")
+    }
+  }
+
+  # Define the destination path
+  destination_path <- path(site_dir, "index.html")
+
+  # Copy the most recent report to the _site directory as index.html
+  file_copy(report_file, destination_path, overwrite = TRUE)
+}

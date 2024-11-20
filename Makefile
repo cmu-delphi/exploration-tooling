@@ -30,3 +30,6 @@ upload: push
 
 dashboard:
 	Rscript scripts/dashboard.R
+
+netlify:
+	netlify deploy --prod
