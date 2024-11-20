@@ -62,20 +62,19 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 source(here::here("R", "plotting.R"))
 ```
 
-# Forecaster Predictions for `r params$disease`
+# Forecaster Predictions for `r params$disease`  {.tabset}
 
-## epipredict states {.tabset}
+## Main quantile
 
-Fan displays 10/25/50/75/90% quantiles.
+Fan displays 20-80 quantiles for coverage.
 
-### main
 ```{r, fig.height = 60, fig.width = 12, echo=FALSE}
 the_plot <- plot_forecasts(
   params$forecast_res %>% bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")),
   params$forecast_generation_date,
   "state",
   params$truth_data %>% mutate(target_end_date = time_value, forecaster = "nhsn") %>% filter(time_value > "2023-09-01"),
-  quantiles = c(0.75, 0.9)
+  quantiles = c(0.8)
 ) %>%
   suppressMessages() %>%
   suppressWarnings()
@@ -84,14 +83,17 @@ ggplotly(the_plot, tooltip = "text", height = 9000, width = 2000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
 ```
 
-### extreme quantiles
+## Extreme quantiles
+
+Fan displays 20-80, 5-95, and 1-99 quantiles.
+
 ```{r, fig.height = 60, fig.width = 12, echo=FALSE}
 the_plot <- plot_forecasts(
   params$forecast_res %>% bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")),
   params$forecast_generation_date,
   "state",
   params$truth_data %>% mutate(target_end_date = time_value, forecaster = "nhsn") %>% filter(time_value > "2023-09-01"),
-  quantiles = c(0.75, 0.90, 0.99),
+  quantiles = c(0.8, 0.95, 0.99),
   alphas = c(0.9, 0.6, 0.2)
 ) %>%
   suppressMessages() %>%
