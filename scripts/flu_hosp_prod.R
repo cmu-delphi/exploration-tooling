@@ -1,4 +1,3 @@
-
 # The Flu Hospitalization Production Forecasting Pipeline.
 #
 # Ran into some issues with targets:
@@ -10,7 +9,6 @@ source("scripts/targets-common.R")
 submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
 forecast_generation_date <- Sys.Date()
-bad_forecast_exclusions <- map(forecast_generation_date, get_exclusions)
 forecaster_fns <- list2(
   linear = function(...) {
     forecaster_baseline_linear(...)
@@ -51,8 +49,7 @@ rlang::list2(
   tar_map(
     values = tidyr::expand_grid(
       tibble(
-        forecast_generation_date = forecast_generation_date,
-        bad_forecast_exclusions = bad_forecast_exclusions
+        forecast_generation_date = forecast_generation_date
       )
     ),
     names = "forecast_generation_date",
@@ -75,7 +72,12 @@ rlang::list2(
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
             geo_value = as.factor(geo_value)
-          )
+          ) %>%
+          # exclude geos in the exclusion list
+          filter(geo_value %nin% get_exclusions(
+                                   as.Date(forecast_generation_date),
+                                   names(forecaster_fns[forecasters]),
+                                   here::here("scripts", "flu_geo_exclusions.json"))) %>%
       },
       pattern = cross(aheads, forecasters)
     ),
@@ -92,8 +94,12 @@ rlang::list2(
       name = make_submission_csv,
       command = {
         ensemble_res %>%
-          filter(geo_value %nin% bad_forecast_exclusions) %>%
-          format_flusight(disease = "flu") %>%
+          # exclude geos in the exclusion list
+          filter(geo_value %nin% get_exclusions(
+                                   as.Date(forecast_generation_date),
+                                   "global",
+                                   here::here("scripts", "flu_geo_exclusions.json"))) %>%
+          format_flusight(disease = "covid") %>%
           write_submission_file(forecast_generation_date, submission_directory)
       }
     ),

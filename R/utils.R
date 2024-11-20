@@ -134,20 +134,22 @@ make_ensemble_grid <- function(tib) {
 #'
 #' @param date A date
 #' @param exclusions_json A JSON file with exclusions in the format:
+#' @param forecaster the forecaster whose exclusions to look up; global means to be excluded from the submitted forecast, and otherwise corresponds to the name of the forecaster in forecaster_fns
 #'
 #'    {"exclusions": {"2024-03-24": "ak,hi"}}
 #'
 #' @export
 get_exclusions <- function(
     date,
+    forecaster,
     exclusions_json = here::here("scripts", "geo_exclusions.json")) {
   if (!file.exists(exclusions_json)) {
     return("")
   }
 
-  s <- jsonlite::read_json(exclusions_json)$exclusions[[as.character(date)]]
-  if (!is.null(s)) {
-    return(strsplit(s, ",")[[1]])
+  res <- jsonlite::read_json(exclusions_json)$exclusions[[as.character(date)]]
+  if (!is.null(res[[forecaster]])) {
+    return(strsplit(res[[forecaster]], ",")[[1]])
   }
   return("")
 }
