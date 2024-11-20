@@ -97,7 +97,7 @@ rlang::list2(
         res %>%
           filter(geo_value %nin% bad_forecast_exclusions) %>%
           format_flusight(disease = "covid") %>%
-          write_submission_file(forecast_generation_date, submission_directory)
+          write_submission_file(get_forecast_reference_date(forecast_generation_date), submission_directory)
       }
     ),
     tar_target(
