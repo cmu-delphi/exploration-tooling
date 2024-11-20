@@ -209,12 +209,15 @@ filter_forecast_geos <- function(forecasts, truth_data) {
 
 #' Write a submission file. pred is assumed to be in the correct submission format.
 write_submission_file <- function(pred, forecast_reference_date, submission_directory) {
+  if (!file.exists(submission_directory)) {
+    cli::cli_abort("Submission directory does not exist.", call = rlang::current_call())
+  }
   file_path <- file.path(submission_directory, sprintf("%s-CMU-TimeSeries.csv", forecast_reference_date))
   if (file.exists(file_path)) {
     cli::cli_warn(c("Overwriting existing file in", file_path), call = rlang::current_call())
     file.remove(file_path)
   }
-  write_csv(pred, file_path)
+  readr::write_csv(pred, file_path)
 }
 
 #' Utility to get the reference date for a given date. This is the last day of
