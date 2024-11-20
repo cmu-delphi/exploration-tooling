@@ -90,14 +90,10 @@ rlang::list2(
     tar_target(
       name = make_submission_csv,
       command = {
-        res <- ensemble_res
-        browser()
-        res
-        debugonce(write_submission_file)
-        res %>%
+        ensemble_res %>%
           filter(geo_value %nin% bad_forecast_exclusions) %>%
           format_flusight(disease = "covid") %>%
-          write_submission_file(get_forecast_reference_date(as.Date(forecast_generation_date)), submission_directory)
+          write_submission_file(forecast_generation_date, submission_directory)
       }
     ),
     tar_target(
