@@ -1,8 +1,11 @@
 # The COVID Hospitalization Production Forecasting Pipeline.
 #
-# Ran into some issues with targets:
-#   https://github.com/ropensci/targets/discussions/666#discussioncomment-9050772
-#
+
+# date,forecaster,geo,weight
+# 2024-11-20,linear,all,3     # Set a global weight of 3
+# 2024-11-20,linear,all,0     # Exclude linear for all forecasts
+# 2024-11-20,all,ak,0         # Exclude all forecasters for Alaska
+# 2024-11-20,linear,ak,0.1    # Set a weight of 0.1 for linear in Alaska
 
 source("scripts/targets-common.R")
 
@@ -10,11 +13,16 @@ submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
 truth_data_date <- "2023-09-01"
-+# Generically set the generation date to the next Wednesday
-+forecast_generation_date <- ceiling_date(Sys.Date()-1, unit = "week", week_start = 3)
+# Generically set the generation date to the next Wednesday (or today if it's Wednesday)
+forecast_generation_date <- ceiling_date(Sys.Date() - 1, unit = "week", week_start = 3)
+
+all_states <- unique(readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE)$state_id)
 forecaster_fns <- list2(
   linear = function(...) {
     forecaster_baseline_linear(...)
+  },
+  linearlog = function(...) {
+    forecaster_baseline_linear(..., log = TRUE)
   },
   climate_base = function(...) {
     climatological_model(
@@ -34,6 +42,61 @@ forecaster_fns <- list2(
     )
   },
 )
+# TODO: Parse weight file.
+geo_forecasters_weights <- readr::read_csv("scripts/covid_geo_exclusions.csv") %>%
+  mutate(
+    geo = ifelse(geo == "all", list(all_states), geo),
+  ) %>%
+  unnest_longer(geo) %>%
+  mutate(
+    forecaster = ifelse(forecaster == "all", list(names(forecaster_fns)), forecaster),
+  ) %>%
+  unnest_longer(forecaster)
+geo_forecasters_weights <- tribble(
+  ~forecast_date, ~forecaster, ~geo_value, ~weight,
+  "2024-11-20", "linear", "all", 3,
+  "2024-11-20", "linearlog", "all", 0,
+  "2024-11-20", "climate_base", "all", 0,
+  "2024-11-20", "climate_geo_agged", "all", 0,
+  "2024-11-20", "climate_quantile_extrapolated", "all", 0,
+  # Global exclusions TBD
+  # "2024-11-20", "all", "ak", 0,
+  # Specific exclusions
+  "2024-11-20", "linear", "az", 0,
+  "2024-11-20", "linear", "mi", 0,
+  "2024-11-20", "linear", "mn", 0,
+  "2024-11-20", "linear", "mt", 0,
+  "2024-11-20", "linear", "nm", 0,
+  "2024-11-20", "linear", "pa", 0,
+  "2024-11-20", "linear", "vt", 0,
+  "2024-11-20", "linear", "wy", 0,
+  "2024-11-20", "linearlog", "az", 0,
+  "2024-11-20", "linearlog", "mi", 0,
+  "2024-11-20", "linearlog", "mn", 0,
+  "2024-11-20", "linearlog", "mt", 0,
+  "2024-11-20", "linearlog", "nm", 0,
+  "2024-11-20", "linearlog", "pa", 0,
+  "2024-11-20", "linearlog", "vt", 0,
+  "2024-11-20", "linearlog", "wy", 0,
+) %>%
+  mutate(
+    geo_value = ifelse(geo_value == "all", list(all_states), geo_value),
+  ) %>%
+  unnest_longer(geo_value) %>%
+  mutate(
+    forecaster = ifelse(forecaster == "all", list(names(forecaster_fns)), forecaster),
+  ) %>%
+  unnest_longer(forecaster) %>%
+  group_by(forecast_date, forecaster, geo_value) %>%
+  summarize(weight = min(weight), .groups = "drop") %>%
+  mutate(forecast_date = as.Date(forecast_date)) %>%
+  group_by(forecast_date, geo_value) %>%
+  mutate(weight = ifelse(near(weight, 0), 0, weight / sum(weight)))
+geo_exclusions <- geo_forecasters_weights %>%
+  group_by(forecast_date, geo_value) %>%
+  filter(near(max(weight), 0)) %>%
+  pull(geo_value) %>%
+  unique()
 
 
 rlang::list2(
@@ -76,13 +139,8 @@ rlang::list2(
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
             geo_value = as.factor(geo_value)
-          ) %>%
-          # exclude geos in the exclusion list
-          filter(geo_value %nin% get_exclusions(
-                                   as.Date(forecast_generation_date),
-                                   names(forecaster_fns[forecasters]),
-                                   here::here("scripts", "covid_geo_exclusions.json")))
-          },
+          )
+      },
       pattern = cross(aheads, forecasters),
       cue = tar_cue(mode = "always")
     ),
@@ -90,20 +148,18 @@ rlang::list2(
       name = ensemble_res,
       command = {
         forecast_res %>%
-          group_by(geo_value, quantile, forecast_date, target_end_date) %>%
-          mutate(quantile = round(quantile, digits = 2)) %>%
-          summarize(value = mean(value, na.rm = TRUE), .groups = "drop")
-      }
+          mutate(quantile = round(quantile, digits = 3)) %>%
+          left_join(geo_forecasters_weights) %>%
+          mutate(value = value * weight) %>%
+          group_by(forecast_date, geo_value, target_end_date, quantile) %>%
+          summarize(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+          filter(geo_value %nin% geo_exclusions)
+      },
     ),
     tar_target(
       name = make_submission_csv,
       command = {
         ensemble_res %>%
-          # exclude geos in the exclusion list
-          filter(geo_value %nin% get_exclusions(
-                                   as.Date(forecast_generation_date),
-                                   "global",
-                                   here::here("scripts", "covid_geo_exclusions.json"))) %>%
           format_flusight(disease = "covid") %>%
           write_submission_file(as.Date(forecast_generation_date), submission_directory)
       }
@@ -122,22 +178,27 @@ rlang::list2(
           select(geo_value, source, target_end_date = time_value, value) %>%
           filter(target_end_date > truth_data_date, geo_value %nin% insufficient_data_geos) %>%
           mutate(target_end_date = target_end_date + 6)
-        truth_data <- nhsn_latest_data %>% mutate(target_end_date = time_value) %>% filter(time_value > truth_data_date) %>% mutate(source = "nhsn") %>% select(geo_value, target_end_date, source, value)
+        truth_data <- nhsn_latest_data %>%
+          mutate(target_end_date = time_value) %>%
+          filter(time_value > truth_data_date) %>%
+          mutate(source = "nhsn") %>%
+          select(geo_value, target_end_date, source, value)
         nssp_renormalized <-
           nssp_state %>%
           left_join(
             nssp_state %>%
-            rename(nssp = value) %>%
-            full_join(
-              truth_data %>%
-              select(geo_value, target_end_date, value),
-              by = join_by(geo_value, target_end_date)
-            ) %>%
-            group_by(geo_value) %>%
-            summarise(rel_max_value = max(value, na.rm = TRUE) / max(nssp, na.rm = TRUE)),
+              rename(nssp = value) %>%
+              full_join(
+                truth_data %>%
+                  select(geo_value, target_end_date, value),
+                by = join_by(geo_value, target_end_date)
+              ) %>%
+              group_by(geo_value) %>%
+              summarise(rel_max_value = max(value, na.rm = TRUE) / max(nssp, na.rm = TRUE)),
             by = join_by(geo_value)
           ) %>%
-          mutate(value = value * rel_max_value) %>% select(-rel_max_value)
+          mutate(value = value * rel_max_value) %>%
+          select(-rel_max_value)
         truth_data %>% bind_rows(nssp_renormalized)
       }
     ),
