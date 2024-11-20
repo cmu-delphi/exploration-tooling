@@ -12,6 +12,7 @@ insufficient_data_geos <- c("as", "mp", "vi", "gu")
 truth_data_date <- "2023-09-01"
 # Generically set the generation date to the next Wednesday
 forecast_generation_date <- ceiling_date(Sys.Date() - 1, unit = "week", week_start = 3)
+
 forecaster_fns <- list2(
   linear = function(...) {
     forecaster_baseline_linear(...)
@@ -37,6 +38,9 @@ forecaster_fns <- list2(
     )
   },
 )
+# TODO: Parse weight file.
+geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"))
+geo_exclusions <- exclude_geos(geo_forecasters_weights)
 
 
 rlang::list2(
@@ -79,13 +83,7 @@ rlang::list2(
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
             geo_value = as.factor(geo_value)
-          ) %>%
-          # exclude geos in the exclusion list
-          filter(geo_value %nin% get_exclusions(
-            as.Date(forecast_generation_date),
-            names(forecaster_fns[forecasters]),
-            here::here("scripts", "flu_geo_exclusions.json")
-          ))
+          )
       },
       pattern = cross(aheads, forecasters),
       cue = tar_cue(mode = "always")
@@ -94,22 +92,19 @@ rlang::list2(
       name = ensemble_res,
       command = {
         forecast_res %>%
-          group_by(geo_value, quantile, forecast_date, target_end_date) %>%
-          mutate(quantile = round(quantile, digits = 2)) %>%
-          summarize(value = mean(value, na.rm = TRUE), .groups = "drop")
-      }
+          mutate(quantile = round(quantile, digits = 3)) %>%
+          left_join(geo_forecasters_weights) %>%
+          mutate(value = value * weight) %>%
+          group_by(forecast_date, geo_value, target_end_date, quantile) %>%
+          summarize(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+          filter(geo_value %nin% geo_exclusions)
+      },
     ),
     tar_target(
       name = make_submission_csv,
       command = {
         ensemble_res %>%
-          # exclude geos in the exclusion list
-          filter(geo_value %nin% get_exclusions(
-            as.Date(forecast_generation_date),
-            "global",
-            here::here("scripts", "flu_geo_exclusions.json")
-          )) %>%
-          format_flusight(disease = "covid") %>%
+          format_flusight(disease = "flu") %>%
           write_submission_file(as.Date(forecast_generation_date), submission_directory)
       },
       cue = tar_cue(mode = "always")

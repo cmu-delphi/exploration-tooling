@@ -1,12 +1,6 @@
 # The COVID Hospitalization Production Forecasting Pipeline.
 #
 
-# date,forecaster,geo,weight
-# 2024-11-20,linear,all,3     # Set a global weight of 3
-# 2024-11-20,linear,all,0     # Exclude linear for all forecasts
-# 2024-11-20,all,ak,0         # Exclude all forecasters for Alaska
-# 2024-11-20,linear,ak,0.1    # Set a weight of 0.1 for linear in Alaska
-
 source("scripts/targets-common.R")
 
 submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
@@ -16,7 +10,6 @@ truth_data_date <- "2023-09-01"
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
 forecast_generation_date <- ceiling_date(Sys.Date() - 1, unit = "week", week_start = 3)
 
-all_states <- unique(readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE)$state_id)
 forecaster_fns <- list2(
   linear = function(...) {
     forecaster_baseline_linear(..., residual_tail = 0.97, residual_center = 0.097)
