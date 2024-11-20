@@ -10,7 +10,8 @@ submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
 truth_data_date <- "2023-09-01"
-forecast_generation_date <- Sys.Date()
++# Generically set the generation date to the next Wednesday
++forecast_generation_date <- ceiling_date(Sys.Date()-1, unit = "week", week_start = 3)
 forecaster_fns <- list2(
   linear = function(...) {
     forecaster_baseline_linear(...)
@@ -63,7 +64,8 @@ rlang::list2(
           epix_as_of(nhsn_archive$versions_end) %>%
           filter(disease == "nhsn_covid") %>%
           select(-disease)
-      }
+      },
+      cue = tar_cue(mode = "always")
     ),
     tar_target(
       forecast_res,
@@ -81,7 +83,8 @@ rlang::list2(
                                    names(forecaster_fns[forecasters]),
                                    here::here("scripts", "covid_geo_exclusions.json")))
           },
-      pattern = cross(aheads, forecasters)
+      pattern = cross(aheads, forecasters),
+      cue = tar_cue(mode = "always")
     ),
     tar_target(
       name = ensemble_res,
@@ -141,7 +144,6 @@ rlang::list2(
     tar_target(
       notebook,
       command = {
-        4
         if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
         rmarkdown::render(
           "scripts/forecast_report.Rmd",

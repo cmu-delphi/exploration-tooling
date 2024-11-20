@@ -10,6 +10,14 @@ test:
 run:
 	Rscript scripts/run.R
 
+prod-covid:
+	export TAR_PROJECT=covid_hosp_prod; \
+	Rscript scripts/run_prod.R
+
+prod-flu:
+	export TAR_RUN_PROJECT=flu_hosp_prod; \
+	Rscript scripts/run_prod.R
+
 get_nwss:
 	mkdir -p aux_data/nwss_covid_data; \
 	mkdir -p aux_data/nwss_flu_data; \
