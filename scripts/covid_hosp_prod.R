@@ -52,51 +52,8 @@ geo_forecasters_weights <- readr::read_csv("scripts/covid_geo_exclusions.csv") %
     forecaster = ifelse(forecaster == "all", list(names(forecaster_fns)), forecaster),
   ) %>%
   unnest_longer(forecaster)
-geo_forecasters_weights <- tribble(
-  ~forecast_date, ~forecaster, ~geo_value, ~weight,
-  "2024-11-20", "linear", "all", 3,
-  "2024-11-20", "linearlog", "all", 0,
-  "2024-11-20", "climate_base", "all", 0,
-  "2024-11-20", "climate_geo_agged", "all", 0,
-  "2024-11-20", "climate_quantile_extrapolated", "all", 0,
-  # Global exclusions TBD
-  # "2024-11-20", "all", "ak", 0,
-  # Specific exclusions
-  "2024-11-20", "linear", "az", 0,
-  "2024-11-20", "linear", "mi", 0,
-  "2024-11-20", "linear", "mn", 0,
-  "2024-11-20", "linear", "mt", 0,
-  "2024-11-20", "linear", "nm", 0,
-  "2024-11-20", "linear", "pa", 0,
-  "2024-11-20", "linear", "vt", 0,
-  "2024-11-20", "linear", "wy", 0,
-  "2024-11-20", "linearlog", "az", 0,
-  "2024-11-20", "linearlog", "mi", 0,
-  "2024-11-20", "linearlog", "mn", 0,
-  "2024-11-20", "linearlog", "mt", 0,
-  "2024-11-20", "linearlog", "nm", 0,
-  "2024-11-20", "linearlog", "pa", 0,
-  "2024-11-20", "linearlog", "vt", 0,
-  "2024-11-20", "linearlog", "wy", 0,
-) %>%
-  mutate(
-    geo_value = ifelse(geo_value == "all", list(all_states), geo_value),
-  ) %>%
-  unnest_longer(geo_value) %>%
-  mutate(
-    forecaster = ifelse(forecaster == "all", list(names(forecaster_fns)), forecaster),
-  ) %>%
-  unnest_longer(forecaster) %>%
-  group_by(forecast_date, forecaster, geo_value) %>%
-  summarize(weight = min(weight), .groups = "drop") %>%
-  mutate(forecast_date = as.Date(forecast_date)) %>%
-  group_by(forecast_date, geo_value) %>%
-  mutate(weight = ifelse(near(weight, 0), 0, weight / sum(weight)))
-geo_exclusions <- geo_forecasters_weights %>%
-  group_by(forecast_date, geo_value) %>%
-  filter(near(max(weight), 0)) %>%
-  pull(geo_value) %>%
-  unique()
+geo_forecasters_weights <- parse_prod_weights(here::here("covid_geo_exclusions.csv"))
+geo_exclusions <- exclude_geos(geo_forecasters_weights)
 
 
 rlang::list2(

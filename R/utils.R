@@ -154,6 +154,31 @@ get_exclusions <- function(
   return("")
 }
 
+parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv")) {
+  all_states <- unique(readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE)$state_id)
+  readr::read_csv(filename) %>%
+    mutate(
+      geo_value = ifelse(geo_value == "all", list(all_states), geo_value),
+    ) %>%
+    unnest_longer(geo_value) %>%
+    mutate(
+      forecaster = ifelse(forecaster == "all", list(names(forecaster_fns)), forecaster),
+    ) %>%
+    unnest_longer(forecaster) %>%
+    group_by(forecast_date, forecaster, geo_value) %>%
+    summarize(weight = min(weight), .groups = "drop") %>%
+    mutate(forecast_date = as.Date(forecast_date)) %>%
+    group_by(forecast_date, geo_value) %>%
+    mutate(weight = ifelse(near(weight, 0), 0, weight / sum(weight)))
+}
+exclude_geos <- function(geo_forecasters_weights) {
+  geo_exclusions <- geo_forecasters_weights %>%
+    group_by(forecast_date, geo_value) %>%
+    filter(near(max(weight), 0)) %>%
+    pull(geo_value) %>%
+    unique()
+}
+
 `%nin%` <- function(x, y) !(x %in% y)
 
 get_population_data <- function() {
