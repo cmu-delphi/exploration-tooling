@@ -155,6 +155,53 @@ get_exclusions <- function(
 `%nin%` <- function(x, y) !(x %in% y)
 
 get_population_data <- function() {
-  readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv") %>%
+  readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE) %>%
     rename(population = pop)
+}
+
+# TODO:
+scale_pop <- function(df) {}
+
+unscale_pop <- function(df) {}
+
+filter_forecast_geos <- function(forecasts, truth_data) {
+  subset_geos <- unique(forecasts$geo_value)
+  # Bad forecast filters
+  c(
+    # 1. Filter out forecasts that trend down
+    tibble(
+      geo_value = subset_geos,
+      trend_down = map(subset_geos, ~ lm(value ~ target_end_date, data = forecasts %>% filter(geo_value == .x))$coefficients[2] < 0) %>% unlist()
+    ) %>%
+      filter(trend_down) %>%
+      pull(geo_value),
+    # 2. Filter forecasts where the median exceeds all prior peaks at any ahead.
+    tibble(
+      geo_value = subset_geos
+    ) %>%
+      left_join(
+        forecasts %>% filter(quantile == 0.5) %>% group_by(geo_value) %>% summarize(mv = max(value)),
+        by = "geo_value"
+      ) %>%
+      left_join(
+        truth_data %>% group_by(geo_value) %>% summarize(pp = max(value, na.rm = TRUE)),
+        by = "geo_value"
+      ) %>%
+      filter(mv >= pp) %>%
+      pull(geo_value),
+    # 3. If .75 quantile exceeds all prior peaks at 2 ahead, filter out.
+    tibble(
+      geo_value = subset_geos
+    ) %>%
+      left_join(
+        forecasts %>% filter(near(quantile, 0.75), target_end_date == MMWRweek2Date(epiyear(forecast_date), epiweek(forecast_date)) + 6),
+        by = "geo_value"
+      ) %>%
+      left_join(
+        truth_data %>% group_by(geo_value) %>% summarize(pp = max(value, na.rm = TRUE)),
+        by = "geo_value"
+      ) %>%
+      filter(value >= pp) %>%
+      pull(geo_value)
+  ) %>% unique()
 }

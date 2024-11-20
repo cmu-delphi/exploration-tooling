@@ -23,33 +23,32 @@ knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw())
 ```
 
-# Linear Extrapolation Model for `r params$disease`
-
 Simple model:
 
-- For each geo, replace zero weeks with NA and then forward fill.
-- For each geo, regress the last few weeks (population scaled) on the week number.
-- Predict the aheads for each geo.
+- For each geo, replace zero weeks with NA.
+- For each geo, regress the last few weeks (population scaled) on the week number (possibly log transformed).
 - Any location that had fewer than 2 recent non-zero weeks gets the pop-scaled median (or mean) as their point forecast.
 - Use pooled residuals to get PIs for everything and then resample for future aheads.
 - Get back to the original scale.
 
+# Linear Extrapolation Model for `r params$disease` {.tabset}
+
 ```{r}
-params <- list(disease = "flu")
+# params <- list(disease = "flu")
 source("R/load_all.R")
 library(ggplot2)
 library(plotly)
 
 if (params$disease == "flu") {
-    epi_data <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfflunewadm") %>%
+    epi_data <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfflunewadm", show_col_types = FALSE) %>%
         rename(time_value = weekendingdate, value = totalconfflunewadm, geo_value = jurisdiction)
 } else if (params$disease == "covid") {
-    epi_data <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm") %>%
+    epi_data <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm", show_col_types = FALSE) %>%
         rename(time_value = weekendingdate, value = totalconfc19newadm, geo_value = jurisdiction)
 } else {
     stop("Invalid disease")
 }
-today <- Sys.Date() + 1
+today <- Sys.Date()
 epi_data <- epi_data %>%
     filter(geo_value %nin% c("AS", "USA", "VI", "PR", "MP", "GU")) %>%
     mutate(time_value = as.Date(time_value), geo_value = tolower(geo_value)) %>%
@@ -59,17 +58,21 @@ epi_data <- epi_data %>%
         value = ifelse(value == 0, NA, value)
     ) %>%
     arrange(geo_value, time_value) %>%
-    group_by(geo_value) %>%
-    fill(value) %>%
-    ungroup() %>%
     as_epi_df(as_of = today)
 
+aheads <- -1:3
 forecast_date <- today
-# subset_geos <- epi_data$geo_value %>% unique()
-subset_geos <- c("ca", "ny", "fl", "tx", "pa")
-quantile_forecast <- map(-1:3, ~ forecaster_baseline_linear(epi_data, .x)) %>%
+subset_geos <- epi_data$geo_value %>% unique()
+# subset_geos <- c("ca", "ny", "fl", "tx", "pa")
+```
+
+## Fit On Raw Data
+
+```{r}
+quantile_forecast <- map(aheads, ~ forecaster_baseline_linear(epi_data, .x, log = FALSE)) %>%
     bind_rows() %>%
-    filter(geo_value %in% subset_geos)
+    filter(geo_value %in% subset_geos) %>%
+    mutate(forecaster = "baseline_linear")
 truth_data <- epi_data %>%
     filter(geo_value %in% subset_geos, time_value > forecast_date - 365 * 2)
 train_fit <- quantile_forecast %>%
@@ -80,8 +83,48 @@ train_data <- epi_data %>%
     filter(geo_value %in% subset_geos, time_value > forecast_date - 30) %>%
     summarize(start = min(time_value), stop = max(time_value))
 
+# Bad forecast filters
+filter_geos <- filter_forecast_geos(quantile_forecast, truth_data)
+```
+
+Filter geo recommendations: `r paste(filter_geos, collapse = ", ")`.
+
+(Based on throwing out forecasts that trend down, forecasts where the median exceeds all prior peaks, and forecasts where the 75th percentile exceeds all prior peaks at 2 ahead.)
+
+```{r}
 p <- plot_forecasts(quantile_forecast, forecast_date, geo_type = "state", truth_data = truth_data, relevant_period = train_data) +
     geom_point(data = train_fit, mapping = aes(x = time_value, y = value), size = 0.25)
-p
+
+ggplotly(p, tooltip = "text", height = 5000, width = 1700)
+```
+
+## Fit On Log Data
+
+```{r}
+quantile_forecast <- map(aheads, ~ forecaster_baseline_linear(epi_data, .x, log = TRUE)) %>%
+    bind_rows() %>%
+    filter(geo_value %in% subset_geos) %>%
+    mutate(forecaster = "baseline_linear")
+truth_data <- epi_data %>%
+    filter(geo_value %in% subset_geos, time_value > forecast_date - 365 * 2)
+train_fit <- quantile_forecast %>%
+    filter(is.na(quantile)) %>%
+    mutate(time_value = target_end_date)
+quantile_forecast <- quantile_forecast %>% filter(!is.na(quantile))
+train_data <- epi_data %>%
+    filter(geo_value %in% subset_geos, time_value > forecast_date - 30) %>%
+    summarize(start = min(time_value), stop = max(time_value))
+
+filter_geos <- filter_forecast_geos(quantile_forecast, truth_data)
+```
+
+Filter geo recommendations: `r paste(filter_geos, collapse = ", ")`.
+
+(Based on throwing out forecasts that trend down, forecasts where the median exceeds all prior peaks, and forecasts where the 75th percentile exceeds all prior peaks at 2 ahead.)
+
+```{r}
+p <- plot_forecasts(quantile_forecast, forecast_date, geo_type = "state", truth_data = truth_data, relevant_period = train_data) +
+    geom_point(data = train_fit, mapping = aes(x = time_value, y = value), size = 0.25)
+
 ggplotly(p, tooltip = "text", height = 5000, width = 1700)
 ```

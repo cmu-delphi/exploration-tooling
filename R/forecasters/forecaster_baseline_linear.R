@@ -2,7 +2,6 @@
 forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALSE) {
   forecast_date <- attributes(epi_data)$metadata$as_of
 
-  browser()
   df_processed <- epi_data %>%
     mutate(epiweek = epiweek(time_value), epiyear = epiyear(time_value)) %>%
     left_join(
@@ -30,14 +29,15 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
   }
 
   forecast_season_week <- convert_epiweek_to_season_week(epiyear(forecast_date), epiweek(forecast_date))
+  reference_date <- MMWRweek2Date(epiyear(forecast_date), epiweek(forecast_date)) + 6
   target_season_week <- forecast_season_week + ahead
   geos <- unique(df_processed$geo_value)
 
   train_data <- df_processed %>%
-    filter(time_value >= max(time_value) - 30)
-  # group_by(geo_value) %>%
-  # filter(!is.na(value)) %>%
-  # filter(n() >= 2)
+    filter(time_value >= max(time_value) - 30) %>%
+    group_by(geo_value) %>%
+    filter(!is.na(value)) %>%
+    filter(n() >= 2)
 
   point_forecast <- tibble(
     geo_value = train_data$geo_value %>% unique(),
@@ -61,71 +61,52 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
     )
   )
 
-  pooled_residuals <- point_forecast$model %>%
+  # residuals from the data
+  residuals <- point_forecast$model %>%
     map(~ residuals(.x) %>% as.numeric()) %>%
     unlist()
-  pooled_residuals <- 3 * pooled_residuals
+  residuals <- c(residuals, -residuals)
+
+  # Dan's fit a 2 component normal mixture model
+  if (!log) {
+    sink("/dev/null")
+    library(mixtools)
+    out <- normalmixEM(residuals, k = 2, mean.constr = c(0, 0))
+    sink()
+    bigvarcomp <- which.max(out$sigma)
+    residuals <- residuals[out$posterior[, bigvarcomp] > 0.2]
+  }
 
   if (FALSE) {
     # Debug residuals
-    saveRDS(pooled_residuals, "pooled_residuals.rds")
+    saveRDS(residuals, "pooled_residuals.rds")
   }
 
   get_quantile <- function(point, ahead) {
-    epipredict:::propagate_samples(pooled_residuals, point, quantile_levels = covidhub_probs(), aheads = aheads, nsim = 1e3, symmetrize = TRUE, nonneg = TRUE)[[1]] %>%
-      slice(.env$ahead) %>%
+    epipredict:::propagate_samples(residuals, point, quantile_levels = covidhub_probs(), aheads = ahead + 2, nsim = 1e4, symmetrize = TRUE, nonneg = FALSE)[[1]] %>%
       pull(.pred_distn)
   }
   quantile_forecast <- point_forecast %>%
     rowwise() %>%
-    mutate(quantile = get_quantile(value, season_week - forecast_season_week) %>% nested_quantiles()) %>%
+    mutate(quantile = get_quantile(value, ahead) %>% nested_quantiles()) %>%
     unnest(quantile) %>%
     left_join(
       get_population_data() %>% rename(geo_value = state_id) %>% distinct(geo_value, population),
       by = "geo_value"
     ) %>%
     rename(quantile = quantile_levels) %>%
+    {
+      if (log) {
+        (.) %>% mutate(values = exp(values))
+      } else {
+        .
+      }
+    } %>%
     mutate(
       value = values * population / 10**5,
-      forecaster = "linear",
-      target_end_date = max(train_data$time_value) + (season_week - max(train_data$season_week)) * 7,
-      forecast_date = max(train_data$time_value),
+      target_end_date = reference_date + ahead * 7,
+      forecast_date = forecast_date,
     ) %>%
-    select(-model, -values, -population, -season_week)
-
-  if (log) {
-    quantile_forecast <- quantile_forecast %>% mutate(values = exp(values))
-  }
-
-  if (FALSE) {
-    # Show fit on the train values
-    train_weeks <- df_processed %>%
-      filter(time_value >= max(time_value) - 30) %>%
-      pull(season_week) %>%
-      unique()
-    fit_points <- tibble(
-      geo_value = train_data$geo_value %>% unique(),
-      model = map(geo_value, ~ lm(value ~ season_week, data = train_data %>% filter(geo_value == .x))),
-      prediction = map(model, ~ tibble(season_week = train_weeks, value = predict(.x, newdata = data.frame(season_week = train_weeks))))
-    ) %>%
-      unnest_longer(col = prediction) %>%
-      mutate(value = prediction$value, season_week = prediction$season_week) %>%
-      left_join(
-        get_population_data() %>% rename(geo_value = state_id) %>% distinct(geo_value, population),
-        by = "geo_value"
-      ) %>%
-      mutate(
-        value = value * population / 10**5,
-        forecaster = "linear",
-        target_end_date = max(train_data$time_value) + (season_week - max(train_data$season_week)) * 7,
-        forecast_date = max(train_data$time_value),
-      ) %>%
-      select(-prediction, -model, -population, -season_week)
-
-    quantile_forecast %>% bind_rows(
-      fit_points
-    )
-  } else {
-    quantile_forecast
-  }
+    select(-model, -values, -population, -season_week) %>%
+    mutate(value = pmax(0, value))
 }
