@@ -1,4 +1,5 @@
-# The COVID Hospitalization Production Forecasting Pipeline.
+
+# The Flu Hospitalization Production Forecasting Pipeline.
 #
 # Ran into some issues with targets:
 #   https://github.com/ropensci/targets/discussions/666#discussioncomment-9050772
@@ -6,7 +7,7 @@
 
 source("scripts/targets-common.R")
 
-submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
+submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
 forecast_generation_date <- Sys.Date()
 bad_forecast_exclusions <- map(forecast_generation_date, get_exclusions)
@@ -61,7 +62,7 @@ rlang::list2(
         nhsn_archive <- s3readRDS(object = "nhsn_archive.rds", bucket = "forecasting-team-data")
         nhsn_archive %>%
           epix_as_of(nhsn_archive$versions_end) %>%
-          filter(disease == "nhsn_covid") %>%
+          filter(disease == "nhsn_flu") %>%
           select(-disease)
       }
     ),
@@ -92,23 +93,22 @@ rlang::list2(
       command = {
         ensemble_res %>%
           filter(geo_value %nin% bad_forecast_exclusions) %>%
-          format_flusight(disease = "covid") %>%
+          format_flusight(disease = "flu") %>%
           write_submission_file(forecast_generation_date, submission_directory)
       }
     ),
     tar_target(
       notebook,
       command = {
-        4
         if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
         rmarkdown::render(
           "scripts/forecast_report.Rmd",
           output_file = here::here(
             "reports",
-            sprintf("covid_forecast_report_%s.html", as.Date(forecast_generation_date))
+            sprintf("flu_forecast_report_%s.html", as.Date(forecast_generation_date))
           ),
           params = list(
-            disease = "covid",
+            disease = "flu",
             forecast_res = forecast_res,
             ensemble_res = ensemble_res,
             forecast_generation_date = as.Date(forecast_generation_date),
