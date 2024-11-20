@@ -11,10 +11,13 @@ insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
 truth_data_date <- "2023-09-01"
 # Generically set the generation date to the next Wednesday
-forecast_generation_date <- ceiling_date(Sys.Date()-1, unit = "week", week_start = 3)
+forecast_generation_date <- ceiling_date(Sys.Date() - 1, unit = "week", week_start = 3)
 forecaster_fns <- list2(
   linear = function(...) {
     forecaster_baseline_linear(...)
+  },
+  linearlog = function(...) {
+    forecaster_baseline_linear(..., log = TRUE)
   },
   climate_base = function(...) {
     climatological_model(
@@ -79,9 +82,10 @@ rlang::list2(
           ) %>%
           # exclude geos in the exclusion list
           filter(geo_value %nin% get_exclusions(
-                                   as.Date(forecast_generation_date),
-                                   names(forecaster_fns[forecasters]),
-                                   here::here("scripts", "flu_geo_exclusions.json")))
+            as.Date(forecast_generation_date),
+            names(forecaster_fns[forecasters]),
+            here::here("scripts", "flu_geo_exclusions.json")
+          ))
       },
       pattern = cross(aheads, forecasters),
       cue = tar_cue(mode = "always")
@@ -101,9 +105,10 @@ rlang::list2(
         ensemble_res %>%
           # exclude geos in the exclusion list
           filter(geo_value %nin% get_exclusions(
-                                   as.Date(forecast_generation_date),
-                                   "global",
-                                   here::here("scripts", "flu_geo_exclusions.json"))) %>%
+            as.Date(forecast_generation_date),
+            "global",
+            here::here("scripts", "flu_geo_exclusions.json")
+          )) %>%
           format_flusight(disease = "covid") %>%
           write_submission_file(as.Date(forecast_generation_date), submission_directory)
       },
@@ -123,22 +128,27 @@ rlang::list2(
           select(geo_value, source, target_end_date = time_value, value) %>%
           filter(target_end_date > truth_data_date, geo_value %nin% insufficient_data_geos) %>%
           mutate(target_end_date = target_end_date + 6)
-        truth_data <- nhsn_latest_data %>% mutate(target_end_date = time_value) %>% filter(time_value > truth_data_date) %>% mutate(source = "nhsn") %>% select(geo_value, target_end_date, source, value)
+        truth_data <- nhsn_latest_data %>%
+          mutate(target_end_date = time_value) %>%
+          filter(time_value > truth_data_date) %>%
+          mutate(source = "nhsn") %>%
+          select(geo_value, target_end_date, source, value)
         nssp_renormalized <-
           nssp_state %>%
           left_join(
             nssp_state %>%
-            rename(nssp = value) %>%
-            full_join(
-              truth_data %>%
-              select(geo_value, target_end_date, value),
-              by = join_by(geo_value, target_end_date)
-            ) %>%
-            group_by(geo_value) %>%
-            summarise(rel_max_value = max(value, na.rm = TRUE) / max(nssp, na.rm = TRUE)),
+              rename(nssp = value) %>%
+              full_join(
+                truth_data %>%
+                  select(geo_value, target_end_date, value),
+                by = join_by(geo_value, target_end_date)
+              ) %>%
+              group_by(geo_value) %>%
+              summarise(rel_max_value = max(value, na.rm = TRUE) / max(nssp, na.rm = TRUE)),
             by = join_by(geo_value)
           ) %>%
-          mutate(value = value * rel_max_value) %>% select(-rel_max_value)
+          mutate(value = value * rel_max_value) %>%
+          select(-rel_max_value)
         truth_data %>% bind_rows(nssp_renormalized)
       },
       cue = tar_cue(mode = "always")

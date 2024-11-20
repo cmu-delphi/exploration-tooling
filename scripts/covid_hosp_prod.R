@@ -42,16 +42,6 @@ forecaster_fns <- list2(
     )
   },
 )
-# TODO: Parse weight file.
-geo_forecasters_weights <- readr::read_csv("scripts/covid_geo_exclusions.csv") %>%
-  mutate(
-    geo = ifelse(geo == "all", list(all_states), geo),
-  ) %>%
-  unnest_longer(geo) %>%
-  mutate(
-    forecaster = ifelse(forecaster == "all", list(names(forecaster_fns)), forecaster),
-  ) %>%
-  unnest_longer(forecaster)
 geo_forecasters_weights <- parse_prod_weights(here::here("covid_geo_exclusions.csv"))
 geo_exclusions <- exclude_geos(geo_forecasters_weights)
 
@@ -83,7 +73,8 @@ rlang::list2(
         nhsn_archive %>%
           epix_as_of(nhsn_archive$versions_end) %>%
           filter(disease == "nhsn_covid") %>%
-          select(-disease)
+          select(-disease) %>%
+          filter(geo_value %nin% insufficient_data_geos)
       },
       cue = tar_cue(mode = "always")
     ),

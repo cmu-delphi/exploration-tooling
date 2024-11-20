@@ -42,7 +42,7 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
   train_data <- df_processed %>%
     filter(time_value >= max(time_value) - 30) %>%
     group_by(geo_value) %>%
-    filter(!is.na(value)) %>%
+    filter(!(is.na(value) | is.infinite(value))) %>%
     filter(n() >= 2)
 
   point_forecast <- tibble(
