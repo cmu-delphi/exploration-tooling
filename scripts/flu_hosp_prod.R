@@ -17,9 +17,6 @@ forecaster_fns <- list2(
   linear = function(...) {
     forecaster_baseline_linear(...)
   },
-  linearlog = function(...) {
-    forecaster_baseline_linear(..., log = TRUE)
-  },
   climate_base = function(...) {
     climatological_model(
       ...,
