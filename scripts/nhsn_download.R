@@ -83,6 +83,29 @@ print(Sys.time())
 print("########################################")
 print()
 print()
-
-new_results$DT %>% filter(version =="2024-11-20") %>% filter(time_value < "2024-11-09")
-new_results$DT %>% filter(time_value %in% "2024-11-02") %>% filter(time_value < "2024-11-09")
+q()
+new_results$DT %>%
+  filter(version == "2024-11-20") %>%
+  filter(time_value < "2024-11-09")
+new_results$DT %>%
+  filter(time_value %in% "2024-11-02") %>%
+  filter(time_value < "2024-11-09")
+new_results_prelim$DT %>%
+  group_by(geo_value, time_value, disease) %>%
+  filter(n() > 2) %>%
+  select(disease, geo_value, time_value, version, value) %>%
+  arrange(geo_value, disease, time_value, version) %>%
+  mutate(diff = max(value) - min(value), rel_diff = (max(value) - min(value)) / first(value)) %>%
+  print(n = 57)
+new_results_prelim$DT %>%
+  group_by(geo_value, time_value, disease) %>%
+  filter(version >"2024-11-20")
+new_results_prelim$DT %>%
+  filter(time_value == max(time_value)) %>%
+  as_tibble %>%
+  select(disease, geo_value, time_value, version, value) %>%
+  group_by(geo_value, time_value, disease) %>%
+  mutate(diff = max(value) - min(value), rel_diff = (max(value) - min(value)) / first(value)) %>%
+  arrange(rel_diff, geo_value, disease, time_value, version) %>%
+  print(n=57)
+  print(n=180)
