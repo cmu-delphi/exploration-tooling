@@ -40,26 +40,7 @@ ggplot2::theme_set(ggplot2::theme_bw())
 ```
 
 ```{r setup, include=FALSE}
-library(dplyr)
-library(magrittr)
-library(dplyr)
-library(ggplot2)
-library(lubridate)
-library(MMWRweek)
-library(readr)
-library(rlang)
-library(magrittr)
-library(aws.s3)
-library(data.table)
-library(dplyr)
-library(DT)
-library(ggplot2)
-library(plotly)
-library(readr)
-library(stringr)
-library(tidyr)
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
-source(here::here("R", "plotting.R"))
 ```
 
 # Forecaster Predictions for `r params$disease`  {.tabset}

@@ -14,3 +14,4 @@ reports/
 aux_data
 # Local Netlify folder
 .netlify
+_site/*

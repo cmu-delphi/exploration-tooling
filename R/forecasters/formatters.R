@@ -62,7 +62,7 @@ format_flusight <- function(pred, disease = c("flu", "covid")) {
   disease <- arg_match(disease)
   pred %>%
     mutate(
-      reference_date = MMWRweek::MMWRweek2Date(epiyear(forecast_date), epiweek(forecast_date)),
+      reference_date = get_forecast_reference_date(forecast_date),
       target = glue::glue("wk inc {disease} hosp"),
       horizon = floor((target_end_date - reference_date) / 7),
       output_type = "quantile",
@@ -75,6 +75,7 @@ format_flusight <- function(pred, disease = c("flu", "covid")) {
       by = c("geo_value" = "state_id")
     ) %>%
     mutate(location = state_code) %>%
+    mutate(location = ifelse(is.na(location), "US", location)) %>%
     select(reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value)
 }
 

@@ -1,8 +1,5 @@
 # The Flu Hospitalization Production Forecasting Pipeline.
 #
-# Ran into some issues with targets:
-#   https://github.com/ropensci/targets/discussions/666#discussioncomment-9050772
-#
 
 source("scripts/targets-common.R")
 
@@ -10,7 +7,7 @@ submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
 truth_data_date <- "2023-09-01"
-# Generically set the generation date to the next Wednesday
+# Generically set the generation date to the next Wednesday (or today if it's Wednesday)
 forecast_generation_date <- ceiling_date(Sys.Date() - 1, unit = "week", week_start = 3)
 
 forecaster_fns <- list2(
@@ -35,7 +32,6 @@ forecaster_fns <- list2(
     )
   },
 )
-# TODO: Parse weight file.
 geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"))
 geo_exclusions <- exclude_geos(geo_forecasters_weights)
 
@@ -67,7 +63,8 @@ rlang::list2(
         nhsn_archive %>%
           epix_as_of(nhsn_archive$versions_end) %>%
           filter(disease == "nhsn_flu") %>%
-          select(-disease)
+          select(-disease) %>%
+          filter(geo_value %nin% insufficient_data_geos)
       },
       cue = tar_cue(mode = "always")
     ),
@@ -102,7 +99,7 @@ rlang::list2(
       command = {
         ensemble_res %>%
           format_flusight(disease = "flu") %>%
-          write_submission_file(as.Date(forecast_generation_date), submission_directory)
+          write_submission_file(get_forecast_reference_date(as.Date(forecast_generation_date)), submission_directory)
       },
       cue = tar_cue(mode = "always")
     ),

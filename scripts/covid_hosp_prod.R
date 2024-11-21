@@ -102,7 +102,7 @@ rlang::list2(
       command = {
         ensemble_res %>%
           format_flusight(disease = "covid") %>%
-          write_submission_file(as.Date(forecast_generation_date), submission_directory)
+          write_submission_file(get_forecast_reference_date(as.Date(forecast_generation_date)), submission_directory)
       },
       cue = tar_cue(mode = "always")
     ),
