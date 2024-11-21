@@ -19,11 +19,11 @@ forecast_generation_date <- ceiling_date(Sys.Date() - 1, unit = "week", week_sta
 all_states <- unique(readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE)$state_id)
 forecaster_fns <- list2(
   linear = function(...) {
-    forecaster_baseline_linear(...)
+    forecaster_baseline_linear(..., residual_tail = 0.97, residual_center = 0.097)
   },
-  linearlog = function(...) {
-    forecaster_baseline_linear(..., log = TRUE)
-  },
+  # linearlog = function(...) {
+  #   forecaster_baseline_linear(..., log = TRUE)
+  # },
   climate_base = function(...) {
     climatological_model(
       ...,

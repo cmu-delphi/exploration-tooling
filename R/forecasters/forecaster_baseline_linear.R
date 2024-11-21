@@ -1,5 +1,5 @@
 #' epi_data is expected to have: geo_value, time_value, and value columns.
-forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALSE) {
+forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALSE, residual_tail = 0.85, residual_center = 0.085) {
   forecast_date <- attributes(epi_data)$metadata$as_of
   df_processed <- epi_data %>%
     {
@@ -73,14 +73,11 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
     unlist()
   residuals <- c(residuals, -residuals)
 
-  # Dan's fit a 2 component normal mixture model
+  # Jank attempt to get saner residuals
   if (!log) {
-    sink("/dev/null")
-    suppressPackageStartupMessages(library(mixtools))
-    out <- normalmixEM(residuals, k = 2, mean.constr = c(0, 0))
-    sink()
-    bigvarcomp <- which.max(out$sigma)
-    residuals <- residuals[out$posterior[, bigvarcomp] > 0.2]
+    abs_residuals <- abs(residuals)
+    abs_residuals <- abs_residuals[abs_residuals < quantile(abs_residuals, residual_tail) & abs_residuals > quantile(abs_residuals, residual_center)]
+    residuals <- c(abs_residuals, -abs_residuals)
   }
 
   if (FALSE) {
