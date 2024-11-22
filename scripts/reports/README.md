@@ -21,6 +21,8 @@ for (name in forecaster_families) {
 
 # Overall notebook
 rmarkdown::render("flu-overall-comparison-notebook.Rmd", output_file = file.path(reports_dir, "flu-overall-notebook.html"))
+
+rmarkdown::render("new_data.Rmd", output_file = file.path(reports_dir, "new_data.html"))
 ```
 
 ## Covid Forecasting
