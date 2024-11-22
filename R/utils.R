@@ -159,7 +159,7 @@ parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv")
     unique(readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE)$state_id),
     "usa"
   )
-  readr::read_csv(filename) %>%
+  readr::read_csv(filename, comment = "#") %>%
     mutate(
       geo_value = ifelse(geo_value == "all", list(all_states), geo_value),
     ) %>%

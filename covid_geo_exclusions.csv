@@ -15,3 +15,49 @@ forecast_date,forecaster,geo_value,weight
 "2024-11-20", "linear", "pa", 0
 "2024-11-20", "linear", "vt", 0
 "2024-11-20", "linear", "wy", 0
+################################################
+# minor blip, the uploaded data was wildly wrong
+# this does mean the forecasts will probably be more accurate
+################################################
+"2024-11-21", "linear", "all", 9
+"2024-11-21", "linearlog", "all", 0
+"2024-11-21", "climate_base", "all", 2
+"2024-11-21", "climate_geo_agged", "all", 1
+"2024-11-21", "climate_quantile_extrapolated", "all", 0
+# "2024-11-21", "climate_quantile_extrapolated", "ca", 0
+# "2024-11-21", "climate_geo_agged", "ca", 0
+# co needs a stronger linear part
+"2024-11-21", "climate_base", "co", 0.5
+"2024-11-21", "climate_geo_agged", "co", 0.5
+# de needs a stronger linear part
+"2024-11-21", "climate_base", "de", 0.5
+"2024-11-21", "climate_geo_agged", "de", 0.5
+# ga needs a stronger linear part
+"2024-11-21", "climate_base", "ga", 0.5
+"2024-11-21", "climate_geo_agged", "ga", 0.5
+# hi needs a stronger linear part
+"2024-11-21", "climate_base", "hi", 0.5
+"2024-11-21", "climate_geo_agged", "hi", 0.5
+# ia needs a stronger linear part
+"2024-11-21", "climate_base", "ia", 0.5
+"2024-11-21", "climate_geo_agged", "ia", 0.5
+# md needs a stronger linear part
+"2024-11-21", "climate_base", "md", 0.5
+"2024-11-21", "climate_geo_agged", "md", 0.5
+# mi needs a stronger climate part
+"2024-11-21", "linear", "mi", 0.5
+"2024-11-21", "climate_base", "mi", 0.5
+# nd needs a stronger linear part
+"2024-11-21", "climate_base", "nd", 0.25
+"2024-11-21", "climate_geo_agged", "nd", 0.25
+# ne needs a stronger linear part
+"2024-11-21", "climate_base", "ne", 0.25
+"2024-11-21", "climate_geo_agged", "ne", 0.25
+# nj needs a stronger linear part
+"2024-11-21", "climate_base", "nj", 0.25
+"2024-11-21", "climate_geo_agged", "nj", 0.25
+# or needs a stronger linear part
+"2024-11-21", "climate_base", "or", 0.5
+"2024-11-21", "climate_geo_agged", "or", 0.5
+# pa needs a weaker linear part (data is *very* steep)
+"2024-11-21", "linear", "pa", 0.5

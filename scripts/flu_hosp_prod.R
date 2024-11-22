@@ -8,7 +8,7 @@ insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
 truth_data_date <- "2023-09-01"
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
-forecast_generation_date <- ceiling_date(Sys.Date() - 1, unit = "week", week_start = 3)
+forecast_generation_date <- as.Date("2024-11-21")
 
 forecaster_fns <- list2(
   linear = function(...) {
@@ -34,6 +34,9 @@ forecaster_fns <- list2(
 )
 geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"))
 geo_exclusions <- exclude_geos(geo_forecasters_weights)
+if (nrow(geo_forecasters_weights %>% filter(forecast_date == forecast_generation_date)) == 0) {
+  cli_abort("there are no weights  for the forecast date {forecast_generation_date}")
+}
 
 
 rlang::list2(
@@ -87,7 +90,7 @@ rlang::list2(
       command = {
         forecast_res %>%
           mutate(quantile = round(quantile, digits = 3)) %>%
-          left_join(geo_forecasters_weights) %>%
+          left_join(geo_forecasters_weights, by = join_by(forecast_date, forecaster, geo_value)) %>%
           mutate(value = value * weight) %>%
           group_by(forecast_date, geo_value, target_end_date, quantile) %>%
           summarize(value = sum(value, na.rm = TRUE), .groups = "drop") %>%

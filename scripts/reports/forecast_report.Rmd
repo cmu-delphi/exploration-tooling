@@ -1,7 +1,7 @@
 ---
 title: "`r params$disease` Forecaster Predictions"
 author: Delphi Forecast Team
-date: "Rendered: `r format(Sys.time(), '%d %B %Y')`"
+date: "Rendered: `r format(Sys.time(), '%d %B %Y')`, forecast date `r params$forecast_generation_date`"
 output:
   html_document:
     toc: True
