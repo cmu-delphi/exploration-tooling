@@ -262,36 +262,57 @@ get_forecast_reference_date <- function(date) {
   MMWRweek::MMWRweek2Date(epiyear(date), epiweek(date)) + 6
 }
 
-copy_report <- function(report_date = NULL) {
+update_site <- function() {
   library(fs)
+  library(stringr)
   # Define the directories
   reports_dir <- "reports"
-  site_dir <- "_site"
+  template_path <- "reports/template.md"
 
-  # Create the _site directory if it doesn't exist
-  if (!dir_exists(site_dir)) {
-    dir_create(site_dir)
+  # Create the reports directory if it doesn't exist
+  if (!dir_exists(reports_dir)) {
+    dir_create(reports_dir)
   }
 
-  if (is.null(report_date)) {
-    # Get the list of files in the reports directory
-    report_files <- dir_ls(reports_dir, regexp = "covid_forecast_report_.*\\.html")
+  # Sync the reports directory with the S3 bucket
+  aws.s3::s3sync(path = reports_dir, bucket = "forecasting-team-data", prefix = "reports-2024/")
 
-    # Find the most recent report file
-    report_file <- report_files[which.max(file_info(report_files)$modification_time)]
-  } else {
-    # Define the report file path
-    report_file <- path(reports_dir, sprintf("covid_forecast_report_%s.html", report_date))
+  # Read the template file
+  if (!file_exists(template_path)) {
+    stop("Template file does not exist.")
+  }
+  report_md_content <- readLines(template_path)
 
-    # Check if the report file exists
-    if (!file_exists(report_file)) {
-      stop("Report file does not exist.")
-    }
+  # Get the list of files in the reports directory
+  report_files <- dir_ls(reports_dir, regexp = ".*_prod.html")
+
+  # Extract dates and sort files by date in descending order
+  report_files <- report_files[order(as.Date(str_extract(report_files, "\\d{4}-\\d{2}-\\d{2}")), decreasing = FALSE)]
+
+  # Process each report file
+  for (report_file in report_files) {
+    file_name <- path_file(report_file)
+    file_parts <- str_split(fs::path_ext_remove(file_name), "_", simplify = TRUE)
+    date <- file_parts[1]
+    disease <- file_parts[2]
+    report_type <- file_parts[3]
+
+    report_link <- sprintf(
+      "- [%s Forecasts %s](%s)",
+      str_to_title(disease),
+      date,
+      file_name
+    )
+
+    # Insert into Production Reports section
+    prod_reports_index <- which(grepl("## Production Reports", report_md_content)) + 1
+    report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
   }
 
-  # Define the destination path
-  destination_path <- path(site_dir, "index.html")
+  # Write the updated content to report.md
+  report_md_path <- path(reports_dir, "report.md")
+  writeLines(report_md_content, report_md_path)
 
-  # Copy the most recent report to the _site directory as index.html
-  file_copy(report_file, destination_path, overwrite = TRUE)
+  # Convert the markdown file to HTML
+  system("pandoc reports/report.md -s -o reports/index.html --css=reports/style.css --mathjax='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js' --metadata pagetitle='Delphi Reports'")
 }

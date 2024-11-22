@@ -150,7 +150,7 @@ rlang::list2(
       command = {
         if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
         rmarkdown::render(
-          "scripts/forecast_report.Rmd",
+          "scripts/reports/forecast_report.Rmd",
           output_file = here::here(
             "reports",
             sprintf("covid_forecast_report_%s.html", as.Date(forecast_generation_date))

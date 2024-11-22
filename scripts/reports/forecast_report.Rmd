@@ -1,0 +1,106 @@
+---
+title: "`r params$disease` Forecaster Predictions"
+author: Delphi Forecast Team
+date: "Rendered: `r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: True
+    # self_contained: False
+    # lib_dir: libs
+params:
+  disease: "covid"
+  forecast_res: !r ""
+  ensemble_res: !r ""
+  forecast_generation_date: !r ""
+  truth_data: !r ""
+---
+
+```{css, echo=FALSE}
+body {
+  display: block;
+  max-width: 1280px !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+body .main-container {
+  max-width: 1280px !important;
+  width: 1280px !important;
+}
+```
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{r setup, include=FALSE}
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+```
+
+# Forecaster Predictions for `r params$disease`  {.tabset}
+
+## Main quantile
+
+Fan displays 20-80 quantiles for coverage.
+
+```{r, fig.height = 60, fig.width = 12, echo=FALSE}
+the_plot <- plot_forecasts(
+  params$forecast_res %>% bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")),
+  params$forecast_generation_date,
+  params$truth_data,
+  quantiles = c(0.8),
+  alphas = c(0.7)
+) %>%
+  suppressMessages() %>%
+  suppressWarnings()
+
+ggplotly(the_plot, tooltip = "text", height = 9000, width = 2000) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+```
+
+## Extreme quantiles
+
+Fan displays 20-80, 5-95, and 1-99 quantiles.
+
+```{r, fig.height = 60, fig.width = 12, echo=FALSE}
+the_plot <- plot_forecasts(
+  params$forecast_res %>% bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")),
+  params$forecast_generation_date,
+  params$truth_data,
+  quantiles = c(0.8, 0.95, 0.99),
+  alphas = c(0.9, 0.6, 0.2)
+) %>%
+  suppressMessages() %>%
+  suppressWarnings()
+
+ggplotly(the_plot, tooltip = "text", height = 9000, width = 2000) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+```
+
+<!-- ## epipredict national -->
+
+<!-- ```{r, fig.width = 12, echo=FALSE} -->
+<!-- the_plot <- plot_forecasts( -->
+<!--   params$forecast_res %>% -->
+<!--   bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")) %>% -->
+<!--   filter(geo_value != "usa") %>% -->
+<!--   summarise( -->
+<!--     value = sum(value), -->
+<!--     .by = c("forecaster", "forecast_date", "target_end_date", "quantile") -->
+<!--   ), -->
+<!--   params$forecast_generation_date, -->
+<!--   "nation", -->
+<!--   params$truth_data %>% mutate(target_end_date = time_value) %>% filter(geo_value == "usa") %>% filter(time_value > "2023-09-01") -->
+<!-- ) %>% -->
+<!--   suppressMessages() %>% -->
+<!--   suppressWarnings() -->
+
+<!-- ggplotly(the_plot, tooltip = "text", height = 400, width = 1200) %>% -->
+<!--   layout(hoverlabel = list(bgcolor = "white")) -->
+<!-- ``` -->

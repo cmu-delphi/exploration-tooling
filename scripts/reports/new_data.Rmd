@@ -1,0 +1,307 @@
+---
+title: Investigating NHSN Data for Season 2024-2025
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+editor_options:
+  chunk_output_type: console
+---
+
+$$\\[.4in]$$
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(
+    fig.align = "center",
+    message = FALSE,
+    warning = FALSE,
+    cache = TRUE
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(MMWRweek)
+library(readr)
+```
+
+The data is coming from this repository: https://data.cdc.gov/Public-Health-Surveillance/Weekly-Hospital-Respiratory-Data-HRD-Metrics-by-Ju/ua7e-t2fy.
+
+We are focused solely on the column `totalconfflunewadm` as the number of new confirmed flu admissions.
+
+# Data Overview for Large States
+
+```{r}
+convert_epiweek_to_season <- function(epiyear, epiweek) {
+    # Convert epiweek to season
+    update_inds <- epiweek <= 39
+    epiyear <- ifelse(update_inds, epiyear - 1, epiyear)
+
+    season <- paste0(epiyear, "/", substr((epiyear + 1), 3, 4))
+    return(season)
+}
+
+epiweeks_in_year <- function(year) {
+    last_week_of_year <- seq.Date(as.Date(paste0(year, "-12-24")),
+        as.Date(paste0(year, "-12-31")),
+        by = 1
+    )
+    return(max(as.numeric(MMWRweek::MMWRweek(last_week_of_year)$MMWRweek)))
+}
+
+convert_epiweek_to_season_week <- function(epiyear, epiweek, season_start = 39) {
+    season_week <- epiweek - 39
+    update_inds <- season_week <= 0
+    if (!any(update_inds)) {
+        # none need to be updated
+        return(season_week)
+    }
+    # last year's # of epiweeks determines which week in the season we're at at
+    # the beginning of the year
+    season_week[update_inds] <- season_week[update_inds] +
+        sapply(epiyear[update_inds] - 1, epiweeks_in_year)
+
+    return(season_week)
+}
+
+df <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfflunewadm")
+df <- df %>%
+    mutate(
+        epiweek = epiweek(weekendingdate),
+        epiyear = epiyear(weekendingdate)
+    ) %>%
+    left_join(
+        (.) %>%
+            distinct(epiweek, epiyear) %>%
+            mutate(
+                season = convert_epiweek_to_season(epiyear, epiweek),
+                season_week = convert_epiweek_to_season_week(epiyear, epiweek)
+            ),
+        by = c("epiweek", "epiyear")
+    )
+
+df %>%
+    filter(jurisdiction %in% c("CA", "FL", "TX", "NY", "PA", "MN", "NM")) %>%
+    ggplot(aes(x = weekendingdate, y = totalconfflunewadm, color = jurisdiction)) +
+    geom_line() +
+    theme_minimal() +
+    labs(
+        title = "New Confirmed Flu Admissions by Jurisdiction",
+        x = "Week Ending Date",
+        y = "Total Confirmed Flu Admissions"
+    ) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+# State Season Comparison {.tabset}
+
+## California
+
+```{r}
+df %>%
+    filter(jurisdiction == "CA") %>%
+    ggplot(aes(x = season_week, y = totalconfflunewadm, color = season)) +
+    geom_line() +
+    theme_minimal() +
+    labs(
+        title = "New Confirmed Flu Admissions in CA by Season",
+        x = "Season Week",
+        y = "Total Confirmed Flu Admissions"
+    ) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+## Florida
+
+```{r}
+df %>%
+    filter(jurisdiction == "FL") %>%
+    ggplot(aes(x = season_week, y = totalconfflunewadm, color = season)) +
+    geom_line() +
+    theme_minimal() +
+    labs(
+        title = "New Confirmed Flu Admissions in FL by Season",
+        x = "Season Week",
+        y = "Total Confirmed Flu Admissions"
+    ) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+## Texas
+
+```{r}
+df %>%
+    filter(jurisdiction == "TX") %>%
+    ggplot(aes(x = season_week, y = totalconfflunewadm, color = season)) +
+    geom_line() +
+    theme_minimal() +
+    labs(
+        title = "New Confirmed Flu Admissions in TX by Season",
+        x = "Season Week",
+        y = "Total Confirmed Flu Admissions"
+    ) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+## New York
+
+```{r}
+df %>%
+    filter(jurisdiction == "NY") %>%
+    ggplot(aes(x = season_week, y = totalconfflunewadm, color = season)) +
+    geom_line() +
+    theme_minimal() +
+    labs(
+        title = "New Confirmed Flu Admissions in NY by Season",
+        x = "Season Week",
+        y = "Total Confirmed Flu Admissions"
+    ) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+## Pennsylvania
+
+```{r}
+df %>%
+    filter(jurisdiction == "PA") %>%
+    ggplot(aes(x = season_week, y = totalconfflunewadm, color = season)) +
+    geom_line() +
+    theme_minimal() +
+    labs(
+        title = "New Confirmed Flu Admissions in PA by Season",
+        x = "Season Week",
+        y = "Total Confirmed Flu Admissions"
+    ) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+## Minnesota
+
+```{r}
+df %>%
+    filter(jurisdiction == "MN") %>%
+    ggplot(aes(x = season_week, y = totalconfflunewadm, color = season)) +
+    geom_line() +
+    theme_minimal() +
+    labs(
+        title = "New Confirmed Flu Admissions in MN by Season",
+        x = "Season Week",
+        y = "Total Confirmed Flu Admissions"
+    ) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+## New Mexico
+
+```{r}
+df %>%
+    filter(jurisdiction == "NM") %>%
+    ggplot(aes(x = season_week, y = totalconfflunewadm, color = season)) +
+    geom_line() +
+    theme_minimal() +
+    labs(
+        title = "New Confirmed Flu Admissions in NM by Season",
+        x = "Season Week",
+        y = "Total Confirmed Flu Admissions"
+    ) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+# Comparing with Old NHSN Data
+
+The old NHSN data can be found here: https://healthdata.gov/Hospital/COVID-19-Reported-Patient-Impact-and-Hospital-Capa/g62h-syeh.
+
+The relevant column is `previous_day_admission_influenza_confirmed`.
+
+```{r}
+# You can install this with `pak::pkg_install("cmu-delphi/epiprocess")
+library(epiprocess)
+library(plotly)
+library(DT)
+library(tidyr)
+
+hhs_arch <- read_csv("https://healthdata.gov/resource/g62h-syeh.csv?$limit=90000&$select=date,state,previous_day_admission_influenza_confirmed") %>%
+    mutate(
+        geo_value = tolower(state),
+        time_value = as.Date(date) - 1L,
+        hhs = previous_day_admission_influenza_confirmed
+    ) %>%
+    select(geo_value, time_value, hhs) %>%
+    as_epi_df() %>%
+    group_by(geo_value) %>%
+    epi_slide_sum(
+        hhs,
+        na.rm = TRUE,
+        .window_size = 7L,
+        .ref_time_values = seq.Date(as.Date("2020-01-04"), as.Date("2024-04-24"), by = 7),
+    ) %>%
+    mutate(hhs = slide_value_hhs) %>%
+    select(-slide_value_hhs)
+
+to_compare <- df %>%
+    mutate(time_value = as.Date(weekendingdate), geo_value = tolower(jurisdiction), nhsn = totalconfflunewadm) %>%
+    select(-weekendingdate, -jurisdiction, -totalconfflunewadm) %>%
+    full_join(hhs_arch, by = join_by(geo_value, time_value))
+p <- to_compare %>%
+    mutate(diffed = nhsn - hhs, rel_diff = diffed / hhs) %>%
+    filter(abs(diffed) > 10) %>%
+    ggplot(aes(x = time_value, y = diffed, color = geo_value)) +
+    geom_point() +
+    labs(
+        title = "new value minus original value, filtered to the difference in counts > 10"
+    )
+
+ggplotly(p, tooltip = "text", height = 800, width = 1000)
+```
+
+```{r}
+p <- to_compare %>%
+    mutate(diffed = nhsn - hhs, rel_diff = diffed / hhs) %>%
+    filter(abs(diffed) > 10) %>%
+    ggplot(aes(x = time_value, y = rel_diff, color = geo_value)) +
+    geom_point() +
+    labs(
+        title = "relative version of the previous, dividing by the original value"
+    )
+
+ggplotly(p, tooltip = "text", height = 800, width = 1000)
+```
+
+```{r}
+p <- to_compare %>%
+    mutate(diffed = nhsn - hhs, rel_diff = diffed / hhs) %>%
+    filter(abs(diffed) > 10) %>%
+    group_by(geo_value) %>%
+    summarise(median_diff = median(abs(diffed)), median_rel_diff = median(abs(rel_diff))) %>%
+    ggplot(aes(x = geo_value, weight = median_diff)) +
+    geom_bar() +
+    labs(
+        title = "Median absolute difference across states"
+    )
+
+ggplotly(p, tooltip = "text", height = 800, width = 1000)
+```
+
+```{r}
+to_compare %>%
+    mutate(diffed = nhsn - hhs, rel_diff = diffed / hhs) %>%
+    filter(abs(diffed) > 10) %>%
+    datatable()
+```
+
+## Directly plotting the worst contenders
+
+```{r}
+p <- to_compare %>%
+    rename(old_source = hhs, new_source = nhsn) %>%
+    pivot_longer(names_to = "data_source", cols = c("old_source", "new_source")) %>%
+    filter(geo_value %in% c("ca", "tx", "la", "mi", "in")) %>%
+    ggplot(aes(x = time_value, y = value, color = data_source)) +
+    geom_line() +
+    facet_wrap(~geo_value, scales = "free")
+
+ggplotly(p, tooltip = "text", height = 800, width = 1000)
+```

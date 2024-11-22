@@ -9,9 +9,9 @@ scripts/**.html
 nohup.out
 run.Rout
 tmp.R
-reports/
 .exploration_cache
 aux_data
 # Local Netlify folder
 .netlify
-_site/*
+reports/*.html
+reports/report.md
