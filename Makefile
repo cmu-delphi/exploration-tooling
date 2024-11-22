@@ -27,6 +27,7 @@ get_nwss:
 
 run-nohup:
 	nohup Rscript scripts/run.R &
+
 run-nohup-restarting:
 	scripts/hardRestarting.sh &
 
@@ -45,6 +46,9 @@ upload: push
 
 dashboard:
 	Rscript scripts/dashboard.R
+
+update_site:
+	Rscript -e "source('R/utils.R'); update_site()"
 
 netlify:
 	netlify deploy --prod
