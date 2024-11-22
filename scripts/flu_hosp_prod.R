@@ -96,6 +96,15 @@ rlang::list2(
           summarize(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
           filter(geo_value %nin% geo_exclusions)
       },
+      cue = tar_cue(mode = "always")
+      ),
+    tar_target(
+      name = ensemble_mixture_res,
+      command = {
+        forecast_res %>%
+          ensemble_linear_climate(aheads, other_weights = geo_forecasters_weights) %>%
+          filter(geo_value %nin% geo_exclusions)
+      },
     ),
     tar_target(
       name = make_submission_csv,
@@ -157,7 +166,7 @@ rlang::list2(
           ),
           params = list(
             disease = "flu",
-            forecast_res = forecast_res,
+            forecast_res = forecast_res %>% bind_rows(ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix")),
             ensemble_res = ensemble_res,
             forecast_generation_date = as.Date(forecast_generation_date),
             truth_data = truth_data
