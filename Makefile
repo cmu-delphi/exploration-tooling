@@ -18,6 +18,22 @@ prod-flu:
 	export TAR_RUN_PROJECT=flu_hosp_prod; \
 	Rscript scripts/run_prod.R
 
+submit-covid:
+	current_date=$(date +%D); \
+	cd ../covid19-forecast-hub; \
+	git pull delphi; \
+	git commit -am "CMU-Delphi submission $(date +%D)"; \
+	git push delphi; \
+	gh pr create --fill --repo cdcgov/covid19-forecast-hub --dry-run
+
+submit-flu:
+	current_date=$(date +%D); \
+	cd ../FluSight-forecast-hub; \
+	git pull delphi; \
+	git commit -am "CMU-Delphi submission $(date +%D)"; \
+	git push delphi; \
+	gh pr create --fill --repo cdcepi/FluSight-forecast-hub --dry-run
+
 get_nwss:
 	mkdir -p aux_data/nwss_covid_data; \
 	mkdir -p aux_data/nwss_flu_data; \
