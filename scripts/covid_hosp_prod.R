@@ -112,12 +112,27 @@ rlang::list2(
     tar_target(
       name = make_submission_csv,
       command = {
+        forecast_reference_date <- get_forecast_reference_date(as.Date(forecast_generation_date))
         ensemble_res %>%
           format_flusight(disease = "covid") %>%
-          write_submission_file(get_forecast_reference_date(as.Date(forecast_generation_date)), submission_directory)
+          write_submission_file(forecast_reference_date, file.path(submission_directory, "model_output/CMU-TimeSeries"))
       },
       cue = tar_cue(mode = "always")
     ),
+    tar_target(
+      name = validate_result,
+      command = {
+        make_submission_csv
+        # only validate if we're saving the result to a hub
+        if (submission_directory != "cache") {
+          validation <- validate_submission(
+            submission_directory,
+            file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", forecast_reference_date))
+        }
+        validation
+      },
+      cue = tar_cue(mode = "always")
+    )
     tar_target(
       name = truth_data,
       command = {

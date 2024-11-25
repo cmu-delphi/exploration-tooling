@@ -16,6 +16,9 @@ library(ggplot2)
 library(glue)
 library(grf)
 library(here)
+if (Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache") != "cache") {
+  library(hubValidations)
+}
 library(jsonlite)
 library(languageserver)
 library(lubridate)

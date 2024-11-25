@@ -246,8 +246,8 @@ filter_forecast_geos <- function(forecasts, truth_data) {
         truth_data %>% group_by(geo_value) %>% summarize(pp = max(value, na.rm = TRUE)),
         by = "geo_value"
       ) %>%
-      filter(value >= pp) %>%
-      pull(geo_value)
+    filter(value >= pp) %>%
+    pull(geo_value)
   ) %>% unique()
 }
 
