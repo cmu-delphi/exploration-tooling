@@ -8,7 +8,7 @@ insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
 truth_data_date <- "2023-09-01"
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
-forecast_generation_date <- as.Date("2024-11-21")
+forecast_generation_date <- Sys.Date()
 
 forecaster_fns <- list2(
   linear = function(...) {
@@ -127,7 +127,9 @@ rlang::list2(
         if (submission_directory != "cache") {
           validation <- validate_submission(
             submission_directory,
-            file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", forecast_reference_date))
+            file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(as.Date(forecast_generation_date))))
+        } else {
+          validation <- "not validating when there is no hub (set submission_directory)"
         }
         validation
       },

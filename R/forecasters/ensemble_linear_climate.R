@@ -74,7 +74,7 @@ ensemble_linear_climate <- function(forecasts,
     ) %>%
     mutate(value = weight * value) %>%
     group_by(geo_value, forecast_date, target_end_date, quantile) %>%
-    summarize(value = sum(value), .groups = "drop")
+    summarize(value = sum(value, na.rm = TRUE), .groups = "drop")
   # sort the quantiles
   weighted_forecasts <- weighted_forecasts %>%
     group_by(geo_value, target_end_date, forecast_date) %>%

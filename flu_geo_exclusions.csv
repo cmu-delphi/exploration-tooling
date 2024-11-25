@@ -5,6 +5,7 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, linearlog, all, 0
 2024-10-01, climate_base, all, 2
 2024-10-01, climate_geo_agged, all, 0.5
+2024-10-01, climate_quantile_extrapolated, all, 0
 ################################################
 # minor blip, the uploaded data was wildly wrong
 # this does mean the forecasts will probably be more accurate
