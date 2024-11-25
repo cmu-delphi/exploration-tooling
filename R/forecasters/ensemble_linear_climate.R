@@ -32,23 +32,6 @@ ensemble_linear_climate <- function(forecasts,
     mutate(weight = weight.x * weight.y) %>%
     select(forecast_family, quantile, ahead, weight)
 
-  renorm_weights <-
-    weights %>%
-    group_by(quantile, ahead) %>%
-    summarize(mass = sum(weight), .groups = "drop")
-  weights %>%
-    left_join(renorm_weights) %>%
-    mutate(weight = weight / mass) %>%
-    ggplot(aes(x = ahead, y = quantile, fill = weight)) +
-    geom_tile() +
-    facet_wrap(~forecast_family) +
-    scale_fill_gradient2(
-      low = "blue", mid = "cyan", high = "purple",
-      midpoint = 0.5,
-      breaks = seq(-100, 100, 4),
-      limits = c(0, 1)
-    )
-
   forecasters <- unique(forecasts$forecaster)
   other_weights <-
     other_weights %>%

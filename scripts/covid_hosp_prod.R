@@ -132,7 +132,7 @@ rlang::list2(
         validation
       },
       cue = tar_cue(mode = "always")
-    )
+    ),
     tar_target(
       name = truth_data,
       command = {

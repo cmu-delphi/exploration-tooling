@@ -117,6 +117,20 @@ rlang::list2(
       cue = tar_cue(mode = "always")
     ),
     tar_target(
+      name = validate_result,
+      command = {
+        make_submission_csv
+        # only validate if we're saving the result to a hub
+        if (submission_directory != "cache") {
+          validation <- validate_submission(
+            submission_directory,
+            file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", forecast_reference_date))
+        }
+        validation
+      },
+      cue = tar_cue(mode = "always")
+    ),
+    tar_target(
       name = truth_data,
       command = {
         nssp_state <- pub_covidcast(
