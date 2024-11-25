@@ -71,4 +71,4 @@ update_site:
 	Rscript -e "source('R/utils.R'); update_site()"
 
 netlify:
-	netlify deploy --prod
+	netlify deploy --dir=reports --prod
