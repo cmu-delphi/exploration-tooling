@@ -1,20 +1,10 @@
 forecast_date,forecaster,geo_value,weight
-"2024-11-20", "linear", "all", 2
-"2024-11-20", "linearlog", "all", 0
-"2024-11-20", "climate_base", "all", 2
-"2024-11-20", "climate_geo_agged", "all", 0.5
-"2024-11-20", "climate_quantile_extrapolated", "all", 0.5
-"2024-11-20", "linear", "az", 0
-"2024-11-20", "linear", "mi", 0
-"2024-11-20", "linear", "ma", 0
-"2024-11-20", "climate_geo_agged", "ma", 0
-"2024-11-20", "climate_quantile_extrapolated", "ma", 0
-"2024-11-20", "linear", "mn", 0
-"2024-11-20", "linear", "mt", 0
-"2024-11-20", "linear", "nm", 0
-"2024-11-20", "linear", "pa", 0
-"2024-11-20", "linear", "vt", 0
-"2024-11-20", "linear", "wy", 0
+# defaults
+"2024-10-01", "all", "mp", 0
+"2024-10-01", "linear", "all", 3
+"2024-10-01", "linearlog", "all", 0
+"2024-10-01", "climate_base", "all", 2
+"2024-10-01", "climate_geo_agged", "all", 0.5
 ################################################
 # minor blip, the uploaded data was wildly wrong
 # this does mean the forecasts will probably be more accurate
@@ -61,3 +51,22 @@ forecast_date,forecaster,geo_value,weight
 "2024-11-21", "climate_geo_agged", "or", 0.5
 # pa needs a weaker linear part (data is *very* steep)
 "2024-11-21", "linear", "pa", 0.5
+################################################
+#first forecast
+################################################
+"2024-11-20", "linear", "all", 2
+"2024-11-20", "linearlog", "all", 0
+"2024-11-20", "climate_base", "all", 2
+"2024-11-20", "climate_geo_agged", "all", 0.5
+"2024-11-20", "climate_quantile_extrapolated", "all", 0.5
+"2024-11-20", "linear", "az", 0
+"2024-11-20", "linear", "mi", 0
+"2024-11-20", "linear", "ma", 0
+"2024-11-20", "climate_geo_agged", "ma", 0
+"2024-11-20", "climate_quantile_extrapolated", "ma", 0
+"2024-11-20", "linear", "mn", 0
+"2024-11-20", "linear", "mt", 0
+"2024-11-20", "linear", "nm", 0
+"2024-11-20", "linear", "pa", 0
+"2024-11-20", "linear", "vt", 0
+"2024-11-20", "linear", "wy", 0

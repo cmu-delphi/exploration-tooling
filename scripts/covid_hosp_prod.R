@@ -35,7 +35,7 @@ forecaster_fns <- list2(
     )
   },
 )
-geo_forecasters_weights <- parse_prod_weights(here::here("covid_geo_exclusions.csv"))
+geo_forecasters_weights <- parse_prod_weights(here::here("covid_geo_exclusions.csv"), forecast_generation_date)
 geo_exclusions <- exclude_geos(geo_forecasters_weights)
 if (nrow(geo_forecasters_weights %>% filter(forecast_date == forecast_generation_date)) == 0) {
   cli_abort("there are no weights  for the forecast date {forecast_generation_date}")

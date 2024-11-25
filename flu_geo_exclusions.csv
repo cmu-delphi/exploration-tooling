@@ -1,4 +1,30 @@
 forecast_date,forecaster,geo_value,weight
+# default values
+2024-10-01, all, mp, 0
+2024-10-01, linear, all, 3
+2024-10-01, linearlog, all, 0
+2024-10-01, climate_base, all, 2
+2024-10-01, climate_geo_agged, all, 0.5
+################################################
+# minor blip, the uploaded data was wildly wrong
+# this does mean the forecasts will probably be more accurate
+################################################
+2024-11-21, all, mp, 0
+2024-11-21, linear, all, 3
+2024-11-21, linearlog, all, 0
+2024-11-21, climate_base, all, 2
+2024-11-21, climate_geo_agged, all, 0.5
+# ga needs more weight on the linear
+2024-11-21, climate_base, ga, 0.5
+2024-11-21, climate_geo_agged, ga, 0.25
+# sc needs more weight on the linear
+2024-11-21, climate_base, sc, 0.5
+2024-11-21, climate_geo_agged, sc, 0.25
+2024-11-22, all, mp, 0
+2024-11-22, linear, all, 3
+2024-11-22, linearlog, all, 0
+2024-11-22, climate_base, all, 2
+# first day of forecasting
 2024-11-20, all, mp, 0
 2024-11-20, linear, all, 3
 2024-11-20, linearlog, all, 0
@@ -27,18 +53,3 @@ forecast_date,forecaster,geo_value,weight
 2024-11-20, linear, mi, 1
 2024-11-20, linear, mn, 0
 2024-11-20, linear, pa, 0
-################################################
-# minor blip, the uploaded data was wildly wrong
-# this does mean the forecasts will probably be more accurate
-################################################
-2024-11-21, all, mp, 0
-2024-11-21, linear, all, 3
-2024-11-21, linearlog, all, 0
-2024-11-21, climate_base, all, 2
-2024-11-21, climate_geo_agged, all, 0.5
-# ga needs more weight on the linear
-2024-11-21, climate_base, ga, 0.5
-2024-11-21, climate_geo_agged, ga, 0.25
-# sc needs more weight on the linear
-2024-11-21, climate_base, sc, 0.5
-2024-11-21, climate_geo_agged, sc, 0.25

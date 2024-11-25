@@ -8,7 +8,7 @@ insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
 truth_data_date <- "2023-09-01"
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
-forecast_generation_date <- as.Date("2024-11-21")
+forecast_generation_date <- Sys.Date()
 
 forecaster_fns <- list2(
   linear = function(...) {
@@ -32,9 +32,10 @@ forecaster_fns <- list2(
     )
   },
 )
-geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"))
+geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"), forecast_generation_date)
 geo_exclusions <- exclude_geos(geo_forecasters_weights)
 if (nrow(geo_forecasters_weights %>% filter(forecast_date == forecast_generation_date)) == 0) {
+  geo_forecasters_weights
   cli_abort("there are no weights  for the forecast date {forecast_generation_date}")
 }
 
