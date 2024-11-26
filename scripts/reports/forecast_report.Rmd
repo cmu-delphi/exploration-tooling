@@ -1,5 +1,5 @@
 ---
-title: "`r params$disease` Forecaster Predictions"
+title: "`r params$forecast_generation_date`: `r params$disease` forecaster predictions"
 author: Delphi Forecast Team
 date: "Rendered: `r format(Sys.time(), '%d %B %Y')`, forecast date `r params$forecast_generation_date`"
 output:

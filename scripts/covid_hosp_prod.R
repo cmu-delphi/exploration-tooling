@@ -71,8 +71,11 @@ rlang::list2(
     tar_target(
       forecast_res,
       command = {
-        nhsn_latest_data %>%
-          as_epi_df(as_of = as.Date(forecast_generation_date)) %>%
+        nhsn <- nhsn_latest_data
+        nhsn <- nhsn %>%
+          as_epi_df(as_of = as.Date(forecast_generation_date))
+        attributes(nhsn)$metadata$as_of <- as.Date(forecast_generation_date)
+        nhsn %>%
           forecaster_fns[[forecasters]](ahead = aheads) %>%
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
@@ -85,7 +88,8 @@ rlang::list2(
     tar_target(
       name = ensemble_res,
       command = {
-        forecast_res %>%
+        forecasts <- forecast_res
+        forecasts %>%
           mutate(quantile = round(quantile, digits = 3)) %>%
           left_join(geo_forecasters_weights, by = join_by(forecast_date, forecaster, geo_value)) %>%
           mutate(value = value * weight) %>%

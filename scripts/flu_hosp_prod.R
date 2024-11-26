@@ -14,6 +14,9 @@ forecaster_fns <- list2(
   linear = function(...) {
     forecaster_baseline_linear(...)
   },
+  # linearlog = function(...) {
+  #   forecaster_baseline_linear(..., log = TRUE)
+  # },
   climate_base = function(...) {
     climatological_model(
       ...,
@@ -96,7 +99,7 @@ rlang::list2(
           filter(geo_value %nin% geo_exclusions)
       },
       cue = tar_cue(mode = "always")
-      ),
+    ),
     tar_target(
       name = ensemble_mixture_res,
       command = {
