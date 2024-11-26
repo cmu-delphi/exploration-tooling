@@ -182,7 +182,7 @@ rlang::list2(
           "scripts/reports/forecast_report.Rmd",
           output_file = here::here(
             "reports",
-            sprintf("covid_forecast_report_%s.html", as.Date(forecast_generation_date))
+            sprintf("%s_covid_prod.html", as.Date(forecast_generation_date))
           ),
           params = list(
             disease = "covid",
