@@ -23,15 +23,17 @@ prod: prod-covid prod-flu update_site netlify
 submit-covid:
 	current_date=$(date +%D); \
 	cd ../covid19-forecast-hub; \
-	git pull delphi; \
+	git pull delphi main; \
+	git add model-output/CMU-TimeSeries/*; \
 	git commit -am "CMU-Delphi submission $(date +%D)"; \
-	git push delphi; \
+	git push delphi main; \
 	gh pr create --fill --repo cdcgov/covid19-forecast-hub --dry-run
 
 submit-flu:
 	current_date=$(date +%D); \
 	cd ../FluSight-forecast-hub; \
-	git pull delphi; \
+	git pull delphi main; \
+	git add model-output/CMU-TimeSeries/*; \
 	git commit -am "CMU-Delphi submission $(date +%D)"; \
 	git push delphi; \
 	gh pr create --fill --repo cdcepi/FluSight-forecast-hub --dry-run
