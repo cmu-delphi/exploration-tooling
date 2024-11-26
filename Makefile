@@ -27,9 +27,27 @@ submit-covid:
 	git add model-output/CMU-TimeSeries/*; \
 	git commit -am "CMU-Delphi submission $(date +%D)"; \
 	git push delphi main; \
+	gh pr create --fill --repo cdcgov/covid19-forecast-hub
+
+submit-flu-dry:
+	current_date=$(date +%D); \
+	cd ../FluSight-forecast-hub; \
+	git pull delphi main; \
+	git add model-output/CMU-TimeSeries/*; \
+	git commit -am "CMU-Delphi submission $(date +%D)"; \
+	git push delphi; \
+	gh pr create --fill --repo cdcepi/FluSight-forecast-hub
+
+submit-covid-dry:
+	current_date=$(date +%D); \
+	cd ../covid19-forecast-hub; \
+	git pull delphi main; \
+	git add model-output/CMU-TimeSeries/*; \
+	git commit -am "CMU-Delphi submission $(date +%D)"; \
+	git push delphi main; \
 	gh pr create --fill --repo cdcgov/covid19-forecast-hub --dry-run
 
-submit-flu:
+submit-flu-dry:
 	current_date=$(date +%D); \
 	cd ../FluSight-forecast-hub; \
 	git pull delphi main; \
