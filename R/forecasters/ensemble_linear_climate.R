@@ -92,8 +92,8 @@ ensemble_linear_climate <- function(forecasts,
 #' @param max_climate_ahead_weight the maximal weight the climate model is able
 #'   to take on, which occurs on the last day
 make_quantile_weights <- function(quantiles,
-                                  min_climate_weight = .05,
-                                  max_climate_weight = .75) {
+                                  min_climate_weight = 0.1,
+                                  max_climate_weight = 1.0) {
   # x ranges from 0-1, so abs(x-0.5)*1 is 0 near 0.5, and 1 near either 0 or 1
   quantile_weight_values <-
     quantiles %>% map_dbl(\(x) min_climate_weight + (max_climate_weight - min_climate_weight) * abs(x - 0.5) * 2)
@@ -112,8 +112,8 @@ make_quantile_weights <- function(quantiles,
 #' @param max_climate_ahead_weight the maximal weight the climate model is able
 #'   to take on, which occurs on the last day
 make_ahead_weights <- function(aheads,
-                               min_climate_weight = .05,
-                               max_climate_weight = .75) {
+                               min_climate_weight = 0.05,
+                               max_climate_weight = 0.9) {
   ahead_weight_values <- seq(
     from = min_climate_weight,
     to = max_climate_weight,

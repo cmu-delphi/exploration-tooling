@@ -111,7 +111,7 @@ rlang::list2(
       name = make_submission_csv,
       command = {
         forecast_reference_date <- get_forecast_reference_date(as.Date(forecast_generation_date))
-        ensemble_res %>%
+        ensemble_mixture_res %>%
           format_flusight(disease = "covid") %>%
           write_submission_file(forecast_reference_date, file.path(submission_directory, "model_output/CMU-TimeSeries"))
       },

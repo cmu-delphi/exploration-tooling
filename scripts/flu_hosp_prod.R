@@ -111,9 +111,12 @@ rlang::list2(
     tar_target(
       name = make_submission_csv,
       command = {
-        ensemble_res %>%
+        ensemble_mixture_res %>%
           format_flusight(disease = "flu") %>%
-          write_submission_file(get_forecast_reference_date(as.Date(forecast_generation_date)), submission_directory)
+          write_submission_file(
+            get_forecast_reference_date(as.Date(forecast_generation_date)),
+            file.path(submission_directory, "model-output/CMU-TimeSeries")
+          )
       },
       cue = tar_cue(mode = "always")
     ),
