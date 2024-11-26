@@ -28,12 +28,6 @@ forecaster_fns <- list2(
       geo_agg = TRUE
     )
   },
-  climate_quantile_extrapolated = function(...) {
-    climatological_model(
-      ...,
-      quantile_method = "epipredict"
-    )
-  },
 )
 geo_forecasters_weights <- parse_prod_weights(here::here("covid_geo_exclusions.csv"), forecast_generation_date)
 geo_exclusions <- exclude_geos(geo_forecasters_weights)

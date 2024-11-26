@@ -18,7 +18,7 @@ prod-flu:
 	export TAR_RUN_PROJECT=flu_hosp_prod; \
 	Rscript scripts/run_prod.R
 
-prod: prod-covid prod-flu
+prod: prod-covid prod-flu update_site netlify
 
 submit-covid:
 	current_date=$(date +%D); \
