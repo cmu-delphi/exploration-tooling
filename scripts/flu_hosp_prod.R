@@ -110,7 +110,7 @@ rlang::list2(
       command = {
         forecast_res %>%
           ensemble_linear_climate(aheads, other_weights = geo_forecasters_weights) %>%
-          filter(geo_value %nin% geo_exclusions)
+          filter(geo_value %nin% geo_exclusions) %>% ungroup()
       },
     ),
     tar_target(
