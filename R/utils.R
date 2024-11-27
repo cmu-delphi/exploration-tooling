@@ -283,7 +283,7 @@ update_site <- function() {
   }
 
   # Sync the reports directory with the S3 bucket
-  aws.s3::s3sync(path = reports_dir, bucket = "forecasting-team-data", prefix = "reports-2024/")
+  aws.s3::s3sync(path = reports_dir, bucket = "forecasting-team-data", prefix = "reports-2024/", verbose = FALSE)
 
   # Read the template file
   if (!file_exists(template_path)) {

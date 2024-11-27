@@ -12,7 +12,7 @@ forecast_generation_date <- Sys.Date()
 
 forecaster_fns <- list2(
   linear = function(...) {
-    forecaster_baseline_linear(...)
+    forecaster_baseline_linear(..., residual_tail = 0.99, residual_center = 0.35)
   },
   # linearlog = function(...) {
   #   forecaster_baseline_linear(..., log = TRUE)
@@ -133,7 +133,8 @@ rlang::list2(
         if (submission_directory != "cache") {
           validation <- validate_submission(
             submission_directory,
-            file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(as.Date(forecast_generation_date))))
+            file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(as.Date(forecast_generation_date)))
+          )
         } else {
           validation <- "not validating when there is no hub (set submission_directory)"
         }
