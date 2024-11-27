@@ -4,6 +4,12 @@ date: "`r format(Sys.time(), '%d %B %Y')`"
 output:
   html_document:
     code_folding: hide
+params:
+  forecaster_parameters: ""
+  forecasts: ""
+  scores: ""
+  truth_data: ""
+  disease: "flu"
 editor_options:
   chunk_output_type: console
 ---
@@ -21,7 +27,6 @@ ggplot2::theme_set(ggplot2::theme_bw())
 ```
 
 ```{r}
-library(aws.s3)
 library(data.table)
 library(dplyr)
 library(DT)
@@ -34,13 +39,28 @@ library(purrr)
 ```
 
 ```{r}
-# Load the table of parameter combinations
-s3load("flu_2023_forecaster_parameter_combinations.rds", bucket = "forecasting-team-data")
-s3load("flu_2023_joined_scores.rds", bucket = "forecasting-team-data")
+# params <- list(
+#     forecaster_parameter_combinations = tar_read(forecaster_parameter_combinations),
+#     forecaster_family = "scaled_pop_season",
+#     joined_forecasts = tar_read(joined_forecasts),
+#     joined_scores = tar_read(joined_scores),
+#     truth_data = tar_read(hhs_evaluation_data) %>%
+#         select(-population) %>%
+#         mutate(target_end_date = target_end_date + 3),
+#     disease = "flu"
+# )
+
+if (params$disease == "flu") {
+    base_forecaster_name <- "FluSight-baseline"
+    ensemble_forecaster_name <- "FluSight-ensemble"
+} else {
+    base_forecaster_name <- "COVIDhub-baseline"
+    ensemble_forecaster_name <- "COVIDhub-ensemble"
+}
 
 # Select forecasters for this notebook
-outside_forecasters <- c("FluSight-baseline", "FluSight-ensemble")
-id_to_forecaster <- forecaster_parameter_combinations_ %>%
+outside_forecasters <- c(base_forecaster_name, ensemble_forecaster_name)
+id_to_forecaster <- params$forecaster_parameters %>%
     purrr::imap(\(x, idx) {
         x %>% mutate(family_name = idx)
     }) %>%
@@ -51,7 +71,7 @@ id_to_forecaster <- forecaster_parameter_combinations_ %>%
 Mean <- function(x) mean(x, na.rm = TRUE)
 GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
 
-overall_rating <- flu_2023_joined_scores %>%
+overall_rating <- params$scores %>%
     group_by(forecaster) %>%
     summarize(mean_score = Mean(wis)) %>%
     filter(mean_score > 20) %>%
@@ -63,7 +83,7 @@ best_in_class <- overall_rating %>%
     pull(forecaster)
 forecasters_to_keep <- c(best_in_class, outside_forecasters) %>% unique()
 # Load forecasts and scores
-scores <- flu_2023_joined_scores %>%
+scores <- params$scores %>%
     filter(forecaster %in% forecasters_to_keep)
 forecast_dates <- scores %>%
     pull(forecast_date) %>%
@@ -72,14 +92,19 @@ forecasters <- best_in_class
 aheads <- scores %>%
     pull(ahead) %>%
     unique()
-base_forecaster_name <- "FluSight-baseline"
+
+# Define aggregation functions
+Mean <- function(x) mean(x, na.rm = TRUE)
+GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
 ```
 
 ### Notebook Information
 
-#### Forecaster Family
+Best examples from each family of forecasters.
 
-Best examples from each family of forecasters
+#### Disease
+
+`r params$disease`
 
 #### Target Dates
 
@@ -91,13 +116,17 @@ The table is sorted by ascending WIS and contains all the forecasters in this no
 
 ```{r}
 # Display the table
-forecasters_to_keep
-param_table <- forecaster_parameter_combinations_ %>%
-    map(\(x) x %>%
-        filter(id %in% forecasters_to_keep)) %>%
+if (params$disease == "flu") {
+    ignore_keys <- c("forecaster", "keys_to_ignore", "pop_scaling")
+} else {
+    ignore_keys <- c("forecaster", "keys_to_ignore")
+}
+
+param_table <- params$forecaster_parameters %>%
+    map(\(x) x %>% filter(id %in% forecasters_to_keep)) %>%
     bind_rows() %>%
     left_join(id_to_forecaster, by = join_by(id)) %>%
-    select(-any_of(c("forecaster", "keys_to_ignore", "pop_scaling"))) %>%
+    select(-any_of(ignore_keys)) %>%
     {
         if ("n_training" %in% colnames(.)) {
             (.) %>% mutate(n_training = as.character(n_training))
@@ -126,11 +155,11 @@ $$\\[.07in]$$
 
 ### Score Plots {.tabset}
 
-- The WIS plots are relative to the FluSight-baseline. These plots are aggregated with the geometric mean.
-- The absolute error plots are also relative to the FluSight-baseline, but are aggregated with the arithmetic mean.
-- The dashed black line in all plots is the FluSight-ensemble.
+- The WIS plots are relative to the baseline. These plots are aggregated with the geometric mean.
+- The absolute error plots are also relative to the baseline and are aggregated with the arithmetic mean.
+- The dashed black line in all plots is the ensemble.
 
-#### WIS by Forecast Date
+#### WIS by Forecast Date (GeoMean)
 
 ```{r}
 var <- "wis"
@@ -168,18 +197,18 @@ subtitle <- sprintf(
     format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-    normalized_df %>% filter(forecaster != "FluSight-ensemble"),
+    normalized_df %>% filter(forecaster != ensemble_forecaster_name),
     aes(x = forecast_date, y = !!sym(var))
 ) +
     geom_line(aes(color = forecaster, group = forecaster)) +
     geom_point(aes(color = forecaster, group = forecaster)) +
     geom_line(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+        data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
         aes(x = forecast_date, y = !!sym(var)),
         color = "black", linetype = 2
     ) +
     geom_point(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+        data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
         aes(x = forecast_date, y = !!sym(var)),
         color = "black", shape = 21, fill = "white"
     ) +
@@ -227,18 +256,18 @@ subtitle <- sprintf(
     format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-    normalized_df %>% filter(forecaster != "FluSight-ensemble"),
+    normalized_df %>% filter(forecaster != ensemble_forecaster_name),
     aes(x = ahead, y = !!sym(var))
 ) +
     geom_line(aes(color = forecaster, group = forecaster)) +
     geom_point(aes(color = forecaster, group = forecaster)) +
     geom_line(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+        data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
         aes(x = ahead, y = !!sym(var)),
         color = "black", linetype = 2
     ) +
     geom_point(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+        data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
         aes(x = ahead, y = !!sym(var)),
         color = "black", shape = 21, fill = "white"
     ) +
@@ -290,18 +319,18 @@ subtitle <- sprintf(
     format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-    normalized_df %>% filter(forecaster != "FluSight-ensemble"),
+    normalized_df %>% filter(forecaster != ensemble_forecaster_name),
     aes(x = forecast_date, y = !!sym(var))
 ) +
     geom_line(aes(color = forecaster, group = forecaster)) +
     geom_point(aes(color = forecaster, group = forecaster)) +
     geom_line(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+        data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
         aes(x = forecast_date, y = !!sym(var)),
         color = "black", linetype = 2
     ) +
     geom_point(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+        data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
         aes(x = forecast_date, y = !!sym(var)),
         color = "black", shape = 21, fill = "white"
     ) +
@@ -311,7 +340,7 @@ p <- ggplot(
     scale_y_log10(n.breaks = 10) +
     scale_color_discrete() +
     guides(color = guide_legend(ncol = 2)) +
-    labs(title = subtitle, x = "Forecast Dates", y = "Mean Absolute Error")
+    labs(title = subtitle, x = "Forecast Dates", y = "Arithmetic Mean Absolute Error")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
     layout(hoverlabel = list(bgcolor = "white"))
@@ -349,18 +378,18 @@ subtitle <- sprintf(
     format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-    normalized_df %>% filter(forecaster != "FluSight-ensemble"),
+    normalized_df %>% filter(forecaster != ensemble_forecaster_name),
     aes(x = ahead, y = !!sym(var))
 ) +
     geom_line(aes(color = forecaster, group = forecaster)) +
     geom_point(aes(color = forecaster, group = forecaster)) +
     geom_line(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+        data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
         aes(x = ahead, y = !!sym(var)),
         color = "black", linetype = 2
     ) +
     geom_point(
-        data = normalized_df %>% filter(forecaster == "FluSight-ensemble"),
+        data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
         aes(x = ahead, y = !!sym(var)),
         color = "black", shape = 21, fill = "white"
     ) +
@@ -368,7 +397,7 @@ p <- ggplot(
     scale_y_log10(n.breaks = 25) +
     scale_color_discrete() +
     guides(color = guide_legend(ncol = 2)) +
-    labs(title = subtitle, x = "Days ahead", y = "Mean Absolute Error")
+    labs(title = subtitle, x = "Days ahead", y = "Arithmetic Mean Absolute Error")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
     layout(hoverlabel = list(bgcolor = "white"))
@@ -394,18 +423,18 @@ subtitle <- sprintf(
     format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-    df %>% filter(forecaster != "FluSight-ensemble"),
+    df %>% filter(forecaster != ensemble_forecaster_name),
     aes(x = forecast_date, y = !!sym(var))
 ) +
     geom_line(aes(color = forecaster, group = forecaster)) +
     geom_point(aes(color = forecaster, group = forecaster)) +
     geom_line(
-        data = df %>% filter(forecaster == "FluSight-ensemble"),
+        data = df %>% filter(forecaster == ensemble_forecaster_name),
         aes(x = forecast_date, y = !!sym(var)),
         color = "black", linetype = 2
     ) +
     geom_point(
-        data = df %>% filter(forecaster == "FluSight-ensemble"),
+        data = df %>% filter(forecaster == ensemble_forecaster_name),
         aes(x = forecast_date, y = !!sym(var)),
         color = "black", shape = 21, fill = "white"
     ) +
@@ -414,7 +443,7 @@ p <- ggplot(
     facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
     scale_color_discrete() +
     guides(color = guide_legend(ncol = 2)) +
-    labs(title = subtitle, x = "Forecast Dates", y = "Mean 80% Coverage")
+    labs(title = subtitle, x = "Forecast Dates", y = "Arithmetic Mean 80% Coverage")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
     layout(hoverlabel = list(bgcolor = "white"))
@@ -439,25 +468,25 @@ subtitle <- sprintf(
     format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-    df %>% filter(forecaster != "FluSight-ensemble"),
+    df %>% filter(forecaster != ensemble_forecaster_name),
     aes(x = ahead, y = !!sym(var))
 ) +
     geom_line(aes(color = forecaster, group = forecaster)) +
     geom_point(aes(color = forecaster, group = forecaster)) +
     geom_line(
-        data = df %>% filter(forecaster == "FluSight-ensemble"),
+        data = df %>% filter(forecaster == ensemble_forecaster_name),
         aes(x = ahead, y = !!sym(var)),
         color = "black", linetype = 2
     ) +
     geom_point(
-        data = df %>% filter(forecaster == "FluSight-ensemble"),
+        data = df %>% filter(forecaster == ensemble_forecaster_name),
         aes(x = ahead, y = !!sym(var)),
         color = "black", shape = 21, fill = "white"
     ) +
     geom_hline(yintercept = .8, linetype = 1, color = "black") +
     scale_color_discrete() +
     guides(color = guide_legend(ncol = 2)) +
-    labs(title = subtitle, x = "Days ahead", y = "Mean 80% Coverage")
+    labs(title = subtitle, x = "Days ahead", y = "Arithmetic Mean 80% Coverage")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
     layout(hoverlabel = list(bgcolor = "white"))
@@ -467,15 +496,20 @@ ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
 
 Fan plots showing the 80% prediction intervals for the forecasts made by the CMU forecasters and the outside forecasters. The black line is the truth data.
 
-#### Large States
 ```{r}
-# Load the forecasts and the truth data
-s3load(object = "flu_2023_joined_forecasts.rds", bucket = "forecasting-team-data")
-s3load(object = "flu_2023_truth_data.rds", bucket = "forecasting-team-data")
+if (params$disease == "flu") {
+    plot_dates <- seq.Date(as.Date("2023-10-07"), by = "4 weeks", length.out = 8)
+} else {
+    plot_dates <- seq.Date(as.Date("2023-07-03"), by = "4 weeks", length.out = 7)
+}
+```
+
+#### Large States
+
+```{r}
 # We plot a subset of the dates and geos for the fan plot
-plot_dates <- seq.Date(as.Date("2023-10-07"), by = "4 weeks", length.out = 8)
 geo_vals <- c("ca", "fl", "pa", "tx", "ny")
-forecast_subset <- flu_2023_joined_forecasts %>%
+forecast_subset <- params$forecasts %>%
     filter(
         forecaster %in% forecasters_to_keep,
         geo_value %in% geo_vals,
@@ -485,7 +519,6 @@ forecast_subset <- flu_2023_joined_forecasts %>%
     pivot_wider(names_from = "quantile", values_from = "prediction") %>%
     mutate(ahead = as.numeric(target_end_date - forecast_date))
 
-
 p <- ggplot(
     data = forecast_subset,
     aes(x = target_end_date, group = forecast_date)
@@ -494,7 +527,12 @@ p <- ggplot(
     geom_line(aes(y = `0.5`, color = forecast_date), linetype = 2L) +
     geom_point(aes(y = `0.5`, color = forecast_date), size = 0.75) +
     geom_line(
-        data = flu_2023_truth_data %>% filter(geo_value %in% geo_vals),
+        data = params$truth_data %>%
+            filter(
+                geo_value %in% geo_vals,
+                target_end_date >= min(plot_dates),
+                target_end_date <= max(plot_dates)
+            ),
         aes(x = target_end_date, y = true_value),
         inherit.aes = FALSE, na.rm = TRUE,
         color = "black", linetype = 1
@@ -510,14 +548,11 @@ ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 100
 ```
 
 #### Medium States
+
 ```{r}
-# Load the forecasts and the truth data
-s3load(object = "flu_2023_joined_forecasts.rds", bucket = "forecasting-team-data")
-s3load(object = "flu_2023_truth_data.rds", bucket = "forecasting-team-data")
 # We plot a subset of the dates and geos for the fan plot
-plot_dates <- seq.Date(as.Date("2023-10-07"), by = "4 weeks", length.out = 8)
 geo_vals <- c("mn", "co", "ky", "md")
-forecast_subset <- flu_2023_joined_forecasts %>%
+forecast_subset <- params$forecasts %>%
     filter(
         forecaster %in% forecasters_to_keep,
         geo_value %in% geo_vals,
@@ -536,7 +571,12 @@ p <- ggplot(
     geom_line(aes(y = `0.5`, color = forecast_date), linetype = 2L) +
     geom_point(aes(y = `0.5`, color = forecast_date), size = 0.75) +
     geom_line(
-        data = flu_2023_truth_data %>% filter(geo_value %in% geo_vals),
+        data = params$truth_data %>%
+            filter(
+                geo_value %in% geo_vals,
+                target_end_date >= min(plot_dates),
+                target_end_date <= max(plot_dates)
+            ),
         aes(x = target_end_date, y = true_value),
         inherit.aes = FALSE, na.rm = TRUE,
         color = "black", linetype = 1
@@ -550,15 +590,13 @@ p <- ggplot(
 ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
     layout(hoverlabel = list(bgcolor = "white"))
 ```
+
 #### Small States
+
 ```{r}
-# Load the forecasts and the truth data
-s3load(object = "flu_2023_joined_forecasts.rds", bucket = "forecasting-team-data")
-s3load(object = "flu_2023_truth_data.rds", bucket = "forecasting-team-data")
 # We plot a subset of the dates and geos for the fan plot
-plot_dates <- seq.Date(as.Date("2023-10-07"), by = "4 weeks", length.out = 8)
 geo_vals <- c("nv", "vt", "de", "ri", "nm")
-forecast_subset <- flu_2023_joined_forecasts %>%
+forecast_subset <- params$forecasts %>%
     filter(
         forecaster %in% forecasters_to_keep,
         geo_value %in% geo_vals,
@@ -577,7 +615,12 @@ p <- ggplot(
     geom_line(aes(y = `0.5`, color = forecast_date), linetype = 2L) +
     geom_point(aes(y = `0.5`, color = forecast_date), size = 0.75) +
     geom_line(
-        data = flu_2023_truth_data %>% filter(geo_value %in% geo_vals),
+        data = params$truth_data %>%
+            filter(
+                geo_value %in% geo_vals,
+                target_end_date >= min(plot_dates),
+                target_end_date <= max(plot_dates)
+            ),
         aes(x = target_end_date, y = true_value),
         inherit.aes = FALSE, na.rm = TRUE,
         color = "black", linetype = 1

@@ -147,7 +147,7 @@ make_data_targets <- function() {
 #' - joined_archive_data: the target data, it needs the outcome column to be hhs
 #' - hhs_evaluation_data: the true values of the target data
 make_forecasts_and_scores <- function() {
-  tar_map(
+  forecasts_and_scores <- tar_map(
     values = forecaster_grid,
     names = id,
     unlist = FALSE,
@@ -169,39 +169,58 @@ make_forecasts_and_scores <- function() {
           cache_key = "joined_archive_data"
         ) %>%
           rename(prediction = value) %>%
-          mutate(ahead = as.numeric(target_end_date - forecast_date))
+          mutate(ahead = as.numeric(target_end_date - forecast_date)) %>%
+          mutate(id = id)
         gc()
         return(slid)
       },
       pattern = map(aheads)
+    ),
+    tar_target(
+      name = score,
+      command = {
+        # If the data has already been scaled, hhs needs to include the
+        # population and undo scaling.
+        if ("population" %in% colnames(hhs_evaluation_data)) {
+          actual_eval_data <- hhs_evaluation_data %>% select(-population)
+          forecast_scaled <- forecast %>%
+            left_join(
+              hhs_evaluation_data %>% distinct(geo_value, population),
+              by = "geo_value"
+            ) %>%
+            mutate(prediction = prediction * population / 10L**5)
+        } else {
+          forecast_scaled <- forecast
+          actual_eval_data <- hhs_evaluation_data
+        }
+        # Fix for timing offsets
+        actual_eval_data <- actual_eval_data %>% mutate(target_end_date = target_end_date + 3)
+        state_geo_values <- actual_eval_data %>%
+          pull(geo_value) %>%
+          unique()
+        forecast_scaled <- forecast_scaled %>%
+          filter(geo_value %in% state_geo_values) %>%
+          mutate(forecast_date = forecast_date + 3, target_end_date = target_end_date + 3) %>%
+          rename("model" = "id")
+
+        # Score
+        evaluate_predictions(predictions_cards = forecast_scaled, truth_data = actual_eval_data) %>%
+          rename("id" = "model")
+      }
     )
-    # Disabling scores, since we score elsewhere right now.
-    # tar_target(
-    #   name = score,
-    #   command = {
-    #     # if the data has already been scaled, hhs needs to include the population
-    #     if ("population" %in% colnames(hhs_evaluation_data)) {
-    #       # Undo population scaling
-    #       actual_eval_data <- hhs_evaluation_data %>%
-    #         select(-population)
-    #       forecast_scaled <- forecast %>%
-    #         left_join(
-    #           hhs_evaluation_data %>%
-    #             select(geo_value, population) %>%
-    #             distinct(),
-    #           by = "geo_value"
-    #         ) %>%
-    #         mutate(prediction = prediction * population / 10L**5)
-    #     } else {
-    #       forecast_scaled <- forecast
-    #       actual_eval_data <- hhs_evaluation_data
-    #     }
-    #     evaluate_predictions(
-    #       predictions_cards = forecast_scaled,
-    #       truth_data = actual_eval_data
-    #     )
-    #   }
-    # )
+  )
+  rlang::list2(
+    forecasts_and_scores,
+    tar_combine(
+      delphi_forecasts,
+      forecasts_and_scores[["forecast"]],
+      command = dplyr::bind_rows(!!!.x) %>% rename(forecaster = id)
+    ),
+    tar_combine(
+      delphi_scores,
+      forecasts_and_scores[["score"]],
+      command = dplyr::bind_rows(!!!.x) %>% rename(forecaster = id)
+    ),
   )
 }
 

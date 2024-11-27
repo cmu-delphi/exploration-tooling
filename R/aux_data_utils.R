@@ -61,23 +61,15 @@ add_pop_and_density <-
         mutate(
           geo_value = ifelse(geo_value == "us", "usa", geo_value),
           agg_level = ifelse(grepl("[0-9]{2}", geo_value),
-                             "hhs_region",
-                      ifelse(("us" == geo_value) | ("usa" == geo_value), "nation", "state"))
+            "hhs_region",
+            ifelse(("us" == geo_value) | ("usa" == geo_value), "nation", "state")
+          )
         )
     }
     if (!("agg_level" %in% names(original_dataset))) {
       original_dataset %<>%
         mutate(agg_level = ifelse(grepl("[0-9]{2}", geo_value), "hhs_region", ifelse(("us" == geo_value) | ("usa" == geo_value), "nation", "state")))
     }
-    original_dataset %>% filter(geo_value == "usa")
-    pops_by_state_hhs %>% filter(geo_value == "usa")
-    original_dataset %>%
-      mutate(year = year(time_value)) %>%
-      left_join(
-        pops_by_state_hhs,
-        by = join_by(year, geo_value, agg_level)
-      ) %>%
-      filter(geo_value == "usa") %>% select(-epiweek, -epiyear)
     original_dataset %>%
       mutate(year = year(time_value)) %>%
       left_join(
@@ -155,6 +147,7 @@ gen_pop_and_density_data <-
       fill(population, density)
     pops_by_state_hhs
   }
+
 daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), day_of_week = 4L, day_of_week_end = 7L, keys = "geo_value", values = c("value")) {
   epi_df %>%
     mutate(epiweek = epiweek(time_value), year = epiyear(time_value)) %>%

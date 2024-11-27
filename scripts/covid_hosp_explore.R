@@ -1,12 +1,22 @@
 source("scripts/targets-common.R")
 source("scripts/targets-exploration-common.R")
+
+# These globals are needed by make_forecasts_and_scores (and they need to persist
+# during the actual targets run, since the commands are frozen as expressions).
+hhs_signal <- "confirmed_admissions_covid_1d"
+ref_time_values_ <- as.Date(c("2023-11-08", "2023-11-22"))
+if (!exists("ref_time_values_")) {
+  # Alternatively you can let slide_forecaster figure out ref_time_values
+  start_date <- as.Date("2023-10-04")
+  end_date <- as.Date("2024-04-24")
+  date_step <- 7L
+  ref_time_values_ <- NULL
+}
 time_value_adjust <- 3 # this moves the week marker from Saturday to Wednesday
-as.Date("2024-11-16") - time_value_adjust
+
 # Debug mode will replace all forecasters with a fast dummy forecaster. Helps
 # with prototyping the pipeline.
 dummy_mode <- as.logical(Sys.getenv("DUMMY_MODE", FALSE))
-
-
 
 # these are for datasets which have some locations with extreme latency; currently that's only nwss
 # note that this has a vector of names first, and then the list of things to
@@ -144,7 +154,6 @@ forecaster_parameter_combinations_ <- rlang::list2(
     x
   }) %>%
   map(add_id)
-s3save(forecaster_parameter_combinations_, object = "covid_2023_forecaster_parameter_combinations.rds", bucket = "forecasting-team-data")
 
 # Make sure all ids are unique.
 stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(forecaster_parameter_combinations_$id))
@@ -244,369 +253,389 @@ if (length(missing_forecasters) > 0) {
 # Build targets-internal tibble to map over.
 ensemble_grid <- make_ensemble_grid(ensemble_parameter_combinations_)
 
-# These globals are needed by the function below (and they need to persist
-# during the actual targets run, since the commands are frozen as expressions).
-hhs_signal <- "confirmed_admissions_covid_1d"
-date_step <- 7L
-ref_time_values <- as.Date(c("2023-11-08", "2023-11-22"))
-if (!exists("ref_time_values")) {
-  start_date <- as.Date("2023-10-04")
-  end_date <- as.Date("2024-04-24")
-  ref_time_values <- NULL
-}
-ref_time_values_for_map <- tibble(ref_time_value = ref_time_values)
 fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
-nhsn_map <- tar_map(
-  values = ref_time_values_for_map,
-  tar_target(
-    name = hhs_archive_data_asof,
-    command = {
-      date_ref <- as.Date(ref_time_value)
-      get_health_data(ref_time_value) %>%
-        mutate(version = as.Date(ref_time_value))
-    }
-  )
-)
-data_targets <- rlang::list2(
-  tar_combine(
-    name = hhs_archive_data,
-    nhsn_map[["hhs_archive_data_asof"]],
-    command = {
-      bind_rows(!!!.x) %>%
-        relocate(geo_value, time_value, version, hhs) %>%
-        as_epi_archive(compactify = TRUE) %>%
-        daily_to_weekly_archive(agg_columns = "hhs")
-    }
+# These globals are needed by make_external_names_and_scores
+external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
+project_path <- Sys.getenv("TAR_PROJECT", "")
+
+# Data targets
+rlang::list2(
+  # Parameter targets
+  list2(
+    tar_target(name = forecaster_parameter_combinations, command = forecaster_parameter_combinations_),
+    tar_target(name = ensemble_forecasters, command = ensemble_parameter_combinations_),
+    tar_target(name = aheads, command = c(0, 7, 14, 21)),
+    tar_target(name = ref_time_values, command = ref_time_values_),
+    tar_target(name = forecaster_families, command = forecaster_families_)
   ),
-  tar_target(
-    name = hhs_latest_data,
-    command = {
-      epidatr::pub_covidcast(
-        source = "hhs",
-        signals = hhs_signal,
-        geo_type = "state",
-        time_type = "day",
-        geo_values = "*",
-        time_values = "*",
-        fetch_args = fetch_args
-      )
-    }
-  ),
-  tar_target(
-    name = hhs_evaluation_data,
-    command = {
-      hhs_latest_data %>%
-        select(
-          signal,
-          geo_value,
-          time_value,
-          value
-        ) %>%
-        daily_to_weekly(keys = c("geo_value", "signal")) %>%
-        rename(
-          true_value = value,
-          target_end_date = time_value
-        ) %>%
-        select(
-          signal,
-          geo_value,
-          target_end_date,
-          true_value
-        )
-    }
-  ),
-  tar_target(
-    name = hhs_latest_data_2022,
-    command = {
-      hhs_latest_data # %>% filter(time_value >= "2022-01-01", time_value < "2022-04-01")
-    }
-  ),
-  tar_target(
-    name = nssp_archive,
-    command = {
-      nssp_state <- pub_covidcast(
-        source = "nssp",
-        signal = "pct_ed_visits_covid",
-        time_type = "week",
-        geo_type = "state",
-        geo_values = "*",
-        fetch_args = epidatr::fetch_args_list(timeout_seconds = 400)
-      )
-      nssp_state
-      nssp_hhs <- pub_covidcast(
-        source = "nssp",
-        signal = "pct_ed_visits_covid",
-        time_type = "week",
-        geo_type = "hhs",
-        geo_values = "*"
-      )
-      nssp_archive <- nssp_state %>%
-        bind_rows(nssp_hhs) %>%
-        select(geo_value, time_value, issue, nssp = value) %>%
-        as_epi_archive(compactify = TRUE) %>%
-        `$`("DT") %>%
-        # weekly data is indexed from the start of the week
-        mutate(time_value = time_value + 6 - time_value_adjust) %>%
-        mutate(version = time_value) %>%
-        as_epi_archive(compactify = TRUE)
-      nssp_archive
-    }
-  ),
-  tar_target(
-    name = hosp_admissions_archive_raw,
-    command = {
-      # this data set is not worth the effort
-    }
-  ),
-  tar_target(
-    name = google_symptoms_archive,
-    command = {
-      used_searches <- c(4, 5)
-      # not using actual versions here because the only revision behavior is the
-      # source going down completely, which means we're actually just comparing
-      # with the version without this source
-      all_of_them <- lapply(used_searches, \(search_name) {
-        google_symptoms_state_archive <- pub_covidcast(
-          source = "google-symptoms",
-          signal = glue::glue("s0{search_name}_smoothed_search"),
-          time_type = "day",
+  # Data targets
+  rlang::list2(
+    tar_target(
+      name = hhs_archive_data_asof,
+      command = {
+        get_health_data(as.Date(ref_time_values)) %>%
+          mutate(version = as.Date(ref_time_values)) %>%
+          relocate(geo_value, time_value, version, hhs)
+      },
+      pattern = map(ref_time_values)
+    ),
+    tar_target(
+      name = hhs_archive,
+      command = {
+        hhs_archive_data_asof %>%
+          rename(value = hhs) %>%
+          as_epi_archive(compactify = TRUE) %>%
+          daily_to_weekly_archive(agg_columns = "value")
+      }
+    ),
+    tar_target(
+      name = hhs_latest_data,
+      command = {
+        epidatr::pub_covidcast(
+          source = "hhs",
+          signals = hhs_signal,
           geo_type = "state",
-          geo_values = "*"
-        )
-        google_symptoms_hhs_archive <- pub_covidcast(
-          source = "google-symptoms",
-          signal = glue::glue("s0{search_name}_smoothed_search"),
           time_type = "day",
+          geo_values = "*",
+          time_values = "*",
+          fetch_args = fetch_args
+        )
+      }
+    ),
+    tar_target(
+      name = hhs_evaluation_data,
+      command = {
+        hhs_latest_data %>%
+          select(signal, geo_value, time_value, value) %>%
+          daily_to_weekly(keys = c("geo_value", "signal")) %>%
+          rename(
+            true_value = value,
+            target_end_date = time_value
+          ) %>%
+          select(signal, geo_value, target_end_date, true_value)
+      }
+    ),
+    tar_target(
+      name = hhs_latest_data_2022,
+      command = {
+        hhs_latest_data # %>% filter(time_value >= "2022-01-01", time_value < "2022-04-01")
+      }
+    ),
+    tar_target(
+      name = nssp_archive,
+      command = {
+        nssp_state <- pub_covidcast(
+          source = "nssp",
+          signal = "pct_ed_visits_covid",
+          time_type = "week",
+          geo_type = "state",
+          geo_values = "*",
+          fetch_args = epidatr::fetch_args_list(timeout_seconds = 400)
+        )
+        nssp_hhs <- pub_covidcast(
+          source = "nssp",
+          signal = "pct_ed_visits_covid",
+          time_type = "week",
           geo_type = "hhs",
           geo_values = "*"
         )
-        google_symptoms_archive_min <-
-          google_symptoms_state_archive %>%
-          bind_rows(google_symptoms_hhs_archive) %>%
-          select(geo_value, time_value, value) %>%
-          daily_to_weekly() %>%
+        nssp_archive <- nssp_state %>%
+          bind_rows(nssp_hhs) %>%
+          select(geo_value, time_value, issue, nssp = value) %>%
+          as_epi_archive(compactify = TRUE) %>%
+          `$`("DT") %>%
+          # weekly data is indexed from the start of the week
+          mutate(time_value = time_value + 6 - time_value_adjust) %>%
           mutate(version = time_value) %>%
           as_epi_archive(compactify = TRUE)
-        google_symptoms_archive_min$DT %>%
-          filter(!is.na(value)) %>%
-          relocate(geo_value, time_value, version, value) %>%
-          as_epi_archive(compactify = TRUE)
-      })
-      all_of_them[[1]]$DT %<>% rename(google_symptoms_4_bronchitis = value)
-      all_of_them[[2]]$DT %<>% rename(google_symptoms_5_ageusia = value)
-      google_symptoms_archive <- epix_merge(all_of_them[[1]], all_of_them[[2]])
-      google_symptoms_archive <- google_symptoms_archive$DT %>%
-        mutate(google_symptoms = google_symptoms_4_bronchitis + google_symptoms_5_ageusia) %>%
-        as_epi_archive(compactify = TRUE)
-      # not just using dplyr to allow for na.rm
-      google_symptoms_archive$DT$google_symptoms <-
-        rowSums(google_symptoms_archive$DT[, c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia")],
-          na.rm = TRUE
-        )
-      pre_pipeline <- google_symptoms_archive %>%
-        epix_as_of(as.Date("2023-10-04")) %>%
-        mutate(source = "none")
-      colnames <- c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia", "google_symptoms")
-      for (colname in colnames) {
-        learned_params <- calculate_whitening_params(pre_pipeline, colname = colname)
-        google_symptoms_archive$DT %<>% data_whitening(colname = colname, learned_params)
+        nssp_archive
       }
-      google_symptoms_archive$DT %>%
-        select(-starts_with("source")) %>%
-        as_epi_archive(compactify = TRUE)
-    }
-  ),
-  tar_target(
-    name = doctor_visits_archive_raw,
-    command = {
-      years <- seq(from = 0, to = 00040000, by = 00010000)
-      all_of_them <- lapply(years, \(year) {
-        time_values1 <- epidatr::epirange(20200102 + year, 20200601 + year)
-        time_values2 <- epidatr::epirange(20200602 + year, 20210101 + year)
-        dr_visits1 <- pub_covidcast(
-          source = "doctor-visits",
-          signal = "smoothed_cli",
-          time_type = "day",
-          time_values = time_values1,
-          geo_type = "state",
-          geo_values = "*",
-          issues = "*"
-        )
-        dr_visits2 <- pub_covidcast(
-          source = "doctor-visits",
-          signal = "smoothed_cli",
-          time_type = "day",
-          time_values = time_values2,
-          geo_type = "state",
-          geo_values = "*",
-          issues = "*"
-        )
-        bind_rows(
-          dr_visits1,
-          dr_visits2
-        ) %>%
-          select(
-            geo_value, time_value, issue, value
-          )
-      })
-      all_of_them %>%
-        bind_rows()
-    }
-  ),
-  tar_target(
-    name = doctor_visits_weekly_archive,
-    command = {
-      # compactify to remove reduntant issues
-      doctor_visits_archive <- doctor_visits_archive_raw %>%
-        rename(dr_visits = value) %>%
-        drop_na() %>%
-        as_epi_archive(compactify = TRUE)
-      # filter to versions at the end of the week (when we'd be doing the sum)
-      doctor_visits_archive$DT %<>% filter(wday(version, week_start = 7) == 7)
-      doctor_visits_weekly_archive <- doctor_visits_archive %>%
-        daily_to_weekly_archive(agg_columns = "dr_visits")
-      doctor_visits_weekly_archive <- doctor_visits_weekly_archive$DT %>%
-        as_epi_archive(compactify = TRUE)
-      doctor_visits_weekly_archive
-    }
-  ),
-  tar_target(
-    name = nwss_coarse,
-    command = {
-      files <- file.info(list.files(here::here("aux_data/nwss_covid_data/"), full.names = TRUE))
-      most_recent <- rownames(files)[which.max(files$mtime)]
-      nwss <- readr::read_csv(most_recent) %>%
-        rename(value = state_med_conc) %>%
-        arrange(geo_value, time_value)
-      state_code <- readr::read_csv(here::here("aux_data", "flusion_data", "state_codes_table.csv"), show_col_types = FALSE)
-      hhs_codes <- readr::read_csv(here::here("aux_data", "flusion_data", "state_code_hhs_table.csv"), show_col_types = FALSE)
-      state_to_hhs <- hhs_codes %>%
-        left_join(state_code, by = "state_code") %>%
-        select(hhs_region = hhs, geo_value = state_id)
-      nwss %<>%
-        add_pop_and_density() %>%
-        drop_na() %>%
-        select(-agg_level, -year, -agg_level, -population, -density)
-      pop_data <- gen_pop_and_density_data()
-      nwss_hhs_region <-
-        nwss %>%
-        left_join(state_to_hhs, by = "geo_value") %>%
-        mutate(year = year(time_value)) %>%
-        left_join(pop_data, by = join_by(geo_value, year)) %>%
-        select(-year, density) %>%
-        group_by(time_value, hhs_region) %>%
-        summarize(
-          value = sum(value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
-          activity_level = sum(activity_level * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
-          region_value = mean(region_value * population) / sum(population, na.rm = TRUE),
-          national_value = sum(national_value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
-          .groups = "drop"
-        ) %>%
-        mutate(agg_level = "hhs_region", hhs_region = as.character(hhs_region)) %>%
-        rename(geo_value = hhs_region)
-      nwss %>%
-        mutate(agg_level = "state") %>%
-        bind_rows(nwss_hhs_region) %>%
-        select(geo_value, time_value, nwss = value, nwss_region = region_value, nwss_national = national_value) %>%
-        mutate(time_value = time_value - 3, version = time_value) %>%
-        arrange(geo_value, time_value) %>%
-        as_epi_archive(compactify = TRUE)
-    }
-  ),
-  tar_target(
-    name = hhs_region,
-    command = {
-      hhs_region <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_code_hhs_table.csv")
-      state_id <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_codes_table.csv")
-      hhs_region %>%
-        left_join(state_id, by = "state_code") %>%
-        select(hhs_region = hhs, geo_value = state_id) %>%
-        mutate(hhs_region = as.character(hhs_region))
-    }
-  ),
-  tar_target(
-    name = joined_archive_data,
-    command = {
-      # reformt hhs_archive, remove data spotty locations
-      joined_archive_data <- hhs_archive_data$DT %>%
-        select(geo_value, time_value, value, version) %>%
-        rename("hhs" := value) %>%
-        as_epi_archive(
-          compactify = TRUE
-        )
-      # drop aggregated geo_values
-      nwss_coarse_state <- nwss_coarse$DT %>%
-        filter(grepl("[a-z]{2}", geo_value)) %>%
-        as_epi_archive()
-      nssp_archive_state <- nssp_archive$DT %>%
-        filter(grepl("[a-z]{2}", geo_value)) %>%
-        as_epi_archive()
-      google_symptoms_archive_state <- google_symptoms_archive$DT %>%
-        filter(grepl("[a-z]{2}", geo_value)) %>%
-        mutate(time_value = as.Date(time_value)) %>%
-        as_epi_archive()
-      joined_archive_data <- joined_archive_data$DT %>%
-        add_hhs_region_sum(hhs_region) %>%
-        as_epi_archive() %>%
-        epix_merge(nwss_coarse_state, sync = "locf") %>%
-        epix_merge(doctor_visits_weekly_archive, sync = "locf") %>%
-        epix_merge(nssp_archive_state, sync = "locf") %>%
-        epix_merge(google_symptoms_archive_state, sync = "locf")
-      joined_archive_data$DT %<>% filter(!geo_value %in% c("as", "pr", "vi", "gu", "mp"))
-      slide_forecaster(
-        epi_archive = joined_archive_data,
-        outcome = "hhs",
-        ahead = 0,
-        forecaster = dummy_forecaster,
-        n_training_pad = 30L,
-        forecaster_args = list(),
-        forecaster_args_names = list(),
-        ref_time_values = ref_time_values,
-        start_date = start_date,
-        end_date = end_date,
-        date_range_step_size = date_step,
-        cache_key = "joined_archive_data"
-      )
-      joined_archive_data
-    }
-  )
-)
-
-
-forecasts_and_scores <- make_forecasts_and_scores()
-
-ensembles_and_scores <- make_ensembles_and_scores()
-external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
-project_path <- Sys.getenv("TAR_PROJECT", "")
-external_names_and_scores <- make_external_names_and_scores()
-
-
-rlang::list2(
-  list(
-    tar_target(
-      name = forecaster_parameter_combinations,
-      command = {
-        forecaster_parameter_combinations_
-      },
-      priority = 0.99
     ),
     tar_target(
-      name = ensemble_forecasters,
+      name = hosp_admissions_archive_raw,
       command = {
-        ensemble_parameter_combinations_
-      },
-      priority = 0.99
+        # this data set is not worth the effort
+      }
+    ),
+    tar_target(
+      name = google_symptoms_archive,
+      command = {
+        used_searches <- c(4, 5)
+        # not using actual versions here because the only revision behavior is the
+        # source going down completely, which means we're actually just comparing
+        # with the version without this source
+        all_of_them <- lapply(used_searches, \(search_name) {
+          google_symptoms_state_archive <- pub_covidcast(
+            source = "google-symptoms",
+            signal = glue::glue("s0{search_name}_smoothed_search"),
+            time_type = "day",
+            geo_type = "state",
+            geo_values = "*"
+          )
+          google_symptoms_hhs_archive <- pub_covidcast(
+            source = "google-symptoms",
+            signal = glue::glue("s0{search_name}_smoothed_search"),
+            time_type = "day",
+            geo_type = "hhs",
+            geo_values = "*"
+          )
+          google_symptoms_archive_min <-
+            google_symptoms_state_archive %>%
+            bind_rows(google_symptoms_hhs_archive) %>%
+            select(geo_value, time_value, value) %>%
+            daily_to_weekly() %>%
+            mutate(version = time_value) %>%
+            as_epi_archive(compactify = TRUE)
+          google_symptoms_archive_min$DT %>%
+            filter(!is.na(value)) %>%
+            relocate(geo_value, time_value, version, value) %>%
+            as_epi_archive(compactify = TRUE)
+        })
+        all_of_them[[1]]$DT %<>% rename(google_symptoms_4_bronchitis = value)
+        all_of_them[[2]]$DT %<>% rename(google_symptoms_5_ageusia = value)
+        google_symptoms_archive <- epix_merge(all_of_them[[1]], all_of_them[[2]])
+        google_symptoms_archive <- google_symptoms_archive$DT %>%
+          mutate(google_symptoms = google_symptoms_4_bronchitis + google_symptoms_5_ageusia) %>%
+          as_epi_archive(compactify = TRUE)
+        # not just using dplyr to allow for na.rm
+        google_symptoms_archive$DT$google_symptoms <-
+          rowSums(google_symptoms_archive$DT[, c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia")],
+            na.rm = TRUE
+          )
+        pre_pipeline <- google_symptoms_archive %>%
+          epix_as_of(as.Date("2023-10-04")) %>%
+          mutate(source = "none")
+        colnames <- c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia", "google_symptoms")
+        for (colname in colnames) {
+          learned_params <- calculate_whitening_params(pre_pipeline, colname = colname)
+          google_symptoms_archive$DT %<>% data_whitening(colname = colname, learned_params)
+        }
+        google_symptoms_archive$DT %>%
+          select(-starts_with("source")) %>%
+          as_epi_archive(compactify = TRUE)
+      }
+    ),
+    # TODO: DV takes too long
+    # tar_target(
+    #   name = doctor_visits_archive_raw,
+    #   command = {
+    #     years <- seq(from = 0, to = 00040000, by = 00010000)
+    #     all_of_them <- lapply(years, \(year) {
+    #       time_values1 <- epidatr::epirange(20200102 + year, 20200601 + year)
+    #       time_values2 <- epidatr::epirange(20200602 + year, 20210101 + year)
+    #       dr_visits1 <- pub_covidcast(
+    #         source = "doctor-visits",
+    #         signal = "smoothed_cli",
+    #         time_type = "day",
+    #         time_values = time_values1,
+    #         geo_type = "state",
+    #         geo_values = "*",
+    #         issues = "*"
+    #       )
+    #       dr_visits2 <- pub_covidcast(
+    #         source = "doctor-visits",
+    #         signal = "smoothed_cli",
+    #         time_type = "day",
+    #         time_values = time_values2,
+    #         geo_type = "state",
+    #         geo_values = "*",
+    #         issues = "*"
+    #       )
+    #       bind_rows(
+    #         dr_visits1,
+    #         dr_visits2
+    #       ) %>%
+    #         select(
+    #           geo_value, time_value, issue, value
+    #         )
+    #     })
+    #     all_of_them %>%
+    #       bind_rows()
+    #   }
+    # ),
+    # tar_target(
+    #   name = doctor_visits_weekly_archive,
+    #   command = {
+    #     # compactify to remove reduntant issues
+    #     doctor_visits_archive <- doctor_visits_archive_raw %>%
+    #       rename(dr_visits = value) %>%
+    #       drop_na() %>%
+    #       as_epi_archive(compactify = TRUE)
+    #     # filter to versions at the end of the week (when we'd be doing the sum)
+    #     doctor_visits_archive$DT %<>% filter(wday(version, week_start = 7) == 7)
+    #     doctor_visits_weekly_archive <- doctor_visits_archive %>%
+    #       daily_to_weekly_archive(agg_columns = "dr_visits")
+    #     doctor_visits_weekly_archive <- doctor_visits_weekly_archive$DT %>%
+    #       as_epi_archive(compactify = TRUE)
+    #     doctor_visits_weekly_archive
+    #   }
+    # ),
+    tar_target(
+      name = nwss_coarse,
+      command = {
+        files <- file.info(list.files(here::here("aux_data/nwss_covid_data/"), full.names = TRUE))
+        most_recent <- rownames(files)[which.max(files$mtime)]
+        nwss <- readr::read_csv(most_recent) %>%
+          rename(value = state_med_conc) %>%
+          arrange(geo_value, time_value)
+        state_code <- readr::read_csv(here::here("aux_data", "flusion_data", "state_codes_table.csv"), show_col_types = FALSE)
+        hhs_codes <- readr::read_csv(here::here("aux_data", "flusion_data", "state_code_hhs_table.csv"), show_col_types = FALSE)
+        state_to_hhs <- hhs_codes %>%
+          left_join(state_code, by = "state_code") %>%
+          select(hhs_region = hhs, geo_value = state_id)
+        nwss %<>%
+          add_pop_and_density() %>%
+          drop_na() %>%
+          select(-agg_level, -year, -agg_level, -population, -density)
+        pop_data <- gen_pop_and_density_data()
+        nwss_hhs_region <-
+          nwss %>%
+          left_join(state_to_hhs, by = "geo_value") %>%
+          mutate(year = year(time_value)) %>%
+          left_join(pop_data, by = join_by(geo_value, year)) %>%
+          select(-year, density) %>%
+          group_by(time_value, hhs_region) %>%
+          summarize(
+            value = sum(value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
+            activity_level = sum(activity_level * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
+            region_value = mean(region_value * population) / sum(population, na.rm = TRUE),
+            national_value = sum(national_value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
+            .groups = "drop"
+          ) %>%
+          mutate(agg_level = "hhs_region", hhs_region = as.character(hhs_region)) %>%
+          rename(geo_value = hhs_region)
+        nwss %>%
+          mutate(agg_level = "state") %>%
+          bind_rows(nwss_hhs_region) %>%
+          select(geo_value, time_value, nwss = value, nwss_region = region_value, nwss_national = national_value) %>%
+          mutate(time_value = time_value - 3, version = time_value) %>%
+          arrange(geo_value, time_value) %>%
+          as_epi_archive(compactify = TRUE)
+      }
+    ),
+    tar_target(
+      name = hhs_region,
+      command = {
+        hhs_region <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_code_hhs_table.csv")
+        state_id <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_codes_table.csv")
+        hhs_region %>%
+          left_join(state_id, by = "state_code") %>%
+          select(hhs_region = hhs, geo_value = state_id) %>%
+          mutate(hhs_region = as.character(hhs_region))
+      }
+    ),
+    tar_target(
+      name = joined_archive_data,
+      command = {
+        # reformt hhs_archive, remove data spotty locations
+        joined_archive_data <- hhs_archive$DT %>%
+          select(geo_value, time_value, value, version) %>%
+          rename("hhs" := value) %>%
+          as_epi_archive(
+            compactify = TRUE
+          )
+        # drop aggregated geo_values
+        nwss_coarse_state <- nwss_coarse$DT %>%
+          filter(grepl("[a-z]{2}", geo_value)) %>%
+          as_epi_archive()
+        nssp_archive_state <- nssp_archive$DT %>%
+          filter(grepl("[a-z]{2}", geo_value)) %>%
+          as_epi_archive()
+        google_symptoms_archive_state <- google_symptoms_archive$DT %>%
+          filter(grepl("[a-z]{2}", geo_value)) %>%
+          mutate(time_value = as.Date(time_value)) %>%
+          as_epi_archive()
+        joined_archive_data <- joined_archive_data$DT %>%
+          add_hhs_region_sum(hhs_region) %>%
+          as_epi_archive() %>%
+          epix_merge(nwss_coarse_state, sync = "locf") %>%
+          # TODO: Maybe bring these back
+          # epix_merge(doctor_visits_weekly_archive, sync = "locf") %>%
+          epix_merge(nssp_archive_state, sync = "locf") %>%
+          epix_merge(google_symptoms_archive_state, sync = "locf")
+        joined_archive_data$DT %<>% filter(!geo_value %in% c("as", "pr", "vi", "gu", "mp"))
+        slide_forecaster(
+          epi_archive = joined_archive_data,
+          outcome = "hhs",
+          ahead = 0,
+          forecaster = dummy_forecaster,
+          n_training_pad = 30L,
+          forecaster_args = list(),
+          forecaster_args_names = list(),
+          ref_time_values = ref_time_values,
+          start_date = start_date,
+          end_date = end_date,
+          date_range_step_size = date_step,
+          cache_key = "joined_archive_data"
+        )
+        joined_archive_data
+      }
     )
   ),
+  make_forecasts_and_scores(),
+  make_ensembles_and_scores(),
+  # make_external_names_and_scores(),
   tar_target(
-    name = aheads,
+    external_forecasts,
     command = {
-      c(7, 14, 21, 28)
+      s3load("flusight_forecasts_2023.rds", bucket = "forecasting-team-data")
+      flusight_forecasts_2023
     }
   ),
-  nhsn_map,
-  data_targets,
-  forecasts_and_scores,
-  ensembles_and_scores,
-  external_names_and_scores
+  tar_target(
+    external_scores,
+    command = {
+      actual_eval_data <- hhs_evaluation_data %>%
+        select(-population) %>%
+        mutate(target_end_date = target_end_date - 2)
+      cmu_forecast_dates <- ref_time_values_ + 3
+      filtered_forecasts <- external_forecasts %>%
+        filter(forecast_date %in% cmu_forecast_dates) %>%
+        rename(model = forecaster)
+      evaluate_predictions(predictions_cards = filtered_forecasts, truth_data = actual_eval_data) %>%
+        rename(forecaster = model)
+    }
+  ),
+  # TODO: Score here also.
+  # make_ensembles_and_scores()
+  tar_target(
+    joined_forecasts,
+    command = {
+      delphi_forecasts %>% bind_rows(external_forecasts)
+    }
+  ),
+  tar_target(
+    joined_scores,
+    command = {
+      delphi_scores %>% bind_rows(external_scores)
+    }
+  ),
+  tar_target(
+    family_notebooks,
+    command = {
+      actual_eval_data <- hhs_evaluation_data %>%
+        select(-population) %>%
+        mutate(target_end_date = target_end_date + 3)
+      delphi_forecaster_subset <- forecaster_parameter_combinations[[forecaster_families]]$id
+      outside_forecaster_subset <- c("COVIDhub-baseline", "COVIDhub-ensemble")
+      filtered_forecasts <- joined_forecasts %>%
+        filter(forecaster %in% c(delphi_forecaster_subset, outside_forecaster_subset))
+      filtered_scores <- joined_scores %>%
+        filter(forecaster %in% c(delphi_forecaster_subset, outside_forecaster_subset))
+      forecaster_parameters <- forecaster_parameter_combinations[[forecaster_families]]
+      rmarkdown::render(
+        "scripts/reports/comparison-notebook.Rmd",
+        params = list(
+          forecaster_parameters = forecaster_parameters,
+          forecaster_family = forecaster_families,
+          forecasts = filtered_forecasts,
+          scores = filtered_scores,
+          truth_data = actual_eval_data,
+          disease = "covid"
+        ),
+        output_file = here::here(reports_dir, paste0("covid-notebook-", forecaster_families, ".html"))
+      )
+    },
+    pattern = map(forecaster_families)
+  ),
 )

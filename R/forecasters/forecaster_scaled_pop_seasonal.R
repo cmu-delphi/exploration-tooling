@@ -105,7 +105,6 @@ scaled_pop_seasonal <- function(epi_data,
 
   # end of the copypasta
 
-
   # get the seasonal features
   if (seasonal_method %in% c("flu", "covid")) {
     if (seasonal_method == "flu") {

@@ -246,11 +246,10 @@ filter_forecast_geos <- function(forecasts, truth_data) {
         truth_data %>% group_by(geo_value) %>% summarize(pp = max(value, na.rm = TRUE)),
         by = "geo_value"
       ) %>%
-    filter(value >= pp) %>%
-    pull(geo_value)
+      filter(value >= pp) %>%
+      pull(geo_value)
   ) %>% unique()
 }
-
 
 #' Write a submission file. pred is assumed to be in the correct submission format.
 write_submission_file <- function(pred, forecast_reference_date, submission_directory) {
@@ -304,16 +303,10 @@ update_site <- function() {
     file_parts <- str_split(fs::path_ext_remove(file_name), "_", simplify = TRUE)
     date <- file_parts[1]
     disease <- file_parts[2]
-    report_type <- file_parts[3]
 
-    report_link <- sprintf(
-      "- [%s Forecasts %s](%s)",
-      str_to_title(disease),
-      date,
-      file_name
-    )
+    report_link <- sprintf("- [%s Forecasts %s](%s)", str_to_title(disease), date, file_name)
 
-    # Insert into Production Reports section
+    # Insert into Production Reports section, skipping a line
     prod_reports_index <- which(grepl("## Production Reports", report_md_content)) + 1
     report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
   }
