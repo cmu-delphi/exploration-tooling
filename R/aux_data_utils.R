@@ -573,3 +573,32 @@ gen_ili_data <- function(default_day_of_week = 1) {
     rename(hhs = value) %>%
     as_epi_archive(compactify = TRUE)
 }
+
+
+process_nhsn_data <- function(raw_nhsn_data) {
+  epi_data <- raw_nhsn_data %>%
+    mutate(
+      epiweek = epiweek(weekendingdate),
+      epiyear = epiyear(weekendingdate)
+    ) %>%
+    left_join(
+      (.) %>%
+        distinct(epiweek, epiyear) %>%
+        mutate(
+          season = convert_epiweek_to_season(epiyear, epiweek),
+          season_week = convert_epiweek_to_season_week(epiyear, epiweek)
+        ),
+      by = c("epiweek", "epiyear")
+    ) %>%
+    mutate(
+      geo_value = tolower(jurisdiction),
+      time_value = as.Date(weekendingdate),
+      nhsn_covid = totalconfc19newadm,
+      nhsn_flu = totalconfflunewadm
+    ) %>%
+    select(-weekendingdate, -jurisdiction, -starts_with("totalconf")) %>%
+    pivot_longer(cols = starts_with("nhsn"), names_to = "disease") %>%
+    filter(!is.na(value)) %>%
+    mutate(version = Sys.Date()) %>%
+    relocate(geo_value, disease, time_value, version)
+}

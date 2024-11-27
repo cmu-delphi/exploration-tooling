@@ -59,9 +59,14 @@ rlang::list2(
     tar_target(
       nhsn_latest_data,
       command = {
-        nhsn_archive <- s3readRDS(object = "nhsn_archive.rds", bucket = "forecasting-team-data")
-        nhsn_archive %>%
-          epix_as_of(nhsn_archive$versions_end) %>%
+        if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
+          # download from the preliminary data source from Wednesday to Friday
+          most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/mpgq-jmmr.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
+        } else {
+          most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
+        }
+        most_recent_result %>%
+          process_nhsn_data() %>%
           filter(disease == "nhsn_covid") %>%
           select(-disease) %>%
           filter(geo_value %nin% insufficient_data_geos)
