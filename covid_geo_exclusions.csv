@@ -6,6 +6,18 @@ forecast_date,forecaster,geo_value,weight
 "2024-10-01", "climate_base", "all", 2
 "2024-10-01", "climate_geo_agged", "all", 0.5
 "2024-10-01", "climate_quantile_extrapolated", "all", 0
+# nov 27th
+"2024-11-27", "all", "mp", 0
+"2024-11-27", "linear", "all", 3
+"2024-11-27", "linearlog", "all", 0
+"2024-11-27", "climate_base", "all", 2
+"2024-11-27", "climate_geo_agged", "all", 0.5
+"2024-11-27", "climate_quantile_extrapolated", "all", 0
+"2024-11-27", "climate_base", "fl", 1
+"2024-11-27", "climate_base", "de", 0.5
+"2024-11-27", "climate_base", "mi", 0.5
+"2024-11-27", "linear", "az", 0
+"2024-11-27", "linear", "ma", 0
 ################################################
 # minor blip, the uploaded data was wildly wrong
 # this does mean the forecasts will probably be more accurate
