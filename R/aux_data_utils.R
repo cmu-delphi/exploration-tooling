@@ -257,8 +257,8 @@ add_hhs_region_sum <- function(archive_data_raw, hhs_region_table) {
     as_tibble() %>%
     group_by(across(c(setdiff(data.table::key(archive_data_raw), "geo_value"), "hhs_region"))) %>%
     reframe(hhs_region = sum(hhs, na.rm = TRUE), across(everything(), ~.x)) %>%
-    relocate(version, time_value, geo_value) %>%
-    drop_na()
+    relocate(version, time_value, geo_value)
+
   archive_data_raw %<>%
     filter(agg_level != "state") %>%
     mutate(hhs_region = hhs) %>%

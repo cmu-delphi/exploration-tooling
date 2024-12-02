@@ -234,6 +234,12 @@ scaled_pop_seasonal <- function(epi_data,
     epi_data <- epi_data %>% filter(time_value %in% unlist(date_ranges))
   }
 
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
+  }
+
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {
