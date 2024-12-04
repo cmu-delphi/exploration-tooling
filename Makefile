@@ -29,7 +29,7 @@ submit-covid:
 	git push delphi main; \
 	gh pr create --fill --repo cdcgov/covid19-forecast-hub
 
-submit-flu-dry:
+submit-flu:
 	current_date=$(date +%D); \
 	cd ../FluSight-forecast-hub; \
 	git pull delphi main; \

@@ -125,18 +125,27 @@ daily_to_weekly_archive <- function(epi_arch,
     as_epi_archive(compactify = TRUE)
 }
 
-health_data <- map(forecast_dates, get_health_data)
-health_data %>% map(bind_rows(version = ))
-compactified_health_data <- mapply(\(x, y) mutate(x, version = y),
-       health_data,
+health_data_covid <- map(forecast_dates, get_health_data)
+compactified_health_data_covid <- mapply(\(x, y) mutate(x, version = y),
+       health_data_covid,
        forecast_dates,
        SIMPLIFY = FALSE) %>%
-  bind_rows() %>% filter(!is.na(hhs)) %>%
+  bind_rows() %>%
+  filter(!is.na(hhs)) %>%
   as_epi_archive(compactify = TRUE)
-weekly_archive <- compactified_health_data %>%
+weekly_archive_covid <- compactified_health_data_covid %>%
   daily_to_weekly_archive(agg_columns = "hhs")
 
 
 
 
-weekly_archive
+health_data_flu <- map(forecast_dates, \(x) get_health_data(x, "flu"))
+compactified_health_data_flu <- mapply(\(x, y) mutate(x, version = y),
+       health_data_flu,
+       forecast_dates,
+       SIMPLIFY = FALSE) %>%
+  bind_rows() %>%
+  filter(!is.na(hhs)) %>%
+  as_epi_archive(compactify = TRUE)
+weekly_archive_flu <- compactified_health_data_flu %>%
+  daily_to_weekly_archive(agg_columns = "hhs")

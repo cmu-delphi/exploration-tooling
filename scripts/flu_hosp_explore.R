@@ -789,9 +789,21 @@ rlang::list2(
     }
   ),
   tar_target(
+    rescaled_delphi_forecasts,
+    command = {
+      delphi_forecasts %>%
+        left_join(
+          hhs_evaluation_data %>% distinct(geo_value, population),
+          by = "geo_value"
+        ) %>%
+        mutate(prediction = prediction * population / 10L**5) %>%
+        select(-population)
+    }
+  ),
+  tar_target(
     joined_forecasts,
     command = {
-      delphi_forecasts %>% bind_rows(external_forecasts)
+      rescaled_delphi_forecasts %>% bind_rows(external_forecasts)
     }
   ),
   tar_target(

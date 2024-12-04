@@ -1,6 +1,6 @@
 ---
-title: Evaluation of Hospitalization Forecasters 2024-2025
-date: "`r format(Sys.time(), '%d %B %Y')`"
+title: "`r params$forecaster_family`" Evaluation of Hospitalization Forecasters 2024-2025
+date: "compiled on `r format(Sys.time(), '%d %B %Y')`"
 output:
   html_document:
     code_folding: hide

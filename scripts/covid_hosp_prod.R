@@ -108,8 +108,9 @@ rlang::list2(
       name = ensemble_mixture_res,
       command = {
         forecast_res %>%
-          ensemble_linear_climate(aheads, other_weights = geo_forecasters_weights) %>%
-          filter(geo_value %nin% geo_exclusions) %>% ungroup()
+          ensemble_linear_climate(aheads, other_weights = geo_forecasters_weights, max_climate_ahead_weight = 0.6, max_climate_quantile_weight = 0.6) %>%
+          filter(geo_value %nin% geo_exclusions) %>%
+          ungroup()
       },
     ),
     tar_target(
