@@ -27,7 +27,7 @@ submit-covid:
 	git add model-output/CMU-TimeSeries/*; \
 	git commit -am "CMU-Delphi submission $(date +%D)"; \
 	git push delphi main; \
-	gh pr create --fill --repo cdcgov/covid19-forecast-hub
+	gh pr create --title "CMU-TimeSeries $(date +%D)" --repo cdcgov/covid19-forecast-hub
 
 submit-flu:
 	current_date=$(date +%D); \
@@ -36,7 +36,7 @@ submit-flu:
 	git add model-output/CMU-TimeSeries/*; \
 	git commit -am "CMU-Delphi submission $(date +%D)"; \
 	git push delphi; \
-	gh pr create --fill --repo cdcepi/FluSight-forecast-hub
+	gh pr create --title "CMU-TimeSeries $(date +%D)" --repo cdcepi/FluSight-forecast-hub
 
 submit-covid-dry:
 	current_date=$(date +%D); \
@@ -45,7 +45,7 @@ submit-covid-dry:
 	git add model-output/CMU-TimeSeries/*; \
 	git commit -am "CMU-Delphi submission $(date +%D)"; \
 	git push delphi main; \
-	gh pr create --fill --repo cdcgov/covid19-forecast-hub --dry-run
+	gh pr create --title "CMU-TimeSeries $(date +%D)" --repo cdcgov/covid19-forecast-hub --dry-run
 
 submit-flu-dry:
 	current_date=$(date +%D); \
@@ -54,7 +54,7 @@ submit-flu-dry:
 	git add model-output/CMU-TimeSeries/*; \
 	git commit -am "CMU-Delphi submission $(date +%D)"; \
 	git push delphi; \
-	gh pr create --fill --repo cdcepi/FluSight-forecast-hub --dry-run
+	gh pr create --title "CMU-TimeSeries $(date +%D)" --repo cdcepi/FluSight-forecast-hub --dry-run
 
 submit: submit-covid submit-flu
 
