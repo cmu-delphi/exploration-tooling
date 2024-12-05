@@ -347,6 +347,6 @@ climate_median <- function(epi_data, target, ahead, window_size = 3, recent_wind
     mutate(epiweek = epiweek(time_value)) %>%
     left_join(
       moving_medians,
-      by = c("epiweek", key_colnames(rel_values, exclude = "time_value"))
+      by = c("epiweek", key_colnames(epi_data, exclude = "time_value"))
     )
 }
