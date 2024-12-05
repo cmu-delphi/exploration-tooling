@@ -260,7 +260,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
         c(0, 7, 14, 21),
         c(0, 7)
       ),
-      seasonal_method = c("flu", "indicator"),
+      seasonal_method = c("flu", "indicator", "climatological"),
       pop_scaling = FALSE,
       filter_source = "nhsn",
       filter_agg_level = "state",
@@ -792,6 +792,7 @@ rlang::list2(
     rescaled_delphi_forecasts,
     command = {
       delphi_forecasts %>%
+        mutate(forecast_date = ceiling_date(forecast_date, "weeks", week_start = 6)) %>%
         left_join(
           hhs_evaluation_data %>% distinct(geo_value, population),
           by = "geo_value"

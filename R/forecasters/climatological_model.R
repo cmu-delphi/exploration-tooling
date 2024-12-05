@@ -2,10 +2,6 @@ climatological_model <- function(epi_data, ahead, window_size = 3, recent_window
   quantile_method <- arg_match(quantile_method)
   forecast_date <- attributes(epi_data)$metadata$as_of
   forecast_week <- epiweek(forecast_date)
-  last_week_data <- epi_data %>%
-    filter(time_value > "2024-08-01") %>%
-    pull(epiweek) %>%
-    max()
   last_date_data <- epi_data %>%
     pull(time_value) %>%
     max()
@@ -33,7 +29,6 @@ climatological_model <- function(epi_data, ahead, window_size = 3, recent_window
     filtered %<>%
       group_by(geo_value)
   }
-  filtered %>% filter(geo_value == "usa")
   naive_preds <- filtered %>%
     reframe(
       enframe(

@@ -44,7 +44,7 @@ scaled_pop_seasonal <- function(epi_data,
                                 scale_method = c("quantile", "std", "none"),
                                 center_method = c("median", "mean"),
                                 nonlin_method = c("quart_root", "none"),
-                                seasonal_method = c("none", "flu", "covid", "indicator", "window"),
+                                seasonal_method = c("none", "flu", "covid", "indicator", "window", "climatological"),
                                 trainer = parsnip::linear_reg(),
                                 quantile_levels = covidhub_probs(),
                                 filter_source = "",
@@ -232,6 +232,8 @@ scaled_pop_seasonal <- function(epi_data,
       unlist() %>%
       as.Date()
     epi_data <- epi_data %>% filter(time_value %in% unlist(date_ranges))
+  } else if (seasonal_method == "climatological") {
+    epi_data <- epi_data %>% climate_median(target = outcome, ahead = ahead, scale_rate = pop_scaling)
   }
 
   if (drop_non_seasons) {
@@ -262,6 +264,8 @@ scaled_pop_seasonal <- function(epi_data,
     preproc %<>% add_role(PC1, new_role = "predictor")
   } else if (seasonal_method == "covid") {
     preproc %<>% add_role(PC1, new_role = "predictor")
+  } else if (seasonal_method == "climatological") {
+    preproc %<>% add_role(pooled_climate_median, climate_median, new_role = "predictor")
   }
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
 

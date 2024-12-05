@@ -283,3 +283,70 @@ data_coloring <- function(epi_data, colname, learned_params, nonlin_method = c("
   res %>%
     select(-ends_with("_center"), -ends_with("_scale"))
 }
+
+
+mod_dist <- function(a, b, m) {
+  pmin(as.integer(a - b) %% m, as.integer(b - a) %% m)
+}
+
+#' adds a column giving the median value for a window around a given point in time, and around the time `ahead` days ahead of it
+#' @param ahead measured in days, regardless of whether we're forecasting weekly or daily data
+#' @param epi_data expected columns include
+climate_median <- function(epi_data, target, ahead, window_size = 3, recent_window = 3, probs = covidhub_probs(), scale_rate = TRUE) {
+  # epi_data <- tar_read(joined_archive_data) %>% epix_as_of(as.Date("2023-11-29"))
+  as_of <- attributes(epi_data)$metadata$as_of
+  last_date_data <- epi_data %>%
+    pull(time_value) %>%
+    max()
+  filtered <-
+    epi_data %>%
+    filter(if_any(all_of(target), \(x) !is.na(x))) %>%
+    filter((season != "2020/21") & (season != "2021/22") & (season != "2019/20"))
+  if (!scale_rate) {
+    # add the
+    filtered %<>% mutate(across(all_of(target), \(x) x / population * 1e5))
+  }
+  moving_medians <- lapply(1:53, function(target_week) {
+    rel_values <- filtered %>%
+      filter(
+        (mod_dist(epiweek(time_value), target_week + ahead, 53) <= window_size) |
+          (mod_dist(epiweek(time_value), target_week, 53) <= recent_window)
+      )
+    pooled_median <- rel_values %>%
+      group_by(across(all_of(key_colnames(rel_values, exclude = c("geo_value", "time_value"))))) %>%
+      summarize(
+        across(
+          all_of(target),
+          \(x) median(x, na.rm = TRUE),
+          .names = "pooled_climate_median"
+        ),
+        .groups = "drop"
+      )
+    rel_values %>%
+      group_by(
+        across(
+          all_of(key_colnames(rel_values, exclude = "time_value"))
+        )
+      ) %>%
+      summarize(
+        across(
+          all_of(target),
+          \(x) median(x, na.rm = TRUE),
+          .names = "climate_median"
+        ),
+        .groups = "drop"
+      ) %>%
+      mutate(epiweek = target_week) %>%
+      left_join(
+        pooled_median,
+        by = key_colnames(rel_values, exclude = c("time_value", "geo_value"))
+      )
+  })
+  moving_medians <- moving_medians %>% bind_rows()
+  epi_data %>%
+    mutate(epiweek = epiweek(time_value)) %>%
+    left_join(
+      moving_medians,
+      by = c("epiweek", key_colnames(rel_values, exclude = "time_value"))
+    )
+}
