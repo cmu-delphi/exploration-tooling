@@ -260,8 +260,9 @@ forecaster_parameter_combinations_ <- rlang::list2(
         c(0, 7, 14, 21),
         c(0, 7)
       ),
-      seasonal_method = c("flu", "indicator", "climatological"),
+      seasonal_method = list("flu", "indicator", "climatological"),
       pop_scaling = FALSE,
+      train_residual = FALSE,
       filter_source = "nhsn",
       filter_agg_level = "state",
       drop_non_seasons = c(TRUE, FALSE),
@@ -276,9 +277,10 @@ forecaster_parameter_combinations_ <- rlang::list2(
         c(0, 7, 14, 21),
         c(0, 7)
       ),
-      seasonal_method = "window",
+      seasonal_method = list("window", c("window", "flu"), c("window", "climatological")),
       pop_scaling = FALSE,
-      filter_source = "nhsn",
+      train_residual = c(FALSE, TRUE),
+      filter_source = c("", "nhsn"),
       filter_agg_level = "state",
       drop_non_seasons = FALSE,
       n_training = Inf,
@@ -334,10 +336,6 @@ forecaster_parameter_combinations_ <- rlang::list2(
   map(add_id)
 # scale_method and filter_source being empty are exclusive
 # also population and density are exclusive
-
-forecaster_parameter_combinations_$scaled_pop_season %>%
-  slice(1) %>%
-  select(id)
 
 # Make sure all ids are unique.
 stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(forecaster_parameter_combinations_$id))

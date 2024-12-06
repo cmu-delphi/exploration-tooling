@@ -45,6 +45,9 @@ scaled_pop_seasonal <- function(epi_data,
                                 center_method = c("median", "mean", "none"),
                                 nonlin_method = c("quart_root", "none"),
                                 seasonal_method = c("none", "flu", "covid", "indicator", "window", "climatological"),
+                                season_forward_window = 3,
+                                season_backward_window = 5,
+                                train_residual = FALSE,
                                 trainer = parsnip::linear_reg(),
                                 quantile_levels = covidhub_probs(),
                                 filter_source = "",
@@ -53,7 +56,12 @@ scaled_pop_seasonal <- function(epi_data,
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
-  seasonal_method <- arg_match(seasonal_method)
+  if (typeof(seasonal_method) == "list") {
+    seasonal_method <- seasonal_method[[1]]
+  }
+  if (all(seasonal_method == c("none", "flu", "covid", "indicator", "window", "climatological"))) {
+    seasonal_method <- "none"
+  }
   # perform any preprocessing not supported by epipredict
   #
   # this is for the case where there are multiple sources in the same column
@@ -105,107 +113,6 @@ scaled_pop_seasonal <- function(epi_data,
 
   # end of the copypasta
 
-  # get the seasonal features
-  if (seasonal_method %in% c("flu", "covid")) {
-    if (seasonal_method == "flu") {
-      cache_file_path <- paste0(
-        "aux_data/seasonal_features/flu",
-        drop_non_seasons,
-        scale_method,
-        center_method,
-        nonlin_method,
-        tar_timestamp(flusion_data_archive),
-        sep = "_"
-      )
-      if (!file.exists(cache_file_path)) {
-        # Whiten the data and get the PCA
-        learned_params <- qs::qread("flu_hosp_explore/objects/flusion_data_archive") %>%
-          epix_as_of(as.Date("2024-03-01")) %>%
-          drop_non_seasons() %>%
-          calculate_whitening_params("hhs", scale_method, center_method, nonlin_method)
-
-        wide <- qs::qread("flu_hosp_explore/objects/flusion_data_archive") %>%
-          epix_as_of(as.Date("2024-03-01")) %>%
-          data_whitening("hhs", learned_params, nonlin_method) %>%
-          select(geo_value, season, source, season_week, hhs) %>%
-          filter(!is.na(season_week), !is.na(hhs)) %>%
-          pivot_wider(names_from = c(geo_value, season, source), values_from = hhs) %>%
-          arrange(season_week) %>%
-          fill(-season_week, .direction = "downup")
-
-        pca <- wide %>%
-          keep(~ !all(near(diff(.x), 0))) %>%
-          arrange(season_week) %>%
-          select(-season_week) %>%
-          as.matrix() %>%
-          prcomp()
-
-        # Using the top 3 PCs, since they all look reasonable
-        seasonal_features <- as_tibble(predict(pca)[, 1:3]) %>% select(PC1)
-        seasonal_features$season_week <- 1:nrow(seasonal_features)
-        qs::qsave(seasonal_features, cache_file_path)
-      } else {
-        seasonal_features <- qs::qread(cache_file_path)
-      }
-      args_list$lags <- c(args_list$lags, 0, 0, 0)
-    }
-    if (seasonal_method == "covid") {
-      cache_file_path <- paste0(
-        "aux_data/seasonal_features/covid",
-        sep = "_"
-      )
-      if (!file.exists(cache_file_path)) {
-        seasonal_data <- pub_covidcast(
-          "hhs", "confirmed_admissions_covid_1d_prop_7dav",
-          geo_type = "state",
-          geo_values = "*",
-          time_type = "day",
-          time_values = epirange(20210801, 20240501)
-        ) %>%
-          select(geo_value, time_value, hosp = value) %>%
-          filter(geo_value %nin% c("as", "pr", "vi", "gu", "mp"))
-        pca <- seasonal_data %>%
-          mutate(
-            epiweek = epiweek(time_value),
-            epiyear = epiyear(time_value)
-          ) %>%
-          left_join(
-            (.) %>%
-              distinct(epiyear, epiweek) %>%
-              mutate(
-                season = convert_epiweek_to_season(epiyear, epiweek),
-                season_week = convert_epiweek_to_season_week(epiyear, epiweek)
-              ),
-            by = c("epiyear", "epiweek")
-          ) %>%
-          group_by(geo_value, season, season_week) %>%
-          summarise(hosp = sum(hosp), .groups = "drop") %>%
-          mutate(hr = case_when(hosp == 0 ~ NA, TRUE ~ hosp)) %>%
-          select(geo_value, season, season_week, hosp) %>%
-          mutate(hosp = hosp^(1 / 4)) |>
-          pivot_wider(names_from = c(geo_value, season), values_from = hosp) |>
-          fill(-season_week, .direction = "downup") %>%
-          select(-season_week) %>%
-          as.matrix() %>%
-          prcomp()
-
-        # Only using the first two, because the third looks like noise
-        seasonal_features <- as_tibble(predict(pca)[, 1])
-        seasonal_features$season_week <- 1:nrow(seasonal_features)
-        qs::qsave(seasonal_features, cache_file_path)
-      } else {
-        seasonal_features <- qs::qread(cache_file_path)
-      }
-      args_list$lags <- c(args_list$lags, 0, 0)
-    }
-
-    # A jank way to account for aheads
-    epi_data <- epi_data %>% left_join(
-      seasonal_features %>% mutate(season_week = shift(season_week, ahead / 7, type = "cyclic")),
-      by = "season_week"
-    )
-  }
-
   # whiten to get the sources on the same scale
   # TODO Jank way to avoid having hhs_region get centered
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
@@ -218,22 +125,48 @@ scaled_pop_seasonal <- function(epi_data,
   learned_params <- calculate_whitening_params(season_data, setdiff(predictors, "hhs_region"), scale_method, center_method, nonlin_method)
   epi_data %<>% data_whitening(setdiff(predictors, "hhs_region"), learned_params, nonlin_method)
 
-  # This method simply filters the training data to similar season weeks in the past
-  if (seasonal_method == "window") {
-    current_season_week <- epi_data %>%
+  # get the seasonal features
+  # first add PCA
+  if (seasonal_method %in% c("flu", "covid")) {
+    epi_data <- compute_pca(epi_data, seasonal_method, ahead, scale_method, center_method, nonlin_method)
+  if (("flu" %in% seasonal_method) || ("covid" %in% seasonal_method)) {
+    epi_data <- compute_pca(epi_data, seasonal_method, ahead, scale_method, center_method, nonlin_method, normalize = train_residual)
+    if (train_residual) {
+      epi_data <- epi_data %>% mutate(across(all_of(outcome), ~ .x - PC1))
+      values_subtracted <- epi_data %>% select(geo_value, source, season_week, value = PC1) %>% distinct(geo_value, source, season_week, .keep_all = TRUE)
+    }
+    args_list$lags <- c(args_list$lags, 0)
+  }
+
+  # then the climatological median
+  if ("climatological" %in% seasonal_method) {
+    epi_data <- epi_data %>%
+      climate_median(target = outcome, ahead = ahead, scale_rate = pop_scaling, normalize = train_residual)
+    if (train_residual) {
+      epi_data <- epi_data %>% mutate(across(all_of(outcome), ~ .x - climate_median))
+      values_subtracted <- epi_data %>% select(geo_value, source, epiweek, value = climate_median) %>% distinct(geo_value, source, epiweek, .keep_all = TRUE)
+      values_subtracted %>% pull(value) %>% abs %>% max
+    }
+  }
+
+
+  # Then filter to weeks around the target in the past
+  if ("window" %in% seasonal_method) {
+    last_data_season_week <- epi_data %>%
       filter(time_value == max(time_value)) %>%
       pull(season_week) %>%
       max()
+    current_season_week <-
+      convert_epiweek_to_season_week(epiyear(epi_as_of(epi_data)), epiweek(epi_as_of(epi_data)))
     date_ranges <- epi_data %>%
-      filter(season_week == current_season_week) %>%
+      filter((season_week == current_season_week) | (season_week == last_data_season_week)) %>%
       pull(time_value) %>%
       unique() %>%
-      map(~ c(.x - 1:5 * 7, .x + 0:3 * 7)) %>%
+      map(~ c(.x - 1:season_backward_window * 7, .x + 0:(ahead + 7 * season_forward_window))) %>%
       unlist() %>%
-      as.Date()
+      as.Date() %>%
+      unique()
     epi_data <- epi_data %>% filter(time_value %in% unlist(date_ranges))
-  } else if (seasonal_method == "climatological") {
-    epi_data <- epi_data %>% climate_median(target = outcome, ahead = ahead, scale_rate = pop_scaling)
   }
 
   if (drop_non_seasons) {
@@ -254,17 +187,19 @@ scaled_pop_seasonal <- function(epi_data,
       by = c("geo_value" = "abbr")
     )
   }
-  if (seasonal_method == "indicator") {
+  if ("indicator" %in% seasonal_method) {
     stopifnot("season_week" %in% names(epi_data))
     preproc %<>%
       # Really jank way of accounting for ahead.
       step_mutate(before_peak = (season_week - (ahead / 7) < 16), role = "predictor") %>%
       step_mutate(after_peak = (season_week - (ahead / 7) > 20), role = "predictor")
-  } else if (seasonal_method == "flu") {
+  }
+  if (!train_residual && ("flu" %in% seasonal_method)) {
     preproc %<>% add_role(PC1, new_role = "predictor")
-  } else if (seasonal_method == "covid") {
+  } else if (!train_residual && ("covid" %in% seasonal_method)) {
     preproc %<>% add_role(PC1, new_role = "predictor")
-  } else if (seasonal_method == "climatological") {
+  }
+  if (!train_residual && ("climatological" %in% seasonal_method)) {
     preproc %<>% add_role(pooled_climate_median, climate_median, new_role = "predictor")
   }
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
@@ -287,6 +222,14 @@ scaled_pop_seasonal <- function(epi_data,
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration
+  #
+  # undo subtraction if we're training on residuals
+  if (train_residual) {
+    pred <- pred %>% mutate(epi_week = epiweek(target_end_date)) %>%
+      left_join(values_subtracted, by = join_by(geo_value, source, epi_week == epiweek)) %>%
+      mutate(value = value.x + value.y) %>% select(geo_value, source, forecast_date, target_end_date, quantile, value)
+  }
+
   # reintroduce color into the value
   pred_final <- pred %>%
     rename({{ outcome }} := value) %>%
