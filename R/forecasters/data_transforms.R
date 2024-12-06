@@ -360,8 +360,8 @@ climate_median <- function(epi_data, target, ahead, window_size = 3, recent_wind
 #' @param filter_time the last day of data to include in the pca computation
 compute_pca <- function(epi_data, disease = "flu", ahead = 0, scale_method = "quantile", center_method = "median", nonlin_method = "quart_root", filter_time = "2320-07-01", normalize = FALSE) {
   used_data <- epi_data %>%
-    select(geo_value, season, source, season_week, hhs) %>%
-    filter(time_value < filter_time)
+    filter(time_value < filter_time) %>%
+    select(geo_value, season, source, season_week, hhs)
   cache_file_path <- paste0(
     "aux_data/seasonal_features/",
     disease[grepl("flu|covid", disease)],
