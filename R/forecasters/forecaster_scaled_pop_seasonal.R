@@ -134,7 +134,7 @@ scaled_pop_seasonal <- function(epi_data,
       values_subtracted <- epi_data %>%
         mutate(epiweek = epiweek(time_value)) %>%
         select(geo_value, source, epiweek, value = PC1) %>%
-        distinct(geo_value, source, season_week, .keep_all = TRUE)
+        distinct(geo_value, source, epiweek, .keep_all = TRUE)
     }
     args_list$lags <- c(args_list$lags, 0)
   }
