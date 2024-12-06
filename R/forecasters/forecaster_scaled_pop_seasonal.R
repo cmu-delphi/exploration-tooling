@@ -127,8 +127,6 @@ scaled_pop_seasonal <- function(epi_data,
 
   # get the seasonal features
   # first add PCA
-  if (seasonal_method %in% c("flu", "covid")) {
-    epi_data <- compute_pca(epi_data, seasonal_method, ahead, scale_method, center_method, nonlin_method)
   if (("flu" %in% seasonal_method) || ("covid" %in% seasonal_method)) {
     epi_data <- compute_pca(epi_data, seasonal_method, ahead, scale_method, center_method, nonlin_method, normalize = train_residual)
     if (train_residual) {
