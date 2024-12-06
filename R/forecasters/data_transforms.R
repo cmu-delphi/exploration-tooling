@@ -146,9 +146,7 @@ extend_ahead <- function(epi_data, ahead) {
     if (is.null(as_of)) {
       as_of <- max_time
     }
-    effective_ahead <- as.integer(
-      as.Date(as_of) - max_time + ahead
-    )
+    effective_ahead <- as.integer(as.Date(as_of) - max_time + ahead)
   } else {
     effective_ahead <- Inf
   }
@@ -181,7 +179,12 @@ get_poly_coefs <- function(values, degree, n_points) {
 
 #' get the mean and median used to whiten epi_data on a per source-geo_value basis
 #' note that we can't just use step_boxcox or step yeo-johnson because it doesn't allow for grouping
-calculate_whitening_params <- function(epi_data, colname, scale_method = c("quantile", "quantile_upper", "std", "none"), center_method = c("median", "mean"), nonlin_method = c("quart_root", "none")) {
+calculate_whitening_params <- function(
+    epi_data,
+    colname,
+    scale_method = c("quantile", "quantile_upper", "std", "none"),
+    center_method = c("median", "mean", "none"),
+    nonlin_method = c("quart_root", "none")) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
@@ -189,26 +192,22 @@ calculate_whitening_params <- function(epi_data, colname, scale_method = c("quan
     return(NULL)
   }
   if (nonlin_method == "quart_root") {
-    scaled_data <- epi_data %>%
-      mutate(across(all_of(colname), \(x) (x + 0.01)^0.25))
+    scaled_data <- epi_data %>% mutate(across(all_of(colname), \(x) (x + 0.01)^0.25))
   } else if (nonlin_method == "none") {
     scaled_data <- epi_data
   }
-  scaled_data <- scaled_data %>%
-    group_by(source, geo_value)
+  scaled_data <- scaled_data %>% group_by(source, geo_value)
   # center so that either the mean or median is 0
   if (center_method == "mean") {
     fn <- mean
-  } else {
+  } else if (center_method == "median") {
     fn <- median
+  } else {
+    fn <- \(x, na.rm) 0
   }
-  learned_params <-
-    scaled_data %>%
+  learned_params <- scaled_data %>%
     summarize(
-      across(all_of(colname),
-        ~ fn(.x, na.rm = TRUE),
-        .names = "{.col}_center"
-      ),
+      across(all_of(colname), ~ fn(.x, na.rm = TRUE), .names = "{.col}_center"),
       .groups = "drop"
     )
   if (scale_method == "quantile") {
@@ -226,10 +225,7 @@ calculate_whitening_params <- function(epi_data, colname, scale_method = c("quan
   learned_params %<>% full_join(
     summarize(
       scaled_data,
-      across(all_of(colname),
-        ~ scale_fn(.x),
-        .names = "{.col}_scale"
-      ),
+      across(all_of(colname), ~ scale_fn(.x), .names = "{.col}_scale"),
       .groups = "drop"
     ),
     by = join_by(source, geo_value)
@@ -248,10 +244,7 @@ data_whitening <- function(epi_data, colname, learned_params, nonlin_method = c(
   }
   nonlin_method <- arg_match(nonlin_method)
   res <- epi_data %>%
-    left_join(
-      learned_params,
-      by = join_cols
-    )
+    left_join(learned_params, by = join_cols)
   if (nonlin_method == "quart_root") {
     res %<>% mutate(across(all_of(colname), ~ (.x + 0.01)^(1 / 4)))
   }
@@ -271,17 +264,13 @@ data_coloring <- function(epi_data, colname, learned_params, nonlin_method = c("
   }
   nonlin_method <- arg_match(nonlin_method)
   res <- epi_data %>%
-    left_join(
-      learned_params,
-      by = join_cols
-    ) %>%
+    left_join(learned_params, by = join_cols) %>%
     mutate(across(all_of(colname), ~ .x * get(paste0(cur_column(), "_scale")))) %>%
     mutate(across(all_of(colname), ~ .x + get(paste0(cur_column(), "_center"))))
   if (nonlin_method == "quart_root") {
     res %<>% mutate(across(all_of(colname), ~ .x^4 - 0.01))
   }
-  res %>%
-    select(-ends_with("_center"), -ends_with("_scale"))
+  res %>% select(-ends_with("_center"), -ends_with("_scale"))
 }
 
 

@@ -859,5 +859,11 @@ rlang::list2(
         output_file = here::here(reports_dir, "flu-overall-notebook.html")
       )
     }
+  ),
+  tar_target(
+    new_data_notebook,
+    command = {
+      rmarkdown::render("scripts/reports/new_data.Rmd", output_file = here::here("reports", "new_data.html"))
+    }
   )
 )

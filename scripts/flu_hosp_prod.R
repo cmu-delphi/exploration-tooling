@@ -110,7 +110,8 @@ rlang::list2(
       command = {
         forecast_res %>%
           ensemble_linear_climate(aheads, other_weights = geo_forecasters_weights) %>%
-          filter(geo_value %nin% geo_exclusions) %>% ungroup()
+          filter(geo_value %nin% geo_exclusions) %>%
+          ungroup()
       },
     ),
     tar_target(
@@ -203,4 +204,10 @@ rlang::list2(
       cue = tar_cue(mode = "always")
     )
   ),
+  tar_target(
+    new_data_notebook,
+    command = {
+      rmarkdown::render("scripts/reports/new_data.Rmd", output_file = here::here("reports", "new_data.html"))
+    }
+  )
 )
