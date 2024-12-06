@@ -131,7 +131,7 @@ scaled_pop_seasonal <- function(epi_data,
     epi_data <- compute_pca(epi_data, seasonal_method, ahead, scale_method, center_method, nonlin_method, normalize = train_residual)
     if (train_residual) {
       epi_data <- epi_data %>% mutate(across(all_of(outcome), ~ .x - PC1))
-      values_subtracted <- epi_data %>% select(geo_value, source, season_week, value = PC1) %>% distinct(geo_value, source, season_week, .keep_all = TRUE)
+      values_subtracted <- epi_data %>% select(geo_value, source, epiweek, value = PC1) %>% distinct(geo_value, source, season_week, .keep_all = TRUE)
     }
     args_list$lags <- c(args_list$lags, 0)
   }
