@@ -143,7 +143,6 @@ scaled_pop_seasonal <- function(epi_data,
     if (train_residual) {
       epi_data <- epi_data %>% mutate(across(all_of(outcome), ~ .x - climate_median))
       values_subtracted <- epi_data %>% select(geo_value, source, epiweek, value = climate_median) %>% distinct(geo_value, source, epiweek, .keep_all = TRUE)
-      values_subtracted %>% pull(value) %>% abs %>% max
     }
   }
 
@@ -222,7 +221,7 @@ scaled_pop_seasonal <- function(epi_data,
   # finally, any postprocessing not supported by epipredict e.g. calibration
   #
   # undo subtraction if we're training on residuals
-  if (train_residual) {
+  if (train_residual && (("flu" %in% seasonal_method) || ("covid" %in% seasonal_method) || ("climatological" %in% seasonal_method))) {
     pred <- pred %>% mutate(epi_week = epiweek(target_end_date)) %>%
       left_join(values_subtracted, by = join_by(geo_value, source, epi_week == epiweek)) %>%
       mutate(value = value.x + value.y) %>% select(geo_value, source, forecast_date, target_end_date, quantile, value)
