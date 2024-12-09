@@ -129,6 +129,7 @@ scaled_pop_seasonal <- function(epi_data,
   # first add PCA
   if (("flu" %in% seasonal_method) || ("covid" %in% seasonal_method)) {
     epi_data <- compute_pca(epi_data, seasonal_method, ahead, scale_method, center_method, nonlin_method, normalize = train_residual)
+
     if (train_residual) {
       epi_data <- epi_data %>% mutate(across(all_of(outcome), ~ .x - PC1))
       values_subtracted <- epi_data %>%

@@ -130,7 +130,7 @@ run_workflow_and_format <- function(preproc,
 #' @param full_data the full data to narrow down from
 #' @param test_data_interval the amount of time to go backwards from the last
 #'   day
-get_oversized_test_data <- function(full_data, test_data_interval, preproc) {
+get_oversized_test_data <- function(full_data, test_data_interval, preproc, predicting = "nhsn") {
   # getting the max time value of data columns actually used
   non_na_indicators <- preproc$var_info %>%
     filter(role == "pre-predictor") %>%
@@ -139,6 +139,9 @@ get_oversized_test_data <- function(full_data, test_data_interval, preproc) {
     na.omit(non_na_indicators) %>%
     pull(time_value) %>%
     max()
+  if ("source" %in% names(full_data)) {
+    full_data <- full_data %>% filter(source == predicting)
+  }
   full_data %>%
     filter((max_time_value - time_value) < test_data_interval) %>%
     arrange(time_value)
