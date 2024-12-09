@@ -267,6 +267,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       filter_agg_level = "state",
       drop_non_seasons = c(TRUE, FALSE),
       n_training = Inf,
+      season_backward_window = 5,
       keys_to_ignore = very_latent_locations
     ),
     # Window-based seasonal method shouldn't drop non-seasons
@@ -283,6 +284,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       filter_agg_level = "state",
       drop_non_seasons = FALSE,
       n_training = Inf,
+      season_backward_window = 5,
       keys_to_ignore = very_latent_locations
     ),
     tidyr::expand_grid(
