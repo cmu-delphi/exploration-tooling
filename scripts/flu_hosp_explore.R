@@ -274,7 +274,6 @@ forecaster_parameter_combinations_ <- rlang::list2(
       forecaster = "scaled_pop_seasonal",
       trainer = "quantreg",
       lags = list(
-        c(0, 7, 14, 21),
         c(0, 7)
       ),
       seasonal_method = list("window", c("window", "flu"), c("window", "climatological")),
@@ -284,6 +283,22 @@ forecaster_parameter_combinations_ <- rlang::list2(
       filter_agg_level = "state",
       drop_non_seasons = FALSE,
       n_training = Inf,
+      keys_to_ignore = very_latent_locations
+    ),
+    tidyr::expand_grid(
+      forecaster = "scaled_pop_seasonal",
+      trainer = "quantreg",
+      lags = list(
+        c(0, 7, 14, 21)
+      ),
+      seasonal_method = list("window", c("window", "flu"), c("window", "climatological")),
+      pop_scaling = FALSE,
+      train_residual = c(FALSE, TRUE),
+      filter_source = c("", "nhsn"),
+      filter_agg_level = "state",
+      drop_non_seasons = FALSE,
+      n_training = Inf,
+      season_backward_window = 8,
       keys_to_ignore = very_latent_locations
     )
   )

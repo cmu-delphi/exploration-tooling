@@ -164,7 +164,7 @@ scaled_pop_seasonal <- function(epi_data,
     current_season_week <-
       convert_epiweek_to_season_week(epiyear(epi_as_of(epi_data)), epiweek(epi_as_of(epi_data)))
     date_ranges <- epi_data %>%
-      filter((season_week == last_data_season_week)) %>%
+      filter(season_week == last_data_season_week) %>%
       pull(time_value) %>%
       unique() %>%
       map(~ c(.x - seq(from = 7, to = season_backward_window * 7, by = 7), .x + seq(from = 0, to = season_forward_window * 7, by = 7))) %>%
