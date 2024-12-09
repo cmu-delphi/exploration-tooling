@@ -94,21 +94,8 @@ scaled_pop_seasonal <- function(epi_data,
   predictors <- c(outcome, extra_sources[[1]])
   c(args_list, predictors, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
 
-  if (!("season_week" %in% names(epi_data))) {
-    epi_data %<>%
-      mutate(
-        epiweek = epiweek(time_value),
-        epiyear = epiyear(time_value)
-      ) %>%
-      left_join(
-        (.) %>%
-          distinct(epiweek, epiyear) %>%
-          mutate(
-            season = convert_epiweek_to_season(epiyear, epiweek),
-            season_week = convert_epiweek_to_season_week(epiyear, epiweek)
-          ),
-        by = c("epiweek", "epiyear")
-      )
+  if ("season_week" %nin% names(epi_data)) {
+    epi_data %<>% add_season_info()
   }
 
   # end of the copypasta
@@ -153,7 +140,6 @@ scaled_pop_seasonal <- function(epi_data,
     }
   }
 
-
   # Then filter to weeks around the target in the past
   if ("window" %in% seasonal_method) {
     last_data_season_week <- epi_data %>%
@@ -161,13 +147,12 @@ scaled_pop_seasonal <- function(epi_data,
       filter(time_value == max(time_value)) %>%
       pull(season_week) %>%
       max()
-    current_season_week <-
-      convert_epiweek_to_season_week(epiyear(epi_as_of(epi_data)), epiweek(epi_as_of(epi_data)))
+    current_season_week <- convert_epiweek_to_season_week(epiyear(epi_as_of(epi_data)), epiweek(epi_as_of(epi_data)))
     date_ranges <- epi_data %>%
       filter(season_week == last_data_season_week) %>%
       pull(time_value) %>%
       unique() %>%
-      map(~ c(.x - seq(from = 7, to = season_backward_window * 7, by = 7), .x + seq(from = 0, to = season_forward_window * 7, by = 7))) %>%
+      map(~ c(.x - seq(from = 7, to = season_backward_window, by = 7), .x + seq(from = 0, to = season_forward_window, by = 7))) %>%
       unlist() %>%
       as.Date() %>%
       unique()
@@ -193,7 +178,6 @@ scaled_pop_seasonal <- function(epi_data,
     )
   }
   if ("indicator" %in% seasonal_method) {
-    stopifnot("season_week" %in% names(epi_data))
     preproc %<>%
       # Really jank way of accounting for ahead.
       step_mutate(before_peak = (season_week - (ahead / 7) < 16), role = "predictor") %>%
@@ -208,6 +192,8 @@ scaled_pop_seasonal <- function(epi_data,
     preproc %<>% add_role(pooled_climate_median, climate_median, new_role = "predictor")
   }
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
+
+  browser()
 
   # postprocessing supported by epipredict
   postproc <- frosting()

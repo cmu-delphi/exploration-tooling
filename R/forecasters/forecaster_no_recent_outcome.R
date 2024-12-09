@@ -45,21 +45,8 @@ no_recent_outcome <- function(epi_data,
     epi_data$source <- c("none")
     attributes(epi_data)$metadata$other_keys <- "source"
   }
-  if (!("season_week" %in% names(epi_data))) {
-    epi_data %<>%
-      mutate(
-        epiweek = epiweek(time_value),
-        epiyear = epiyear(time_value)
-      ) %>%
-      left_join(
-        (.) %>%
-          distinct(epiweek, epiyear) %>%
-          mutate(
-            season = convert_epiweek_to_season(epiyear, epiweek),
-            season_week = convert_epiweek_to_season_week(epiyear, epiweek)
-          ),
-        by = c("epiweek", "epiyear")
-      )
+  if ("season_week" %nin% names(epi_data)) {
+    epi_data %<>% add_season_info()
   }
   if (!("population" %in% names(epi_data))) {
     epi_data %<>% add_pop_and_density()

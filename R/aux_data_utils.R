@@ -30,6 +30,37 @@ convert_epiweek_to_season_week <- function(epiyear, epiweek, season_start = 39) 
   return(season_week)
 }
 
+#' Adds epiweek, epiyear, season_week, season columns to the dataset.
+#'
+#' Assumes that the dataset has a time_value column that is a date. If
+#' season_week or season already exist, they will be dropped and replaced.
+add_season_info <- function(data) {
+  if (!("time_value" %in% names(data))) {
+    cli::cli_abort("'time_value' column not found in data", call = rlang::caller_fn())
+  }
+
+
+  data %>%
+    select(-any_of("season", "season_week")) %>%
+    {
+      if ("epiweek" %in% cols) {
+        . <- mutate(., epiweek = epiweek(time_value))
+      }
+      if ("epiyear" %in% cols) {
+        . <- mutate(., epiyear = epiyear(time_value))
+      }
+    } %>%
+    left_join(
+      (.) %>%
+        distinct(epiweek, epiyear) %>%
+        mutate(
+          season = convert_epiweek_to_season(epiyear, epiweek),
+          season_week = convert_epiweek_to_season_week(epiyear, epiweek)
+        ),
+      by = c("epiweek", "epiyear")
+    )
+}
+
 #' add a sine and half sine component; it is zero after `season` (by default 35, which roughly corresponds to epiweek 23)
 step_season_week_sine <- function(preproc, season = 35) {
   preproc %<>%
@@ -39,9 +70,6 @@ step_season_week_sine <- function(preproc, season = 35) {
       role = "pre-predictor"
     )
 }
-
-
-
 
 #' Append the state population and state population density, taken from the census and interpolated in the most straightforward way.
 #' apportionment data taken from here: https://www.census.gov/data/tables/time-series/dec/popchange-data-text.html
@@ -223,13 +251,8 @@ daily_to_weekly_archive <- function(epi_arch,
 #' prediction we do
 drop_non_seasons <- function(epi_data, min_window = 12) {
   forecast_date <- attributes(epi_data)$metadata$as_of %||% max(epi_data$time_value)
-  if (!("season_week" %in% names(epi_data))) {
-    epi_data %<>%
-      mutate(
-        epiweek = epiweek(time_value),
-        year = epiyear(time_value),
-        season_week = convert_epiweek_to_season_week(year, epiweek)
-      )
+  if ("season_week" %nin% names(epi_data)) {
+    epi_data %<>% add_season_info()
   }
   epi_data %>%
     filter(

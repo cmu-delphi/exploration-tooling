@@ -43,16 +43,8 @@ flusion <- function(epi_data,
     epi_data$source <- c("none")
     attributes(epi_data)$metadata$other_keys <- "source"
   }
-  if (!("season_week" %in% names(epi_data))) {
-    epi_data %<>%
-      mutate(
-        epiweek = epiweek(time_value),
-        year = epiyear(time_value),
-        season_week = convert_epiweek_to_season_week(year, epiweek)
-      )
-  }
-  if (!("season" %in% names(epi_data))) {
-    epi_data %<>% mutate(season = convert_epiweek_to_season(year, epiweek))
+  if ("season_week" %nin% names(epi_data) | "season" %nin% names(epi_data)) {
+    epi_data %<>% add_season_info()
   }
 
   if (!("population" %in% names(epi_data))) {
