@@ -302,8 +302,36 @@ forecaster_parameter_combinations_ <- rlang::list2(
       n_training = Inf,
       season_backward_window = 8,
       keys_to_ignore = very_latent_locations
-    )
-  )
+    ),
+    # trying various window sizes
+    tidyr::expand_grid(
+      forecaster = "scaled_pop_seasonal",
+      trainer = "quantreg",
+      lags = list(
+        c(0, 7)
+      ),
+      seasonal_method = list("window"),
+      pop_scaling = FALSE,
+      train_residual = FALSE,
+      filter_source = "",
+      filter_agg_level = "state",
+      drop_non_seasons = FALSE,
+      n_training = Inf,
+      season_backward_window = c(3,5,7,9,52),
+      season_forward_window = c(3,5,7),
+      keys_to_ignore = very_latent_locations
+    ),
+  ),
+  climate_linear = expand_grid(
+    forecaster = "climate_linear_ensembled",
+    scale_method = c("quantile", "none"),
+    center_method = "median",
+    nonlin_method = "quart_root",
+    filter_source = c("", "nhsn"),
+    filter_agg_level = "state",
+    drop_non_seasons = c(FALSE),
+    aheads = list(c(0, 7, 14, 21))
+  ),
   # scaled_pop_season_data_augmented = bind_rows(
   #   tidyr::expand_grid(
   #     forecaster = "scaled_pop_seasonal",

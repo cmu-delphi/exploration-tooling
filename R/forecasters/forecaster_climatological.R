@@ -13,10 +13,10 @@ climate_linear_ensembled <- function(epi_data,
                            residual_tail = 0.99,
                            residual_center = 0.35,
                            ...) {
-  browser()
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
+  args_list <- list(...)
   epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   # this is to deal with grouping by source in tests that don't include it
   adding_source <- FALSE
@@ -46,21 +46,24 @@ climate_linear_ensembled <- function(epi_data,
   } else {
     season_data <- epi_data
   }
-  learned_params <- calculate_whitening_params(season_data, setdiff(predictors, "hhs_region"), scale_method, center_method, nonlin_method)
-  epi_data %<>% data_whitening(setdiff(predictors, "hhs_region"), learned_params, nonlin_method)
+  learned_params <- calculate_whitening_params(season_data, outcome, scale_method, center_method, nonlin_method)
+  epi_data %<>% data_whitening(outcome, learned_params, nonlin_method)
   epi_data <- epi_data %>% select(geo_value, source, time_value, season, value = !!outcome) %>% mutate(epiweek = epiweek(time_value))
-  pred_climate <- climatological_model(epi_data, ahead, ...) %>% mutate(forecaster = "climate")
-  pred_geo_climate <- climatological_model(epi_data, ahead, ..., geo_agg = FALSE) %>% mutate(forecaster = "climate_geo")
+  pred_climate <- climatological_model(epi_data, ahead) %>% mutate(forecaster = "climate")
+  pred_geo_climate <- climatological_model(epi_data, ahead, geo_agg = FALSE) %>% mutate(forecaster = "climate_geo")
   pred_linear <- forecaster_baseline_linear(epi_data, ahead, residual_tail = residual_tail, residual_center = residual_center) %>% mutate(forecaster = "linear")
-  bind_rows(pred_climate, pred_linear, pred_geo_climate) %>% ensemble_linear_climate(ahead, other_weights = geo_forecasters_weights) %>%
-    filter(geo_value %nin% geo_exclusions) %>% ungroup()
+  pred <- bind_rows(pred_climate, pred_linear, pred_geo_climate) %>%
+    ensemble_linear_climate(args_list$aheads[[1]]) %>%
+    ungroup()
 
   pred_final <- pred %>%
     rename({{ outcome }} := value) %>%
+    mutate(source = "nhsn") %>%
     data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
     rename(value = {{ outcome }}) %>%
     mutate(value = pmax(0, value))
   if (adding_source) {
     pred_final %<>% select(-source)
   }
+  return(pred_final)
 }

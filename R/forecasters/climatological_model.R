@@ -1,4 +1,8 @@
-climatological_model <- function(epi_data, ahead, window_size = 3, recent_window = 3, quantile_method = c("baseR", "epipredict"), quant_type = 8, geo_agg = FALSE) {
+#' predict using the quantiles of the past values in the region around
+#' @param epi_data expected to have columns time_value, geo_value, season, value,
+climatological_model <- function(epi_data, ahead, window_size = 3,
+                                 recent_window = 3, quantile_method = c("baseR", "epipredict"),
+                                 quant_type = 8, geo_agg = FALSE) {
   quantile_method <- arg_match(quantile_method)
   forecast_date <- attributes(epi_data)$metadata$as_of
   forecast_week <- epiweek(forecast_date)
@@ -20,6 +24,7 @@ climatological_model <- function(epi_data, ahead, window_size = 3, recent_window
     (abs(forecast_week + ahead - epiweek) <= window_size) |
       (last_date_data - time_value <= recent_window * 7)
   )
+
   if (geo_agg) {
     filtered %<>%
       add_pop_and_density() %>%

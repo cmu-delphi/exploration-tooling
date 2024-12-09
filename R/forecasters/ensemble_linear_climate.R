@@ -33,12 +33,6 @@ ensemble_linear_climate <- function(forecasts,
     select(forecast_family, quantile, ahead, weight)
 
   forecasters <- unique(forecasts$forecaster)
-  other_weights <-
-    other_weights %>%
-    filter(
-      geo_value %in% unique(forecasts$geo_value),
-      forecaster %in% forecasters
-    )
   full_weights <- weights %>%
     left_join(
       tibble(
@@ -48,20 +42,33 @@ ensemble_linear_climate <- function(forecasts,
       by = join_by(forecast_family),
       relationship = "many-to-many"
     ) %>%
-    select(-forecast_family) %>%
-    left_join(
+    select(-forecast_family)
+  if (!is.null(other_weights)) {
+    other_weights <-
+      other_weights %>%
+      filter(
+        geo_value %in% unique(forecasts$geo_value),
+        forecaster %in% forecasters
+      )
+    full_weights <- left_join(
       other_weights,
       by = join_by(forecaster),
       relationship = "many-to-many"
     ) %>%
-    mutate(weight = weight.x * weight.y) %>%
-    select(geo_value, ahead, forecaster, quantile, weight) # renormalize so the weights sum to 1
+      mutate(weight = weight.x * weight.y) %>%
+      select(geo_value, ahead, forecaster, quantile, weight)
+    grouping_cols <- c("geo_value", "ahead", "quantile")
+  } else {
+    grouping_cols <- c("ahead", "quantile")
+  }
+  # renormalize so the weights sum to 1
   renorm <-
     full_weights %>%
-    group_by(geo_value, quantile, ahead) %>%
+    group_by(across(all_of(grouping_cols))) %>%
     summarize(mass = sum(weight), .groups = "drop")
-  full_weights <- full_weights %>%
-    left_join(renorm, by = c("geo_value", "ahead", "quantile")) %>%
+  full_weights <-
+    full_weights %>%
+    left_join(renorm, by = grouping_cols) %>%
     mutate(weight = weight / mass) %>%
     select(-mass)
   weighted_forecasts <-
@@ -70,13 +77,14 @@ ensemble_linear_climate <- function(forecasts,
     mutate(ahead = as.integer(floor((target_end_date - forecast_date) / 7))) %>%
     left_join(
       full_weights,
-      by = join_by(geo_value, forecaster, quantile, ahead)
+      by = c("forecaster", grouping_cols)
     ) %>%
     mutate(value = weight * value) %>%
     group_by(geo_value, forecast_date, target_end_date, quantile) %>%
     summarize(value = sum(value, na.rm = TRUE), .groups = "drop")
   # sort the quantiles
-  weighted_forecasts <- weighted_forecasts %>%
+  weighted_forecasts <-
+    weighted_forecasts %>%
     group_by(geo_value, target_end_date, forecast_date) %>%
     arrange(geo_value, target_end_date, forecast_date, quantile) %>%
     mutate(value = sort(value))
@@ -117,7 +125,7 @@ make_ahead_weights <- function(aheads,
   ahead_weight_values <- seq(
     from = min_climate_weight,
     to = max_climate_weight,
-    length.out = max(aheads) - min(aheads) + 1
+    length.out = length(aheads)
   )
   ahead_weights <- bind_rows(
     tibble(forecast_family = "climate", ahead = sort(aheads), weight = ahead_weight_values),
