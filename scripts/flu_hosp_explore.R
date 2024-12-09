@@ -262,7 +262,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       ),
       seasonal_method = list("flu", "indicator", "climatological"),
       pop_scaling = FALSE,
-      train_residual = FALSE,
+      train_residual = c(TRUE, FALSE),
       filter_source = "nhsn",
       filter_agg_level = "state",
       drop_non_seasons = c(TRUE, FALSE),

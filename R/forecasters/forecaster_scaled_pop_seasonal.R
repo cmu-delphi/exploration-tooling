@@ -83,7 +83,7 @@ scaled_pop_seasonal <- function(epi_data,
   adding_source <- FALSE
   if (!("source" %in% names(epi_data))) {
     adding_source <- TRUE
-    epi_data$source <- c("none")
+    epi_data$source <- c("nhsn")
     attributes(epi_data)$metadata$other_keys <- "source"
   }
   args_input[["ahead"]] <- ahead
@@ -157,16 +157,17 @@ scaled_pop_seasonal <- function(epi_data,
   # Then filter to weeks around the target in the past
   if ("window" %in% seasonal_method) {
     last_data_season_week <- epi_data %>%
+      filter(source == "nhsn") %>%
       filter(time_value == max(time_value)) %>%
       pull(season_week) %>%
       max()
     current_season_week <-
       convert_epiweek_to_season_week(epiyear(epi_as_of(epi_data)), epiweek(epi_as_of(epi_data)))
     date_ranges <- epi_data %>%
-      filter((season_week == current_season_week) | (season_week == last_data_season_week)) %>%
+      filter((season_week == last_data_season_week)) %>%
       pull(time_value) %>%
       unique() %>%
-      map(~ c(.x - 1:season_backward_window * 7, .x + 0:(ahead + 7 * season_forward_window))) %>%
+      map(~ c(.x - seq(from = 7, to = season_backward_window * 7, by = 7), .x + seq(from = 0, to = season_forward_window * 7, by = 7))) %>%
       unlist() %>%
       as.Date() %>%
       unique()
