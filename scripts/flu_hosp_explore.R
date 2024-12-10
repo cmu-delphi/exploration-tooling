@@ -310,7 +310,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       forecaster = "scaled_pop_seasonal",
       trainer = "quantreg",
       # since it's a list, this gets expanded out to a single one in each row
-      extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region"),
+      extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region"), # removing google_symptoms for lack of data for now
       lags = list2(
         list2(
           c(0, 7), # hhs
@@ -330,10 +330,10 @@ forecaster_parameter_combinations_ <- rlang::list2(
       trainer = "quantreg",
       extra_sources = list2(
         c("nssp", "google_symptoms"),
-        c("nssp", "nwss"),
+        #c("nssp", "nwss"),
         c("nssp", "nwss_region"),
         c("google_symptoms", "nwss"),
-        c("google_symptoms", "nwss_region"),
+        #c("google_symptoms", "nwss_region"),
         c("nwss", "nwss_region")
       ),
       lags = list2(
