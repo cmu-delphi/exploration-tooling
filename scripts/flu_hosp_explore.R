@@ -329,7 +329,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       forecaster = "scaled_pop_seasonal",
       trainer = "quantreg",
       extra_sources = list2(
-        c("nssp", "google_symptoms"),
+        #c("nssp", "google_symptoms"),
         #c("nssp", "nwss"),
         c("nssp", "nwss_region"),
         c("google_symptoms", "nwss"),
