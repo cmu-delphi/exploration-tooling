@@ -54,9 +54,8 @@ climate_linear_ensembled <- function(epi_data,
   pred_geo_climate <- climatological_model(epi_data, ahead, geo_agg = FALSE) %>% mutate(forecaster = "climate_geo")
   pred_linear <- forecaster_baseline_linear(epi_data, ahead, residual_tail = residual_tail, residual_center = residual_center) %>% mutate(forecaster = "linear")
   pred <- bind_rows(pred_climate, pred_linear, pred_geo_climate) %>%
-    ensemble_linear_climate(args_list$aheads[[1]]) %>%
+    ensemble_linear_climate((args_list$aheads[[1]]) / 7) %>%
     ungroup()
-
   # undo whitening
   pred_final <- pred %>%
     rename({{ outcome }} := value) %>%
