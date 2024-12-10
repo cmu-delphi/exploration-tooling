@@ -302,7 +302,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       n_training = Inf,
       season_backward_window = 8,
       keys_to_ignore = very_latent_locations
-    ),
+    )
     # trying various window sizes
   ),
   season_window_sizes = tidyr::expand_grid(
@@ -322,7 +322,6 @@ forecaster_parameter_combinations_ <- rlang::list2(
       season_forward_window = c(3,5,7),
       keys_to_ignore = very_latent_locations
     ),
-  ),
   climate_linear = expand_grid(
     forecaster = "climate_linear_ensembled",
     scale_method = c("quantile", "none"),
@@ -332,7 +331,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
     filter_agg_level = "state",
     drop_non_seasons = c(FALSE),
     aheads = list(c(0, 7, 14, 21))
-  ),
+  )
   # scaled_pop_season_data_augmented = bind_rows(
   #   tidyr::expand_grid(
   #     forecaster = "scaled_pop_seasonal",
