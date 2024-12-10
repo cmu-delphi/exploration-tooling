@@ -310,60 +310,11 @@ forecaster_parameter_combinations_ <- rlang::list2(
       forecaster = "scaled_pop_seasonal",
       trainer = "quantreg",
       # since it's a list, this gets expanded out to a single one in each row
-      extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region"), # removing google_symptoms for lack of data for now
+      extra_sources = list2("nssp", "nwss", "nwss_region"), # removing google_symptoms for lack of data for now
       lags = list2(
         list2(
           c(0, 7), # hhs
           c(0, 7) # exogenous feature
-        )
-      ),
-      seasonal_method = "window",
-      pop_scaling = FALSE,
-      filter_source = "",
-      filter_agg_level = "state",
-      n_training = Inf,
-      drop_non_seasons = FALSE,
-      keys_to_ignore = very_latent_locations
-    ),
-    expand_grid(
-      forecaster = "scaled_pop_seasonal",
-      trainer = "quantreg",
-      extra_sources = list2(
-        #c("nssp", "google_symptoms"),
-        #c("nssp", "nwss"),
-        c("nssp", "nwss_region"),
-        c("google_symptoms", "nwss"),
-        #c("google_symptoms", "nwss_region"),
-        c("nwss", "nwss_region")
-      ),
-      lags = list2(
-        list2(
-          c(0, 7, 14, 21), # hhs
-          c(0, 7), # first feature
-          c(0, 7) # second feature
-        )
-      ),
-      seasonal_method = "window",
-      pop_scaling = FALSE,
-      filter_source = "",
-      filter_agg_level = "state",
-      n_training = Inf,
-      drop_non_seasons = FALSE,
-      keys_to_ignore = very_latent_locations
-    ),
-    expand_grid(
-      forecaster = "scaled_pop_seasonal",
-      trainer = "quantreg",
-      extra_sources = list2(
-        c("nssp", "google_symptoms", "nwss", "nwss_region"),
-      ),
-      lags = list2(
-        list2(
-          c(0, 7, 14, 21), # hhs
-          c(0, 7), # nssp
-          c(0, 7), # google symptoms
-          c(0, 7), # nwss
-          c(0, 7), # nwss_region
         )
       ),
       seasonal_method = "window",
