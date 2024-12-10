@@ -1,7 +1,7 @@
 climate_linear_ensembled <- function(epi_data,
                            outcome,
                            extra_sources = "",
-                           ahead = 1,
+                           ahead = 7,
                            trainer = parsnip::linear_reg(),
                            quantile_levels = covidhub_probs(),
                            filter_source = "",
@@ -17,6 +17,7 @@ climate_linear_ensembled <- function(epi_data,
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
   args_list <- list(...)
+  ahead <- as.integer(ahead / 7)
   epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   # this is to deal with grouping by source in tests that don't include it
   adding_source <- FALSE

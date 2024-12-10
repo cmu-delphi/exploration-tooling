@@ -8,14 +8,24 @@
 ## Exploration Reports
 
 - [NHSN 2024-2025 Data Analysis](new_data.html)
+
+### Flu
+
 - [Flu Overall](flu-overall-notebook.html)
 - [Flu AR with population scaling (quantile reg)](flu-notebook-scaled_pop_main.html)
 - [Flu AR with population scaling and data augmented](flu-notebook-scaled_pop_data_augmented.html)
 - [Flu AR with population scaling, data augmented, and exogenous features](flu-notebook-scaled_pop_exogenous.html)
 - [Flu AR with seasonal features](flu-notebook-scaled_pop_season.html)
-- [Flu AR with seasonal features and data augmented](flu-notebook-scaled_pop_season_data_augmented.html)
+- [Flu AR seasonal window size comparisons](flu-notebook-season_window_sizes.html)
+- [Flu AR with seasonal features and exogenous features](flu-notebook-scaled_pop_season_exogenous.html)
+
+Simplistic/low data methods:
 - [Flu no recent](flu-notebook-no_recent_quant.html)
 - [Flu flatline](flu-notebook-flatline.html)
+- [Flu climate](flu-notebook-climate_linear.html)
+
+### Covid
+
 - [Covid AR with population scaling](covid-notebook-1.html)
 - [Covid AR with population scaling and smoothed features](covid-notebook-2.html)
 - [Covid Flatline](covid-notebook-3.html)

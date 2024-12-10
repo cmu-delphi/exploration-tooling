@@ -305,6 +305,76 @@ forecaster_parameter_combinations_ <- rlang::list2(
     )
     # trying various window sizes
   ),
+  scaled_pop_season_exogenous = bind_rows(
+    expand_grid(
+      forecaster = "scaled_pop_seasonal",
+      trainer = "quantreg",
+      # since it's a list, this gets expanded out to a single one in each row
+      extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region"),
+      lags = list2(
+        list2(
+          c(0, 7), # hhs
+          c(0, 7) # exogenous feature
+        )
+      ),
+      seasonal_method = "window",
+      pop_scaling = FALSE,
+      filter_source = "",
+      filter_agg_level = "state",
+      n_training = Inf,
+      drop_non_seasons = FALSE,
+      keys_to_ignore = very_latent_locations
+    ),
+    expand_grid(
+      forecaster = "scaled_pop_seasonal",
+      trainer = "quantreg",
+      extra_sources = list2(
+        c("nssp", "google_symptoms"),
+        c("nssp", "nwss"),
+        c("nssp", "nwss_region"),
+        c("google_symptoms", "nwss"),
+        c("google_symptoms", "nwss_region"),
+        c("nwss", "nwss_region")
+      ),
+      lags = list2(
+        list2(
+          c(0, 7, 14, 21), # hhs
+          c(0, 7), # first feature
+          c(0, 7) # second feature
+        )
+      ),
+      seasonal_method = "window",
+      pop_scaling = FALSE,
+      filter_source = "",
+      filter_agg_level = "state",
+      n_training = Inf,
+      drop_non_seasons = FALSE,
+      keys_to_ignore = very_latent_locations
+    ),
+    expand_grid(
+      forecaster = "scaled_pop_seasonal",
+      trainer = "quantreg",
+      extra_sources = list2(
+        c("nssp", "google_symptoms", "nwss", "nwss_region"),
+      ),
+      lags = list2(
+        list2(
+          c(0, 7, 14, 21), # hhs
+          c(0, 7), # nssp
+          c(0, 7), # google symptoms
+          c(0, 7), # nwss
+          c(0, 7), # nwss_region
+        )
+      ),
+      seasonal_method = "window",
+      pop_scaling = FALSE,
+      filter_source = "",
+      filter_agg_level = "state",
+      n_training = Inf,
+      drop_non_seasons = FALSE,
+      keys_to_ignore = very_latent_locations
+    )
+  ),
   season_window_sizes = tidyr::expand_grid(
       forecaster = "scaled_pop_seasonal",
       trainer = "quantreg",
@@ -332,45 +402,6 @@ forecaster_parameter_combinations_ <- rlang::list2(
     drop_non_seasons = c(FALSE),
     aheads = list(c(0, 7, 14, 21))
   )
-  # scaled_pop_season_data_augmented = bind_rows(
-  #   tidyr::expand_grid(
-  #     forecaster = "scaled_pop_seasonal",
-  #     trainer = "quantreg",
-  #     lags = list(
-  #       c(0, 7, 14, 21),
-  #       c(0, 7)
-  #     ),
-  #     seasonal_method = c("flu", "indicator"),
-  #     pop_scaling = FALSE,
-  #     scale_method = "quantile",
-  #     center_method = "median",
-  #     nonlin_method = "quart_root",
-  #     filter_source = "",
-  #     filter_agg_level = "",
-  #     n_training = Inf,
-  #     drop_non_seasons = TRUE,
-  #     keys_to_ignore = very_latent_locations
-  #   ),
-  #   # Window-based seasonal method shouldn't drop non-seasons
-  #   tidyr::expand_grid(
-  #     forecaster = "scaled_pop_seasonal",
-  #     trainer = "quantreg",
-  #     lags = list(
-  #       c(0, 7, 14, 21),
-  #       c(0, 7)
-  #     ),
-  #     seasonal_method = c("window"),
-  #     pop_scaling = FALSE,
-  #     scale_method = "quantile",
-  #     center_method = "median",
-  #     nonlin_method = "quart_root",
-  #     filter_source = "",
-  #     filter_agg_level = "",
-  #     n_training = Inf,
-  #     drop_non_seasons = FALSE,
-  #     keys_to_ignore = very_latent_locations
-  #   )
-  # )
 ) %>%
   map(function(x) {
     if (dummy_mode) {
