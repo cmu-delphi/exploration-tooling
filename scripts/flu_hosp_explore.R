@@ -317,7 +317,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
           c(0, 7) # exogenous feature
         )
       ),
-      seasonal_method = "window",
+      seasonal_method = list("window"),
       pop_scaling = FALSE,
       filter_source = "",
       filter_agg_level = "state",
