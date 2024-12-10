@@ -304,7 +304,8 @@ forecaster_parameter_combinations_ <- rlang::list2(
       keys_to_ignore = very_latent_locations
     ),
     # trying various window sizes
-    tidyr::expand_grid(
+  ),
+  season_window_sizes = tidyr::expand_grid(
       forecaster = "scaled_pop_seasonal",
       trainer = "quantreg",
       lags = list(
