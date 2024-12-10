@@ -56,14 +56,15 @@ climate_linear_ensembled <- function(epi_data,
     ensemble_linear_climate(args_list$aheads[[1]]) %>%
     ungroup()
 
+  # undo whitening
   pred_final <- pred %>%
     rename({{ outcome }} := value) %>%
     mutate(source = "nhsn") %>%
     data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
     rename(value = {{ outcome }}) %>%
-    mutate(value = pmax(0, value))
-  if (adding_source) {
-    pred_final %<>% select(-source)
-  }
+    mutate(value = pmax(0, value)) %>%
+    select(-source)
+  # move dates to appropriate markers
+  pred_final <- pred_final %>% mutate(target_end_date = target_end_date - 3)
   return(pred_final)
 }
