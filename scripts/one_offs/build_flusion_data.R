@@ -75,14 +75,7 @@ nhsn_nation <- pub_covidcast(
 nhsn <- bind_rows(nhsn_state, nhsn_nation) %>% drop_na()
 
 # Additional column: season, season_week
-nhsn <- nhsn %>%
-  mutate(epiyear = epiyear(time_value), epiweek = epiweek(time_value)) %>%
-  left_join(
-    (.) %>%
-      distinct(epiyear, epiweek) %>%
-      mutate(season = convert_epiweek_to_season(epiyear, epiweek)) %>%
-      mutate(season_week = convert_epiweek_to_season_week(epiyear, epiweek))
-  )
+nhsn <- nhsn %>% add_season_info()
 
 # are there any season_weeks with more than 7 days? no
 expect_equal(

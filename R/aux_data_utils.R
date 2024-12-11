@@ -39,16 +39,16 @@ add_season_info <- function(data) {
     cli::cli_abort("'time_value' column not found in data", call = rlang::caller_fn())
   }
 
-
   data %>%
-    select(-any_of("season", "season_week")) %>%
+    select(-any_of(c("season", "season_week"))) %>%
     {
-      if ("epiweek" %in% cols) {
-        . <- mutate(., epiweek = epiweek(time_value))
+      if ("epiweek" %nin% names(.)) {
+        . <- (.) %>% mutate(epiweek = epiweek(time_value))
       }
-      if ("epiyear" %in% cols) {
-        . <- mutate(., epiyear = epiyear(time_value))
+      if ("epiyear" %nin% names(.)) {
+        . <- (.) %>% mutate(epiyear = epiyear(time_value))
       }
+      .
     } %>%
     left_join(
       (.) %>%
@@ -243,8 +243,6 @@ daily_to_weekly_archive <- function(epi_arch,
   too_many_tibbles %>%
     as_epi_archive(compactify = TRUE)
 }
-
-
 
 
 #' for training, we don't want off-season times or anomalous seasons, but for
@@ -477,8 +475,6 @@ generate_flusurv_adjusted <- function(day_of_week = 1) {
 }
 
 
-
-
 process_who_nrevss <- function(filename1, filename2, filename3) {
   clinical_lab_pos <- readr::read_csv(
     here::here("aux_data", "flusion_data", filename1),
@@ -503,6 +499,7 @@ process_who_nrevss <- function(filename1, filename2, filename3) {
     mutate(across(any_of("% WEIGHTED ILI"), as.numeric)) %>%
     as_tibble()
 }
+
 gen_ili_data <- function(default_day_of_week = 1) {
   ili_plus_nation <- process_who_nrevss(
     "WHO_NREVSS_Clinical_Labs_Nation.csv",
@@ -597,28 +594,15 @@ gen_ili_data <- function(default_day_of_week = 1) {
     as_epi_archive(compactify = TRUE)
 }
 
-
 process_nhsn_data <- function(raw_nhsn_data) {
-  epi_data <- raw_nhsn_data %>%
-    mutate(
-      epiweek = epiweek(weekendingdate),
-      epiyear = epiyear(weekendingdate)
-    ) %>%
-    left_join(
-      (.) %>%
-        distinct(epiweek, epiyear) %>%
-        mutate(
-          season = convert_epiweek_to_season(epiyear, epiweek),
-          season_week = convert_epiweek_to_season_week(epiyear, epiweek)
-        ),
-      by = c("epiweek", "epiyear")
-    ) %>%
+  raw_nhsn_data %>%
     mutate(
       geo_value = tolower(jurisdiction),
       time_value = as.Date(weekendingdate),
       nhsn_covid = totalconfc19newadm,
       nhsn_flu = totalconfflunewadm
     ) %>%
+    add_season_info() %>%
     select(-weekendingdate, -jurisdiction, -starts_with("totalconf")) %>%
     pivot_longer(cols = starts_with("nhsn"), names_to = "disease") %>%
     filter(!is.na(value)) %>%

@@ -18,6 +18,9 @@ default_args_list <- function(
     check_enough_data_n = NULL,
     check_enough_data_epi_keys = NULL,
     keys_to_ignore = list(),
+    n_recent = 5 * 7,
+    n_forward = 3 * 7,
+    seasonal_window = FALSE,
     ...) {
   # error checking if lags is a list
   rlang::check_dots_empty()
@@ -68,7 +71,10 @@ default_args_list <- function(
       quantile_by_key,
       check_enough_data_n,
       check_enough_data_epi_keys,
-      keys_to_ignore
+      keys_to_ignore,
+      n_recent,
+      n_forward,
+      seasonal_window
     ),
     class = c("arx_fcast", "alist")
   )

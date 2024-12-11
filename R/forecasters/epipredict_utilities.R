@@ -30,8 +30,13 @@ arx_preprocess <- function(preproc, outcome, predictors, args_list) {
   }
   preproc %<>%
     step_epi_ahead(!!outcome, ahead = args_list$ahead) %>%
-    step_epi_naomit() %>%
-    step_training_window(n_recent = args_list$n_training)
+    # TODO: Uncomment after debugging
+    # step_epi_naomit() %>%
+    step_training_window(
+      n_recent = args_list$n_training,
+      # n_forward = args_list$n_forward,
+      # seasonal = args_list$seasonal_window
+    )
   return(preproc)
 }
 
@@ -119,6 +124,7 @@ run_workflow_and_format <- function(preproc,
   # keeping only the last time_value for any given location/key
   pred %<>%
     group_by(across(all_of(key_colnames(train_data, exclude = "time_value")))) %>%
+    # TODO: slice_max(time_value)?
     arrange(time_value) %>%
     filter(row_number() == n()) %>%
     ungroup()

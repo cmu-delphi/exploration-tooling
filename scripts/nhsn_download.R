@@ -28,19 +28,7 @@ s3save(epi_data_raw_prelim, object = paste0(raw_file, "_prelim", ".rds"), bucket
 file_path <- file.path(save_folder, "nhsn_data.parquet")
 epi_data_to_archive <- function(epi_data_raw) {
   epi_data <- epi_data_raw %>%
-    mutate(
-      epiweek = epiweek(weekendingdate),
-      epiyear = epiyear(weekendingdate)
-    ) %>%
-    left_join(
-      (.) %>%
-        distinct(epiweek, epiyear) %>%
-        mutate(
-          season = convert_epiweek_to_season(epiyear, epiweek),
-          season_week = convert_epiweek_to_season_week(epiyear, epiweek)
-        ),
-      by = c("epiweek", "epiyear")
-    ) %>%
+    add_season_info() %>%
     mutate(
       geo_value = tolower(jurisdiction),
       time_value = as.Date(weekendingdate),
@@ -99,13 +87,13 @@ new_results_prelim$DT %>%
   print(n = 57)
 new_results_prelim$DT %>%
   group_by(geo_value, time_value, disease) %>%
-  filter(version >"2024-11-20")
+  filter(version > "2024-11-20")
 new_results_prelim$DT %>%
   filter(time_value == max(time_value)) %>%
-  as_tibble %>%
+  as_tibble() %>%
   select(disease, geo_value, time_value, version, value) %>%
   group_by(geo_value, time_value, disease) %>%
   mutate(diff = max(value) - min(value), rel_diff = (max(value) - min(value)) / first(value)) %>%
   arrange(rel_diff, geo_value, disease, time_value, version) %>%
-  print(n=57)
-  print(n=180)
+  print(n = 57)
+print(n = 180)

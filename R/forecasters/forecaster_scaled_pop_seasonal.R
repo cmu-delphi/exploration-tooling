@@ -45,8 +45,8 @@ scaled_pop_seasonal <- function(epi_data,
                                 center_method = c("median", "mean", "none"),
                                 nonlin_method = c("quart_root", "none"),
                                 seasonal_method = c("none", "flu", "covid", "indicator", "window", "climatological"),
-                                season_forward_window = 3,
-                                season_backward_window = 5,
+                                season_backward_window = 5 * 7,
+                                season_forward_window = 3 * 7,
                                 train_residual = FALSE,
                                 trainer = parsnip::linear_reg(),
                                 quantile_levels = covidhub_probs(),
@@ -89,6 +89,9 @@ scaled_pop_seasonal <- function(epi_data,
   args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
   args_input[["nonneg"]] <- scale_method == "none"
+  args_input[["n_training"]] <- season_backward_window
+  args_input[["n_forward"]] <- season_forward_window + ahead
+  args_input[["seasonal_window"]] <- "window" %in% seasonal_method
   args_list <- inject(default_args_list(!!!args_input))
   # if you want to hardcode particular predictors in a particular forecaster
   predictors <- c(outcome, extra_sources[[1]])
@@ -97,7 +100,6 @@ scaled_pop_seasonal <- function(epi_data,
   if ("season_week" %nin% names(epi_data)) {
     epi_data %<>% add_season_info()
   }
-
   # end of the copypasta
 
   # whiten to get the sources on the same scale
@@ -140,7 +142,7 @@ scaled_pop_seasonal <- function(epi_data,
     }
   }
 
-  # Then filter to weeks around the target in the past
+  # TODO: Replace with step_training_window2
   if ("window" %in% seasonal_method) {
     last_data_season_week <- epi_data %>%
       filter(source == "nhsn") %>%
@@ -208,6 +210,14 @@ scaled_pop_seasonal <- function(epi_data,
       by = c("geo_value" = "abbr")
     )
   }
+  # TODO: Getting a lot of NAs, at irregularly spaced intervals
+  preproc %>%
+    prep(epi_data) %>%
+    bake(new_data = NULL) %>%
+    filter(source == "ILI+") %>%
+    pull(time_value) %>%
+    unique() %>%
+    sort()
   # with all the setup done, we execute and format
   pred <- run_workflow_and_format(preproc, postproc, trainer, season_data, epi_data)
   # now pred has the columns

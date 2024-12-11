@@ -9,23 +9,46 @@ insufficient_data_geos <- c("as", "mp", "vi", "gu")
 truth_data_date <- "2023-09-01"
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
 forecast_generation_date <- Sys.Date()
+very_latent_locations <- list(list(
+  c("source"),
+  c("flusurv", "ILI+")
+))
 
 forecaster_fns <- list2(
-  linear = function(...) {
-    forecaster_baseline_linear(..., residual_tail = 0.99, residual_center = 0.35)
-  },
-  # linearlog = function(...) {
-  #   forecaster_baseline_linear(..., log = TRUE)
+  # linear = function(epi_data, ahead, ...) {
+  #   epi_data %>%
+  #     filter(source == "nhsn") %>%
+  #     forecaster_baseline_linear(
+  #       ahead, ...,
+  #       residual_tail = 0.99,
+  #       residual_center = 0.35
+  #     )
   # },
-  climate_base = function(...) {
-    climatological_model(
-      ...,
-    )
-  },
-  climate_geo_agged = function(...) {
-    climatological_model(
-      ...,
-      geo_agg = TRUE
+  # # linearlog = function(...) {
+  # #   forecaster_baseline_linear(..., log = TRUE)
+  # # },
+  # climate_base = function(epi_data, ahead, ...) {
+  #   epi_data %>%
+  #     filter(source == "nhsn") %>%
+  #     climatological_model(ahead, ...)
+  # },
+  # climate_geo_agged = function(epi_data, ahead, ...) {
+  #   epi_data %>%
+  #     filter(source == "nhsn") %>%
+  #     climatological_model(ahead, ..., geo_agg = TRUE)
+  # },
+  windowed_seasonal = function(epi_data, ahead, ...) {
+    # Figure out the ahead
+    forecast_date <- attributes(epi_data)$metadata$as_of
+    forecast_season_week <- convert_epiweek_to_season_week(epiyear(forecast_date), epiweek(forecast_date))
+    reference_date <- MMWRweek2Date(epiyear(forecast_date), epiweek(forecast_date)) + 6 + ahead * 7
+    ahead <- as.numeric(reference_date - max(epi_data$time_value))
+    scaled_pop_seasonal(
+      epi_data,
+      outcome = "value", ahead = ahead, ...,
+      seasonal_method = "window",
+      lags = c(0, 7),
+      keys_to_ignore = very_latent_locations
     )
   },
 )
@@ -36,52 +59,58 @@ if (nrow(geo_forecasters_weights %>% filter(forecast_date == forecast_generation
   cli_abort("there are no weights  for the forecast date {forecast_generation_date}")
 }
 
+# This is needed to build the data archive
+ref_time_values_ <- seq.Date(as.Date("2023-10-04"), as.Date("2024-04-24"), by = 7L)
+
 
 rlang::list2(
+  rlang::list2(
+    tar_target(aheads, command = -1:3),
+    tar_target(forecasters, command = seq_along(forecaster_fns)),
+    tar_target(name = ref_time_values, command = ref_time_values_),
+  ),
+  make_historical_flu_data_targets(),
   tar_target(
-    aheads,
+    joined_latest_extra_data,
     command = {
-      -1:3
+      joined_archive_data %>%
+        epix_as_of(as.Date(max(joined_archive_data$DT$time_value))) %>%
+        select(geo_value, source, time_value, hhs, season, season_week) %>%
+        rename(value = hhs) %>%
+        filter(source != "nhsn")
     }
   ),
   tar_target(
-    forecasters,
+    nhsn_latest_data,
     command = {
-      seq_along(forecaster_fns)
-    }
+      if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
+        # download from the preliminary data source from Wednesday to Friday
+        most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/mpgq-jmmr.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
+      } else {
+        most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
+      }
+      most_recent_result %>%
+        process_nhsn_data() %>%
+        filter(disease == "nhsn_flu") %>%
+        select(-disease) %>%
+        filter(geo_value %nin% insufficient_data_geos) %>%
+        mutate(
+          source = "nhsn",
+          geo_value = ifelse(geo_value == "usa", "us", geo_value),
+          time_value = time_value + 4
+        )
+    },
+    cue = tar_cue(mode = "always")
   ),
   tar_map(
-    values = tidyr::expand_grid(
-      tibble(
-        forecast_generation_date = forecast_generation_date
-      )
-    ),
+    values = tidyr::expand_grid(tibble(forecast_generation_date = forecast_generation_date)),
     names = "forecast_generation_date",
-    tar_target(
-      nhsn_latest_data,
-      command = {
-        if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
-          # download from the preliminary data source from Wednesday to Friday
-          most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/mpgq-jmmr.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
-        } else {
-          most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
-        }
-        most_recent_result %>%
-          process_nhsn_data() %>%
-          filter(disease == "nhsn_flu") %>%
-          select(-disease) %>%
-          filter(geo_value %nin% insufficient_data_geos)
-      },
-      cue = tar_cue(mode = "always")
-    ),
     tar_target(
       forecast_res,
       command = {
-        nhsn <- nhsn_latest_data
-        nhsn <- nhsn %>%
-          as_epi_df(as_of = as.Date(forecast_generation_date))
-        attributes(nhsn)$metadata$as_of <- as.Date(forecast_generation_date)
-        nhsn %>%
+        nhsn_latest_data %>%
+          bind_rows(joined_latest_extra_data) %>%
+          as_epi_df(other_keys = "source", as_of = as.Date(forecast_generation_date)) %>%
           forecaster_fns[[forecasters]](ahead = aheads) %>%
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
@@ -181,33 +210,34 @@ rlang::list2(
         truth_data %>% bind_rows(nssp_renormalized)
       },
       cue = tar_cue(mode = "always")
-    ),
-    tar_target(
-      notebook,
-      command = {
-        if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
-        rmarkdown::render(
-          "scripts/reports/forecast_report.Rmd",
-          output_file = here::here(
-            "reports",
-            sprintf("%s_flu_prod.html", as.Date(forecast_generation_date))
-          ),
-          params = list(
-            disease = "flu",
-            forecast_res = forecast_res %>% bind_rows(ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix")),
-            ensemble_res = ensemble_res,
-            forecast_generation_date = as.Date(forecast_generation_date),
-            truth_data = truth_data
-          )
-        )
-      },
-      cue = tar_cue(mode = "always")
     )
+    # tar_target(
+    #   notebook,
+    #   command = {
+    #     if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
+    #     rmarkdown::render(
+    #       "scripts/reports/forecast_report.Rmd",
+    #       output_file = here::here(
+    #         "reports",
+    #         sprintf("%s_flu_prod.html", as.Date(forecast_generation_date))
+    #       ),
+    #       params = list(
+    #         disease = "flu",
+    #         forecast_res = forecast_res %>% bind_rows(ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix")),
+    #         ensemble_res = ensemble_res,
+    #         forecast_generation_date = as.Date(forecast_generation_date),
+    #         truth_data = truth_data
+    #       )
+    #     )
+    #   },
+    #   cue = tar_cue(mode = "always")
+    # )
   ),
-  tar_target(
-    new_data_notebook,
-    command = {
-      rmarkdown::render("scripts/reports/new_data.Rmd", output_file = here::here("reports", "new_data.html"))
-    }
-  )
+  # TODO: New data report
+  # tar_target(
+  #   new_data_notebook,
+  #   command = {
+  #     rmarkdown::render("scripts/reports/new_data.Rmd", output_file = here::here("reports", "new_data.html"))
+  #   }
+  # )
 )

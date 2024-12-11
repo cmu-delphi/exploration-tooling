@@ -26,6 +26,7 @@ library(ggplot2)
 library(lubridate)
 library(MMWRweek)
 library(readr)
+source(here::here("R", "aux_data_utils.R"))
 ```
 
 The data is coming from this repository: https://data.cdc.gov/Public-Health-Surveillance/Weekly-Hospital-Respiratory-Data-HRD-Metrics-by-Ju/ua7e-t2fy.
@@ -68,21 +69,7 @@ convert_epiweek_to_season_week <- function(epiyear, epiweek, season_start = 39) 
 }
 
 df <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfflunewadm")
-df <- df %>%
-    mutate(
-        epiweek = epiweek(weekendingdate),
-        epiyear = epiyear(weekendingdate)
-    ) %>%
-    left_join(
-        (.) %>%
-            distinct(epiweek, epiyear) %>%
-            mutate(
-                season = convert_epiweek_to_season(epiyear, epiweek),
-                season_week = convert_epiweek_to_season_week(epiyear, epiweek)
-            ),
-        by = c("epiweek", "epiyear")
-    )
-
+df <- df %>% add_season_info()
 df %>%
     filter(jurisdiction %in% c("CA", "FL", "TX", "NY", "PA", "MN", "NM")) %>%
     ggplot(aes(x = weekendingdate, y = totalconfflunewadm, color = jurisdiction)) +
