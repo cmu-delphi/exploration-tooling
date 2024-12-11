@@ -107,6 +107,7 @@ add_pop_and_density <-
       # virgin islands data too limited for now
       filter(geo_value != "vi") %>%
       arrange(geo_value, time_value) %>%
+      ungroup() %>%
       fill(population, density)
   }
 
@@ -173,7 +174,11 @@ gen_pop_and_density_data <-
       ) %>%
       arrange(geo_value, year) %>%
       fill(population, density)
-    pops_by_state_hhs
+    # add us as both a nation and state
+    pops_by_state_hhs %>%
+      bind_rows(
+        (.) %>% filter(geo_value == "us") %>% mutate(agg_level = "nation")
+      )
   }
 
 daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), day_of_week = 4L, day_of_week_end = 7L, keys = "geo_value", values = c("value")) {

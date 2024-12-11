@@ -43,7 +43,6 @@ forecaster_fns <- list2(
       epi_data,
       outcome = "value", ahead = ahead * 7, ...,
       seasonal_method = "window",
-      filter_agg_level = "state",
       pop_scaling = FALSE,
       lags = c(0, 7),
       keys_to_ignore = very_latent_locations
@@ -75,6 +74,7 @@ rlang::list2(
       joined_archive_data %>%
         epix_as_of(joined_archive_data$versions_end) %>%
         mutate(epiweek = epiweek(time_value), epiyear = epiyear(time_value)) %>%
+        filter((agg_level == "state") | (agg_level == "nation")) %>%
         select(geo_value, source, time_value, hhs, season, season_week, epiweek, epiyear) %>%
         rename(value = hhs) %>%
         filter(source != "nhsn")

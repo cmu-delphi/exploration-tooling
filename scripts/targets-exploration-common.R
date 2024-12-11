@@ -388,7 +388,6 @@ make_historical_flu_data_targets <- function() {
           bind_rows(ili_plus, flusurv, hhs_archive) %>%
           add_pop_and_density() %>%
           as_epi_archive(compactify = TRUE, other_keys = "source")
-        max_date <- min(max(ili_plus$time_value), max(flusurv$time_value), max(hhs_archive$time_value))
         flusion_data_archive <- flusion_data_archive$DT %>%
           filter(
             !geo_value %in% c("as", "pr", "vi", "gu", "mp"),
