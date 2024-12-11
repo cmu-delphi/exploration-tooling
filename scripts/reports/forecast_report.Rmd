@@ -1,7 +1,7 @@
 ---
-title: "`r params$forecast_generation_date`: `r params$disease` forecaster predictions"
+title: "Weekly Forecaster Predictions"
 author: Delphi Forecast Team
-date: "Rendered: `r format(Sys.time(), '%d %B %Y')`, forecast date `r params$forecast_generation_date`, last day of data: `r max(params$truth_data$target_end_date)`"
+date: "Rendered: `r Sys.time()`, Forecast date: `r params$forecast_generation_date`, Last day of data: `r max(params$truth_data$target_end_date)`"
 output:
   html_document:
     toc: True
@@ -43,7 +43,7 @@ ggplot2::theme_set(ggplot2::theme_bw())
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 ```
 
-# Forecaster Predictions for `r params$disease`  {.tabset}
+# Forecaster Predictions for `r params$disease`:  {.tabset}
 
 ## Main quantile
 
