@@ -198,7 +198,7 @@ get_population_data <- function() {
     rename(population = pop) %>%
     bind_rows(
       (.) %>% summarize(
-        state_id = "usa",
+        state_id = "us",
         population = sum(population)
       )
     )
