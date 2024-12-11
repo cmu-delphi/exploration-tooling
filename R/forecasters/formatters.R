@@ -71,7 +71,8 @@ format_flusight <- function(pred, disease = c("flu", "covid")) {
     ) %>%
     left_join(
       get_population_data() %>%
-        distinct(state_code, state_id),
+        distinct(state_code, state_id) %>%
+         bind_rows(tibble(state_code = c("US", "US"), state_id = c("us", "usa"))),
       by = c("geo_value" = "state_id")
     ) %>%
     mutate(location = state_code) %>%
