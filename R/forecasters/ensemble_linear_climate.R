@@ -50,7 +50,8 @@ ensemble_linear_climate <- function(forecasts,
         geo_value %in% unique(forecasts$geo_value),
         forecaster %in% forecasters
       )
-    full_weights <- left_join(
+    full_weights <- full_weights %>%
+      left_join(
       other_weights,
       by = join_by(forecaster),
       relationship = "many-to-many"

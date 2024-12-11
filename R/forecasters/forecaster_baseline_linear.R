@@ -2,28 +2,12 @@
 forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALSE, residual_tail = 0.85, residual_center = 0.085) {
   forecast_date <- attributes(epi_data)$metadata$as_of
   df_processed <- epi_data %>%
-    {
-      if ("season_week" %nin% names(.)) {
-        (.) %>%
-          mutate(epiweek = epiweek(time_value), epiyear = epiyear(time_value)) %>%
-          left_join(
-            (.) %>%
-              distinct(epiweek, epiyear) %>%
-              mutate(
-                season = convert_epiweek_to_season(epiyear, epiweek),
-                season_week = convert_epiweek_to_season_week(epiyear, epiweek)
-              ),
-            by = c("epiweek", "epiyear")
-          )
-      } else {
-        .
-      }
-    } %>%
     left_join(
       get_population_data() %>% rename(geo_value = state_id) %>% distinct(geo_value, population),
       by = "geo_value"
     ) %>%
     mutate(value = value / population * 10**5)
+
 
   if (log) {
     df_processed <- df_processed %>% mutate(value = log(value))
@@ -38,17 +22,21 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
   reference_date <- MMWRweek2Date(epiyear(forecast_date), epiweek(forecast_date)) + 6
   target_season_week <- forecast_season_week + ahead
   geos <- unique(df_processed$geo_value)
-
-  train_data <- df_processed %>%
+  # only train on the last 30 days of data
+  train_data <-
+    df_processed %>%
     filter(time_value >= max(time_value) - 30) %>%
     group_by(geo_value) %>%
     filter(!(is.na(value) | is.infinite(value))) %>%
-    filter(n() >= 2)
+    filter(n() >= 2) %>%
+    mutate(weeks_back = -as.integer(time_value - epi_as_of(df_processed)) / 7)
 
   point_forecast <- tibble(
     geo_value = train_data$geo_value %>% unique(),
-    model = map(geo_value, ~ lm(value ~ season_week, data = train_data %>% filter(geo_value == .x))),
-    value = map_dbl(model, ~ predict(.x, newdata = data.frame(season_week = target_season_week))),
+    model = map(geo_value, ~ lm(value ~ weeks_back,
+      data = train_data
+    )),
+    value = map_dbl(model, ~ predict(.x, newdata = data.frame(weeks_back = ahead))),
     season_week = target_season_week
   )
 
