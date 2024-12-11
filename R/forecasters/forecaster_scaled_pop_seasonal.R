@@ -196,6 +196,11 @@ scaled_pop_seasonal <- function(epi_data,
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
 
   browser()
+  preproc %>%
+    prep(epi_data) %>%
+    bake(new_data = NULL) %>%
+    filter(geo_value %nin% 1:10) %>%
+    print(n = 100)
 
   # postprocessing supported by epipredict
   postproc <- frosting()
