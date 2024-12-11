@@ -97,7 +97,7 @@ rlang::list2(
         mutate(
           source = "nhsn",
           geo_value = ifelse(geo_value == "usa", "us", geo_value),
-          time_value = time_value + 4
+          time_value = time_value - 3
         ) %>%
         filter(version == max(version)) %>%
         select(-version)

@@ -33,9 +33,7 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
 
   point_forecast <- tibble(
     geo_value = train_data$geo_value %>% unique(),
-    model = map(geo_value, ~ lm(value ~ weeks_back,
-      data = train_data
-    )),
+    model = map(geo_value, ~ lm(value ~ weeks_back, data = train_data %>% filter(geo_value == .x))),
     value = map_dbl(model, ~ predict(.x, newdata = data.frame(weeks_back = ahead))),
     season_week = target_season_week
   )
