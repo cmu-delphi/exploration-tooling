@@ -29,7 +29,7 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
     group_by(geo_value) %>%
     filter(!(is.na(value) | is.infinite(value))) %>%
     filter(n() >= 2) %>%
-    mutate(weeks_back = -as.integer(time_value - epi_as_of(df_processed)) / 7)
+    mutate(weeks_back = as.integer(time_value - epi_as_of(df_processed)) / 7)
 
   point_forecast <- tibble(
     geo_value = train_data$geo_value %>% unique(),

@@ -48,7 +48,7 @@ forecaster_fns <- list2(
       lags = c(0, 7),
       keys_to_ignore = very_latent_locations
     ) %>%
-      mutate(target_end_date + 3)
+      mutate(target_end_date = target_end_date + 3)
   },
 )
 geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"), forecast_generation_date)
