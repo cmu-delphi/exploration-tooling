@@ -1,12 +1,13 @@
 # The Flu Hospitalization Production Forecasting Pipeline.
-#
-
 source("scripts/targets-common.R")
+source("scripts/targets-exploration-common.R")
 
 submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
 truth_data_date <- "2023-09-01"
+# needed to create the aux data targets
+end_date <- Sys.Date()
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
 forecast_generation_date <- Sys.Date()
 very_latent_locations <- list(list(
@@ -15,41 +16,39 @@ very_latent_locations <- list(list(
 ))
 
 forecaster_fns <- list2(
-  # linear = function(epi_data, ahead, ...) {
-  #   epi_data %>%
-  #     filter(source == "nhsn") %>%
-  #     forecaster_baseline_linear(
-  #       ahead, ...,
-  #       residual_tail = 0.99,
-  #       residual_center = 0.35
-  #     )
+  linear = function(epi_data, ahead, ...) {
+    epi_data %>%
+      filter(source == "nhsn") %>%
+      forecaster_baseline_linear(
+        ahead, ...,
+        residual_tail = 0.99,
+        residual_center = 0.35
+      )
+  },
+  # linearlog = function(...) {
+  #   forecaster_baseline_linear(..., log = TRUE)
   # },
-  # # linearlog = function(...) {
-  # #   forecaster_baseline_linear(..., log = TRUE)
-  # # },
-  # climate_base = function(epi_data, ahead, ...) {
-  #   epi_data %>%
-  #     filter(source == "nhsn") %>%
-  #     climatological_model(ahead, ...)
-  # },
-  # climate_geo_agged = function(epi_data, ahead, ...) {
-  #   epi_data %>%
-  #     filter(source == "nhsn") %>%
-  #     climatological_model(ahead, ..., geo_agg = TRUE)
-  # },
+  climate_base = function(epi_data, ahead, ...) {
+    epi_data %>%
+      filter(source == "nhsn") %>%
+      climatological_model(ahead, ...)
+  },
+  climate_geo_agged = function(epi_data, ahead, ...) {
+    epi_data %>%
+      filter(source == "nhsn") %>%
+      climatological_model(ahead, ..., geo_agg = TRUE)
+  },
   windowed_seasonal = function(epi_data, ahead, ...) {
-    # Figure out the ahead
-    forecast_date <- attributes(epi_data)$metadata$as_of
-    forecast_season_week <- convert_epiweek_to_season_week(epiyear(forecast_date), epiweek(forecast_date))
-    reference_date <- MMWRweek2Date(epiyear(forecast_date), epiweek(forecast_date)) + 6 + ahead * 7
-    ahead <- as.numeric(reference_date - max(epi_data$time_value))
     scaled_pop_seasonal(
       epi_data,
-      outcome = "value", ahead = ahead, ...,
+      outcome = "value", ahead = ahead * 7, ...,
       seasonal_method = "window",
+      filter_agg_level = "state",
+      pop_scaling = FALSE,
       lags = c(0, 7),
       keys_to_ignore = very_latent_locations
-    )
+    ) %>%
+      mutate(target_end_date + 3)
   },
 )
 geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"), forecast_generation_date)
@@ -74,8 +73,9 @@ rlang::list2(
     joined_latest_extra_data,
     command = {
       joined_archive_data %>%
-        epix_as_of(as.Date(max(joined_archive_data$DT$time_value))) %>%
-        select(geo_value, source, time_value, hhs, season, season_week) %>%
+        epix_as_of(joined_archive_data$versions_end) %>%
+        mutate(epiweek = epiweek(time_value), epiyear = epiyear(time_value)) %>%
+        select(geo_value, source, time_value, hhs, season, season_week, epiweek, epiyear) %>%
         rename(value = hhs) %>%
         filter(source != "nhsn")
     }
@@ -98,7 +98,9 @@ rlang::list2(
           source = "nhsn",
           geo_value = ifelse(geo_value == "usa", "us", geo_value),
           time_value = time_value + 4
-        )
+        ) %>%
+        filter(version == max(version)) %>%
+        select(-version)
     },
     cue = tar_cue(mode = "always")
   ),
@@ -110,7 +112,7 @@ rlang::list2(
       command = {
         nhsn_latest_data %>%
           bind_rows(joined_latest_extra_data) %>%
-          as_epi_df(other_keys = "source", as_of = as.Date(forecast_generation_date)) %>%
+          as_epi_df(other_keys = "source", as_of = round_date(as.Date(forecast_generation_date), "weeks", week_start = 3)) %>%
           forecaster_fns[[forecasters]](ahead = aheads) %>%
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
@@ -210,28 +212,28 @@ rlang::list2(
         truth_data %>% bind_rows(nssp_renormalized)
       },
       cue = tar_cue(mode = "always")
+    ),
+    tar_target(
+      notebook,
+      command = {
+        if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
+        rmarkdown::render(
+          "scripts/reports/forecast_report.Rmd",
+          output_file = here::here(
+            "reports",
+            sprintf("%s_flu_prod.html", as.Date(forecast_generation_date))
+          ),
+          params = list(
+            disease = "flu",
+            forecast_res = forecast_res %>% bind_rows(ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix")),
+            ensemble_res = ensemble_res,
+            forecast_generation_date = as.Date(forecast_generation_date),
+            truth_data = truth_data
+          )
+        )
+      },
+      cue = tar_cue(mode = "always")
     )
-    # tar_target(
-    #   notebook,
-    #   command = {
-    #     if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
-    #     rmarkdown::render(
-    #       "scripts/reports/forecast_report.Rmd",
-    #       output_file = here::here(
-    #         "reports",
-    #         sprintf("%s_flu_prod.html", as.Date(forecast_generation_date))
-    #       ),
-    #       params = list(
-    #         disease = "flu",
-    #         forecast_res = forecast_res %>% bind_rows(ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix")),
-    #         ensemble_res = ensemble_res,
-    #         forecast_generation_date = as.Date(forecast_generation_date),
-    #         truth_data = truth_data
-    #       )
-    #     )
-    #   },
-    #   cue = tar_cue(mode = "always")
-    # )
   ),
   # TODO: New data report
   # tar_target(
