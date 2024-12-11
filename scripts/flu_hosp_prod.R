@@ -140,9 +140,14 @@ rlang::list2(
       name = ensemble_mixture_res,
       command = {
         forecast_res %>%
+          # Apply the ahead-by-quantile weighting scheme
           ensemble_linear_climate(aheads, other_weights = geo_forecasters_weights) %>%
           filter(geo_value %nin% geo_exclusions) %>%
-          ungroup()
+          ungroup() %>%
+          # Ensemble with windowed_seasonal
+          bind_rows(forecast_res %>% filter(forecaster == "windowed_seasonal")) %>%
+          group_by(geo_value, forecast_date, target_end_date, quantile) %>%
+          summarize(value = mean(value, na.rm = TRUE), .groups = "drop")
       },
     ),
     tar_target(
