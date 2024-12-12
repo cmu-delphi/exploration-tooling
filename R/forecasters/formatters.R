@@ -69,14 +69,8 @@ format_flusight <- function(pred, disease = c("flu", "covid")) {
       output_type_id = quantile,
       value = value
     ) %>%
-    left_join(
-      get_population_data() %>%
-        distinct(state_code, state_id) %>%
-         bind_rows(tibble(state_code = c("US", "US"), state_id = c("us", "usa"))),
-      by = c("geo_value" = "state_id")
-    ) %>%
+    left_join(get_population_data() %>% select(state_id, state_code), by = c("geo_value" = "state_id")) %>%
     mutate(location = state_code) %>%
-    mutate(location = ifelse(is.na(location), "US", location)) %>%
     select(reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value)
 }
 

@@ -1,11 +1,11 @@
 #' epi_data is expected to have: geo_value, time_value, and value columns.
 forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALSE, residual_tail = 0.85, residual_center = 0.085) {
   forecast_date <- attributes(epi_data)$metadata$as_of
+  population_data <- get_population_data() %>%
+    rename(geo_value = state_id) %>%
+    distinct(geo_value, population)
   df_processed <- epi_data %>%
-    left_join(
-      get_population_data() %>% rename(geo_value = state_id) %>% distinct(geo_value, population),
-      by = "geo_value"
-    ) %>%
+    left_join(population_data, by = "geo_value") %>%
     mutate(value = value / population * 10**5)
 
 
@@ -79,10 +79,7 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
     rowwise() %>%
     mutate(quantile = get_quantile(value, ahead) %>% nested_quantiles()) %>%
     unnest(quantile) %>%
-    left_join(
-      get_population_data() %>% rename(geo_value = state_id) %>% distinct(geo_value, population),
-      by = "geo_value"
-    ) %>%
+    left_join(population_data, by = "geo_value") %>%
     rename(quantile = quantile_levels) %>%
     {
       if (log) {

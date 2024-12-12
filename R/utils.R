@@ -196,12 +196,12 @@ exclude_geos <- function(geo_forecasters_weights) {
 get_population_data <- function() {
   readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE) %>%
     rename(population = pop) %>%
+    # Add a row for the United States
     bind_rows(
-      (.) %>% summarize(
-        state_id = "us",
-        population = sum(population)
-      )
-    )
+      (.) %>% summarize(state_id = "us", population = sum(population), state_name = "United States", state_code = "US")
+    ) %>%
+    # Duplicate the last row, but with state_id = "usa".
+    bind_rows((.) %>% filter(state_id == "us") %>% mutate(state_id = "usa"))
 }
 
 # TODO:
