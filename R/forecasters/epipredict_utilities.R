@@ -31,7 +31,7 @@ arx_preprocess <- function(preproc, outcome, predictors, args_list) {
   preproc %<>%
     step_epi_ahead(!!outcome, ahead = args_list$ahead) %>%
     # TODO: Uncomment after debugging
-    # step_epi_naomit() %>%
+    step_epi_naomit() %>%
     step_training_window(
       n_recent = args_list$n_training,
       # n_forward = args_list$n_forward,
