@@ -74,10 +74,10 @@ forecaster_parameter_combinations_ <- rlang::list2(
       forecaster = "scaled_pop",
       trainer = "quantreg",
       extra_sources = list2(
-        c("dr_visits", "google_symptoms"),
-        c("dr_visits", "nssp"),
-        c("dr_visits", "nwss"),
-        c("dr_visits", "nwss_region"),
+        ## c("dr_visits", "google_symptoms"),
+        ## c("dr_visits", "nssp"),
+        ## c("dr_visits", "nwss"),
+        ## c("dr_visits", "nwss_region"),
         c("nssp", "google_symptoms"),
         c("nssp", "nwss"),
         c("nssp", "nwss_region"),
@@ -105,7 +105,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       forecaster = "scaled_pop",
       trainer = "quantreg",
       extra_sources = list2(
-        c("dr_visits", "nssp", "google_symptoms", "nwss", "nwss_region"),
+        c("nssp", "google_symptoms", "nwss", "nwss_region"),
       ),
       lags = list2(
         list2(
