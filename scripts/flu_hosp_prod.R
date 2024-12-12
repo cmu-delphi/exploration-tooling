@@ -240,11 +240,10 @@ rlang::list2(
       cue = tar_cue(mode = "always")
     )
   ),
-  # TODO: New data report
-  # tar_target(
-  #   new_data_notebook,
-  #   command = {
-  #     rmarkdown::render("scripts/reports/new_data.Rmd", output_file = here::here("reports", "new_data.html"))
-  #   }
-  # )
+  tar_target(
+    new_data_notebook,
+    command = {
+      rmarkdown::render("scripts/reports/new_data.Rmd", output_file = here::here("reports", "new_data.html"))
+    }
+  )
 )
