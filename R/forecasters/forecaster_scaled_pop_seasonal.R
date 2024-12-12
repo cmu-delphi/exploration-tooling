@@ -208,14 +208,6 @@ scaled_pop_seasonal <- function(epi_data,
       by = c("geo_value" = "abbr")
     )
   }
-  # TODO: Getting a lot of NAs, at irregularly spaced intervals
-  preproc %>%
-    prep(epi_data) %>%
-    bake(new_data = NULL) %>%
-    filter(source == "ILI+") %>%
-    pull(time_value) %>%
-    unique() %>%
-    sort()
   # with all the setup done, we execute and format
   pred <- run_workflow_and_format(preproc, postproc, trainer, season_data, epi_data)
   # now pred has the columns

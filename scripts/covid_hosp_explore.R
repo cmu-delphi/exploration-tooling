@@ -144,7 +144,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
     ),
     pop_scaling = FALSE,
     n_training = Inf,
-    seasonal_method = c("covid", "indicator")
+    seasonal_method = list(c("covid"), c("window"), c("covid", "window"), c("climatological"), c("climatological", "window"))
   )
 ) %>%
   map(function(x) {
