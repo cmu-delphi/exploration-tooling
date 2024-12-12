@@ -59,7 +59,11 @@ if (!dir.exists(store_dir)) dir.create(store_dir)
 
 tar_manifest()
 print(Sys.time())
-tar_make(store = tar_config_get("store", project = tar_project), script = tar_config_get("script", project = tar_project))
+tar_make(
+  store = tar_config_get("store", project = tar_project),
+  script = tar_config_get("script", project = tar_project),
+  use_crew = TRUE
+)
 
 print(Sys.time())
 print("########################################################")
