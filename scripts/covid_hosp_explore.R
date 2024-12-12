@@ -38,7 +38,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       c(0, 7, 14, 21),
       c(0, 7, 14, 21, 28)
     ),
-    pop_scaling = TRUE,
+    pop_scaling = FALSE,
     n_training = Inf
   ),
   tidyr::expand_grid(
@@ -50,7 +50,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       forecaster = "scaled_pop",
       trainer = "quantreg",
       # since it's a list, this gets expanded out to a single one in each row
-      extra_sources = list2("dr_visits", "nssp", "google_symptoms_4_bronchitis", "google_symptoms", "nwss", "nwss_region"),
+      extra_sources = list2("nssp", "google_symptoms_4_bronchitis", "google_symptoms", "nwss", "nwss_region"),
       lags = list2(
         list2(
           c(0, 7, 14, 21), # hhs
@@ -61,7 +61,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
           c(0, 7, 14) # exogenous feature
         )
       ),
-      pop_scaling = TRUE,
+      pop_scaling = FALSE,
       scale_method = "quantile",
       center_method = "median",
       nonlin_method = "quart_root",
@@ -92,7 +92,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
           c(0, 7) # second feature
         )
       ),
-      pop_scaling = TRUE,
+      pop_scaling = FALSE,
       scale_method = "quantile",
       center_method = "median",
       nonlin_method = "quart_root",
@@ -125,7 +125,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
           c(0, 7, 14), # nwss_region
         )
       ),
-      pop_scaling = TRUE,
+      pop_scaling = FALSE,
       scale_method = "quantile",
       center_method = "median",
       nonlin_method = "quart_root",
@@ -142,7 +142,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       c(0, 7, 14, 21),
       c(0, 7)
     ),
-    pop_scaling = TRUE,
+    pop_scaling = FALSE,
     n_training = Inf,
     seasonal_method = c("covid", "indicator")
   )
@@ -161,6 +161,7 @@ stopifnot(length(forecaster_parameter_combinations_$id %>% unique()) == length(f
 forecaster_grid <- forecaster_parameter_combinations_ %>%
   map(make_forecaster_grid) %>%
   bind_rows()
+forecaster_families_ <- setdiff(forecaster_parameter_combinations_ %>% names(), c("flusion_grf"))
 
 scaled_pop_not_scaled <- list(
   forecaster = "scaled_pop",
@@ -282,10 +283,12 @@ rlang::list2(
     tar_target(
       name = hhs_archive,
       command = {
-        hhs_archive_data_asof %>%
+        hhs_archive <- hhs_archive_data_asof %>%
           rename(value = hhs) %>%
           as_epi_archive(compactify = TRUE) %>%
           daily_to_weekly_archive(agg_columns = "value")
+        hhs_archive$geo_type <- "state"
+        hhs_archive
       }
     ),
     tar_target(
@@ -531,29 +534,25 @@ rlang::list2(
         joined_archive_data <- hhs_archive$DT %>%
           select(geo_value, time_value, value, version) %>%
           rename("hhs" := value) %>%
+          add_hhs_region_sum(hhs_region) %>%
+          filter(geo_value != "us") %>%
           as_epi_archive(
             compactify = TRUE
           )
+        joined_archive_data$geo_type <- "custom"
         # drop aggregated geo_values
-        nwss_coarse_state <- nwss_coarse$DT %>%
-          filter(grepl("[a-z]{2}", geo_value)) %>%
-          as_epi_archive()
-        nssp_archive_state <- nssp_archive$DT %>%
-          filter(grepl("[a-z]{2}", geo_value)) %>%
-          as_epi_archive()
-        google_symptoms_archive_state <- google_symptoms_archive$DT %>%
-          filter(grepl("[a-z]{2}", geo_value)) %>%
-          mutate(time_value = as.Date(time_value)) %>%
-          as_epi_archive()
-        joined_archive_data <- joined_archive_data$DT %>%
-          add_hhs_region_sum(hhs_region) %>%
-          as_epi_archive() %>%
-          epix_merge(nwss_coarse_state, sync = "locf") %>%
-          # TODO: Maybe bring these back
-          # epix_merge(doctor_visits_weekly_archive, sync = "locf") %>%
-          epix_merge(nssp_archive_state, sync = "locf") %>%
-          epix_merge(google_symptoms_archive_state, sync = "locf")
-        joined_archive_data$DT %<>% filter(!geo_value %in% c("as", "pr", "vi", "gu", "mp"))
+        joined_archive_data <- joined_archive_data %>%
+          epix_merge(nwss_coarse, sync = "locf")
+        joined_archive_data$geo_type <- "custom"
+        # TODO: Maybe bring these back
+        # epix_merge(doctor_visits_weekly_archive, sync = "locf") %>%
+        joined_archive_data %<>%
+          epix_merge(nssp_archive, sync = "locf")
+        joined_archive_data$geo_type <- "custom"
+        joined_archive_data %<>%
+          epix_merge(google_symptoms_archive, sync = "locf")
+        joined_archive_data$DT %<>% filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% c("as", "pr", "vi", "gu", "mp")))
+        joined_archive_data$geo_type <- "state"
         slide_forecaster(
           epi_archive = joined_archive_data,
           outcome = "hhs",
@@ -586,8 +585,7 @@ rlang::list2(
     external_scores,
     command = {
       actual_eval_data <- hhs_evaluation_data %>%
-        select(-population) %>%
-        mutate(target_end_date = target_end_date - 2)
+        mutate(target_end_date = target_end_date + 3)
       cmu_forecast_dates <- ref_time_values_ + 3
       filtered_forecasts <- external_forecasts %>%
         filter(forecast_date %in% cmu_forecast_dates) %>%

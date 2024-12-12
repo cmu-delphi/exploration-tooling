@@ -108,7 +108,8 @@ run_workflow_and_format <- function(preproc,
                                     train_data,
                                     full_data = NULL,
                                     test_data_interval = as.difftime(52, units = "weeks"),
-                                    return_model = FALSE) {
+                                    return_model = FALSE,
+                                    source_value = "nhsn") {
   as_of <- attributes(train_data)$metadata$as_of
   if (is.null(as_of)) {
     as_of <- max(train_data$time_value)
@@ -117,7 +118,7 @@ run_workflow_and_format <- function(preproc,
     fit(train_data) %>%
     add_frosting(postproc)
   # filter full_data to less than full but more than we need
-  test_data <- get_oversized_test_data(full_data %||% train_data, test_data_interval, preproc)
+  test_data <- get_oversized_test_data(full_data %||% train_data, test_data_interval, preproc, source_value = source_value)
   # predict, and filter out those forecasts for less recent days (predict
   # predicts for every day that has enough data)
   pred <- predict(workflow, test_data)
@@ -136,7 +137,7 @@ run_workflow_and_format <- function(preproc,
 #' @param full_data the full data to narrow down from
 #' @param test_data_interval the amount of time to go backwards from the last
 #'   day
-get_oversized_test_data <- function(full_data, test_data_interval, preproc, predicting = "nhsn") {
+get_oversized_test_data <- function(full_data, test_data_interval, preproc, source_value = "nhsn") {
   # getting the max time value of data columns actually used
   non_na_indicators <- preproc$var_info %>%
     filter(role == "pre-predictor") %>%
@@ -146,7 +147,7 @@ get_oversized_test_data <- function(full_data, test_data_interval, preproc, pred
     pull(time_value) %>%
     max()
   if ("source" %in% names(full_data)) {
-    full_data <- full_data %>% filter(source == predicting)
+    full_data <- full_data %>% filter(source == source_value)
   }
   full_data %>%
     filter((max_time_value - time_value) < test_data_interval) %>%
