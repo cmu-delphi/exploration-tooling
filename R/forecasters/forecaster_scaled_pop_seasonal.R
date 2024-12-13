@@ -142,6 +142,22 @@ scaled_pop_seasonal <- function(epi_data,
     }
   }
 
+  # Make sure NHSN data is the latest available. This is important to make sure
+  # that we use the right data when forecasting and selecting the training
+  # window. We do this by removing any extra source data that could be older.
+  max_time_nhsn <- epi_data %>%
+    filter(source == "nhsn") %>%
+    group_by(geo_value) %>%
+    summarize(max_time_nhsn = max(time_value))
+  epi_data %<>%
+    filter(source == "nhsn") %>%
+    bind_rows(
+      epi_data %>%
+        filter(source != "nhsn") %>%
+        left_join(max_time_nhsn, by = "geo_value") %>%
+        filter(time_value <= max_time_nhsn)
+    )
+
   if (drop_non_seasons) {
     season_data <- epi_data %>% drop_non_seasons()
   } else {
