@@ -295,6 +295,10 @@ climate_median <- function(epi_data, target, ahead, window_size = 3, recent_wind
     filter((season != "2020/21") & (season != "2021/22") & (season != "2019/20"))
   if (!scale_rate) {
     # add the
+    if (!("population" %in% names(filtered))) {
+      filtered %<>%
+        left_join(get_population_data() %>% select(state_id, population), by = join_by(geo_value == state_id))
+    }
     filtered %<>% mutate(across(all_of(target), \(x) x / population * 1e5))
   }
   week_ahead <- as.integer(floor((ahead) / 7))
