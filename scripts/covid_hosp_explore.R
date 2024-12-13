@@ -110,7 +110,6 @@ forecaster_parameter_combinations_ <- rlang::list2(
       lags = list2(
         list2(
           c(0, 7, 14, 21), # hhs
-          c(0, 7), # dr visits
           c(0, 7), # nssp
           c(0, 7), # google symptoms
           c(0, 7), # nwss
@@ -118,7 +117,6 @@ forecaster_parameter_combinations_ <- rlang::list2(
         ),
         list2(
           c(0, 7, 14, 21), # hhs
-          c(0, 7, 14), # dr visits
           c(0, 7), # nssp
           c(0, 7, 14), # google symptoms
           c(0, 7, 14), # nwss
