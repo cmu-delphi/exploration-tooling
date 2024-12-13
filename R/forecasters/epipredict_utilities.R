@@ -30,12 +30,12 @@ arx_preprocess <- function(preproc, outcome, predictors, args_list) {
   }
   preproc %<>%
     step_epi_ahead(!!outcome, ahead = args_list$ahead) %>%
-    # TODO: Uncomment after debugging
     step_epi_naomit() %>%
-    step_training_window(
+    step_training_window2(
       n_recent = args_list$n_training,
-      # n_forward = args_list$n_forward,
-      # seasonal = args_list$seasonal_window
+      seasonal = args_list$seasonal_window,
+      seasonal_backward_window = args_list$seasonal_backward_window,
+      seasonal_forward_window = args_list$seasonal_forward_window,
     )
   return(preproc)
 }

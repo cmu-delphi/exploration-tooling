@@ -40,16 +40,11 @@ add_season_info <- function(data) {
   }
 
   data %>%
-    select(-any_of(c("season", "season_week"))) %>%
-    {
-      if ("epiweek" %nin% names(.)) {
-        . <- (.) %>% mutate(epiweek = epiweek(time_value))
-      }
-      if ("epiyear" %nin% names(.)) {
-        . <- (.) %>% mutate(epiyear = epiyear(time_value))
-      }
-      .
-    } %>%
+    select(-any_of(c("season", "season_week", "epiweek", "epiyear"))) %>%
+    mutate(
+      epiweek = epiweek(time_value),
+      epiyear = epiyear(time_value)
+    ) %>%
     left_join(
       (.) %>%
         distinct(epiweek, epiyear) %>%

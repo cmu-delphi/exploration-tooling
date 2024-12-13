@@ -45,8 +45,8 @@ scaled_pop_seasonal <- function(epi_data,
                                 center_method = c("median", "mean", "none"),
                                 nonlin_method = c("quart_root", "none"),
                                 seasonal_method = c("none", "flu", "covid", "indicator", "window", "climatological"),
-                                season_backward_window = 5 * 7,
-                                season_forward_window = 3 * 7,
+                                seasonal_backward_window = 5 * 7,
+                                seasonal_forward_window = 3 * 7,
                                 train_residual = FALSE,
                                 trainer = parsnip::linear_reg(),
                                 quantile_levels = covidhub_probs(),
@@ -89,9 +89,9 @@ scaled_pop_seasonal <- function(epi_data,
   args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
   args_input[["nonneg"]] <- scale_method == "none"
-  args_input[["n_training"]] <- season_backward_window
-  args_input[["n_forward"]] <- season_forward_window + ahead
   args_input[["seasonal_window"]] <- "window" %in% seasonal_method
+  args_input[["seasonal_backward_window"]] <- seasonal_backward_window
+  args_input[["seasonal_forward_window"]] <- seasonal_forward_window + ahead
   args_list <- inject(default_args_list(!!!args_input))
   # if you want to hardcode particular predictors in a particular forecaster
   predictors <- c(outcome, extra_sources[[1]])
@@ -140,25 +140,6 @@ scaled_pop_seasonal <- function(epi_data,
         select(geo_value, source, epiweek, value = climate_median) %>%
         distinct(geo_value, source, epiweek, .keep_all = TRUE)
     }
-  }
-
-  # TODO: Replace with step_training_window2
-  if ("window" %in% seasonal_method) {
-    last_data_season_week <- epi_data %>%
-      filter(source == "nhsn") %>%
-      filter(time_value == max(time_value)) %>%
-      pull(season_week) %>%
-      max()
-    current_season_week <- convert_epiweek_to_season_week(epiyear(epi_as_of(epi_data)), epiweek(epi_as_of(epi_data)))
-    date_ranges <- epi_data %>%
-      filter(season_week == last_data_season_week) %>%
-      pull(time_value) %>%
-      unique() %>%
-      map(~ c(.x - seq(from = 7, to = season_backward_window, by = 7), .x + seq(from = 0, to = season_forward_window, by = 7))) %>%
-      unlist() %>%
-      as.Date() %>%
-      unique()
-    epi_data <- epi_data %>% filter(time_value %in% unlist(date_ranges))
   }
 
   if (drop_non_seasons) {
