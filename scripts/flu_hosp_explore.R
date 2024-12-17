@@ -535,8 +535,7 @@ rlang::list2(
   tar_target(
     family_notebooks,
     command = {
-      actual_eval_data <- hhs_evaluation_data %>%
-        select(-population) %>%
+      actual_eval_data <- hhs_evaluation_data
         mutate(target_end_date = target_end_date + 3)
       delphi_forecaster_subset <- forecaster_parameter_combinations[[forecaster_families]]$id
       outside_forecaster_subset <- c("FluSight-baseline", "FluSight-ensemble", "UMass-flusion")
@@ -564,7 +563,6 @@ rlang::list2(
     overall_notebook,
     command = {
       actual_eval_data <- hhs_evaluation_data %>%
-        select(-population) %>%
         mutate(target_end_date = target_end_date + 3)
       rmarkdown::render(
         "scripts/reports/flu-overall-comparison-notebook.Rmd",

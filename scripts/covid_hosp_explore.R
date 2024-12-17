@@ -41,7 +41,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
     pop_scaling = FALSE,
     n_training = Inf
   ),
-  tidyr::expand_grid(
+  flatline_forecaster = tidyr::expand_grid(
     forecaster = "flatline_fc",
   ),
   # using exogenous variables
@@ -160,6 +160,7 @@ forecaster_grid <- forecaster_parameter_combinations_ %>%
   map(make_forecaster_grid) %>%
   bind_rows()
 forecaster_families_ <- setdiff(forecaster_parameter_combinations_ %>% names(), c("flusion_grf"))
+reports_dir <- "reports"
 
 scaled_pop_not_scaled <- list(
   forecaster = "scaled_pop",
@@ -575,8 +576,8 @@ rlang::list2(
   tar_target(
     external_forecasts,
     command = {
-      s3load("flusight_forecasts_2023.rds", bucket = "forecasting-team-data")
-      flusight_forecasts_2023
+      s3load("covid19_forecast_hub_2023.rds", bucket = "forecasting-team-data", verbose = FALSE)
+      full_results
     }
   ),
   tar_target(
@@ -586,8 +587,11 @@ rlang::list2(
         mutate(target_end_date = target_end_date + 3)
       cmu_forecast_dates <- ref_time_values_ + 3
       filtered_forecasts <- external_forecasts %>%
+        mutate(forecast_date = forecast_date + 5, target_end_date = target_end_date + 5) %>%
         filter(forecast_date %in% cmu_forecast_dates) %>%
-        rename(model = forecaster)
+        rename(model = forecaster) %>%
+        rename(prediction = value) %>%
+        filter(!is.na(geo_value))
       evaluate_predictions(predictions_cards = filtered_forecasts, truth_data = actual_eval_data) %>%
         rename(forecaster = model)
     }
@@ -610,7 +614,6 @@ rlang::list2(
     family_notebooks,
     command = {
       actual_eval_data <- hhs_evaluation_data %>%
-        select(-population) %>%
         mutate(target_end_date = target_end_date + 3)
       delphi_forecaster_subset <- forecaster_parameter_combinations[[forecaster_families]]$id
       outside_forecaster_subset <- c("COVIDhub-baseline", "COVIDhub-ensemble")
