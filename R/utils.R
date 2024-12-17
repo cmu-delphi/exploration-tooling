@@ -252,11 +252,11 @@ filter_forecast_geos <- function(forecasts, truth_data) {
 }
 
 #' Write a submission file. pred is assumed to be in the correct submission format.
-write_submission_file <- function(pred, forecast_reference_date, submission_directory) {
+write_submission_file <- function(pred, forecast_reference_date, submission_directory, file_name = "CMU-TimeSeries") {
   if (!file.exists(submission_directory)) {
     cli::cli_abort("Submission directory does not exist.", call = rlang::current_call())
   }
-  file_path <- file.path(submission_directory, sprintf("%s-CMU-TimeSeries.csv", forecast_reference_date))
+  file_path <- file.path(submission_directory, sprintf("%s-%s.csv", forecast_reference_date, file_name))
   if (file.exists(file_path)) {
     cli::cli_warn(c("Overwriting existing file in", file_path), call = rlang::current_call())
     file.remove(file_path)

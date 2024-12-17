@@ -9,7 +9,7 @@ truth_data_date <- "2023-09-01"
 # needed to create the aux data targets
 end_date <- Sys.Date()
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
-forecast_generation_date <- Sys.Date()
+forecast_generation_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 very_latent_locations <- list(list(
   c("source"),
   c("flusurv", "ILI+")
@@ -50,12 +50,6 @@ forecaster_fns <- list2(
       mutate(target_end_date = target_end_date + 3)
   },
 )
-geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"), forecast_generation_date)
-geo_exclusions <- exclude_geos(geo_forecasters_weights)
-if (nrow(geo_forecasters_weights %>% filter(forecast_date == forecast_generation_date)) == 0) {
-  geo_forecasters_weights
-  cli_abort("there are no weights  for the forecast date {forecast_generation_date}")
-}
 
 # This is needed to build the data archive
 ref_time_values_ <- seq.Date(as.Date("2023-10-04"), as.Date("2024-04-24"), by = 7L)
@@ -107,6 +101,23 @@ rlang::list2(
   tar_map(
     values = tidyr::expand_grid(tibble(forecast_generation_date = forecast_generation_date)),
     names = "forecast_generation_date",
+    tar_target(
+      name = geo_forecasters_weights,
+      command = {
+        geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"), forecast_generation_date)
+        if (nrow(geo_forecasters_weights %>% filter(forecast_date == forecast_generation_date)) == 0) {
+          cli_abort("there are no weights  for the forecast date {forecast_generation_date}")
+        }
+        geo_forecasters_weights
+      },
+      cue = tar_cue(mode = "always")
+    ),
+    tar_target(
+      name = geo_exclusions,
+      command = {
+        exclude_geos(geo_forecasters_weights)
+      }
+    ),
     tar_target(
       forecast_res,
       command = {
@@ -163,6 +174,23 @@ rlang::list2(
       cue = tar_cue(mode = "always")
     ),
     tar_target(
+      name = make_climate_submission_csv,
+      command = {
+        forecasts <- forecast_res
+        forecasts %>%
+          filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
+          group_by(geo_value, target_end_date, quantile) %>%
+          summarize(forecast_date = first(forecast_date), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+          ungroup() %>%
+          format_flusight(disease = "flu") %>%
+          write_submission_file(
+            get_forecast_reference_date(as.Date(forecast_generation_date)),
+            file.path(submission_directory, "model-output/CMU-climatological-baseline")
+          )
+      },
+      cue = tar_cue(mode = "always")
+    ),
+    tar_target(
       name = validate_result,
       command = {
         make_submission_csv
@@ -172,6 +200,22 @@ rlang::list2(
             submission_directory,
             file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(as.Date(forecast_generation_date)))
           )
+        } else {
+          validation <- "not validating when there is no hub (set submission_directory)"
+        }
+        validation
+      },
+      cue = tar_cue(mode = "always")
+    ),
+    tar_target(
+      name = validate_climate_result,
+      command = {
+        make_climate_submission_csv
+        # only validate if we're saving the result to a hub
+        if (submission_directory != "cache") {
+          validation <- validate_submission(
+            submission_directory,
+            file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(as.Date(forecast_generation_date))))
         } else {
           validation <- "not validating when there is no hub (set submission_directory)"
         }

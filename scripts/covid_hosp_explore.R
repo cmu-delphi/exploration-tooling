@@ -4,13 +4,12 @@ source("scripts/targets-exploration-common.R")
 # These globals are needed by make_forecasts_and_scores (and they need to persist
 # during the actual targets run, since the commands are frozen as expressions).
 hhs_signal <- "confirmed_admissions_covid_1d"
-ref_time_values_ <- as.Date(c("2023-11-08", "2023-11-22"))
 if (!exists("ref_time_values_")) {
   # Alternatively you can let slide_forecaster figure out ref_time_values
   start_date <- as.Date("2023-10-04")
   end_date <- as.Date("2024-04-24")
   date_step <- 7L
-  ref_time_values_ <- NULL
+  #ref_time_values_ <- as.Date(c("2023-11-08", "2023-11-22"))
 }
 time_value_adjust <- 3 # this moves the week marker from Saturday to Wednesday
 
