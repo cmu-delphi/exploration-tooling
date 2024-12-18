@@ -98,6 +98,22 @@ rlang::list2(
     },
     cue = tar_cue(mode = "always")
   ),
+  tar_target(
+    name = nhsn_archive_data,
+    command = {
+      qs::qread(here::here("cache/nhsn_archive.parquet")) %>%
+        add_season_info() %>%
+        mutate(
+          source = "nhsn",
+          geo_value = ifelse(geo_value == "usa", "us", geo_value),
+          value = nhsn_flu,
+          time_value = time_value - 3
+        ) %>%
+        select(geo_value, time_value, version, value, epiweek, epiyear, season, season_week, source) %>%
+        drop_na() %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+    }
+  ),
   tar_map(
     values = tidyr::expand_grid(tibble(forecast_generation_date = forecast_generation_date)),
     names = "forecast_generation_date",
@@ -121,9 +137,15 @@ rlang::list2(
     tar_target(
       forecast_res,
       command = {
-        nhsn_latest_data %>%
+        forecast_date <- as.Date(forecast_generation_date)
+        if (forecast_date < Sys.Date()) {
+          train_data <- nhsn_archive_data %>% epix_as_of(forecast_date)
+        } else {
+          train_data <- nhsn_latest_data
+        }
+        train_data %>%
           bind_rows(joined_latest_extra_data) %>%
-          as_epi_df(other_keys = "source", as_of = round_date(as.Date(forecast_generation_date), "weeks", week_start = 3)) %>%
+          as_epi_df(other_keys = "source", as_of = round_date(forecast_date, "weeks", week_start = 3)) %>%
           forecaster_fns[[forecasters]](ahead = aheads) %>%
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
@@ -215,7 +237,8 @@ rlang::list2(
         if (submission_directory != "cache") {
           validation <- validate_submission(
             submission_directory,
-            file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(as.Date(forecast_generation_date))))
+            file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(as.Date(forecast_generation_date)))
+          )
         } else {
           validation <- "not validating when there is no hub (set submission_directory)"
         }
