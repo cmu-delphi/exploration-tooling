@@ -595,6 +595,14 @@ gen_ili_data <- function(default_day_of_week = 1) {
 }
 
 process_nhsn_data <- function(raw_nhsn_data) {
+  # These are exception dates when the data was available on a different day
+  # than usual. In these two cases, it was the Thursday after. But to keep
+  # the rest of the pipeline the same, we pretend it was available on Wednesday.
+  remap_exceptions <- list(
+    "2024-12-26" = "2024-12-25",
+    "2025-01-02" = "2025-01-01"
+  )
+  fixed_version <- remap_exceptions[[as.character(Sys.Date())]] %||% Sys.Date()
   raw_nhsn_data %>%
     mutate(
       geo_value = tolower(jurisdiction),
@@ -606,6 +614,6 @@ process_nhsn_data <- function(raw_nhsn_data) {
     select(-weekendingdate, -jurisdiction, -starts_with("totalconf")) %>%
     pivot_longer(cols = starts_with("nhsn"), names_to = "disease") %>%
     filter(!is.na(value)) %>%
-    mutate(version = Sys.Date()) %>%
+    mutate(version = fixed_version) %>%
     relocate(geo_value, disease, time_value, version)
 }

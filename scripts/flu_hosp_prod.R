@@ -9,7 +9,8 @@ truth_data_date <- "2023-09-01"
 # needed to create the aux data targets
 end_date <- Sys.Date()
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
-forecast_generation_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
+forecast_generation_date <- Sys.Date() - 1
+
 very_latent_locations <- list(list(
   c("source"),
   c("flusurv", "ILI+")
@@ -98,22 +99,22 @@ rlang::list2(
     },
     cue = tar_cue(mode = "always")
   ),
-  tar_target(
-    name = nhsn_archive_data,
-    command = {
-      qs::qread(here::here("cache/nhsn_archive.parquet")) %>%
-        add_season_info() %>%
-        mutate(
-          source = "nhsn",
-          geo_value = ifelse(geo_value == "usa", "us", geo_value),
-          value = nhsn_flu,
-          time_value = time_value - 3
-        ) %>%
-        select(geo_value, time_value, version, value, epiweek, epiyear, season, season_week, source) %>%
-        drop_na() %>%
-        as_epi_archive(other_keys = "source", compactify = TRUE)
-    }
-  ),
+  # tar_target(
+  #   name = nhsn_archive_data,
+  #   command = {
+  #     qs::qread(here::here("cache/nhsn_archive.parquet")) %>%
+  #       add_season_info() %>%
+  #       mutate(
+  #         source = "nhsn",
+  #         geo_value = ifelse(geo_value == "usa", "us", geo_value),
+  #         value = nhsn_flu,
+  #         time_value = time_value - 3
+  #       ) %>%
+  #       select(geo_value, time_value, version, value, epiweek, epiyear, season, season_week, source) %>%
+  #       drop_na() %>%
+  #       as_epi_archive(other_keys = "source", compactify = TRUE)
+  #   }
+  # ),
   tar_map(
     values = tidyr::expand_grid(tibble(forecast_generation_date = forecast_generation_date)),
     names = "forecast_generation_date",
@@ -139,7 +140,7 @@ rlang::list2(
       command = {
         forecast_date <- as.Date(forecast_generation_date)
         if (forecast_date < Sys.Date()) {
-          train_data <- nhsn_archive_data %>% epix_as_of(forecast_date)
+          # train_data <- nhsn_archive_data %>% epix_as_of(forecast_date)
         } else {
           train_data <- nhsn_latest_data
         }
@@ -195,23 +196,23 @@ rlang::list2(
       },
       cue = tar_cue(mode = "always")
     ),
-    tar_target(
-      name = make_climate_submission_csv,
-      command = {
-        forecasts <- forecast_res
-        forecasts %>%
-          filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
-          group_by(geo_value, target_end_date, quantile) %>%
-          summarize(forecast_date = first(forecast_date), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
-          ungroup() %>%
-          format_flusight(disease = "flu") %>%
-          write_submission_file(
-            get_forecast_reference_date(as.Date(forecast_generation_date)),
-            file.path(submission_directory, "model-output/CMU-climatological-baseline")
-          )
-      },
-      cue = tar_cue(mode = "always")
-    ),
+    # tar_target(
+    #   name = make_climate_submission_csv,
+    #   command = {
+    #     forecasts <- forecast_res
+    #     forecasts %>%
+    #       filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
+    #       group_by(geo_value, target_end_date, quantile) %>%
+    #       summarize(forecast_date = first(forecast_date), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+    #       ungroup() %>%
+    #       format_flusight(disease = "flu") %>%
+    #       write_submission_file(
+    #         get_forecast_reference_date(as.Date(forecast_generation_date)),
+    #         file.path(submission_directory, "model-output/CMU-climatological-baseline")
+    #       )
+    #   },
+    #   cue = tar_cue(mode = "always")
+    # ),
     tar_target(
       name = validate_result,
       command = {
@@ -229,23 +230,23 @@ rlang::list2(
       },
       cue = tar_cue(mode = "always")
     ),
-    tar_target(
-      name = validate_climate_result,
-      command = {
-        make_climate_submission_csv
-        # only validate if we're saving the result to a hub
-        if (submission_directory != "cache") {
-          validation <- validate_submission(
-            submission_directory,
-            file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(as.Date(forecast_generation_date)))
-          )
-        } else {
-          validation <- "not validating when there is no hub (set submission_directory)"
-        }
-        validation
-      },
-      cue = tar_cue(mode = "always")
-    ),
+    # tar_target(
+    #   name = validate_climate_result,
+    #   command = {
+    #     make_climate_submission_csv
+    #     # only validate if we're saving the result to a hub
+    #     if (submission_directory != "cache") {
+    #       validation <- validate_submission(
+    #         submission_directory,
+    #         file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(as.Date(forecast_generation_date)))
+    #       )
+    #     } else {
+    #       validation <- "not validating when there is no hub (set submission_directory)"
+    #     }
+    #     validation
+    #   },
+    #   cue = tar_cue(mode = "always")
+    # ),
     tar_target(
       name = truth_data,
       command = {

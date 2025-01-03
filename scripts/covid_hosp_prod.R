@@ -8,7 +8,7 @@ insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
 truth_data_date <- "2023-09-01"
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
-forecast_generation_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
+forecast_generation_date <- Sys.Date() - 1
 
 forecaster_fns <- list2(
   linear = function(...) {
@@ -134,23 +134,23 @@ rlang::list2(
       },
       cue = tar_cue(mode = "always")
     ),
-    tar_target(
-      name = make_climate_submission_csv,
-      command = {
-        forecasts <- forecast_res
-        forecasts %>%
-          filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
-          group_by(geo_value, target_end_date, quantile) %>%
-          summarize(forecast_date = first(forecast_date), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
-          ungroup() %>%
-          format_flusight(disease = "covid") %>%
-          write_submission_file(
-            get_forecast_reference_date(as.Date(forecast_generation_date)),
-            file.path(submission_directory, "model-output/CMU-climatological-baseline")
-          )
-      },
-      cue = tar_cue(mode = "always")
-    ),
+    # tar_target(
+    #   name = make_climate_submission_csv,
+    #   command = {
+    #     forecasts <- forecast_res
+    #     forecasts %>%
+    #       filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
+    #       group_by(geo_value, target_end_date, quantile) %>%
+    #       summarize(forecast_date = first(forecast_date), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+    #       ungroup() %>%
+    #       format_flusight(disease = "covid") %>%
+    #       write_submission_file(
+    #         get_forecast_reference_date(as.Date(forecast_generation_date)),
+    #         file.path(submission_directory, "model-output/CMU-climatological-baseline")
+    #       )
+    #   },
+    #   cue = tar_cue(mode = "always")
+    # ),
     tar_target(
       name = validate_result,
       command = {
@@ -159,7 +159,8 @@ rlang::list2(
         if (submission_directory != "cache") {
           validation <- validate_submission(
             submission_directory,
-            file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(as.Date(forecast_generation_date))))
+            file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(as.Date(forecast_generation_date)))
+          )
         } else {
           validation <- "not validating when there is no hub (set submission_directory)"
         }
@@ -167,22 +168,22 @@ rlang::list2(
       },
       cue = tar_cue(mode = "always")
     ),
-    tar_target(
-      name = validate_climate_result,
-      command = {
-        make_climate_submission_csv
-        # only validate if we're saving the result to a hub
-        if (submission_directory != "cache") {
-          validation <- validate_submission(
-            submission_directory,
-            file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(as.Date(forecast_generation_date))))
-        } else {
-          validation <- "not validating when there is no hub (set submission_directory)"
-        }
-        validation
-      },
-      cue = tar_cue(mode = "always")
-    ),
+    # tar_target(
+    #   name = validate_climate_result,
+    #   command = {
+    #     make_climate_submission_csv
+    #     # only validate if we're saving the result to a hub
+    #     if (submission_directory != "cache") {
+    #       validation <- validate_submission(
+    #         submission_directory,
+    #         file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(as.Date(forecast_generation_date))))
+    #     } else {
+    #       validation <- "not validating when there is no hub (set submission_directory)"
+    #     }
+    #     validation
+    #   },
+    #   cue = tar_cue(mode = "always")
+    # ),
     tar_target(
       name = truth_data,
       command = {
