@@ -9,7 +9,7 @@ truth_data_date <- "2023-09-01"
 # needed to create the aux data targets
 end_date <- Sys.Date()
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
-forecast_generation_date <- Sys.Date()
+forecast_generation_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 
 very_latent_locations <- list(list(
   c("source"),
@@ -99,58 +99,22 @@ rlang::list2(
         select(-version) %>%
         data_substitutions(disease = "flu")
     },
-    cue = tar_cue(mode = "always")
+    cue = targets::tar_cue(mode = "thorough")
   ),
   tar_target(
     name = nhsn_archive_data,
     command = {
-      nhsn_main_state <- epidatr::pub_covidcast(
-                 source = "nhsn",
-                 signals = "confirmed_admissions_flu_ew",
-                 geo_type = "state",
-                 time_type = "week",
-                 geo_values = "*",
-                 time_values = "*",
-                 issues = "*"
-               )
-      nhsn_main_nation <- epidatr::pub_covidcast(
-                 source = "nhsn",
-                 signals = "confirmed_admissions_flu_ew",
-                 geo_type = "nation",
-                 time_type = "week",
-                 geo_values = "*",
-                 time_values = "*",
-                 issues = "*"
-               )
-      nhsn_prelim_state <- epidatr::pub_covidcast(
-                 source = "nhsn",
-                 signals = "confirmed_admissions_flu_ew_prelim",
-                 geo_type = "state",
-                 time_type = "week",
-                 geo_values = "*",
-                 time_values = "*",
-                 issues = "*"
-               ) %>%
-        mutate(issue = issue + 3)
-      nhsn_prelim_nation <- epidatr::pub_covidcast(
-                 source = "nhsn",
-                 signals = "confirmed_admissions_flu_ew_prelim",
-                 geo_type = "nation",
-                 time_type = "week",
-                 geo_values = "*",
-                 time_values = "*",
-                 issues = "*"
-               ) %>%
-        mutate(issue = issue + 3)
-      nhsn_archive <- bind_rows(
-        nhsn_main_state,
-        nhsn_main_nation,
-        nhsn_prelim_state,
-        nhsn_prelim_nation) %>%
-        select(geo_value, time_value, version = issue, value) %>%
+      qs::qread(here::here("cache/nhsn_archive_made_2025-01-06.parquet")) %>%
+        add_season_info() %>%
+        mutate(
+          source = "nhsn",
+          geo_value = ifelse(geo_value == "usa", "us", geo_value),
+          value = nhsn_flu,
+          time_value = time_value - 3
+        ) %>%
+        select(geo_value, time_value, version, value, epiweek, epiyear, season, season_week, source) %>%
         drop_na() %>%
-        as_epi_archive(compactify = TRUE)
-      nhsn_archive
+        as_epi_archive(other_keys = "source", compactify = TRUE)
     }
   ),
   tar_map(
@@ -178,7 +142,7 @@ rlang::list2(
       command = {
         forecast_date <- as.Date(forecast_generation_date)
         if (forecast_date < Sys.Date()) {
-          # train_data <- nhsn_archive_data %>% epix_as_of(forecast_date)
+          train_data <- nhsn_archive_data %>% epix_as_of(forecast_date)
         } else {
           train_data <- nhsn_latest_data
         }
@@ -235,23 +199,24 @@ rlang::list2(
       },
       cue = tar_cue(mode = "always")
     ),
-    # tar_target(
-    #   name = make_climate_submission_csv,
-    #   command = {
-    #     forecasts <- forecast_res
-    #     forecasts %>%
-    #       filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
-    #       group_by(geo_value, target_end_date, quantile) %>%
-    #       summarize(forecast_date = first(forecast_date), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
-    #       ungroup() %>%
-    #       format_flusight(disease = "flu") %>%
-    #       write_submission_file(
-    #         get_forecast_reference_date(as.Date(forecast_generation_date)),
-    #         file.path(submission_directory, "model-output/CMU-climatological-baseline")
-    #       )
-    #   },
-    #   cue = tar_cue(mode = "always")
-    # ),
+    tar_target(
+      name = make_climate_submission_csv,
+      command = {
+        forecasts <- forecast_res
+        forecasts %>%
+          filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
+          group_by(geo_value, target_end_date, quantile) %>%
+          summarize(forecast_date = first(forecast_date), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+          ungroup() %>%
+          format_flusight(disease = "flu") %>%
+          write_submission_file(
+            get_forecast_reference_date(as.Date(forecast_generation_date)),
+            submission_directory = file.path(submission_directory, "model-output/CMU-climatological-baseline"),
+            file_name = "CMU-climatological-baseline"
+          )
+      },
+      cue = tar_cue(mode = "always")
+    ),
     tar_target(
       name = validate_result,
       command = {
@@ -269,23 +234,23 @@ rlang::list2(
       },
       cue = tar_cue(mode = "always")
     ),
-    # tar_target(
-    #   name = validate_climate_result,
-    #   command = {
-    #     make_climate_submission_csv
-    #     # only validate if we're saving the result to a hub
-    #     if (submission_directory != "cache") {
-    #       validation <- validate_submission(
-    #         submission_directory,
-    #         file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(as.Date(forecast_generation_date)))
-    #       )
-    #     } else {
-    #       validation <- "not validating when there is no hub (set submission_directory)"
-    #     }
-    #     validation
-    #   },
-    #   cue = tar_cue(mode = "always")
-    # ),
+    tar_target(
+      name = validate_climate_result,
+      command = {
+        make_climate_submission_csv
+        # only validate if we're saving the result to a hub
+        if (submission_directory != "cache") {
+          validation <- validate_submission(
+            submission_directory,
+            file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(as.Date(forecast_generation_date)))
+          )
+        } else {
+          validation <- "not validating when there is no hub (set submission_directory)"
+        }
+        validation
+      },
+      cue = tar_cue(mode = "always")
+    ),
     tar_target(
       name = truth_data,
       command = {

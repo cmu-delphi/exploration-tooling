@@ -97,3 +97,24 @@ new_results_prelim$DT %>%
   arrange(rel_diff, geo_value, disease, time_value, version) %>%
   print(n = 57)
 print(n = 180)
+
+all_versions <- lapply(list.files(here::here("cache/raw_data/"), pattern = "*.parquet"),
+       function(filename) {
+         version_timestamp <- ymd_hms(stringr::str_sub(filename, 11,-9))
+         qs::qread(file.path(here::here("cache/raw_data/"), filename)) %>%
+           process_nhsn_data() %>%
+           mutate(version = version_timestamp)
+       })
+compactified <-
+  all_versions %>%
+  bind_rows() %>%
+  arrange(geo_value, time_value, disease, version) %>%
+  filter(if_any(
+    c(everything(), -version), # all non-version columns
+    ~ !epiprocess:::is_locf(., .Machine$double.eps^0.5)
+  ))
+compactified %>% mutate(version = as.Date(version)) %>% pivot_wider(names_from = disease, values_from = value) %>%
+compactified %>% group_by(geo_value, time_value, disease) %>% count() %>% arrange(desc(n))
+compactified %>% filter(time_value == "2020-10-17", geo_value == "ak") %>% glimpse
+compactified %>% filter(time_value == "2024-11-02", geo_value == "usa", disease == "nhsn_covid") %>% glimpse
+qs::qsave(here::here("cache/nhsn_archive_made_2025-01-06.parquet"))
