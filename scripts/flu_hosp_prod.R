@@ -101,22 +101,58 @@ rlang::list2(
     },
     cue = tar_cue(mode = "always")
   ),
-  # tar_target(
-  #   name = nhsn_archive_data,
-  #   command = {
-  #     qs::qread(here::here("cache/nhsn_archive.parquet")) %>%
-  #       add_season_info() %>%
-  #       mutate(
-  #         source = "nhsn",
-  #         geo_value = ifelse(geo_value == "usa", "us", geo_value),
-  #         value = nhsn_flu,
-  #         time_value = time_value - 3
-  #       ) %>%
-  #       select(geo_value, time_value, version, value, epiweek, epiyear, season, season_week, source) %>%
-  #       drop_na() %>%
-  #       as_epi_archive(other_keys = "source", compactify = TRUE)
-  #   }
-  # ),
+  tar_target(
+    name = nhsn_archive_data,
+    command = {
+      nhsn_main_state <- epidatr::pub_covidcast(
+                 source = "nhsn",
+                 signals = "confirmed_admissions_flu_ew",
+                 geo_type = "state",
+                 time_type = "week",
+                 geo_values = "*",
+                 time_values = "*",
+                 issues = "*"
+               )
+      nhsn_main_nation <- epidatr::pub_covidcast(
+                 source = "nhsn",
+                 signals = "confirmed_admissions_flu_ew",
+                 geo_type = "nation",
+                 time_type = "week",
+                 geo_values = "*",
+                 time_values = "*",
+                 issues = "*"
+               )
+      nhsn_prelim_state <- epidatr::pub_covidcast(
+                 source = "nhsn",
+                 signals = "confirmed_admissions_flu_ew_prelim",
+                 geo_type = "state",
+                 time_type = "week",
+                 geo_values = "*",
+                 time_values = "*",
+                 issues = "*"
+               ) %>%
+        mutate(issue = issue + 3)
+      nhsn_prelim_nation <- epidatr::pub_covidcast(
+                 source = "nhsn",
+                 signals = "confirmed_admissions_flu_ew_prelim",
+                 geo_type = "nation",
+                 time_type = "week",
+                 geo_values = "*",
+                 time_values = "*",
+                 issues = "*"
+               ) %>%
+        mutate(issue = issue + 3)
+      nhsn_archive <- bind_rows(
+        nhsn_main_state,
+        nhsn_main_nation,
+        nhsn_prelim_state,
+        nhsn_prelim_nation) %>%
+        select(geo_value, time_value, version = issue, value) %>%
+        drop_na() %>%
+        as_epi_archive(compactify = TRUE)
+      nhsn_archive
+    }
+  ),
   tar_map(
     values = tidyr::expand_grid(tibble(forecast_generation_date = forecast_generation_date)),
     names = "forecast_generation_date",
