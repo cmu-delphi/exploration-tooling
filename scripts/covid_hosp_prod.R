@@ -8,7 +8,7 @@ insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
 truth_data_date <- "2023-09-01"
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
-forecast_generation_date <- Sys.Date() - 1
+forecast_generation_date <- Sys.Date()
 
 forecaster_fns <- list2(
   linear = function(...) {

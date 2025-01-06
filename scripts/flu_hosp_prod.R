@@ -9,7 +9,7 @@ truth_data_date <- "2023-09-01"
 # needed to create the aux data targets
 end_date <- Sys.Date()
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
-forecast_generation_date <- Sys.Date() - 1
+forecast_generation_date <- Sys.Date()
 
 very_latent_locations <- list(list(
   c("source"),
