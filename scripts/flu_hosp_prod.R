@@ -173,7 +173,8 @@ rlang::list2(
     tar_target(
       name = ensemble_mixture_res,
       command = {
-        forecast_res %>%
+        ensembled <-
+          forecast_res %>%
           # Apply the ahead-by-quantile weighting scheme
           ensemble_linear_climate(aheads, other_weights = geo_forecasters_weights) %>%
           filter(geo_value %nin% geo_exclusions) %>%
@@ -182,6 +183,11 @@ rlang::list2(
           bind_rows(forecast_res %>% filter(forecaster == "windowed_seasonal")) %>%
           group_by(geo_value, forecast_date, target_end_date, quantile) %>%
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop")
+          #filter(geo_value != "us", geo_value !="usa")
+        sorted <- ensembled %>%
+          group_by(geo_value, forecast_date, target_end_date) %>%
+          mutate(value = sort(value))
+        sorted
       },
     ),
     tar_target(

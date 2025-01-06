@@ -158,7 +158,7 @@ parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv")
                                gen_forecast_date) {
   all_states <- c(
     unique(readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE)$state_id),
-    "usa"
+    "usa", "us"
   )
   all_prod_weights <- readr::read_csv(filename, comment = "#", show_col_types = FALSE)
   # if we haven't set specific weights, use the overall defaults
