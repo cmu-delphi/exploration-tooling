@@ -1,5 +1,5 @@
 source(here::here("R", "load_all.R"))
-local_edition(3)
+testthat::local_edition(3)
 # TODO better way to do this than copypasta
 forecasters <- list(
   list("scaled_pop", scaled_pop),
@@ -35,7 +35,7 @@ for (forecaster in forecasters) {
     if (forecaster[[1]] == "smoothed_scaled") {
       expect_no_error(res <- forecaster[[2]](jhu, "case_rate", "", -2L, lags = forecaster$lags))
     } else {
-      expect_no_error(res <- forecaster[[2]](jhu, "case_rate", "", -2L))
+      expect_no_error(suppressWarnings(res <- forecaster[[2]](jhu, "case_rate", "", -2L)))
     }
   })
 

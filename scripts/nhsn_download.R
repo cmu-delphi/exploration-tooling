@@ -114,7 +114,7 @@ compactified <-
     ~ !epiprocess:::is_locf(., .Machine$double.eps^0.5)
   ))
 compactified %>% mutate(version = as.Date(version)) %>% pivot_wider(names_from = disease, values_from = value) %>%
+  qs::qsave(here::here("cache/nhsn_archive_made_2025-01-06.parquet"))
 compactified %>% group_by(geo_value, time_value, disease) %>% count() %>% arrange(desc(n))
 compactified %>% filter(time_value == "2020-10-17", geo_value == "ak") %>% glimpse
 compactified %>% filter(time_value == "2024-11-02", geo_value == "usa", disease == "nhsn_covid") %>% glimpse
-qs::qsave(here::here("cache/nhsn_archive_made_2025-01-06.parquet"))

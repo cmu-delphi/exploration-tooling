@@ -94,7 +94,7 @@ smoothed_scaled <- function(epi_data,
   adding_source <- FALSE
   if (!("source" %in% names(epi_data))) {
     adding_source <- TRUE
-    epi_data$source <- c("none")
+    epi_data$source <- c("nhsn")
     attributes(epi_data)$metadata$other_keys <- "source"
   }
   args_input[["ahead"]] <- ahead
