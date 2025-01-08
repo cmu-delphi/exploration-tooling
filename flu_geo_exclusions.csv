@@ -7,6 +7,14 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, climate_base, all, 0.5
 2024-10-01, climate_geo_agged, all, 0.25
 2024-10-01, climate_quantile_extrapolated, all, 0
+# jan 8
+2025-01-08, all, mp, 0
+2025-01-08, windowed_seasonal, all, 3
+2025-01-08, linear, all, 0.5
+2025-01-08, linearlog, all, 0
+2025-01-08, climate_base, all, 0.5
+2025-01-08, climate_geo_agged, all, 0.25
+2025-01-08, climate_quantile_extrapolated, all, 0
 # nov 27
 2024-11-27, all, mp, 0
 2024-11-27, linear, all, 3

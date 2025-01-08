@@ -12,7 +12,7 @@ forecast_generation_date <- Sys.Date()
 
 forecaster_fns <- list2(
   linear = function(...) {
-    forecaster_baseline_linear(..., residual_tail = 0.97, residual_center = 0.097)
+    forecaster_baseline_linear(..., residual_tail = 0.97, residual_center = 0.097, no_intercept = TRUE)
   },
   # linearlog = function(...) {
   #   forecaster_baseline_linear(..., log = TRUE)

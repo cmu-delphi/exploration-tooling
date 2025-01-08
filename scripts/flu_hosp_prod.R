@@ -23,7 +23,8 @@ forecaster_fns <- list2(
       forecaster_baseline_linear(
         ahead, ...,
         residual_tail = 0.99,
-        residual_center = 0.35
+        residual_center = 0.35,
+        no_intercept = TRUE
       )
   },
   # linearlog = function(...) {

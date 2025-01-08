@@ -1,5 +1,5 @@
 #' epi_data is expected to have: geo_value, time_value, and value columns.
-forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALSE, residual_tail = 0.85, residual_center = 0.085) {
+forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALSE, residual_tail = 0.85, residual_center = 0.085, no_intercept = FALSE) {
   forecast_date <- attributes(epi_data)$metadata$as_of
   population_data <- get_population_data() %>%
     rename(geo_value = state_id) %>%
@@ -29,15 +29,45 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
     group_by(geo_value) %>%
     filter(!(is.na(value) | is.infinite(value))) %>%
     filter(n() >= 2) %>%
-    mutate(weeks_back = as.integer(time_value - epi_as_of(df_processed)) / 7)
+    mutate(weeks_back = as.integer(time_value - max(df_processed$time_value)) / 7)
+  latency <- as.integer(ceiling((epi_as_of(df_processed) - max(df_processed$time_value)) / 7))
 
-  point_forecast <- tibble(
-    geo_value = train_data$geo_value %>% unique(),
-    model = map(geo_value, ~ lm(value ~ weeks_back, data = train_data %>% filter(geo_value == .x))),
-    value = map_dbl(model, ~ predict(.x, newdata = data.frame(weeks_back = ahead))),
-    season_week = target_season_week
-  )
-
+  if (no_intercept) {
+    # set the intercept column to be the last value for that geo
+    intercept_values <-
+      train_data %>%
+      select(geo_value, time_value, value, weeks_back) %>%
+      group_by(geo_value) %>%
+      filter(time_value == max(time_value)) %>%
+      rename(intercept = value) %>%
+      select(geo_value, intercept) %>%
+      ungroup()
+    train_data <- train_data %>%
+      left_join(intercept_values, by = join_by(geo_value))
+    point_forecast <- tibble(
+      geo_value = train_data$geo_value %>% unique(),
+      model = purrr::map(geo_value, ~ lm(value ~ weeks_back + 0, data = train_data %>% filter(geo_value == .x), offset = intercept)),
+      season_week = target_season_week
+    ) %>%
+      left_join(intercept_values, by = join_by(geo_value)) %>%
+      mutate(
+        value = map2_vec(
+          model, intercept,
+          \(model_x, intercept_y)
+          # need to add the latency
+          predict(model_x, newdata = data.frame(weeks_back = ahead + latency, intercept = intercept_y))
+        )
+      ) %>%
+      select(-intercept)
+  } else {
+    point_forecast <- tibble(
+      geo_value = train_data$geo_value %>% unique(),
+      model = map(geo_value, ~ lm(value ~ weeks_back, data = train_data %>% filter(geo_value == .x))),
+      # ahead is +1 b/c the data is 1 week latent
+      value = map_dbl(model, ~ predict(.x, newdata = data.frame(weeks_back = ahead + latency))),
+      season_week = target_season_week
+    )
+  }
   missing_geos <- setdiff(geos, unique(point_forecast$geo_value))
 
   point_forecast <- bind_rows(
@@ -75,7 +105,8 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
     epipredict:::propagate_samples(residuals, point, quantile_levels = covidhub_probs(), aheads = ahead + 2, nsim = 1e4, symmetrize = TRUE, nonneg = FALSE)[[1]] %>%
       pull(.pred_distn)
   }
-  quantile_forecast <- point_forecast %>%
+  quantile_forecast <-
+    point_forecast %>%
     rowwise() %>%
     mutate(quantile = get_quantile(value, ahead) %>% nested_quantiles()) %>%
     unnest(quantile) %>%
@@ -95,4 +126,5 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
     ) %>%
     select(-model, -values, -population, -season_week) %>%
     mutate(value = pmax(0, value))
+  quantile_forecast
 }
