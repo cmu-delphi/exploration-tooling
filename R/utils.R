@@ -153,7 +153,20 @@ get_exclusions <- function(
   }
   return("")
 }
-
+data_substitutions <- function(dataset, disease, forecast_generation_date) {
+  disease <- "flu"
+  forecast_generation_date <- as.Date("2025-01-08")
+  substitutions <- readr::read_csv(
+                          glue::glue("{disease}_data_substitutions.csv"),
+                          comment = "#",
+                          show_col_types = FALSE) %>%
+    filter(forecast_date == forecast_generation_date) %>%
+    select(-forecast_date) %>%
+    rename(new_value = value)
+  dataset %>% left_join(substitutions) %>%
+    mutate(value = ifelse(!is.na(new_value), new_value, value)) %>%
+    select(-new_value)
+}
 parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv"),
                                gen_forecast_date) {
   all_states <- c(

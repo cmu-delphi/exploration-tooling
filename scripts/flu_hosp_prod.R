@@ -96,7 +96,8 @@ rlang::list2(
           time_value = time_value - 3
         ) %>%
         filter(version == max(version)) %>%
-        select(-version)
+        select(-version) %>%
+        data_substitutions(disease = "flu")
     },
     cue = tar_cue(mode = "always")
   ),
