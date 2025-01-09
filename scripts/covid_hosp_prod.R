@@ -87,7 +87,8 @@ rlang::list2(
     tar_target(
       forecast_res,
       command = {
-        nhsn <- nhsn_latest_data
+        nhsn <- nhsn_latest_data %>%
+          data_substitutions(disease = "covid")
         nhsn <- nhsn %>%
           as_epi_df(as_of = as.Date(forecast_generation_date))
         attributes(nhsn)$metadata$as_of <- as.Date(forecast_generation_date)
@@ -96,8 +97,7 @@ rlang::list2(
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
             geo_value = as.factor(geo_value)
-          ) %>%
-          data_substitutions(disease = "covid")
+          )
       },
       pattern = cross(aheads, forecasters),
       cue = tar_cue(mode = "always")
