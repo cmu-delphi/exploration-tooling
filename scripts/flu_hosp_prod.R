@@ -185,10 +185,11 @@ rlang::list2(
           bind_rows(forecast_res %>% filter(forecaster == "windowed_seasonal")) %>%
           group_by(geo_value, forecast_date, target_end_date, quantile) %>%
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop")
-          #filter(geo_value != "us", geo_value !="usa")
+        # filter(geo_value != "us", geo_value !="usa")
         sorted <- ensembled %>%
           group_by(geo_value, forecast_date, target_end_date) %>%
-          mutate(value = sort(value))
+          mutate(value = sort(value)) %>%
+          ungroup()
         sorted
       },
     ),
