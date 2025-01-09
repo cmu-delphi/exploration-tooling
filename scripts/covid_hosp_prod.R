@@ -96,7 +96,8 @@ rlang::list2(
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
             geo_value = as.factor(geo_value)
-          )
+          ) %>%
+          data_substitutions(disease = "covid")
       },
       pattern = cross(aheads, forecasters),
       cue = tar_cue(mode = "always")
