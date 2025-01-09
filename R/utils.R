@@ -157,13 +157,15 @@ data_substitutions <- function(dataset, disease, forecast_generation_date) {
   disease <- "flu"
   forecast_generation_date <- as.Date("2025-01-08")
   substitutions <- readr::read_csv(
-                          glue::glue("{disease}_data_substitutions.csv"),
-                          comment = "#",
-                          show_col_types = FALSE) %>%
+    glue::glue("{disease}_data_substitutions.csv"),
+    comment = "#",
+    show_col_types = FALSE
+  ) %>%
     filter(forecast_date == forecast_generation_date) %>%
     select(-forecast_date) %>%
     rename(new_value = value)
-  dataset %>% left_join(substitutions) %>%
+  dataset %>%
+    left_join(substitutions) %>%
     mutate(value = ifelse(!is.na(new_value), new_value, value)) %>%
     select(-new_value)
 }
@@ -330,4 +332,14 @@ update_site <- function() {
 
   # Convert the markdown file to HTML
   system("pandoc reports/report.md -s -o reports/index.html --css=reports/style.css --mathjax='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js' --metadata pagetitle='Delphi Reports'")
+}
+
+#' Ensure that forecast values are monotically increasing
+#' in quantile order.
+sort_by_quantile <- function(forecasts) {
+  forecasts %>%
+    arrange(geo_value, target_end_date, forecast_date, quantile) %>%
+    group_by(geo_value, forecast_date, target_end_date) %>%
+    mutate(value = sort(value)) %>%
+    ungroup()
 }

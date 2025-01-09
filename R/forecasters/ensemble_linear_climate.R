@@ -52,10 +52,10 @@ ensemble_linear_climate <- function(forecasts,
       )
     full_weights <- full_weights %>%
       left_join(
-      other_weights,
-      by = join_by(forecaster),
-      relationship = "many-to-many"
-    ) %>%
+        other_weights,
+        by = join_by(forecaster),
+        relationship = "many-to-many"
+      ) %>%
       mutate(weight = weight.x * weight.y) %>%
       select(geo_value, ahead, forecaster, quantile, weight)
     grouping_cols <- c("geo_value", "ahead", "quantile")
@@ -82,13 +82,8 @@ ensemble_linear_climate <- function(forecasts,
     ) %>%
     mutate(value = weight * value) %>%
     group_by(geo_value, forecast_date, target_end_date, quantile) %>%
-    summarize(value = sum(value, na.rm = TRUE), .groups = "drop")
-  # sort the quantiles
-  weighted_forecasts <-
-    weighted_forecasts %>%
-    group_by(geo_value, target_end_date, forecast_date) %>%
-    arrange(geo_value, target_end_date, forecast_date, quantile) %>%
-    mutate(value = sort(value))
+    summarize(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+    sort_by_quantile()
   return(weighted_forecasts)
 }
 
