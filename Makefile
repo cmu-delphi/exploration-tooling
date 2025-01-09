@@ -1,3 +1,5 @@
+current_date:=$(shell date +%F)
+
 install:
 	Rscript -e "install.packages(c('renv', 'pak', 'rspm'))"
 	Rscript -e "renv::restore()"
@@ -21,40 +23,36 @@ prod-flu:
 prod: prod-covid prod-flu update_site netlify
 
 submit-covid:
-	current_date=$(date +%D); \
 	cd ../covid19-forecast-hub; \
 	git pull delphi main; \
 	git add model-output/CMU-TimeSeries/*; \
-	git commit -am "CMU-Delphi submission $(date +%D)"; \
+	git commit -am "CMU-Delphi submission $(current_date)"; \
 	git push delphi main; \
-	gh pr create --title "CMU-TimeSeries $(date +%D)" --repo cdcgov/covid19-forecast-hub
+	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcgov/covid19-forecast-hub
 
 submit-flu:
-	current_date=$(date +%D); \
 	cd ../FluSight-forecast-hub; \
 	git pull delphi main; \
 	git add model-output/CMU-TimeSeries/*; \
-	git commit -am "CMU-Delphi submission $(date +%D)"; \
+	git commit -am "CMU-Delphi submission $(current_date)"; \
 	git push delphi; \
-	gh pr create --title "CMU-TimeSeries $(date +%D)" --repo cdcepi/FluSight-forecast-hub
+	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcepi/FluSight-forecast-hub
 
 submit-covid-dry:
-	current_date=$(date +%D); \
 	cd ../covid19-forecast-hub; \
 	git pull delphi main; \
 	git add model-output/CMU-TimeSeries/*; \
-	git commit -am "CMU-Delphi submission $(date +%D)"; \
+	git commit -am "CMU-Delphi submission $(current_date)"; \
 	git push delphi main; \
-	gh pr create --title "CMU-TimeSeries $(date +%D)" --repo cdcgov/covid19-forecast-hub --dry-run
+	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcgov/covid19-forecast-hub --dry-run
 
 submit-flu-dry:
-	current_date=$(date +%D); \
 	cd ../FluSight-forecast-hub; \
 	git pull delphi main; \
 	git add model-output/CMU-TimeSeries/*; \
-	git commit -am "CMU-Delphi submission $(date +%D)"; \
+	git commit -am "CMU-Delphi submission $(current_date)"; \
 	git push delphi; \
-	gh pr create --title "CMU-TimeSeries $(date +%D)" --repo cdcepi/FluSight-forecast-hub --dry-run
+	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcepi/FluSight-forecast-hub --dry-run
 
 submit: submit-covid submit-flu
 
