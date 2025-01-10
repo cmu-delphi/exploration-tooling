@@ -303,15 +303,28 @@ update_site <- function() {
     stop("Template file does not exist.")
   }
   report_md_content <- readLines(template_path)
-
   # Get the list of files in the reports directory
-  report_files <- dir_ls(reports_dir, regexp = ".*_prod.html")
+  report_files <- dir_ls(reports_dir, regexp = ".*_prod_on_.*.html")
+  report_table <- tibble(filename = report_files,
+         dates = str_match_all(filename, "[0-9]{4}-..-..")) %>%
+    unnest_wider(dates, names_sep = "_") %>%
+    rename(forecast_date = dates_1, generation_date = dates_2) %>%
+    mutate(
+      forecast_date = ymd(forecast_date),
+      generation_date = ymd(generation_date)
+    )
 
-  # Extract dates and sort files by date in descending order
-  report_files <- report_files[order(as.Date(str_extract(report_files, "\\d{4}-\\d{2}-\\d{2}")), decreasing = FALSE)]
+  # use the most recently generated forecast, and sort descending on the
+  # forecast date
+  used_reports <- report_table %>%
+    group_by(forecast_date) %>%
+    arrange(generation_date) %>%
+    filter(generation_date == max(generation_date)) %>%
+    ungroup() %>%
+    arrange(forecast_date)
 
   # Process each report file
-  for (report_file in report_files) {
+  for (report_file in used_reports$filename) {
     file_name <- path_file(report_file)
     file_parts <- str_split(fs::path_ext_remove(file_name), "_", simplify = TRUE)
     date <- file_parts[1]
