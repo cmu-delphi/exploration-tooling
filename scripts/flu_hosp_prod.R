@@ -104,17 +104,7 @@ rlang::list2(
   tar_target(
     name = nhsn_archive_data,
     command = {
-      qs::qread(here::here("cache/nhsn_archive_made_2025-01-06.parquet")) %>%
-        add_season_info() %>%
-        mutate(
-          source = "nhsn",
-          geo_value = ifelse(geo_value == "usa", "us", geo_value),
-          value = nhsn_flu,
-          time_value = time_value - 3
-        ) %>%
-        select(geo_value, time_value, version, value, epiweek, epiyear, season, season_week, source) %>%
-        drop_na() %>%
-        as_epi_archive(other_keys = "source", compactify = TRUE)
+      create_nhsn_data_archive(disease = "nhsn_flu")
     }
   ),
   tar_map(
@@ -142,13 +132,22 @@ rlang::list2(
       command = {
         forecast_date <- as.Date(forecast_generation_date)
         if (forecast_date < Sys.Date()) {
-          train_data <- nhsn_archive_data %>% epix_as_of(forecast_date)
+          train_data <- nhsn_archive_data %>%
+            epix_as_of(forecast_date) %>%
+            add_season_info() %>%
+            mutate(
+              source = "nhsn",
+              geo_value = ifelse(geo_value == "usa", "us", geo_value),
+              time_value = time_value - 3
+            )
         } else {
           train_data <- nhsn_latest_data
         }
-        train_data %>%
-          bind_rows(joined_latest_extra_data) %>%
-          as_epi_df(other_keys = "source", as_of = round_date(forecast_date, "weeks", week_start = 3)) %>%
+        full_data <- train_data %>%
+          bind_rows(joined_latest_extra_data)
+        attributes(full_data)$metadata$other_keys <- "source"
+        attributes(full_data)$metadata$as_of <- round_date(forecast_date, "weeks", week_start = 3)
+        full_data %>%
           forecaster_fns[[forecasters]](ahead = aheads) %>%
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
@@ -265,7 +264,25 @@ rlang::list2(
           select(geo_value, source, target_end_date = time_value, value) %>%
           filter(target_end_date > truth_data_date, geo_value %nin% insufficient_data_geos) %>%
           mutate(target_end_date = target_end_date + 6)
-        truth_data <- nhsn_latest_data %>%
+        forecast_date <- as.Date(forecast_generation_date)
+        if (forecast_date < Sys.Date()) {
+          truth_data <- nhsn_archive_data %>% epix_as_of(forecast_date)
+        } else {
+          truth_data <- nhsn_latest_data
+        }
+        nhsn_latest_data %>%
+          pull(time_value) %>%
+          max()
+        nhsn_archive_data %>%
+          epix_as_of(as.Date("2024-12-18")) %>%
+          pull(time_value) %>%
+          max()
+        forecast_date
+        nhsn_archive_data %>%
+          epix_as_of(forecast_date) %>%
+          pull(time_value) %>%
+          max()
+        truth_data <- truth_data %>%
           mutate(target_end_date = time_value) %>%
           filter(time_value > truth_data_date) %>%
           mutate(source = "nhsn") %>%
@@ -298,11 +315,11 @@ rlang::list2(
           "scripts/reports/forecast_report.Rmd",
           output_file = here::here(
             "reports",
-            sprintf("%s_flu_prod.html", as.Date(forecast_generation_date))
+            sprintf("%s_flu_prod_on_%s.html", as.Date(forecast_generation_date), as.Date(Sys.Date()))
           ),
           params = list(
             disease = "flu",
-            forecast_res = forecast_res %>% bind_rows(ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix")),
+            forecast_res = forecast_res %>% bind_rows(ensemble_mixture_res_20075 %>% mutate(forecaster = "ensemble_mix")),
             ensemble_res = ensemble_res,
             forecast_generation_date = as.Date(forecast_generation_date),
             truth_data = truth_data

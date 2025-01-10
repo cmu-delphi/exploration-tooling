@@ -51,16 +51,7 @@ rlang::list2(
   tar_target(
     name = nhsn_archive_data,
     command = {
-      qs::qread(here::here("cache/nhsn_archive_made_2025-01-06.parquet")) %>%
-        add_season_info() %>%
-        mutate(
-          geo_value = ifelse(geo_value == "usa", "us", geo_value),
-          value = nhsn_covid,
-          time_value = time_value - 3
-        ) %>%
-        select(geo_value, time_value, version, value, epiweek, epiyear, season, season_week) %>%
-        drop_na() %>%
-        as_epi_archive(compactify = TRUE)
+      create_nhsn_data_archive(disease = "nhsn_covid")
     }
   ),
   tar_map(
@@ -92,14 +83,21 @@ rlang::list2(
       command = {
         forecast_date <- as.Date(forecast_generation_date)
         if (forecast_date < Sys.Date()) {
-          train_data <- nhsn_archive_data %>% epix_as_of(forecast_date)
+          train_data <- nhsn_archive_data %>%
+            epix_as_of(forecast_date) %>%
+            mutate(
+              geo_value = ifelse(geo_value == "usa", "us", geo_value),
+              time_value = time_value - 3
+            ) %>%
+            add_season_info()
         } else {
-          train_data <- nhsn_latest_data %>%
+          train_data <-
+            nhsn_latest_data %>%
             data_substitutions(disease = "covid") %>%
             as_epi_df(as_of = as.Date(forecast_generation_date))
         }
+        attributes(train_data)$metadata$as_of <- round_date(forecast_date, "weeks", week_start = 3)
         train_data %>%
-          as_epi_df(as_of = round_date(forecast_date, "weeks", week_start = 3)) %>%
           forecaster_fns[[forecasters]](ahead = aheads) %>%
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
@@ -240,7 +238,7 @@ rlang::list2(
           "scripts/reports/forecast_report.Rmd",
           output_file = here::here(
             "reports",
-            sprintf("%s_covid_prod.html", as.Date(forecast_generation_date))
+            sprintf("%s_covid_prod_on_%s.html", as.Date(forecast_generation_date), as.Date(Sys.Date()))
           ),
           params = list(
             disease = "covid",
