@@ -4,7 +4,10 @@ This repo is for exploring forecasting methods and tools for both COVID and Flu.
 The repo is structured as a [targets](https://docs.ropensci.org/targets/) project, which means that it is easy to run things in parallel and to cache results.
 The repo is also structured as an R package, which means that it is easy to share code between different targets.
 
-## Usage
+## Production Usage 2024-2025
+
+The pipeline should run on a schedule and by ~10:45AM PST time, you should find the new reports on https://delphi-forecasting-reports.netlify.app/.
+If not, see the instructions below for manual running.
 
 Define run parameters in your `.Renviron` file:
 
@@ -41,21 +44,25 @@ make install
 
 # Pull pre-scored forecasts from the AWS bucket
 make pull
-# or
-make download
 
-# Run only the dashboard, to display results run on other machines
-make dashboard
+# Make forecasts
+make prod-flu
+make prod-covid
 
-# Run the pipeline using the helper script `run.R`
-make run
-# or in the background
-make run-nohup
+# The job output can be found in nohup.out
+# If there are errors, you can view them with the following command (replace with appropriate project)
+Sys.setenv(TAR_PROJECT = "covid_hosp_prod");
+targets::tar_meta(fields = error, complete_only = FALSE)
 
-# Push complete or partial results to the AWS bucket
-make push
-# or
-make upload
+# Automatically append the new reports to the site index and host the site on netlify
+# (this requires the netlify CLI to be installed and configured, talk to Dmitry about this)
+make update_site && make netlify
+
+# Update weights until satisfied using *_geo_exclusions.csv, rerun the make command above
+# Submit (makes a commit, pushes to our fork, and makes a PR; this requires a GitHub token
+# and the gh CLI to be installed and configured, talk to Dmitry about this)
+make submit-flu
+make submit-covid
 ```
 
 ## Development
@@ -74,11 +81,12 @@ make upload
 
 ### Debugging
 
-Targets in parallel mode conflicts with debugging because it ignores `browser()` statements. To debug a target named `yourTarget`:
+Insert a `browser()` statements into the code you want to debug and then run
 
-1. set `DEBUG_MODE=true` in `.Renviron`
-2. insert a browser in the relevant function
-3. run an R session and call `tar_make(yourTarget)`
+```r
+# use_crew=FALSE disables parallelization
+tar_make(target_name, callr_function = NULL, use_crew = FALSE)
+```
 
 ### Pipeline Design
 

@@ -153,6 +153,7 @@ get_exclusions <- function(
   }
   return("")
 }
+
 data_substitutions <- function(dataset, disease, forecast_generation_date) {
   disease <- "flu"
   forecast_generation_date <- as.Date("2025-01-08")
@@ -169,6 +170,7 @@ data_substitutions <- function(dataset, disease, forecast_generation_date) {
     mutate(value = ifelse(!is.na(new_value), new_value, value)) %>%
     select(-new_value)
 }
+
 parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv"),
                                gen_forecast_date) {
   all_states <- c(
@@ -198,6 +200,7 @@ parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv")
     group_by(forecast_date, geo_value) %>%
     mutate(weight = ifelse(near(weight, 0), 0, weight / sum(weight)))
 }
+
 exclude_geos <- function(geo_forecasters_weights) {
   geo_exclusions <- geo_forecasters_weights %>%
     group_by(forecast_date, geo_value) %>%
@@ -218,11 +221,6 @@ get_population_data <- function() {
     # Duplicate the last row, but with state_id = "usa".
     bind_rows((.) %>% filter(state_id == "us") %>% mutate(state_id = "usa"))
 }
-
-# TODO:
-scale_pop <- function(df) {}
-
-unscale_pop <- function(df) {}
 
 filter_forecast_geos <- function(forecasts, truth_data) {
   subset_geos <- unique(forecasts$geo_value)
