@@ -153,7 +153,6 @@ extend_ahead <- function(epi_data, ahead) {
   return(list(epi_data, effective_ahead))
 }
 
-
 #' get the Taylor expansion coefficients for a vector of values
 #' @param values the vector of values to interpolate
 #' @param degree the degree of the polynomial
@@ -233,7 +232,6 @@ calculate_whitening_params <- function(
   return(learned_params)
 }
 
-
 #' scale so that every data source has the same 95th quantile
 data_whitening <- function(epi_data, colname, learned_params, nonlin_method = c("quart_root", "none"), join_cols = NULL) {
   if (is.null(learned_params)) {
@@ -272,7 +270,6 @@ data_coloring <- function(epi_data, colname, learned_params, nonlin_method = c("
   }
   res %>% select(-ends_with("_center"), -ends_with("_scale"))
 }
-
 
 #' the distance between two integers/dates, mod m e.g. mod_dist(1,9,10) = 2
 mod_dist <- function(a, b, m) {
@@ -353,7 +350,6 @@ climate_median <- function(epi_data, target, ahead, window_size = 3, recent_wind
       by = c("epiweek", key_colnames(epi_data, exclude = "time_value"))
     )
 }
-
 
 #' add the first principal component for each season_week to epi_data, shifted
 #' by ahead

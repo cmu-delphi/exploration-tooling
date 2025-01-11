@@ -58,7 +58,6 @@ flatline_fc <- function(epi_data,
   if (is.null(true_forecast_date)) {
     true_forecast_date <- max(epi_data$time_value)
   }
-  res$predictions
   pred <- format_storage(res$predictions, true_forecast_date)
   pred %<>% mutate(forecast_date = true_forecast_date)
   # (geo_value, forecast_date, target_end_date, quantile, value)

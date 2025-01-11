@@ -1,6 +1,4 @@
 # The COVID Hospitalization Production Forecasting Pipeline.
-#
-
 source("scripts/targets-common.R")
 
 submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
@@ -31,18 +29,8 @@ forecaster_fns <- list2(
 )
 
 rlang::list2(
-  tar_target(
-    aheads,
-    command = {
-      -1:3
-    }
-  ),
-  tar_target(
-    forecasters,
-    command = {
-      seq_along(forecaster_fns)
-    }
-  ),
+  tar_target(aheads, command = -1:3),
+  tar_target(forecasters, command = seq_along(forecaster_fns)),
   tar_map(
     values = tidyr::expand_grid(
       tibble(

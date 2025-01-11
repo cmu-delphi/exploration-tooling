@@ -154,9 +154,6 @@ get_oversized_test_data <- function(full_data, test_data_interval, preproc, sour
     arrange(time_value)
 }
 
-
-
-
 epi_as_of <- function(epi_dataframe) {
   attributes(epi_dataframe)$metadata$as_of
 }

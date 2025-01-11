@@ -8,7 +8,6 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
     left_join(population_data, by = "geo_value") %>%
     mutate(value = value / population * 10**5)
 
-
   if (log) {
     df_processed <- df_processed %>% mutate(value = log(value))
   }
