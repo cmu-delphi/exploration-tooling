@@ -9,10 +9,20 @@ insufficient_data_geos <- c("as", "mp", "vi", "gu")
 truth_data_date <- "2023-09-01"
 # needed to create the aux data targets
 end_date <- Sys.Date()
-# Generically set the generation date to the next Wednesday (or today if it's Wednesday)
+# This is the as_of for the forecast. If run on our typical schedule, it's
+# today, which is a Wednesday. Sometimes, if we're doing a delayed forecast,
+# it's a Thursday. It's used for stamping the data and for determining the
+# appropriate as_of when creating the forecast.
 forecast_generation_date <- Sys.Date()
-#forecast_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
+# Usually, the forecast_date is the same as the generation date, but you can
+# override this. It should be a Wednesday.
 forecast_date <- Sys.Date()
+# If doing backfill, you can set the forecast_date to a sequence of dates.
+# forecast_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
+# forecast_generation_date needs to follow suit, but it's more complicated
+# because sometimes we forecast on Thursday.
+# TODO: Fix.
+# forecast_generation_date <- forecast_date
 very_latent_locations <- list(list(
   c("source"),
   c("flusurv", "ILI+")
@@ -109,7 +119,10 @@ rlang::list2(
     }
   ),
   tar_map(
-    values = tidyr::expand_grid(tibble(forecast_date = forecast_date)),
+    values = tibble(
+      forecast_date = forecast_date,
+      forecast_generation_date = forecast_generation_date
+    ),
     names = "forecast_date",
     tar_target(
       name = geo_forecasters_weights,
@@ -131,10 +144,10 @@ rlang::list2(
     tar_target(
       forecast_res,
       command = {
-        forecast_date <- as.Date(forecast_date)
-        if (forecast_date < Sys.Date()) {
+        forecast_generation_date <- as.Date(forecast_generation_date)
+        if (forecast_generation_date < Sys.Date()) {
           train_data <- nhsn_archive_data %>%
-            epix_as_of(forecast_date) %>%
+            epix_as_of(forecast_generation_date) %>%
             add_season_info() %>%
             mutate(
               source = "nhsn",
@@ -147,7 +160,7 @@ rlang::list2(
         full_data <- train_data %>%
           bind_rows(joined_latest_extra_data)
         attributes(full_data)$metadata$other_keys <- "source"
-        attributes(full_data)$metadata$as_of <- round_date(forecast_date, "weeks", week_start = 3)
+        attributes(full_data)$metadata$as_of <- as.Date(forecast_date)
         full_data %>%
           forecaster_fns[[forecasters]](ahead = aheads) %>%
           mutate(
@@ -193,7 +206,7 @@ rlang::list2(
         ensemble_mixture_res %>%
           format_flusight(disease = "flu") %>%
           write_submission_file(
-            get_forecast_reference_date(as.Date(forecast_date)),
+            get_forecast_reference_date(forecast_date),
             file.path(submission_directory, "model-output/CMU-TimeSeries")
           )
       },
@@ -211,7 +224,7 @@ rlang::list2(
             ungroup() %>%
             format_flusight(disease = "flu") %>%
             write_submission_file(
-              get_forecast_reference_date(as.Date(forecast_date)),
+              get_forecast_reference_date(forecast_date),
               submission_directory = file.path(submission_directory, "model-output/CMU-climatological-baseline"),
               file_name = "CMU-climatological-baseline"
             )
@@ -227,7 +240,7 @@ rlang::list2(
         if (submission_directory != "cache") {
           validation <- validate_submission(
             submission_directory,
-            file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(as.Date(forecast_date)))
+            file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(forecast_date))
           )
         } else {
           validation <- "not validating when there is no hub (set submission_directory)"
@@ -244,7 +257,7 @@ rlang::list2(
         if (submission_directory != "cache" && submit_climatological) {
           validation <- validate_submission(
             submission_directory,
-            file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(as.Date(forecast_date)))
+            file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(forecast_date))
           )
         } else {
           validation <- "not validating when there is no hub (set submission_directory)"
@@ -267,9 +280,9 @@ rlang::list2(
           select(geo_value, source, target_end_date = time_value, value) %>%
           filter(target_end_date > truth_data_date, geo_value %nin% insufficient_data_geos) %>%
           mutate(target_end_date = target_end_date + 6)
-        forecast_date <- as.Date(forecast_date)
-        if (forecast_date < Sys.Date()) {
-          truth_data <- nhsn_archive_data %>% epix_as_of(forecast_date)
+        forecast_generation_date <- as.Date(forecast_generation_date)
+        if (forecast_generation_date < Sys.Date()) {
+          truth_data <- nhsn_archive_data %>% epix_as_of(forecast_generation_date)
         } else {
           truth_data <- nhsn_latest_data
         }
@@ -306,7 +319,7 @@ rlang::list2(
           "scripts/reports/forecast_report.Rmd",
           output_file = here::here(
             "reports",
-            sprintf("%s_flu_prod_on_%s.html", as.Date(forecast_date), as.Date(Sys.Date()))
+            sprintf("%s_flu_prod_on_%s.html", as.Date(forecast_date), as.Date(forecast_generation_date))
           ),
           params = list(
             disease = "flu",
