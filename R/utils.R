@@ -305,8 +305,10 @@ update_site <- function() {
   report_md_content <- readLines(template_path)
   # Get the list of files in the reports directory
   report_files <- dir_ls(reports_dir, regexp = ".*_prod_on_.*.html")
-  report_table <- tibble(filename = report_files,
-         dates = str_match_all(filename, "[0-9]{4}-..-..")) %>%
+  report_table <- tibble(
+    filename = report_files,
+    dates = str_match_all(filename, "[0-9]{4}-..-..")
+  ) %>%
     unnest_wider(dates, names_sep = "_") %>%
     rename(forecast_date = dates_1, generation_date = dates_2) %>%
     mutate(

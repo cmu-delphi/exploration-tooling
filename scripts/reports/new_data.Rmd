@@ -12,10 +12,10 @@ $$\\[.4in]$$
 
 ```{r echo=FALSE}
 knitr::opts_chunk$set(
-    fig.align = "center",
-    message = FALSE,
-    warning = FALSE,
-    cache = FALSE
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE
 )
 ggplot2::theme_set(ggplot2::theme_bw())
 ```
@@ -32,25 +32,25 @@ We are focused solely on the column `totalconfflunewadm` as the number of new co
 
 ```{r}
 if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
-    # download from the preliminary data source from Wednesday to Friday
-    most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/mpgq-jmmr.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
+  # download from the preliminary data source from Wednesday to Friday
+  most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/mpgq-jmmr.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
 } else {
-    most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
+  most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
 }
 most_recent_result %<>% process_nhsn_data()
 df <- most_recent_result %>%
-    filter(disease == "nhsn_flu")
+  filter(disease == "nhsn_flu")
 df %>%
-    filter(geo_value %in% c("ca", "fl", "tx", "ny", "pa", "mn", "nm")) %>%
-    ggplot(aes(x = time_value, y = value, color = geo_value)) +
-    geom_line() +
-    theme_minimal() +
-    labs(
-        title = "New Confirmed Flu Admissions by Geo Value",
-        x = "Date",
-        y = "Total Confirmed Flu Admissions"
-    ) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  filter(geo_value %in% c("ca", "fl", "tx", "ny", "pa", "mn", "nm")) %>%
+  ggplot(aes(x = time_value, y = value, color = geo_value)) +
+  geom_line() +
+  theme_minimal() +
+  labs(
+    title = "New Confirmed Flu Admissions by Geo Value",
+    x = "Date",
+    y = "Total Confirmed Flu Admissions"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
 # State Season Comparison {.tabset}
@@ -59,112 +59,112 @@ df %>%
 
 ```{r}
 df %>%
-    filter(geo_value == "ca") %>%
-    ggplot(aes(x = season_week, y = value, color = season)) +
-    geom_line() +
-    theme_minimal() +
-    labs(
-        title = "New Confirmed Flu Admissions in CA by Season",
-        x = "Season Week",
-        y = "Total Confirmed Flu Admissions"
-    ) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  filter(geo_value == "ca") %>%
+  ggplot(aes(x = season_week, y = value, color = season)) +
+  geom_line() +
+  theme_minimal() +
+  labs(
+    title = "New Confirmed Flu Admissions in CA by Season",
+    x = "Season Week",
+    y = "Total Confirmed Flu Admissions"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
 ## Florida
 
 ```{r}
 df %>%
-    filter(geo_value == "fl") %>%
-    ggplot(aes(x = season_week, y = value, color = season)) +
-    geom_line() +
-    theme_minimal() +
-    labs(
-        title = "New Confirmed Flu Admissions in FL by Season",
-        x = "Season Week",
-        y = "Total Confirmed Flu Admissions"
-    ) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  filter(geo_value == "fl") %>%
+  ggplot(aes(x = season_week, y = value, color = season)) +
+  geom_line() +
+  theme_minimal() +
+  labs(
+    title = "New Confirmed Flu Admissions in FL by Season",
+    x = "Season Week",
+    y = "Total Confirmed Flu Admissions"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
 ## Texas
 
 ```{r}
 df %>%
-    filter(geo_value == "tx") %>%
-    ggplot(aes(x = season_week, y = value, color = season)) +
-    geom_line() +
-    theme_minimal() +
-    labs(
-        title = "New Confirmed Flu Admissions in TX by Season",
-        x = "Season Week",
-        y = "Total Confirmed Flu Admissions"
-    ) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  filter(geo_value == "tx") %>%
+  ggplot(aes(x = season_week, y = value, color = season)) +
+  geom_line() +
+  theme_minimal() +
+  labs(
+    title = "New Confirmed Flu Admissions in TX by Season",
+    x = "Season Week",
+    y = "Total Confirmed Flu Admissions"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
 ## New York
 
 ```{r}
 df %>%
-    filter(geo_value == "ny") %>%
-    ggplot(aes(x = season_week, y = value, color = season)) +
-    geom_line() +
-    theme_minimal() +
-    labs(
-        title = "New Confirmed Flu Admissions in NY by Season",
-        x = "Season Week",
-        y = "Total Confirmed Flu Admissions"
-    ) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  filter(geo_value == "ny") %>%
+  ggplot(aes(x = season_week, y = value, color = season)) +
+  geom_line() +
+  theme_minimal() +
+  labs(
+    title = "New Confirmed Flu Admissions in NY by Season",
+    x = "Season Week",
+    y = "Total Confirmed Flu Admissions"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
 ## Pennsylvania
 
 ```{r}
 df %>%
-    filter(geo_value == "pa") %>%
-    ggplot(aes(x = season_week, y = value, color = season)) +
-    geom_line() +
-    theme_minimal() +
-    labs(
-        title = "New Confirmed Flu Admissions in PA by Season",
-        x = "Season Week",
-        y = "Total Confirmed Flu Admissions"
-    ) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  filter(geo_value == "pa") %>%
+  ggplot(aes(x = season_week, y = value, color = season)) +
+  geom_line() +
+  theme_minimal() +
+  labs(
+    title = "New Confirmed Flu Admissions in PA by Season",
+    x = "Season Week",
+    y = "Total Confirmed Flu Admissions"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
 ## Minnesota
 
 ```{r}
 df %>%
-    filter(geo_value == "mn") %>%
-    ggplot(aes(x = season_week, y = value, color = season)) +
-    geom_line() +
-    theme_minimal() +
-    labs(
-        title = "New Confirmed Flu Admissions in MN by Season",
-        x = "Season Week",
-        y = "Total Confirmed Flu Admissions"
-    ) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  filter(geo_value == "mn") %>%
+  ggplot(aes(x = season_week, y = value, color = season)) +
+  geom_line() +
+  theme_minimal() +
+  labs(
+    title = "New Confirmed Flu Admissions in MN by Season",
+    x = "Season Week",
+    y = "Total Confirmed Flu Admissions"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
 ## New Mexico
 
 ```{r}
 df %>%
-    filter(geo_value == "nm") %>%
-    ggplot(aes(x = season_week, y = value, color = season)) +
-    geom_line() +
-    theme_minimal() +
-    labs(
-        title = "New Confirmed Flu Admissions in NM by Season",
-        x = "Season Week",
-        y = "Total Confirmed Flu Admissions"
-    ) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  filter(geo_value == "nm") %>%
+  ggplot(aes(x = season_week, y = value, color = season)) +
+  geom_line() +
+  theme_minimal() +
+  labs(
+    title = "New Confirmed Flu Admissions in NM by Season",
+    x = "Season Week",
+    y = "Total Confirmed Flu Admissions"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
 # Comparing with Old NHSN Data
@@ -175,77 +175,77 @@ The relevant column is `previous_day_admission_influenza_confirmed`.
 
 ```{r}
 hhs_arch <- read_csv("https://healthdata.gov/resource/g62h-syeh.csv?$limit=90000&$select=date,state,previous_day_admission_influenza_confirmed") %>%
-    mutate(
-        geo_value = tolower(state),
-        time_value = as.Date(date) - 1L,
-        hhs = previous_day_admission_influenza_confirmed
-    ) %>%
-    select(geo_value, time_value, hhs) %>%
-    as_epi_df() %>%
-    group_by(geo_value) %>%
-    epi_slide_sum(
-        hhs,
-        na.rm = TRUE,
-        .window_size = 7L,
-        .ref_time_values = seq.Date(as.Date("2020-01-04"), as.Date("2024-04-24"), by = 7),
-    ) %>%
-    mutate(hhs = slide_value_hhs) %>%
-    select(-slide_value_hhs)
+  mutate(
+    geo_value = tolower(state),
+    time_value = as.Date(date) - 1L,
+    hhs = previous_day_admission_influenza_confirmed
+  ) %>%
+  select(geo_value, time_value, hhs) %>%
+  as_epi_df() %>%
+  group_by(geo_value) %>%
+  epi_slide_sum(
+    hhs,
+    na.rm = TRUE,
+    .window_size = 7L,
+    .ref_time_values = seq.Date(as.Date("2020-01-04"), as.Date("2024-04-24"), by = 7),
+  ) %>%
+  mutate(hhs = slide_value_hhs) %>%
+  select(-slide_value_hhs)
 
 to_compare <- df %>%
-    full_join(hhs_arch, by = join_by(geo_value, time_value)) %>%
-    rename(nhsn = value)
+  full_join(hhs_arch, by = join_by(geo_value, time_value)) %>%
+  rename(nhsn = value)
 p <- to_compare %>%
-    mutate(diffed = nhsn - hhs, rel_diff = diffed / hhs) %>%
-    filter(abs(diffed) > 10) %>%
-    ggplot(aes(x = time_value, y = diffed, color = geo_value)) +
-    geom_point() +
-    labs(title = "new value minus original value, filtered to the difference in counts > 10")
+  mutate(diffed = nhsn - hhs, rel_diff = diffed / hhs) %>%
+  filter(abs(diffed) > 10) %>%
+  ggplot(aes(x = time_value, y = diffed, color = geo_value)) +
+  geom_point() +
+  labs(title = "new value minus original value, filtered to the difference in counts > 10")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000)
 ```
 
 ```{r}
 p <- to_compare %>%
-    mutate(diffed = nhsn - hhs, rel_diff = diffed / hhs) %>%
-    filter(abs(diffed) > 10) %>%
-    ggplot(aes(x = time_value, y = rel_diff, color = geo_value)) +
-    geom_point() +
-    labs(title = "relative version of the previous, dividing by the original value")
+  mutate(diffed = nhsn - hhs, rel_diff = diffed / hhs) %>%
+  filter(abs(diffed) > 10) %>%
+  ggplot(aes(x = time_value, y = rel_diff, color = geo_value)) +
+  geom_point() +
+  labs(title = "relative version of the previous, dividing by the original value")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000)
 ```
 
 ```{r}
 p <- to_compare %>%
-    mutate(diffed = nhsn - hhs, rel_diff = diffed / hhs) %>%
-    filter(abs(diffed) > 10) %>%
-    group_by(geo_value) %>%
-    summarise(median_diff = median(abs(diffed)), median_rel_diff = median(abs(rel_diff))) %>%
-    ggplot(aes(x = geo_value, weight = median_diff)) +
-    geom_bar() +
-    labs(title = "Median absolute difference across states")
+  mutate(diffed = nhsn - hhs, rel_diff = diffed / hhs) %>%
+  filter(abs(diffed) > 10) %>%
+  group_by(geo_value) %>%
+  summarise(median_diff = median(abs(diffed)), median_rel_diff = median(abs(rel_diff))) %>%
+  ggplot(aes(x = geo_value, weight = median_diff)) +
+  geom_bar() +
+  labs(title = "Median absolute difference across states")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000)
 ```
 
 ```{r}
 to_compare %>%
-    mutate(diffed = nhsn - hhs, rel_diff = diffed / hhs) %>%
-    filter(abs(diffed) > 10) %>%
-    datatable()
+  mutate(diffed = nhsn - hhs, rel_diff = diffed / hhs) %>%
+  filter(abs(diffed) > 10) %>%
+  datatable()
 ```
 
 ## Directly plotting the worst contenders
 
 ```{r}
 p <- to_compare %>%
-    rename(old_source = hhs, new_source = nhsn) %>%
-    pivot_longer(names_to = "data_source", cols = c("old_source", "new_source")) %>%
-    filter(geo_value %in% c("ca", "tx", "la", "mi", "in")) %>%
-    ggplot(aes(x = time_value, y = value, color = data_source)) +
-    geom_line() +
-    facet_wrap(~geo_value, scales = "free")
+  rename(old_source = hhs, new_source = nhsn) %>%
+  pivot_longer(names_to = "data_source", cols = c("old_source", "new_source")) %>%
+  filter(geo_value %in% c("ca", "tx", "la", "mi", "in")) %>%
+  ggplot(aes(x = time_value, y = value, color = data_source)) +
+  geom_line() +
+  facet_wrap(~geo_value, scales = "free")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000)
 ```

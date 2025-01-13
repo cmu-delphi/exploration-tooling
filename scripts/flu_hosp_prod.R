@@ -2,6 +2,7 @@
 source("scripts/targets-common.R")
 source("scripts/targets-exploration-common.R")
 
+submit_climatological <- FALSE
 submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
@@ -10,7 +11,7 @@ truth_data_date <- "2023-09-01"
 end_date <- Sys.Date()
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
 forecast_generation_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
-
+# forecast_generation_date <- as.Date("2025-01-08")
 very_latent_locations <- list(list(
   c("source"),
   c("flusurv", "ILI+")
