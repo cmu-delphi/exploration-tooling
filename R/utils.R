@@ -311,13 +311,14 @@ update_site <- function() {
     rename(forecast_date = dates_1, generation_date = dates_2) %>%
     mutate(
       forecast_date = ymd(forecast_date),
-      generation_date = ymd(generation_date)
+      generation_date = ymd(generation_date),
+      disease = str_match(filename, "flu|covid")
     )
 
   # use the most recently generated forecast, and sort descending on the
   # forecast date
   used_reports <- report_table %>%
-    group_by(forecast_date) %>%
+    group_by(forecast_date, disease) %>%
     arrange(generation_date) %>%
     filter(generation_date == max(generation_date)) %>%
     ungroup() %>%
