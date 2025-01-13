@@ -319,7 +319,7 @@ rlang::list2(
           ),
           params = list(
             disease = "flu",
-            forecast_res = forecast_res %>% bind_rows(ensemble_mixture_res_20075 %>% mutate(forecaster = "ensemble_mix")),
+            forecast_res = forecast_res %>% bind_rows(ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix")),
             ensemble_res = ensemble_res,
             forecast_generation_date = as.Date(forecast_generation_date),
             truth_data = truth_data
