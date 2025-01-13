@@ -202,18 +202,20 @@ rlang::list2(
     tar_target(
       name = make_climate_submission_csv,
       command = {
-        forecasts <- forecast_res
-        forecasts %>%
-          filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
-          group_by(geo_value, target_end_date, quantile) %>%
-          summarize(forecast_date = first(forecast_date), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
-          ungroup() %>%
-          format_flusight(disease = "flu") %>%
-          write_submission_file(
-            get_forecast_reference_date(as.Date(forecast_generation_date)),
-            submission_directory = file.path(submission_directory, "model-output/CMU-climatological-baseline"),
-            file_name = "CMU-climatological-baseline"
-          )
+        if (submit_climatological) {
+          forecasts <- forecast_res
+          forecasts %>%
+            filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
+            group_by(geo_value, target_end_date, quantile) %>%
+            summarize(forecast_date = first(forecast_date), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+            ungroup() %>%
+            format_flusight(disease = "flu") %>%
+            write_submission_file(
+              get_forecast_reference_date(as.Date(forecast_generation_date)),
+              submission_directory = file.path(submission_directory, "model-output/CMU-climatological-baseline"),
+              file_name = "CMU-climatological-baseline"
+            )
+        }
       },
       cue = tar_cue(mode = "always")
     ),
@@ -239,7 +241,7 @@ rlang::list2(
       command = {
         make_climate_submission_csv
         # only validate if we're saving the result to a hub
-        if (submission_directory != "cache") {
+        if (submission_directory != "cache" && submit_climatological) {
           validation <- validate_submission(
             submission_directory,
             file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(as.Date(forecast_generation_date)))
