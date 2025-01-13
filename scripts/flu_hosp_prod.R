@@ -100,8 +100,7 @@ rlang::list2(
         filter(version == max(version)) %>%
         select(-version) %>%
         data_substitutions(disease = "flu")
-    },
-    cue = targets::tar_cue(mode = "thorough")
+    }
   ),
   tar_target(
     name = nhsn_archive_data,
