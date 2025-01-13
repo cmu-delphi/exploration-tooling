@@ -11,8 +11,8 @@ truth_data_date <- "2023-09-01"
 end_date <- Sys.Date()
 # Generically set the generation date to the next Wednesday (or today if it's Wednesday)
 forecast_generation_date <- Sys.Date()
-forecast_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
-# forecast_date <- as.Date("2025-01-08")
+#forecast_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
+forecast_date <- Sys.Date()
 very_latent_locations <- list(list(
   c("source"),
   c("flusurv", "ILI+")
