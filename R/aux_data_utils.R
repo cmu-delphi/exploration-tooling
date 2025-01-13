@@ -641,7 +641,7 @@ create_nhsn_data_archive <- function(disease_name) {
     previous_archive <- NULL
     last_timestamp <- as.Date("1000-01-01")
   }
-  redundant_data <- aws.s3::get_bucket_df(bucket = "forecasting-team-data", prefix = "nhsn_data_") %>%
+  new_data <- aws.s3::get_bucket_df(bucket = "forecasting-team-data", prefix = "nhsn_data_") %>%
     filter(get_version_timestamp(Key) > last_timestamp) %>%
     pull(Key) %>%
     lapply(
@@ -670,7 +670,7 @@ create_nhsn_data_archive <- function(disease_name) {
     )
   # drop any duplicates on the same day
   compactified <-
-    redundant_data %>%
+    new_data %>%
     bind_rows()
   if (nrow(compactified) == 0) {
     one_per_day <- previous_archive
