@@ -172,7 +172,8 @@ data_substitutions <- function(dataset, disease, forecast_generation_date) {
 }
 
 parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv"),
-                               forecast_date) {
+                               forecast_date_int, forecaster_fns) {
+  forecast_date <- as.Date(forecast_date_int)
   all_states <- c(
     unique(readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE)$state_id),
     "usa", "us"
@@ -196,7 +197,7 @@ parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv")
     unnest_longer(forecaster) %>%
     group_by(forecast_date, forecaster, geo_value) %>%
     summarize(weight = min(weight), .groups = "drop") %>%
-    mutate(forecast_date = as.Date(forecast_date)) %>%
+    mutate(forecast_date = as.Date(forecast_date_int)) %>%
     group_by(forecast_date, geo_value) %>%
     mutate(weight = ifelse(near(weight, 0), 0, weight / sum(weight)))
 }

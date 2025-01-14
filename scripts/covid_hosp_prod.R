@@ -78,8 +78,8 @@ rlang::list2(
     tar_target(
       name = geo_forecasters_weights,
       command = {
-        geo_forecasters_weights <- parse_prod_weights(here::here("covid_geo_exclusions.csv"), forecast_date_int)
-        if (nrow(geo_forecasters_weights %>% filter(forecast_date == forecast_date_int)) == 0) {
+        geo_forecasters_weights <- parse_prod_weights(here::here("covid_geo_exclusions.csv"), forecast_date_int, forecaster_fns)
+        if (nrow(geo_forecasters_weights %>% filter(forecast_date == as.Date(forecast_date_int))) == 0) {
           cli_abort("there are no weights for the forecast date {forecast_date}")
         }
         geo_forecasters_weights

@@ -110,7 +110,8 @@ rlang::list2(
         ) %>%
         filter(version == max(version)) %>%
         select(-version) %>%
-        data_substitutions(disease = "flu")
+        data_substitutions(disease = "flu") %>%
+        as_epi_df(other_keys = "source", as_of = Sys.Date())
     }
   ),
   tar_target(
@@ -129,8 +130,8 @@ rlang::list2(
     tar_target(
       name = geo_forecasters_weights,
       command = {
-        geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"), forecast_date_int)
-        if (nrow(geo_forecasters_weights %>% filter(forecast_date == forecast_date_int)) == 0) {
+        geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"), forecast_date_int, forecaster_fns)
+        if (nrow(geo_forecasters_weights %>% filter(forecast_date == as.Date(forecast_date_int))) == 0) {
           cli_abort("there are no weights  for the forecast date {forecast_date}")
         }
         geo_forecasters_weights
