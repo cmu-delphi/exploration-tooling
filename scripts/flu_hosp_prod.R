@@ -16,7 +16,7 @@ end_date <- Sys.Date()
 forecast_generation_date <- Sys.Date()
 # Usually, the forecast_date is the same as the generation date, but you can
 # override this. It should be a Wednesday.
-forecast_date <- Sys.Date()
+forecast_date <- round_date(forecast_generation_date, "weeks", week_start = 3)
 # If doing backfill, you can set the forecast_date to a sequence of dates.
 # forecast_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 # forecast_generation_date needs to follow suit, but it's more complicated
