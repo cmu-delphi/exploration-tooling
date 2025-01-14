@@ -30,7 +30,7 @@ very_latent_locations <- list(list(
 ))
 
 forecaster_fns <- list2(
-  linear = function(epi_data, ahead, ...) {
+  linear = function(epi_data, ahead, extra_data, ...) {
     epi_data %>%
       filter(source == "nhsn") %>%
       forecaster_baseline_linear(
@@ -43,20 +43,23 @@ forecaster_fns <- list2(
   # linearlog = function(...) {
   #   forecaster_baseline_linear(..., log = TRUE)
   # },
-  climate_base = function(epi_data, ahead, ...) {
+  climate_base = function(epi_data, ahead, extra_data, ...) {
     epi_data %>%
       filter(source == "nhsn") %>%
       climatological_model(ahead, ...)
   },
-  climate_geo_agged = function(epi_data, ahead, ...) {
+  climate_geo_agged = function(epi_data, ahead, extra_data, ...) {
     epi_data %>%
       filter(source == "nhsn") %>%
       climatological_model(ahead, ..., geo_agg = TRUE)
   },
-  windowed_seasonal = function(epi_data, ahead, ...) {
+  windowed_seasonal = function(epi_data, ahead, extra_data, ...) {
     scaled_pop_seasonal(
       epi_data,
-      outcome = "value", ahead = ahead * 7, ...,
+      outcome = "value",
+      ahead = ahead * 7,
+      ...,
+      trainer = epipredict::quantile_reg(),
       seasonal_method = "window",
       pop_scaling = FALSE,
       lags = c(0, 7),
@@ -64,6 +67,25 @@ forecaster_fns <- list2(
     ) %>%
       mutate(target_end_date = target_end_date + 3)
   },
+  windowed_seasonal_extra_sources = function(epi_data, ahead, extra_data, ...) {
+    fcst <-
+      epi_data %>%
+      left_join(extra_data, by = join_by(geo_value, time_value)) %>%
+      scaled_pop_seasonal(
+        outcome = "value",
+        ahead = ahead * 7,
+        extra_sources = "nssp",
+        ...,
+        seasonal_method = "window",
+        trainer = epipredict::quantile_reg(),
+        drop_non_seasons = TRUE,
+        pop_scaling = FALSE,
+        lags = list(c(0, 7), c(0, 7)),
+        keys_to_ignore = very_latent_locations
+      ) %>%
+      mutate(target_end_date = target_end_date + 3)
+    fcst
+  }
 )
 
 # This is needed to build the data archive
@@ -81,6 +103,12 @@ rlang::list2(
     tar_target(name = ref_time_values, command = ref_time_values_),
   ),
   make_historical_flu_data_targets(),
+  tar_target(
+    current_nssp_archive,
+    command = {
+      up_to_date_nssp_state_archive()
+    }
+  ),
   tar_target(
     joined_latest_extra_data,
     command = {
@@ -161,6 +189,7 @@ rlang::list2(
         } else {
           train_data <- nhsn_latest_data
         }
+        nssp <- current_nssp_archive %>% epix_as_of(min(forecast_date, current_nssp_archive$versions_end))
         full_data <- train_data %>%
           bind_rows(joined_latest_extra_data)
         attributes(full_data)$metadata$other_keys <- "source"
@@ -172,7 +201,7 @@ rlang::list2(
       forecast_res,
       command = {
         full_data %>%
-          forecaster_fns[[forecasters]](ahead = aheads) %>%
+          forecaster_fns[[forecasters]](ahead = aheads, extra_data = nssp) %>%
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
             geo_value = as.factor(geo_value)
@@ -236,7 +265,7 @@ rlang::list2(
           filter(geo_value %nin% geo_exclusions) %>%
           ungroup() %>%
           # Ensemble with windowed_seasonal
-          bind_rows(forecast_res %>% filter(forecaster == "windowed_seasonal")) %>%
+          bind_rows(forecast_res %>% filter(forecaster == "windowed_seasonal", forecaster == "windowed_seasonal_extra_sources")) %>%
           group_by(geo_value, forecast_date, target_end_date, quantile) %>%
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
           sort_by_quantile()
