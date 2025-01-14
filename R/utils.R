@@ -172,18 +172,18 @@ data_substitutions <- function(dataset, disease, forecast_generation_date) {
 }
 
 parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv"),
-                               gen_forecast_date) {
+                               forecast_date) {
   all_states <- c(
     unique(readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE)$state_id),
     "usa", "us"
   )
   all_prod_weights <- readr::read_csv(filename, comment = "#", show_col_types = FALSE)
   # if we haven't set specific weights, use the overall defaults
-  useful_prod_weights <- filter(all_prod_weights, forecast_date == gen_forecast_date)
+  useful_prod_weights <- filter(all_prod_weights, forecast_date == forecast_date)
   if (nrow(useful_prod_weights) == 0) {
     useful_prod_weights <- all_prod_weights %>%
       filter(forecast_date == min(forecast_date)) %>%
-      mutate(forecast_date = gen_forecast_date)
+      mutate(forecast_date = forecast_date)
   }
   useful_prod_weights %>%
     mutate(
