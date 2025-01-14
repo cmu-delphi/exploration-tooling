@@ -9,6 +9,7 @@ insufficient_data_geos <- c("as", "mp", "vi", "gu")
 truth_data_date <- "2023-09-01"
 # needed to create the aux data targets
 end_date <- Sys.Date()
+
 # This is the as_of for the forecast. If run on our typical schedule, it's
 # today, which is a Wednesday. Sometimes, if we're doing a delayed forecast,
 # it's a Thursday. It's used for stamping the data and for determining the
@@ -22,6 +23,7 @@ forecast_date <- round_date(forecast_generation_date, "weeks", week_start = 3)
 # forecast_generation_date needs to follow suit, but it's more complicated
 # because sometimes we forecast on Thursday.
 # forecast_generation_date <- c(as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
+
 very_latent_locations <- list(list(
   c("source"),
   c("flusurv", "ILI+")

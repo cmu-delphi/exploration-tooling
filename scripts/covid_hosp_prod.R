@@ -6,10 +6,21 @@ submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
 truth_data_date <- "2023-09-01"
-# Generically set the generation date to the next Wednesday (or today if it's Wednesday)
+
+# This is the as_of for the forecast. If run on our typical schedule, it's
+# today, which is a Wednesday. Sometimes, if we're doing a delayed forecast,
+# it's a Thursday. It's used for stamping the data and for determining the
+# appropriate as_of when creating the forecast.
 forecast_generation_date <- Sys.Date()
-#forecast_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
-forecast_date <- Sys.Date()
+# Usually, the forecast_date is the same as the generation date, but you can
+# override this. It should be a Wednesday.
+forecast_date <- round_date(forecast_generation_date, "weeks", week_start = 3)
+# If doing backfill, you can set the forecast_date to a sequence of dates.
+# forecast_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
+# forecast_generation_date needs to follow suit, but it's more complicated
+# because sometimes we forecast on Thursday.
+# forecast_generation_date <- c(as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
+
 forecaster_fns <- list2(
   linear = function(...) {
     forecaster_baseline_linear(..., residual_tail = 0.97, residual_center = 0.097, no_intercept = TRUE)
@@ -59,16 +70,17 @@ rlang::list2(
   tar_map(
     values = tidyr::expand_grid(
       tibble(
-        forecast_date = forecast_date
+        forecast_date_int = forecast_date,
+        forecast_generation_date_int = forecast_generation_date
       )
     ),
     names = "forecast_date",
     tar_target(
       name = geo_forecasters_weights,
       command = {
-        geo_forecasters_weights <- parse_prod_weights(here::here("covid_geo_exclusions.csv"), forecast_date)
-        if (nrow(geo_forecasters_weights %>% filter(forecast_date == forecast_date)) == 0) {
-          cli_abort("there are no weights  for the forecast date {forecast_date}")
+        geo_forecasters_weights <- parse_prod_weights(here::here("covid_geo_exclusions.csv"), forecast_date_int)
+        if (nrow(geo_forecasters_weights %>% filter(forecast_date == forecast_date_int)) == 0) {
+          cli_abort("there are no weights for the forecast date {forecast_date}")
         }
         geo_forecasters_weights
       },
@@ -83,10 +95,9 @@ rlang::list2(
     tar_target(
       forecast_res,
       command = {
-        forecast_date <- as.Date(forecast_date)
-        if (forecast_date < Sys.Date()) {
+        if (as.Date(forecast_generation_date_int) < Sys.Date()) {
           train_data <- nhsn_archive_data %>%
-            epix_as_of(forecast_date) %>%
+            epix_as_of(as.Date(forecast_generation_date_int)) %>%
             mutate(
               geo_value = ifelse(geo_value == "usa", "us", geo_value),
               time_value = time_value - 3
@@ -96,9 +107,9 @@ rlang::list2(
           train_data <-
             nhsn_latest_data %>%
             data_substitutions(disease = "covid") %>%
-            as_epi_df(as_of = as.Date(forecast_date))
+            as_epi_df(as_of = as.Date(forecast_date_int))
         }
-        attributes(train_data)$metadata$as_of <- round_date(forecast_date, "weeks", week_start = 3)
+        attributes(train_data)$metadata$as_of <- as.Date(forecast_date_int)
         train_data %>%
           forecaster_fns[[forecasters]](ahead = aheads) %>%
           mutate(
@@ -112,7 +123,6 @@ rlang::list2(
     tar_target(
       name = ensemble_res,
       command = {
-        forecasts <- forecast_res
         forecasts %>%
           mutate(quantile = round(quantile, digits = 3)) %>%
           left_join(geo_forecasters_weights, by = join_by(forecast_date, forecaster, geo_value)) %>%
@@ -127,7 +137,12 @@ rlang::list2(
       name = ensemble_mixture_res,
       command = {
         forecast_res %>%
-          ensemble_linear_climate(aheads, other_weights = geo_forecasters_weights, max_climate_ahead_weight = 0.6, max_climate_quantile_weight = 0.6) %>%
+          ensemble_linear_climate(
+            aheads,
+            other_weights = geo_forecasters_weights,
+            max_climate_ahead_weight = 0.6,
+            max_climate_quantile_weight = 0.6
+          ) %>%
           filter(geo_value %nin% geo_exclusions) %>%
           ungroup()
       },
@@ -135,7 +150,7 @@ rlang::list2(
     tar_target(
       name = make_submission_csv,
       command = {
-        forecast_reference_date <- get_forecast_reference_date(as.Date(forecast_date))
+        forecast_reference_date <- get_forecast_reference_date(forecast_date_int)
         ensemble_mixture_res %>%
           format_flusight(disease = "covid") %>%
           write_submission_file(forecast_reference_date, file.path(submission_directory, "model-output/CMU-TimeSeries"))
@@ -154,7 +169,7 @@ rlang::list2(
             ungroup() %>%
             format_flusight(disease = "covid") %>%
             write_submission_file(
-              get_forecast_reference_date(as.Date(forecast_date)),
+              get_forecast_reference_date(forecast_date_int),
               submission_directory = file.path(submission_directory, "model-output/CMU-climatological-baseline"),
               file_name = "CMU-climatological-baseline"
             )
@@ -170,7 +185,7 @@ rlang::list2(
         if (submission_directory != "cache") {
           validation <- validate_submission(
             submission_directory,
-            file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(as.Date(forecast_date)))
+            file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(forecast_date_int))
           )
         } else {
           validation <- "not validating when there is no hub (set submission_directory)"
@@ -187,7 +202,7 @@ rlang::list2(
         if (submission_directory != "cache" && submit_climatological) {
           validation <- validate_submission(
             submission_directory,
-            file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(as.Date(forecast_date)))
+            file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(forecast_date_int))
           )
         } else {
           validation <- "not validating when there is no hub (set submission_directory)"
@@ -243,13 +258,13 @@ rlang::list2(
           "scripts/reports/forecast_report.Rmd",
           output_file = here::here(
             "reports",
-            sprintf("%s_covid_prod_on_%s.html", as.Date(forecast_date), as.Date(Sys.Date()))
+            sprintf("%s_covid_prod_on_%s.html", as.Date(forecast_date_int), as.Date(forecast_generation_date_int))
           ),
           params = list(
             disease = "covid",
             forecast_res = forecast_res %>% bind_rows(ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix")),
             ensemble_res = ensemble_res,
-            forecast_date = as.Date(forecast_date),
+            forecast_date = as.Date(forecast_date_int),
             truth_data = truth_data
           )
         )
