@@ -21,8 +21,7 @@ forecast_date <- Sys.Date()
 # forecast_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 # forecast_generation_date needs to follow suit, but it's more complicated
 # because sometimes we forecast on Thursday.
-# TODO: Fix.
-# forecast_generation_date <- forecast_date
+# forecast_generation_date <- c(as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
 very_latent_locations <- list(list(
   c("source"),
   c("flusurv", "ILI+")
