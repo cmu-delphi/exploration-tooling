@@ -123,7 +123,7 @@ rlang::list2(
     tar_target(
       name = ensemble_res,
       command = {
-        forecasts %>%
+        forecast_res %>%
           mutate(quantile = round(quantile, digits = 3)) %>%
           left_join(geo_forecasters_weights, by = join_by(forecast_date, forecaster, geo_value)) %>%
           mutate(value = value * weight) %>%
