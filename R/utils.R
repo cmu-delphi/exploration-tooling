@@ -281,9 +281,7 @@ write_submission_file <- function(pred, forecast_reference_date, submission_dire
 #' Utility to get the reference date for a given date. This is the last day of
 #' the epiweek that the date falls in.
 get_forecast_reference_date <- function(date) {
-  if (!lubridate::is.Date(date)) {
     date <- as.Date(date)
-  }
   MMWRweek::MMWRweek2Date(lubridate::epiyear(date), lubridate::epiweek(date)) + 6
 }
 
