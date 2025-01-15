@@ -710,13 +710,15 @@ create_nhsn_data_archive <- function(disease_name) {
 }
 
 
-up_to_date_nssp_state_archive <- function() {
+up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
+  disease <- arg_match(disease)
   nssp_state <- pub_covidcast(
     source = "nssp",
-    signal = "pct_ed_visits_influenza",
+    signal = glue::glue("pct_ed_visits_{disease}"),
     time_type = "week",
     geo_type = "state",
-    geo_values = "*"
+    geo_values = "*",
+    issues = "*"
   )
   nssp_state %>%
     select(geo_value, time_value, issue, nssp = value) %>%
