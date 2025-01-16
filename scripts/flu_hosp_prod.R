@@ -69,6 +69,10 @@ forecaster_fns <- list2(
 # This is needed to build the data archive
 ref_time_values_ <- seq.Date(as.Date("2023-10-04"), as.Date("2024-04-24"), by = 7L)
 
+smooth_last_n <- function(x, n = 1, k = 2) {
+  x[(length(x) - (n - 1)):length(x)] <- mean(x[(length(x) - (k - 1)):length(x)], na.rm = TRUE)
+  x
+}
 
 rlang::list2(
   rlang::list2(
@@ -143,7 +147,7 @@ rlang::list2(
       command = exclude_geos(geo_forecasters_weights)
     ),
     tar_target(
-      forecast_res,
+      full_data,
       command = {
         if (as.Date(forecast_generation_date_int) < Sys.Date()) {
           train_data <- nhsn_archive_data %>%
@@ -161,7 +165,46 @@ rlang::list2(
           bind_rows(joined_latest_extra_data)
         attributes(full_data)$metadata$other_keys <- "source"
         attributes(full_data)$metadata$as_of <- as.Date(forecast_date_int)
+        full_data
+      }
+    ),
+    tar_target(
+      forecast_res,
+      command = {
         full_data %>%
+          forecaster_fns[[forecasters]](ahead = aheads) %>%
+          mutate(
+            forecaster = names(forecaster_fns[forecasters]),
+            geo_value = as.factor(geo_value)
+          )
+      },
+      pattern = cross(aheads, forecasters),
+      cue = tar_cue(mode = "always")
+    ),
+    # A hack to model our uncertainty in the data. We smooth the last few points
+    # to make the forecast more stable.
+    tar_target(
+      forecast_res_modified,
+      command = {
+        as_of <- attributes(full_data)$metadata$as_of
+        other_keys <- attributes(full_data)$metadata$other_keys
+
+        # Smooth last few points for every geo.
+        # TODO: This is a hack, we can try some more sophisticated
+        # smoothing/nowcasting here.
+        modified_full_data <- full_data %>%
+          filter(source == "nhsn") %>%
+          arrange(geo_value, time_value) %>%
+          group_by(geo_value) %>%
+          mutate(value = smooth_last_n(value)) %>%
+          ungroup()
+        # Add back in the non-nhsn data.
+        modified_full_data <- modified_full_data %>%
+          bind_rows(full_data %>% filter(source != "nhsn"))
+
+        attributes(modified_full_data)$metadata$as_of <- as_of
+        attributes(modified_full_data)$metadata$other_keys <- other_keys
+        modified_full_data %>%
           forecaster_fns[[forecasters]](ahead = aheads) %>%
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
@@ -198,6 +241,48 @@ rlang::list2(
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
           sort_by_quantile()
       },
+    ),
+    tar_target(
+      name = ensemble_mixture_res_2,
+      command = {
+        forecast_res_modified %>%
+          # Apply the ahead-by-quantile weighting scheme
+          ensemble_linear_climate(aheads, other_weights = geo_forecasters_weights) %>%
+          filter(geo_value %nin% geo_exclusions) %>%
+          ungroup() %>%
+          # Ensemble with windowed_seasonal
+          bind_rows(forecast_res_modified %>% filter(forecaster == "windowed_seasonal")) %>%
+          group_by(geo_value, forecast_date, target_end_date, quantile) %>%
+          summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+          sort_by_quantile()
+      }
+    ),
+    tar_target(
+      name = combo_ensemble_mixture_res,
+      command = {
+        inner_join(
+          ensemble_mixture_res, ensemble_mixture_res_2,
+          by = join_by(geo_value, forecast_date, target_end_date, quantile)
+        ) %>%
+          rowwise() %>%
+          mutate(value = ifelse(quantile > 0.5, max(value.x, value.y), NA)) %>%
+          mutate(value = ifelse(quantile < 0.5, min(value.x, value.y), value)) %>%
+          mutate(value = ifelse(quantile == 0.5, (value.x + value.y) / 2, value)) %>%
+          select(geo_value, forecast_date, target_end_date, quantile, value) %>%
+          ungroup()
+      }
+    ),
+    tar_target(
+      name = forecasts_and_ensembles,
+      command = {
+        bind_rows(
+          forecast_res,
+          ensemble_res %>% mutate(forecaster = "ensemble"),
+          ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix"),
+          ensemble_mixture_res_2 %>% mutate(forecaster = "ensemble_mix_2"),
+          combo_ensemble_mixture_res %>% mutate(forecaster = "combo_ensemble_mix")
+        )
+      }
     ),
     tar_target(
       name = make_submission_csv,
@@ -321,8 +406,7 @@ rlang::list2(
           ),
           params = list(
             disease = "flu",
-            forecast_res = forecast_res %>% bind_rows(ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix")),
-            ensemble_res = ensemble_res,
+            forecast_res = forecasts_and_ensembles,
             forecast_date = as.Date(forecast_date_int),
             truth_data = truth_data
           )

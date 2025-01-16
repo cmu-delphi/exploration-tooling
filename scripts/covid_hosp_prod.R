@@ -148,6 +148,19 @@ rlang::list2(
       },
     ),
     tar_target(
+      name = forecasts_and_ensembles,
+      command = {
+        bind_rows(
+          forecast_res,
+          ensemble_res %>% mutate(forecaster = "ensemble"),
+          ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix"),
+          # TODO: Maybe later, match with flu_hosp_prod
+          # ensemble_mixture_res_2 %>% mutate(forecaster = "ensemble_mix_2"),
+          # combo_ensemble_mixture_res %>% mutate(forecaster = "combo_ensemble_mix")
+        )
+      }
+    ),
+    tar_target(
       name = make_submission_csv,
       command = {
         forecast_reference_date <- get_forecast_reference_date(forecast_date_int)
@@ -262,8 +275,7 @@ rlang::list2(
           ),
           params = list(
             disease = "covid",
-            forecast_res = forecast_res %>% bind_rows(ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix")),
-            ensemble_res = ensemble_res,
+            forecast_res = forecasts_and_ensembles,
             forecast_date = as.Date(forecast_date_int),
             truth_data = truth_data
           )

@@ -10,7 +10,6 @@ output:
 params:
   disease: "covid"
   forecast_res: !r ""
-  ensemble_res: !r ""
   forecast_date: !r ""
   truth_data: !r ""
 ---
@@ -51,7 +50,7 @@ Fan displays 20-80 quantiles for coverage.
 
 ```{r, fig.height = 60, fig.width = 12, echo=FALSE}
 the_plot <- plot_forecasts(
-  params$forecast_res %>% bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")),
+  params$forecast_res,
   params$forecast_date,
   params$truth_data,
   quantiles = c(0.8),
@@ -70,7 +69,7 @@ Fan displays 20-80, 5-95, and 1-99 quantiles.
 
 ```{r, fig.height = 60, fig.width = 12, echo=FALSE}
 the_plot <- plot_forecasts(
-  params$forecast_res %>% bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")),
+  params$forecast_res,
   params$forecast_date,
   params$truth_data,
   quantiles = c(0.8, 0.95, 0.99),
@@ -88,7 +87,6 @@ ggplotly(the_plot, tooltip = "text", height = 9000, width = 2000) %>%
 <!-- ```{r, fig.width = 12, echo=FALSE} -->
 <!-- the_plot <- plot_forecasts( -->
 <!--   params$forecast_res %>% -->
-<!--   bind_rows(params$ensemble_res %>% mutate(forecaster = "ensemble")) %>% -->
 <!--   filter(geo_value != "usa") %>% -->
 <!--   summarise( -->
 <!--     value = sum(value), -->
