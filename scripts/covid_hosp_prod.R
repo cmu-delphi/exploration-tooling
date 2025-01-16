@@ -58,10 +58,11 @@ forecaster_fns <- list2(
     fcst
   }
 )
+indices <- seq_along(forecaster_fns)
 
 rlang::list2(
   tar_target(aheads, command = -1:3),
-  tar_target(forecasters, command = seq_along(forecaster_fns)),
+  tar_target(forecasters, command = indices),
   tar_target(
     download_latest,
     command = {
@@ -121,13 +122,12 @@ rlang::list2(
     }
   ),
   tar_map(
-    values = tidyr::expand_grid(
-      tibble(
+    values = tibble(
         forecast_date_int = forecast_date,
-        forecast_generation_date_int = forecast_generation_date
-      )
-    ),
-    names = "forecast_date",
+        forecast_generation_date_int = forecast_generation_date,
+        forecast_date_chr = as.character(forecast_date_int)
+      ),
+    names = "forecast_date_chr",
     tar_target(
       name = geo_forecasters_weights,
       command = {
@@ -158,11 +158,16 @@ rlang::list2(
         } else {
           train_data <-
             nhsn_latest_data %>%
+            select(-version) %>%
             data_substitutions(disease = "covid") %>%
-            as_epi_df(as_of = as.Date(forecast_date_int))
+            as_epi_df(as_of = as.Date(forecast_date_int)) %>%
+            mutate(time_value = time_value - 3)
         }
-        nssp <- current_nssp_archive %>% epix_as_of(min(forecast_date, current_nssp_archive$versions_end))
+        nssp <- current_nssp_archive %>%
+          epix_as_of(min(forecast_date, current_nssp_archive$versions_end)) %>%
+          mutate(time_value = time_value)
         attributes(train_data)$metadata$as_of <- as.Date(forecast_date_int)
+        print(names(forecaster_fns[forecasters]))
         train_data %>%
           forecaster_fns[[forecasters]](ahead = aheads, extra_data = nssp) %>%
           mutate(
@@ -199,7 +204,9 @@ rlang::list2(
           ) %>%
           filter(geo_value %nin% geo_exclusions) %>%
           ungroup() %>%
-          bind_rows(forecast_res %>% filter(forecaster == "windowed_seasonal_extra_sources")) %>%
+          bind_rows(forecast_res %>%
+                    filter(forecaster == "windowed_seasonal_extra_sources") %>%
+                    filter(forecast_date < target_end_date)) %>% # don't use for neg aheads
           group_by(geo_value, forecast_date, target_end_date, quantile) %>%
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
           sort_by_quantile()

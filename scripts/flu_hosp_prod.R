@@ -340,7 +340,7 @@ rlang::list2(
     tar_target(
       name = make_submission_csv,
       command = {
-        ensemble_mixture_res %>%
+        ensemble_res %>%
           format_flusight(disease = "flu") %>%
           write_submission_file(
             get_forecast_reference_date(forecast_date_int),
@@ -360,7 +360,7 @@ rlang::list2(
             ungroup() %>%
             filter(!(geo_value %in% excluded_geos)) %>%
             format_flusight(disease = "flu") %>%
-            filter(location %nin% c("60", "66", "68")) %>%
+            filter(location %nin% c("60", "66", "78")) %>%
             write_submission_file(
               get_forecast_reference_date(forecast_date_int),
               submission_directory = file.path(submission_directory, "model-output/CMU-climate_baseline"),
