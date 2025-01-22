@@ -212,7 +212,6 @@ rlang::list2(
         } else {
           train_data <- nhsn_latest_data
         }
-        nssp <- current_nssp_archive %>% epix_as_of(min(forecast_date, current_nssp_archive$versions_end))
         full_data <- train_data %>%
           bind_rows(joined_latest_extra_data)
         attributes(full_data)$metadata$other_keys <- "source"
@@ -223,6 +222,8 @@ rlang::list2(
     tar_target(
       forecast_res,
       command = {
+        forecast_date <- as.Date(forecast_date_int)
+        nssp <- current_nssp_archive %>% epix_as_of(min(forecast_date, current_nssp_archive$versions_end))
         full_data %>%
           forecaster_fns[[forecasters]](ahead = aheads, extra_data = nssp) %>%
           mutate(
@@ -239,6 +240,8 @@ rlang::list2(
       command = {
         as_of <- attributes(full_data)$metadata$as_of
         other_keys <- attributes(full_data)$metadata$other_keys
+        forecast_date <- as.Date(forecast_date_int)
+        nssp <- current_nssp_archive %>% epix_as_of(min(forecast_date, current_nssp_archive$versions_end))
 
         # Smooth last few points for every geo.
         # TODO: This is a hack, we can try some more sophisticated
@@ -256,7 +259,7 @@ rlang::list2(
         attributes(modified_full_data)$metadata$as_of <- as_of
         attributes(modified_full_data)$metadata$other_keys <- other_keys
         modified_full_data %>%
-          forecaster_fns[[forecasters]](ahead = aheads) %>%
+          forecaster_fns[[forecasters]](ahead = aheads, extra_data = nssp) %>%
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
             geo_value = as.factor(geo_value)

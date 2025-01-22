@@ -245,6 +245,7 @@ rlang::list2(
             summarize(forecast_date = first(forecast_date), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
             ungroup() %>%
             format_flusight(disease = "covid") %>%
+            filter(location %nin% c("60", "66", "78")) %>%
             write_submission_file(
               get_forecast_reference_date(forecast_date_int),
               submission_directory = file.path(submission_directory, "model-output/CMU-climate_baseline"),
