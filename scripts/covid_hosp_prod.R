@@ -1,7 +1,7 @@
 # The COVID Hospitalization Production Forecasting Pipeline.
 source("scripts/targets-common.R")
 
-submit_climatological <- FALSE
+submit_climatological <- TRUE
 submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
@@ -149,12 +149,12 @@ rlang::list2(
       command = {
         if (as.Date(forecast_generation_date_int) < Sys.Date()) {
           train_data <- nhsn_archive_data %>%
-            epix_as_of(as.Date(forecast_generation_date_int)) %>%
+            epix_as_of(min(forecast_date, current_nssp_archive$versions_end)) %>%
+            add_season_info() %>%
             mutate(
               geo_value = ifelse(geo_value == "usa", "us", geo_value),
               time_value = time_value - 3
-            ) %>%
-            add_season_info()
+            )
         } else {
           train_data <-
             nhsn_latest_data %>%
