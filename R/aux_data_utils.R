@@ -595,6 +595,7 @@ gen_ili_data <- function(default_day_of_week = 1) {
 }
 
 process_nhsn_data <- function(raw_nhsn_data) {
+  # TODO: Is this still needed?
   # These are exception dates when the data was available on a different day
   # than usual. In these two cases, it was the Thursday after. But to keep
   # the rest of the pipeline the same, we pretend it was available on Wednesday.

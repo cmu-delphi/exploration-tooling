@@ -212,15 +212,47 @@ exclude_geos <- function(geo_forecasters_weights) {
 
 `%nin%` <- function(x, y) !(x %in% y)
 
-get_population_data <- function() {
-  readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE) %>%
-    rename(population = pop) %>%
-    # Add a row for the United States
-    bind_rows(
-      (.) %>% summarize(state_id = "us", population = sum(population), state_name = "United States", state_code = "US")
-    ) %>%
-    # Duplicate the last row, but with state_id = "usa".
-    bind_rows((.) %>% filter(state_id == "us") %>% mutate(state_id = "usa"))
+get_population_data <- function(national_code = c("both", "us", "usa")) {
+  national_code <- rlang::arg_match(national_code)
+
+  state_crosswalk <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE) %>%
+    rename(population = pop)
+  us_crosswalk <- state_crosswalk %>%
+    summarize(state_id = "us", population = sum(population), state_name = "United States", state_code = "US")
+  usa_crosswalk <- state_crosswalk %>%
+    filter(state_id == "us") %>%
+    mutate(state_id = "usa")
+
+  if (national_code == "us") {
+    return(bind_rows(state_crosswalk, us_crosswalk))
+  }
+  if (national_code == "usa") {
+    return(bind_rows(state_crosswalk, usa_crosswalk))
+  }
+  if (national_code == "both") {
+    return(bind_rows(state_crosswalk, us_crosswalk, usa_crosswalk))
+  }
+}
+
+#' Add a state info column to a dataframe
+#'
+#' @param df the dataframe to add the state info column to
+#' @param geo_value_col the name of the column in df that contains the geo_value
+#' @param info_col the name of the column in get_population_data() that contains the state info
+#'   the options are: state_id, state_code, state_name, population.
+#'
+#' @examples
+#' # To add state_code to a dataframe with a geo_value column of state_ids (e.g. "ca")
+#' df %>% add_state_info(geo_value_col = "geo_value", old_geo_code = "state_id", new_geo_code = "state_code")
+#'
+#' # To add state_id to a dataframe with a geo_value column of state_codes (e.g. "01")
+#' df %>% add_state_info(geo_value_col = "location", old_geo_code = "state_code", new_geo_code = "state_id")
+add_state_info <- function(df, geo_value_col, old_geo_code, new_geo_code) {
+  original_colnames <- colnames(df)
+
+  df %>%
+    left_join(get_population_data(), by = join_by(!!geo_value_col == !!old_geo_code)) %>%
+    select(original_colnames, !!new_geo_code)
 }
 
 filter_forecast_geos <- function(forecasts, truth_data) {
@@ -276,6 +308,19 @@ write_submission_file <- function(pred, forecast_reference_date, submission_dire
     file.remove(file_path)
   }
   readr::write_csv(pred, file_path)
+}
+
+#' The quantile levels used by the covidhub repository
+#'
+#' @param type either standard or inc_case, with inc_case being a small subset of the standard
+#'
+#' @export
+covidhub_probs <- function(type = c("standard", "inc_case")) {
+  type <- match.arg(type)
+  switch(type,
+    standard = c(0.01, 0.025, seq(0.05, 0.95, by = 0.05), 0.975, 0.99),
+    inc_case = c(0.025, 0.100, 0.250, 0.500, 0.750, 0.900, 0.975)
+  ) |> round(digits = 3)
 }
 
 #' Utility to get the reference date for a given date. This is the last day of

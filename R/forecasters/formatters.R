@@ -59,28 +59,15 @@ format_covidhub <- function(pred, true_forecast_date, target_end_date, quantile_
 format_flusight <- function(pred, disease = c("flu", "covid")) {
   disease <- arg_match(disease)
   pred %>%
+    add_state_info(geo_value_col = "geo_value", old_geo_code = "state_id", new_geo_code = "state_code") %>%
     mutate(
       reference_date = get_forecast_reference_date(forecast_date),
       target = glue::glue("wk inc {disease} hosp"),
       horizon = as.integer(floor((target_end_date - reference_date) / 7)),
       output_type = "quantile",
       output_type_id = quantile,
-      value = value
+      value = value,
+      location = state_code
     ) %>%
-    left_join(get_population_data() %>% select(state_id, state_code), by = c("geo_value" = "state_id")) %>%
-    mutate(location = state_code) %>%
     select(reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value)
-}
-
-#' The quantile levels used by the covidhub repository
-#'
-#' @param type either standard or inc_case, with inc_case being a small subset of the standard
-#'
-#' @export
-covidhub_probs <- function(type = c("standard", "inc_case")) {
-  type <- match.arg(type)
-  switch(type,
-    standard = c(0.01, 0.025, seq(0.05, 0.95, by = 0.05), 0.975, 0.99),
-    inc_case = c(0.025, 0.100, 0.250, 0.500, 0.750, 0.900, 0.975)
-  ) |> round(digits = 3)
 }

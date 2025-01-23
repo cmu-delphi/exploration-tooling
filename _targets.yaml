@@ -19,3 +19,7 @@ covid_hosp_prod:
   script: scripts/covid_hosp_prod.R
   store: covid_hosp_prod
   use_crew: no
+dashboard-proj:
+  script: scripts/dashboard-proj.R
+  store: dashboard-proj
+  use_crew: no
