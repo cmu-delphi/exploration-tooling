@@ -42,7 +42,7 @@ no_recent_outcome <- function(epi_data,
   adding_source <- FALSE
   if (!("source" %in% names(epi_data))) {
     adding_source <- TRUE
-    epi_data$source <- c("none")
+    epi_data$source <- c("nhsn")
     attributes(epi_data)$metadata$other_keys <- "source"
   }
   if ("season_week" %nin% names(epi_data)) {
@@ -59,10 +59,13 @@ no_recent_outcome <- function(epi_data,
   args_input[["quantile_levels"]] <- quantile_levels
   args_list <- do.call(default_args_list, args_input)
   # if you want to hardcode particular predictors in a particular forecaster
-  predictors <- extra_sources[[1]]
-  # TODO: Partial match quantile_level coming from here (on Dmitry's machine)
+  predictors <- c(outcome, extra_sources[[1]])
   c(args_list, tmp_pred, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
-
+  if (extra_sources[[1]] == "") {
+    predictors <- character()
+  } else {
+    predictors <- extra_sources[[1]]
+  }
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict

@@ -172,18 +172,19 @@ data_substitutions <- function(dataset, disease, forecast_generation_date) {
 }
 
 parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv"),
-                               gen_forecast_date) {
+                               forecast_date_int, forecaster_fns) {
+  forecast_date <- as.Date(forecast_date_int)
   all_states <- c(
     unique(readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE)$state_id),
     "usa", "us"
   )
   all_prod_weights <- readr::read_csv(filename, comment = "#", show_col_types = FALSE)
   # if we haven't set specific weights, use the overall defaults
-  useful_prod_weights <- filter(all_prod_weights, forecast_date == gen_forecast_date)
+  useful_prod_weights <- filter(all_prod_weights, forecast_date == forecast_date)
   if (nrow(useful_prod_weights) == 0) {
     useful_prod_weights <- all_prod_weights %>%
       filter(forecast_date == min(forecast_date)) %>%
-      mutate(forecast_date = gen_forecast_date)
+      mutate(forecast_date = forecast_date)
   }
   useful_prod_weights %>%
     mutate(
@@ -196,7 +197,7 @@ parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv")
     unnest_longer(forecaster) %>%
     group_by(forecast_date, forecaster, geo_value) %>%
     summarize(weight = min(weight), .groups = "drop") %>%
-    mutate(forecast_date = as.Date(forecast_date)) %>%
+    mutate(forecast_date = as.Date(forecast_date_int)) %>%
     group_by(forecast_date, geo_value) %>%
     mutate(weight = ifelse(near(weight, 0), 0, weight / sum(weight)))
 }
@@ -280,7 +281,8 @@ write_submission_file <- function(pred, forecast_reference_date, submission_dire
 #' Utility to get the reference date for a given date. This is the last day of
 #' the epiweek that the date falls in.
 get_forecast_reference_date <- function(date) {
-  MMWRweek::MMWRweek2Date(epiyear(date), epiweek(date)) + 6
+    date <- as.Date(date)
+  MMWRweek::MMWRweek2Date(lubridate::epiyear(date), lubridate::epiweek(date)) + 6
 }
 
 update_site <- function() {
@@ -303,15 +305,31 @@ update_site <- function() {
     stop("Template file does not exist.")
   }
   report_md_content <- readLines(template_path)
-
   # Get the list of files in the reports directory
-  report_files <- dir_ls(reports_dir, regexp = ".*_prod.html")
+  report_files <- dir_ls(reports_dir, regexp = ".*_prod_on_.*.html")
+  report_table <- tibble(
+    filename = report_files,
+    dates = str_match_all(filename, "[0-9]{4}-..-..")
+  ) %>%
+    unnest_wider(dates, names_sep = "_") %>%
+    rename(forecast_date = dates_1, generation_date = dates_2) %>%
+    mutate(
+      forecast_date = ymd(forecast_date),
+      generation_date = ymd(generation_date),
+      disease = str_match(filename, "flu|covid")
+    )
 
-  # Extract dates and sort files by date in descending order
-  report_files <- report_files[order(as.Date(str_extract(report_files, "\\d{4}-\\d{2}-\\d{2}")), decreasing = FALSE)]
+  # use the most recently generated forecast, and sort descending on the
+  # forecast date
+  used_reports <- report_table %>%
+    group_by(forecast_date, disease) %>%
+    arrange(generation_date) %>%
+    filter(generation_date == max(generation_date)) %>%
+    ungroup() %>%
+    arrange(forecast_date)
 
   # Process each report file
-  for (report_file in report_files) {
+  for (report_file in used_reports$filename) {
     file_name <- path_file(report_file)
     file_parts <- str_split(fs::path_ext_remove(file_name), "_", simplify = TRUE)
     date <- file_parts[1]

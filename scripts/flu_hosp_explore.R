@@ -536,7 +536,7 @@ rlang::list2(
     family_notebooks,
     command = {
       actual_eval_data <- hhs_evaluation_data
-        mutate(target_end_date = target_end_date + 3)
+      mutate(target_end_date = target_end_date + 3)
       delphi_forecaster_subset <- forecaster_parameter_combinations[[forecaster_families]]$id
       outside_forecaster_subset <- c("FluSight-baseline", "FluSight-ensemble", "UMass-flusion")
       filtered_forecasts <- joined_forecasts %>%

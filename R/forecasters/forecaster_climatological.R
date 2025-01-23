@@ -1,18 +1,18 @@
 climate_linear_ensembled <- function(epi_data,
-                           outcome,
-                           extra_sources = "",
-                           ahead = 7,
-                           trainer = parsnip::linear_reg(),
-                           quantile_levels = covidhub_probs(),
-                           filter_source = "",
-                           filter_agg_level = "",
-                           scale_method = c("quantile", "std", "none"),
-                           center_method = c("median", "mean", "none"),
-                           nonlin_method = c("quart_root", "none"),
-                           drop_non_seasons = FALSE,
-                           residual_tail = 0.99,
-                           residual_center = 0.35,
-                           ...) {
+                                     outcome,
+                                     extra_sources = "",
+                                     ahead = 7,
+                                     trainer = parsnip::linear_reg(),
+                                     quantile_levels = covidhub_probs(),
+                                     filter_source = "",
+                                     filter_agg_level = "",
+                                     scale_method = c("quantile", "std", "none"),
+                                     center_method = c("median", "mean", "none"),
+                                     nonlin_method = c("quart_root", "none"),
+                                     drop_non_seasons = FALSE,
+                                     residual_tail = 0.99,
+                                     residual_center = 0.35,
+                                     ...) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
@@ -49,7 +49,9 @@ climate_linear_ensembled <- function(epi_data,
   }
   learned_params <- calculate_whitening_params(season_data, outcome, scale_method, center_method, nonlin_method)
   epi_data %<>% data_whitening(outcome, learned_params, nonlin_method)
-  epi_data <- epi_data %>% select(geo_value, source, time_value, season, value = !!outcome) %>% mutate(epiweek = epiweek(time_value))
+  epi_data <- epi_data %>%
+    select(geo_value, source, time_value, season, value = !!outcome) %>%
+    mutate(epiweek = epiweek(time_value))
   pred_climate <- climatological_model(epi_data, ahead) %>% mutate(forecaster = "climate")
   pred_geo_climate <- climatological_model(epi_data, ahead, geo_agg = FALSE) %>% mutate(forecaster = "climate_geo")
   pred_linear <- forecaster_baseline_linear(epi_data, ahead, residual_tail = residual_tail, residual_center = residual_center) %>% mutate(forecaster = "linear")

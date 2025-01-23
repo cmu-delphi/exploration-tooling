@@ -617,3 +617,94 @@ process_nhsn_data <- function(raw_nhsn_data) {
     mutate(version = fixed_version) %>%
     relocate(geo_value, disease, time_value, version)
 }
+
+
+# for filenames of the form nhsn_data_2024-11-19_16-29-43.191649.rds
+get_version_timestamp <- function(filename) ymd_hms(str_match(filename, "[0-9]{4}-..-.._..-..-..\\.[^.^_]*"))
+
+#' all in one function to get and cache a nhsn archive from raw files
+#' @description
+#' This takes in all of the raw data files for the nhsn data, creates a
+#'   quasi-archive (it keeps one example per version-day, rather than one per
+#'   change), and puts it in the bucket. The stored value has the columns
+#'   geo_value, time_value, disease, endpoint (either basic or prelim), version,
+#'   version_timestamp (to enable keeping the most recent value), and value.
+#'   The returned value on the other hand is an actual epi_archive, only
+#'   containing the data for `disease_name`.
+create_nhsn_data_archive <- function(disease_name) {
+  if (aws.s3::head_object("archive_timestamped.parquet", bucket = "forecasting-team-data")) {
+    aws.s3::save_object("archive_timestamped.parquet", bucket = "forecasting-team-data", file = here::here("cache/archive_timestamped.parquet"))
+    previous_archive <- qs::qread(here::here("cache/archive_timestamped.parquet"))
+    last_timestamp <- max(previous_archive$version_timestamp)
+  } else {
+    # there is no remote
+    previous_archive <- NULL
+    last_timestamp <- as.Date("1000-01-01")
+  }
+  new_data <- aws.s3::get_bucket_df(bucket = "forecasting-team-data", prefix = "nhsn_data_") %>%
+    filter(get_version_timestamp(Key) > last_timestamp) %>%
+    pull(Key) %>%
+    lapply(
+      function(filename) {
+        version_timestamp <- get_version_timestamp(filename)
+        res <- NULL
+        tryCatch(
+          {
+            s3load(object = filename, bucket = "forecasting-team-data")
+            if (grepl("prelim", filename)) {
+              res <- epi_data_raw_prelim
+              endpoint_val <- "prelim"
+            } else {
+              res <- epi_data_raw
+              endpoint_val <- "basic"
+            }
+            res <- res %>%
+              process_nhsn_data() %>%
+              select(geo_value, disease, time_value, value) %>%
+              mutate(version_timestamp = version_timestamp, endpoint = endpoint_val)
+          },
+          error = function(cond) {}
+        )
+        res
+      }
+    )
+  # drop any duplicates on the same day
+  compactified <-
+    new_data %>%
+    bind_rows()
+  if (nrow(compactified) == 0) {
+    one_per_day <- previous_archive
+  } else {
+    compactified <-
+      compactified %>%
+      arrange(geo_value, time_value, disease, endpoint, version_timestamp) %>%
+      mutate(version = as.Date(version_timestamp)) %>%
+      filter(if_any(
+        c(everything(), -endpoint, -version_timestamp), # all non-version, non-endpoint columns
+        ~ !epiprocess:::is_locf(., .Machine$double.eps^0.5)
+      ))
+
+    unchanged <- previous_archive %>% filter(!(version %in% unique(compactified$version)))
+    # only keep the last value for a given version (so across version_timestamps)
+    # we only need to do this for the versions in compactified, as the other versions can't possibly change
+    one_per_day <-
+      previous_archive %>%
+      filter(version %in% unique(compactified$version)) %>%
+      bind_rows(compactified) %>%
+      group_by(geo_value, disease, time_value, version) %>%
+      arrange(version_timestamp) %>%
+      filter(row_number() == n()) %>%
+      ungroup() %>%
+      bind_rows(unchanged)
+    qs::qsave(one_per_day, here::here("cache/archive_timestamped.parquet"))
+    aws.s3::put_object(here::here("cache/archive_timestamped.parquet"), "archive_timestamped.parquet", bucket = "forecasting-team-data")
+  }
+  one_per_day %>%
+    filter(disease == disease_name) %>%
+    select(-version_timestamp, -endpoint, -disease) %>%
+    mutate(
+      geo_value = ifelse(geo_value == "usa", "us", geo_value)
+    ) %>%
+    filter(geo_value != "mp") %>%
+    as_epi_archive(compactify = TRUE)
+}

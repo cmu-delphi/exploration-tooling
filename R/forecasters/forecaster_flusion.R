@@ -40,7 +40,7 @@ flusion <- function(epi_data,
   adding_source <- FALSE
   if (!("source" %in% names(epi_data))) {
     adding_source <- TRUE
-    epi_data$source <- c("none")
+    epi_data$source <- c("nhsn")
     attributes(epi_data)$metadata$other_keys <- "source"
   }
   if ("season_week" %nin% names(epi_data) | "season" %nin% names(epi_data)) {
@@ -146,7 +146,7 @@ flusion <- function(epi_data,
   preproc %<>%
     add_role(all_of(starts_with("slide_value")), new_role = "pre-predictor")
   # one-hot encoding of the data source
-  if (all(levels(epi_data$source) != "none") && dummy_source) {
+  if (all(levels(epi_data$source) != "nhsn") && dummy_source) {
     preproc %<>% step_dummy(source, one_hot = TRUE, keep_original_cols = TRUE, role = "pre-predictor")
   }
   # one-hot encoding of location

@@ -86,7 +86,7 @@ dashboard:
 	Rscript scripts/dashboard.R
 
 update_site:
-	Rscript -e "source('R/utils.R'); update_site()"
+	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()"
 
 netlify:
 	netlify deploy --dir=reports --prod
