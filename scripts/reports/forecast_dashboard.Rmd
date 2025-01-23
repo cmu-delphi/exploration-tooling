@@ -1,0 +1,196 @@
+---
+title: "Disease Surveillance Dashboard"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+params:
+  nhsn_latest_data: NULL
+  nhsn_archive_data: NULL
+  all_forecasts: NULL
+  all_scores: NULL
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(plotly)
+library(shiny)
+library(DT)
+library(epiprocess)
+
+# Access the parameter data
+nhsn_data <- params$nhsn_latest_data
+nhsn_historical <- params$nhsn_archive_data
+forecast_data <- params$all_forecasts
+scores_data <- params$all_scores
+
+# Pre-filter
+forecast_data <- forecast_data %>%
+    filter(output_type_id %in% c("0.05", "0.5", "0.95")) %>%
+    pivot_wider(names_from = output_type_id, values_from = value)
+
+# Pre-compute the historical data as-of each forecast date
+unique_forecast_dates <- sort(unique(forecast_data$forecast_date))
+nhsn_historical_as_ofs <- map(unique_forecast_dates, ~ {
+    nhsn_historical %>%
+        epix_as_of(as.Date(.x)) %>%
+        mutate(time_value = time_value)
+})
+```
+
+# Column {.sidebar data-width=300}
+
+```{r}
+# Location selector
+selectInput("location", "Select Location",
+    choices = unique(nhsn_data$geo_value),
+    selected = "us"
+)
+
+# Date range for historical data
+dateRangeInput("date_range", "Select Date Range",
+    start = as.Date("2023-07-01"),
+    end = max(nhsn_data$time_value),
+    max = max(nhsn_data$time_value)
+)
+
+# Add checkboxes for forecaster selection
+checkboxGroupInput("forecasters", "Select Forecasters:",
+    choices = unique(forecast_data$forecaster),
+    selected = c("FluSight-ensemble", "CMU-TimeSeries")
+)
+
+div(
+    style = "text-align: center;",
+    p("Forecast Date"),
+    div(
+        style = "display: inline-block;",
+        actionButton("prev_date", "←"),
+        actionButton("next_date", "→")
+    ),
+    textOutput("current_forecast_date")
+)
+
+current_date_index <- reactiveVal(length(unique_forecast_dates))
+
+observeEvent(input$next_date, {
+    current_date_index(min(length(unique_forecast_dates), current_date_index() + 1))
+})
+
+observeEvent(input$prev_date, {
+    current_date_index(max(1, current_date_index() - 1))
+})
+
+output$current_forecast_date <- renderText({
+    unique_forecast_dates[current_date_index()]
+})
+
+# Throttole to avoid re-computing the plot too often
+plot_inputs <- reactive({
+    list(
+        location = input$location,
+        date_range = input$date_range,
+        forecasters = input$forecasters,
+        forecast_date = unique_forecast_dates[current_date_index()]
+    )
+}) %>% debounce(500)
+
+plot_result <- reactive({
+    req(plot_inputs())
+    inputs <- plot_inputs()
+
+    data_subset <- forecast_data %>%
+        filter(
+            forecaster %in% input$forecasters,
+            forecast_date == inputs$forecast_date,
+            geo_value == inputs$location
+        )
+
+    # Base data (light grey)
+    p <- ggplot() +
+        geom_line(
+            data = nhsn_data %>%
+                filter(
+                    geo_value == inputs$location,
+                    inputs$date_range[1] <= time_value,
+                    time_value <= inputs$date_range[2]
+                ),
+            aes(x = time_value, y = value),
+            color = "grey80"
+        ) +
+
+        # As-of data (black)
+        geom_line(
+            data = nhsn_historical_as_ofs[[current_date_index()]] %>%
+                filter(
+                    geo_value == inputs$location,
+                    inputs$date_range[1] <= time_value,
+                    time_value <= inputs$date_range[2]
+                ),
+            aes(x = time_value, y = value),
+            color = "black"
+        ) +
+
+        # Median line
+        geom_line(
+            data = data_subset,
+            aes(x = target_end_date, y = .data$`0.5`, color = forecaster)
+        ) +
+
+        # Confidence interval
+        geom_ribbon(
+            data = data_subset,
+            aes(
+                x = target_end_date,
+                ymin = .data$`0.05`,
+                ymax = .data$`0.95`,
+                fill = forecaster
+            ),
+            alpha = 0.5
+        ) +
+        theme_minimal() +
+        labs(
+            x = "Date", y = "Hospitalizations",
+            title = paste("Disease Surveillance for", toupper(inputs$location))
+        )
+
+    ggplotly(p)
+}) %>% bindCache(plot_inputs())
+```
+
+# Forecast Fan Plots {data-width=750}
+
+```{r}
+renderPlotly({
+    plot_result()
+})
+```
+
+# Performance Metrics {data-width=350}
+
+```{r}
+renderDT({
+    # Calculate performance metrics for selected forecaster
+    performance_metrics <- scores_data %>%
+        filter(
+            geo_value == input$location
+        ) %>%
+        group_by(ahead, forecaster) %>%
+        summarise(
+            wis = round(mean(wis), 2),
+            ae = round(mean(ae), 2),
+            coverage_80 = round(mean(coverage_80), 2)
+        ) %>%
+        ungroup() %>%
+        arrange(ahead, wis)
+
+    datatable(performance_metrics,
+        options = list(
+            pageLength = 50,
+            scrollY = TRUE
+        )
+    )
+})
+```

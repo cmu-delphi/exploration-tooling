@@ -58,16 +58,16 @@ format_covidhub <- function(pred, true_forecast_date, target_end_date, quantile_
 format_flusight <- function(pred, disease = c("flu", "covid")) {
   disease <- arg_match(disease)
   pred %>%
+    add_state_info(geo_value_col = "geo_value", old_geo_code = "state_id", new_geo_code = "state_code") %>%
     mutate(
       reference_date = get_forecast_reference_date(forecast_date),
       target = glue::glue("wk inc {disease} hosp"),
       horizon = as.integer(floor((target_end_date - reference_date) / 7)),
       output_type = "quantile",
       output_type_id = quantile,
-      value = value
+      value = value,
+      location = state_code
     ) %>%
-    left_join(get_population_data() %>% select(state_id, state_code), by = c("geo_value" = "state_id")) %>%
-    mutate(location = state_code) %>%
     select(reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value)
 }
 
