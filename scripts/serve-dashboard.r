@@ -17,3 +17,6 @@ rmarkdown::run(
     )
   )
 )
+
+# Once ready, do this
+rsconnect::deployDoc(doc = here::here("scripts", "reports", "forecast_dashboard.Rmd"))
