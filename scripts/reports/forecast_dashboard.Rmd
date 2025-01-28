@@ -5,12 +5,138 @@ output:
     orientation: columns
     vertical_layout: fill
 runtime: shiny
-params:
-  nhsn_latest_data: NULL
-  nhsn_archive_data: NULL
-  all_forecasts: NULL
-  all_scores: NULL
 ---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(httr)
+library(lubridate)
+library(progress)
+library(targets)
+source(here::here("R", "load_all.R"))
+
+options(readr.show_progress = FALSE)
+options(readr.show_col_types = FALSE)
+insufficient_data_geos <- c("as", "mp", "vi", "gu")
+
+
+config <- list(
+    base_url = "https://raw.githubusercontent.com/cdcepi/FluSight-forecast-hub/main/model-output",
+    forecasters = c(
+        "CMU-TimeSeries", "FluSight-baseline", "FluSight-ensemble",
+        "FluSight-base_seasonal", "UMass-flusion"
+    )
+)
+
+# Function to fetch NHSN data
+get_nhsn_data <- function() {
+    if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
+        # download from the preliminary data source from Wednesday to Friday
+        most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/mpgq-jmmr.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
+    } else {
+        most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
+    }
+    most_recent_result %>%
+        process_nhsn_data() %>%
+        filter(disease == "nhsn_flu") %>%
+        select(-disease) %>%
+        filter(geo_value %nin% insufficient_data_geos) %>%
+        mutate(
+            source = "nhsn",
+            geo_value = ifelse(geo_value == "usa", "us", geo_value),
+            time_value = time_value
+        ) %>%
+        filter(version == max(version)) %>%
+        select(-version) %>%
+        data_substitutions(disease = "flu") %>%
+        as_epi_df(other_keys = "source", as_of = Sys.Date())
+}
+
+# Function to fetch forecasts
+get_forecasts <- function(days_back = 120) {
+    end_date <- Sys.Date()
+    start_date <- end_date - days_back
+    dates <- seq(get_reference_date(start_date), end_date, by = "week")
+
+    all_forecasts <- map(config$forecasters, function(forecaster) {
+        map(dates, function(date) {
+            filename <- paste0(format(date, "%Y-%m-%d"), "-", forecaster, ".csv")
+            url <- paste0(config$base_url, "/", forecaster, "/", filename)
+
+            tryCatch(
+                {
+                    response <- GET(url)
+                    if (status_code(response) == 200) {
+                        read_csv(url, col_types = list(
+                            reference_date = col_date(format = "%Y-%m-%d"),
+                            target_end_date = col_date(format = "%Y-%m-%d"),
+                            target = col_character(),
+                            location = col_character(),
+                            horizon = col_integer(),
+                            output_type = col_character(),
+                            output_type_id = col_character(),
+                            value = col_double(),
+                            forecaster = col_character(),
+                            forecast_date = col_date(format = "%Y-%m-%d")
+                        )) %>%
+                            mutate(
+                                forecaster = forecaster,
+                                forecast_date = as.Date(date)
+                            )
+                    }
+                },
+                error = function(e) NULL
+            )
+        }) %>%
+            bind_rows()
+    }) %>%
+        bind_rows() %>%
+        add_state_info(geo_value_col = "location", old_geo_code = "state_code", new_geo_code = "state_id")
+
+    return(all_forecasts)
+}
+
+score_forecasts <- function(all_forecasts, nhsn_latest_data) {
+    predictions_cards <- all_forecasts %>%
+        rename(model = forecaster) %>%
+        mutate(
+            quantile = as.numeric(output_type_id),
+            prediction = value
+        ) %>%
+        select(model, geo_value, forecast_date, target_end_date, quantile, prediction)
+
+    truth_data <- nhsn_latest_data %>%
+        mutate(
+            target_end_date = as.Date(time_value),
+            true_value = value
+        ) %>%
+        select(geo_value, target_end_date, true_value)
+
+    evaluate_predictions(predictions_cards = predictions_cards, truth_data = truth_data) %>%
+        rename(forecaster = model)
+}
+
+# Fetch all data
+nhsn_latest_data <- get_nhsn_data()
+
+# Create NHSN archive
+nhsn_archive_data <- create_nhsn_data_archive(disease = "nhsn_flu")
+
+# Fetch forecasts
+all_forecasts_unfiltered <- get_forecasts(days_back = 120)
+all_forecasts <- all_forecasts_unfiltered %>%
+    filter(
+        target == "wk inc flu hosp",
+        output_type == "quantile"
+    ) %>%
+    mutate(
+        geo_value = state_id
+    ) %>%
+    select(-location)
+
+# Score forecasts
+all_scores <- score_forecasts(all_forecasts, nhsn_data)
+```
 
 ```{r setup, include=FALSE}
 library(flexdashboard)
@@ -20,16 +146,13 @@ library(shiny)
 library(DT)
 library(epiprocess)
 
-# Access the parameter data
-nhsn_data <- params$nhsn_latest_data
-nhsn_historical <- params$nhsn_archive_data
-forecast_data <- params$all_forecasts
-scores_data <- params$all_scores
-
-# Pre-filter
-forecast_data <- forecast_data %>%
+# Setup the data
+nhsn_data <- nhsn_latest_data
+nhsn_historical <- nhsn_archive_data
+forecast_data <- all_forecasts %>%
     filter(output_type_id %in% c("0.05", "0.5", "0.95")) %>%
     pivot_wider(names_from = output_type_id, values_from = value)
+scores_data <- all_scores
 
 # Pre-compute the historical data as-of each forecast date
 unique_forecast_dates <- sort(unique(forecast_data$forecast_date))
