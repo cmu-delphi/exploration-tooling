@@ -109,7 +109,8 @@ rlang::list2(
     current_nssp_archive,
     command = {
       up_to_date_nssp_state_archive("influenza")
-    }
+    },
+    cue = tar_cue(mode = "always")
   ),
   tar_target(
     joined_latest_extra_data,
@@ -294,7 +295,7 @@ rlang::list2(
           group_by(geo_value, forecast_date, target_end_date, quantile) %>%
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
           sort_by_quantile()
-      },
+      }
     ),
     tar_target(
       name = ens_climate_linear_window_season_ave_data,

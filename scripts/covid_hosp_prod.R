@@ -111,7 +111,8 @@ rlang::list2(
     current_nssp_archive,
     command = {
       up_to_date_nssp_state_archive("covid")
-    }
+    },
+    cue = tar_cue(mode = "always")
   ),
   tar_map(
     values = tibble(
@@ -150,10 +151,8 @@ rlang::list2(
         } else {
           train_data <-
             nhsn_latest_data %>%
-            select(-version) %>%
             data_substitutions(disease = "covid") %>%
-            as_epi_df(as_of = as.Date(forecast_date_int)) %>%
-            mutate(time_value = time_value - 3)
+            as_epi_df(as_of = as.Date(forecast_date_int))
         }
         nssp <- current_nssp_archive %>%
           epix_as_of(min(forecast_date, current_nssp_archive$versions_end)) %>%
