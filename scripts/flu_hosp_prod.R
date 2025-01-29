@@ -151,7 +151,9 @@ rlang::list2(
       if (file.exists(here::here(".nhsn_flu_cache.parquet"))) {
         previous_result <- qs::qread(here::here(".nhsn_flu_cache.parquet"))
         # if something is different, update the file
-        if (isFALSE(all.equal(previous_result, most_recent_result))) {
+        # !isTRUE(all.equal) is true iff there's at least one difference
+        # can't use isFALSE(all.equal) because a bunch of strings are not, in fact, false
+        if (!isTRUE(all.equal(previous_result, most_recent_result))) {
           qs::qsave(most_recent_result, here::here(".nhsn_flu_cache.parquet"))
         }
       } else {
@@ -161,18 +163,14 @@ rlang::list2(
     },
     description = "Download the result, and update the file only if it's actually different",
     priority = 1,
+    cue = tar_cue(mode="always")
   ),
-  tar_target(
-    nhsn_latest_data,
+  tar_change(
+    name = nhsn_latest_data,
     command = {
       qs::qread(here::here(".nhsn_flu_cache.parquet"))
-    }
-  ),
-  tar_target(
-    name = nhsn_archive_data,
-    command = {
-      create_nhsn_data_archive(disease = "nhsn_flu")
-    }
+    },
+    change = tools::md5sum(here::here(".nhsn_flu_cache.parquet"))
   ),
   tar_map(
     # Because targets relies on R metaprogramming, it loses the Date class.
@@ -269,7 +267,7 @@ rlang::list2(
       cue = tar_cue(mode = "always")
     ),
     tar_target(
-      name = ensemble_res,
+      name = climate_linear,
       command = {
         forecast_res %>%
           # Apply the ahead-by-quantile weighting scheme
@@ -284,7 +282,7 @@ rlang::list2(
       }
     ),
     tar_target(
-      name = ensemble_mixture_res,
+      name = ens_climate_linear_window_season,
       command = {
         forecast_res %>%
           # Apply the ahead-by-quantile weighting scheme
@@ -299,7 +297,7 @@ rlang::list2(
       },
     ),
     tar_target(
-      name = ensemble_mixture_res_2,
+      name = ens_climate_linear_window_season_ave_data,
       command = {
         forecast_res_modified %>%
           # Apply the ahead-by-quantile weighting scheme
@@ -314,10 +312,10 @@ rlang::list2(
       }
     ),
     tar_target(
-      name = combo_ensemble_mixture_res,
+      name = combo_ens_climate_linear_window_season,
       command = {
         inner_join(
-          ensemble_mixture_res, ensemble_mixture_res_2,
+          ens_climate_linear_window_season, ens_climate_linear_window_season_ave_data,
           by = join_by(geo_value, forecast_date, target_end_date, quantile)
         ) %>%
           rowwise() %>%
@@ -333,17 +331,17 @@ rlang::list2(
       command = {
         bind_rows(
           forecast_res,
-          ensemble_res %>% mutate(forecaster = "ensemble"),
-          ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix"),
-          ensemble_mixture_res_2 %>% mutate(forecaster = "ensemble_mix_2"),
-          combo_ensemble_mixture_res %>% mutate(forecaster = "combo_ensemble_mix")
+          climate_linear %>% mutate(forecaster = "ensemble"),
+          ens_climate_linear_window_season %>% mutate(forecaster = "ensemble_linclim_windowed_seasonal"),
+          ens_climate_linear_window_season_ave_data %>% mutate(forecaster = "ensemble_ave_data"),
+          combo_ens_climate_linear_window_season %>% mutate(forecaster = "ensemble_overall")
         )
       }
     ),
     tar_target(
       name = make_submission_csv,
       command = {
-        ensemble_res %>%
+        combo_ens_climate_linear_window_season %>%
           format_flusight(disease = "flu") %>%
           write_submission_file(
             get_forecast_reference_date(forecast_date_int),
@@ -463,6 +461,7 @@ rlang::list2(
           )
         )
       },
+      cue = tar_cue(mode = "always")
     )
   ),
   tar_target(

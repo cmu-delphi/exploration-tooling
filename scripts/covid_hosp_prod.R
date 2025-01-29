@@ -83,7 +83,7 @@ rlang::list2(
         previous_result <- qs::qread(here::here(".nhsn_covid_cache.parquet"))
       } else
          # if something is different, update the file
-        if (any(previous_result != most_recent_result)) {
+        if (!isTRUE(all.equal(previous_result, most_recent_result))) {
           qs::qsave(most_recent_result, here::here(".nhsn_covid_cache.parquet"))
         } else {
           qs::qsave(most_recent_result, here::here(".nhsn_covid_cache.parquet"))
@@ -91,23 +91,15 @@ rlang::list2(
       NULL
     },
     description = "Download the result, and update the file only if it's actually different",
-    priority = 1
+    priority = 1,
+    cue = tar_cue(mode = "always")
     ),
-  tar_target(
-    nhsn_latest_data,
+  tar_change(
+    name = nhsn_latest_data,
     command = {
-      if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
-        # download from the preliminary data source from Wednesday to Friday
-        most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/mpgq-jmmr.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
-      } else {
-        most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
-      }
-      most_recent_result %>%
-        process_nhsn_data() %>%
-        filter(disease == "nhsn_covid") %>%
-        select(-disease) %>%
-        filter(geo_value %nin% insufficient_data_geos)
+      qs::qread(here::here(".nhsn_flu_cache.parquet"))
     },
+    change = tools::md5sum(here::here(".nhsn_flu_cache.parquet"))
   ),
   tar_target(
     name = nhsn_archive_data,
@@ -342,6 +334,7 @@ rlang::list2(
           )
         )
       },
+      cue = tar_cue(mode = "always")
     )
   ),
 )
