@@ -1,6 +1,8 @@
 forecast_date,forecaster,geo_value,weight
 # defaults
 "2024-10-01", "all", "mp", 0
+"2024-10-01", "windowed_seasonal", "all", 3
+"2024-10-01", "windowed_seasonal_extra_sources", "all", 3
 "2024-10-01", "linear", "all", 3
 "2024-10-01", "linearlog", "all", 0
 "2024-10-01", "climate_base", "all", 2

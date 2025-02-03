@@ -2,9 +2,10 @@
 source("scripts/targets-common.R")
 source("scripts/targets-exploration-common.R")
 
-submit_climatological <- FALSE
+submit_climatological <- TRUE
 submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
+excluded_geos <- c("as", "gu", "mh")
 # date to cut the truth data off at, so we don't have too much of the past
 truth_data_date <- "2023-09-01"
 # needed to create the aux data targets
@@ -30,7 +31,7 @@ very_latent_locations <- list(list(
 ))
 
 forecaster_fns <- list2(
-  linear = function(epi_data, ahead, ...) {
+  linear = function(epi_data, ahead, extra_data, ...) {
     epi_data %>%
       filter(source == "nhsn") %>%
       forecaster_baseline_linear(
@@ -43,20 +44,23 @@ forecaster_fns <- list2(
   # linearlog = function(...) {
   #   forecaster_baseline_linear(..., log = TRUE)
   # },
-  climate_base = function(epi_data, ahead, ...) {
+  climate_base = function(epi_data, ahead, extra_data, ...) {
     epi_data %>%
       filter(source == "nhsn") %>%
       climatological_model(ahead, ...)
   },
-  climate_geo_agged = function(epi_data, ahead, ...) {
+  climate_geo_agged = function(epi_data, ahead, extra_data, ...) {
     epi_data %>%
       filter(source == "nhsn") %>%
       climatological_model(ahead, ..., geo_agg = TRUE)
   },
-  windowed_seasonal = function(epi_data, ahead, ...) {
+  windowed_seasonal = function(epi_data, ahead, extra_data, ...) {
     scaled_pop_seasonal(
       epi_data,
-      outcome = "value", ahead = ahead * 7, ...,
+      outcome = "value",
+      ahead = ahead * 7,
+      ...,
+      trainer = epipredict::quantile_reg(),
       seasonal_method = "window",
       pop_scaling = FALSE,
       lags = c(0, 7),
@@ -64,7 +68,27 @@ forecaster_fns <- list2(
     ) %>%
       mutate(target_end_date = target_end_date + 3)
   },
+  windowed_seasonal_extra_sources = function(epi_data, ahead, extra_data, ...) {
+    fcst <-
+      epi_data %>%
+      left_join(extra_data, by = join_by(geo_value, time_value)) %>%
+      scaled_pop_seasonal(
+        outcome = "value",
+        ahead = ahead * 7,
+        extra_sources = "nssp",
+        ...,
+        seasonal_method = "window",
+        trainer = epipredict::quantile_reg(),
+        drop_non_seasons = TRUE,
+        pop_scaling = FALSE,
+        lags = list(c(0, 7), c(0, 7)),
+        keys_to_ignore = very_latent_locations
+      ) %>%
+      mutate(target_end_date = target_end_date + 3)
+    fcst
+  }
 )
+indices <- seq_along(forecaster_fns)
 
 # This is needed to build the data archive
 ref_time_values_ <- seq.Date(as.Date("2023-10-04"), as.Date("2024-04-24"), by = 7L)
@@ -77,10 +101,17 @@ smooth_last_n <- function(x, n = 1, k = 2) {
 rlang::list2(
   rlang::list2(
     tar_target(aheads, command = -1:3),
-    tar_target(forecasters, command = seq_along(forecaster_fns)),
+    tar_target(forecasters, command = indices),
     tar_target(name = ref_time_values, command = ref_time_values_),
   ),
   make_historical_flu_data_targets(),
+  tar_target(
+    current_nssp_archive,
+    command = {
+      up_to_date_nssp_state_archive("influenza")
+    },
+    cue = tar_cue(mode = "always")
+  ),
   tar_target(
     joined_latest_extra_data,
     command = {
@@ -94,7 +125,7 @@ rlang::list2(
     }
   ),
   tar_target(
-    nhsn_latest_data,
+    download_latest_nhsn,
     command = {
       if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
         # download from the preliminary data source from Wednesday to Friday
@@ -102,7 +133,8 @@ rlang::list2(
       } else {
         most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
       }
-      most_recent_result %>%
+      most_recent_result <-
+        most_recent_result %>%
         process_nhsn_data() %>%
         filter(disease == "nhsn_flu") %>%
         select(-disease) %>%
@@ -116,22 +148,40 @@ rlang::list2(
         select(-version) %>%
         data_substitutions(disease = "flu") %>%
         as_epi_df(other_keys = "source", as_of = Sys.Date())
-    }
+      # if there's not already a result we need to save it no matter what
+      if (file.exists(here::here(".nhsn_flu_cache.parquet"))) {
+        previous_result <- qs::qread(here::here(".nhsn_flu_cache.parquet"))
+        # if something is different, update the file
+        # !isTRUE(all.equal) is true iff there's at least one difference
+        # can't use isFALSE(all.equal) because a bunch of strings are not, in fact, false
+        if (!isTRUE(all.equal(previous_result, most_recent_result))) {
+          qs::qsave(most_recent_result, here::here(".nhsn_flu_cache.parquet"))
+        }
+      } else {
+        qs::qsave(most_recent_result, here::here(".nhsn_flu_cache.parquet"))
+      }
+      NULL
+    },
+    description = "Download the result, and update the file only if it's actually different",
+    priority = 1,
+    cue = tar_cue(mode="always")
   ),
-  tar_target(
-    name = nhsn_archive_data,
+  tar_change(
+    name = nhsn_latest_data,
     command = {
-      create_nhsn_data_archive(disease = "nhsn_flu")
-    }
+      qs::qread(here::here(".nhsn_flu_cache.parquet"))
+    },
+    change = tools::md5sum(here::here(".nhsn_flu_cache.parquet"))
   ),
   tar_map(
     # Because targets relies on R metaprogramming, it loses the Date class.
     values = tibble(
       forecast_date_int = forecast_date,
-      forecast_generation_date_int = forecast_generation_date
+      forecast_generation_date_int = forecast_generation_date,
+      forecast_date_chr = as.character(forecast_date_int)
     ),
-    names = "forecast_date_int",
-    tar_target(
+    names = "forecast_date_chr",
+    tar_change(
       name = geo_forecasters_weights,
       command = {
         geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"), forecast_date_int, forecaster_fns)
@@ -140,7 +190,7 @@ rlang::list2(
         }
         geo_forecasters_weights
       },
-      cue = tar_cue(mode = "always")
+      change = here::here("flu_geo_exclusions.csv")
     ),
     tar_target(
       name = geo_exclusions,
@@ -171,15 +221,16 @@ rlang::list2(
     tar_target(
       forecast_res,
       command = {
+        forecast_date <- as.Date(forecast_date_int)
+        nssp <- current_nssp_archive %>% epix_as_of(min(forecast_date, current_nssp_archive$versions_end))
         full_data %>%
-          forecaster_fns[[forecasters]](ahead = aheads) %>%
+          forecaster_fns[[forecasters]](ahead = aheads, extra_data = nssp) %>%
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
             geo_value = as.factor(geo_value)
           )
       },
-      pattern = cross(aheads, forecasters),
-      cue = tar_cue(mode = "always")
+      pattern = cross(aheads, forecasters)
     ),
     # A hack to model our uncertainty in the data. We smooth the last few points
     # to make the forecast more stable.
@@ -188,6 +239,8 @@ rlang::list2(
       command = {
         as_of <- attributes(full_data)$metadata$as_of
         other_keys <- attributes(full_data)$metadata$other_keys
+        forecast_date <- as.Date(forecast_date_int)
+        nssp <- current_nssp_archive %>% epix_as_of(min(forecast_date, current_nssp_archive$versions_end))
 
         # Smooth last few points for every geo.
         # TODO: This is a hack, we can try some more sophisticated
@@ -205,7 +258,7 @@ rlang::list2(
         attributes(modified_full_data)$metadata$as_of <- as_of
         attributes(modified_full_data)$metadata$other_keys <- other_keys
         modified_full_data %>%
-          forecaster_fns[[forecasters]](ahead = aheads) %>%
+          forecaster_fns[[forecasters]](ahead = aheads, extra_data = nssp) %>%
           mutate(
             forecaster = names(forecaster_fns[forecasters]),
             geo_value = as.factor(geo_value)
@@ -215,20 +268,7 @@ rlang::list2(
       cue = tar_cue(mode = "always")
     ),
     tar_target(
-      name = ensemble_res,
-      command = {
-        forecast_res %>%
-          mutate(quantile = round(quantile, digits = 3)) %>%
-          left_join(geo_forecasters_weights, by = join_by(forecast_date, forecaster, geo_value)) %>%
-          mutate(value = value * weight) %>%
-          group_by(forecast_date, geo_value, target_end_date, quantile) %>%
-          summarize(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
-          filter(geo_value %nin% geo_exclusions)
-      },
-      cue = tar_cue(mode = "always")
-    ),
-    tar_target(
-      name = ensemble_mixture_res,
+      name = climate_linear,
       command = {
         forecast_res %>%
           # Apply the ahead-by-quantile weighting scheme
@@ -240,10 +280,25 @@ rlang::list2(
           group_by(geo_value, forecast_date, target_end_date, quantile) %>%
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
           sort_by_quantile()
-      },
+      }
     ),
     tar_target(
-      name = ensemble_mixture_res_2,
+      name = ens_climate_linear_window_season,
+      command = {
+        forecast_res %>%
+          # Apply the ahead-by-quantile weighting scheme
+          ensemble_linear_climate(aheads, other_weights = geo_forecasters_weights) %>%
+          filter(geo_value %nin% geo_exclusions) %>%
+          ungroup() %>%
+          # Ensemble with windowed_seasonal
+          bind_rows(forecast_res %>% filter(forecaster == "windowed_seasonal", forecaster == "windowed_seasonal_extra_sources")) %>%
+          group_by(geo_value, forecast_date, target_end_date, quantile) %>%
+          summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+          sort_by_quantile()
+      }
+    ),
+    tar_target(
+      name = ens_climate_linear_window_season_ave_data,
       command = {
         forecast_res_modified %>%
           # Apply the ahead-by-quantile weighting scheme
@@ -258,10 +313,10 @@ rlang::list2(
       }
     ),
     tar_target(
-      name = combo_ensemble_mixture_res,
+      name = combo_ens_climate_linear_window_season,
       command = {
         inner_join(
-          ensemble_mixture_res, ensemble_mixture_res_2,
+          ens_climate_linear_window_season, ens_climate_linear_window_season_ave_data,
           by = join_by(geo_value, forecast_date, target_end_date, quantile)
         ) %>%
           rowwise() %>%
@@ -277,24 +332,23 @@ rlang::list2(
       command = {
         bind_rows(
           forecast_res,
-          ensemble_res %>% mutate(forecaster = "ensemble"),
-          ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix"),
-          ensemble_mixture_res_2 %>% mutate(forecaster = "ensemble_mix_2"),
-          combo_ensemble_mixture_res %>% mutate(forecaster = "combo_ensemble_mix")
+          climate_linear %>% mutate(forecaster = "ensemble"),
+          ens_climate_linear_window_season %>% mutate(forecaster = "ensemble_linclim_windowed_seasonal"),
+          ens_climate_linear_window_season_ave_data %>% mutate(forecaster = "ensemble_ave_data"),
+          combo_ens_climate_linear_window_season %>% mutate(forecaster = "ensemble_overall")
         )
       }
     ),
     tar_target(
       name = make_submission_csv,
       command = {
-        ensemble_mixture_res %>%
+        combo_ens_climate_linear_window_season %>%
           format_flusight(disease = "flu") %>%
           write_submission_file(
             get_forecast_reference_date(forecast_date_int),
             file.path(submission_directory, "model-output/CMU-TimeSeries")
           )
-      },
-      cue = tar_cue(mode = "always")
+      }
     ),
     tar_target(
       name = make_climate_submission_csv,
@@ -306,15 +360,17 @@ rlang::list2(
             group_by(geo_value, target_end_date, quantile) %>%
             summarize(forecast_date = first(forecast_date), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
             ungroup() %>%
+            filter(!(geo_value %in% excluded_geos)) %>%
             format_flusight(disease = "flu") %>%
+            filter(location %nin% c("60", "66", "78")) %>%
             write_submission_file(
               get_forecast_reference_date(forecast_date_int),
-              submission_directory = file.path(submission_directory, "model-output/CMU-climatological-baseline"),
-              file_name = "CMU-climatological-baseline"
+              submission_directory = file.path(submission_directory, "model-output/CMU-climate_baseline"),
+              file_name = "CMU-climate_baseline"
             )
         }
       },
-      cue = tar_cue(mode = "always")
+      priority = 0.99
     ),
     tar_target(
       name = validate_result,
@@ -331,7 +387,6 @@ rlang::list2(
         }
         validation
       },
-      cue = tar_cue(mode = "always")
     ),
     tar_target(
       name = validate_climate_result,
@@ -341,46 +396,42 @@ rlang::list2(
         if (submission_directory != "cache" && submit_climatological) {
           validation <- validate_submission(
             submission_directory,
-            file_path = sprintf("CMU-climatological-baseline/%s-CMU-climatological-baseline.csv", get_forecast_reference_date(forecast_date_int))
+            file_path = sprintf("CMU-climate_baseline/%s-CMU-climate_baseline.csv", get_forecast_reference_date(forecast_date_int))
           )
         } else {
           validation <- "not validating when there is no hub (set submission_directory)"
         }
         validation
       },
-      cue = tar_cue(mode = "always")
     ),
     tar_target(
       name = truth_data,
       command = {
-        nssp_state <- pub_covidcast(
-          source = "nssp",
-          signal = "pct_ed_visits_influenza",
-          time_type = "week",
-          geo_type = "state",
-          geo_values = "*",
-          fetch_args = epidatr::fetch_args_list(timeout_seconds = 400)
-        ) %>%
-          select(geo_value, source, target_end_date = time_value, value) %>%
+        browser()
+        date <- forecast_generation_date_int
+        nssp_state <-
+          current_nssp_archive %>%
+          epix_as_of(min(as.Date(date), current_nssp_archive$versions_end)) %>%
+          rename(target_end_date = time_value) %>%
           filter(target_end_date > truth_data_date, geo_value %nin% insufficient_data_geos) %>%
           mutate(target_end_date = target_end_date + 6)
         if (as.Date(forecast_generation_date_int) < Sys.Date()) {
-          truth_data <- nhsn_archive_data %>% epix_as_of(as.Date(forecast_generation_date_int))
+          truth_dat <- nhsn_archive_data %>% epix_as_of(as.Date(forecast_generation_date_int))
         } else {
-          truth_data <- nhsn_latest_data
+          truth_dat <- nhsn_latest_data
         }
-        truth_data <- truth_data %>%
+        truth_dat <- truth_dat %>%
           mutate(target_end_date = time_value) %>%
           filter(time_value > truth_data_date) %>%
           mutate(source = "nhsn") %>%
           select(geo_value, target_end_date, source, value)
         nssp_renormalized <-
           nssp_state %>%
+          rename(value = nssp) %>%
           left_join(
             nssp_state %>%
-              rename(nssp = value) %>%
               full_join(
-                truth_data %>%
+                truth_dat %>%
                   select(geo_value, target_end_date, value),
                 by = c("geo_value", "target_end_date")
               ) %>%
@@ -390,9 +441,8 @@ rlang::list2(
           ) %>%
           mutate(value = value * rel_max_value) %>%
           select(-rel_max_value)
-        truth_data %>% bind_rows(nssp_renormalized)
+        truth_dat %>% bind_rows(nssp_renormalized)
       },
-      cue = tar_cue(mode = "always")
     ),
     tar_target(
       notebook,
@@ -402,7 +452,7 @@ rlang::list2(
           "scripts/reports/forecast_report.Rmd",
           output_file = here::here(
             "reports",
-            sprintf("%s_flu_prod_on_%s.html", as.Date(forecast_date_int), as.Date(forecast_generation_date_int))
+            sprintf("%s_flu_prod_on_%s.html", as.Date(forecast_date_int), Sys.Date())
           ),
           params = list(
             disease = "flu",

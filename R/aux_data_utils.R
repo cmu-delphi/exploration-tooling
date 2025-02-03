@@ -708,3 +708,23 @@ create_nhsn_data_archive <- function(disease_name) {
     filter(geo_value != "mp") %>%
     as_epi_archive(compactify = TRUE)
 }
+
+
+up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
+  disease <- arg_match(disease)
+  nssp_state <- pub_covidcast(
+    source = "nssp",
+    signal = glue::glue("pct_ed_visits_{disease}"),
+    time_type = "week",
+    geo_type = "state",
+    geo_values = "*",
+    issues = "*"
+  )
+  nssp_state %>%
+    select(geo_value, time_value, issue, nssp = value) %>%
+    as_epi_archive(compactify = TRUE) %>%
+    `$`("DT") %>%
+    # End of week to midweek correction.
+    mutate(time_value = time_value + 3) %>%
+    as_epi_archive(compactify = TRUE)
+}
