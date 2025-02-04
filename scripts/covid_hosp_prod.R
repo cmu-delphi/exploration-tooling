@@ -17,9 +17,9 @@ forecast_generation_date <- Sys.Date()
 forecast_date <- round_date(forecast_generation_date, "weeks", week_start = 3)
 # forecast_generation_date needs to follow suit, but it's more complicated
 # because sometimes we forecast on Thursday.
-#forecast_generation_date <- c(as.Date(c("2024-11-20", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
+# forecast_generation_date <- c(as.Date(c("2024-11-20", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
 # If doing backfill, you can set the forecast_date to a sequence of dates.
-#forecast_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
+# forecast_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 
 forecaster_fns <- list2(
   linear = function(epi_data, ahead, extra_data, ...) {
@@ -82,24 +82,24 @@ rlang::list2(
       if (file.exists(here::here(".nhsn_covid_cache.parquet"))) {
         previous_result <- qs::qread(here::here(".nhsn_covid_cache.parquet"))
       } else
-         # if something is different, update the file
-        if (!isTRUE(all.equal(previous_result, most_recent_result))) {
-          qs::qsave(most_recent_result, here::here(".nhsn_covid_cache.parquet"))
-        } else {
-          qs::qsave(most_recent_result, here::here(".nhsn_covid_cache.parquet"))
-        }
+      # if something is different, update the file
+      if (!isTRUE(all.equal(previous_result, most_recent_result))) {
+        qs::qsave(most_recent_result, here::here(".nhsn_covid_cache.parquet"))
+      } else {
+        qs::qsave(most_recent_result, here::here(".nhsn_covid_cache.parquet"))
+      }
       NULL
     },
     description = "Download the result, and update the file only if it's actually different",
     priority = 1,
     cue = tar_cue(mode = "always")
-    ),
+  ),
   tar_change(
     name = nhsn_latest_data,
     command = {
-      qs::qread(here::here(".nhsn_flu_cache.parquet"))
+      qs::qread(here::here(".nhsn_covid_cache.parquet"))
     },
-    change = tools::md5sum(here::here(".nhsn_flu_cache.parquet"))
+    change = tools::md5sum(here::here(".nhsn_covid_cache.parquet"))
   ),
   tar_target(
     name = nhsn_archive_data,
@@ -116,10 +116,10 @@ rlang::list2(
   ),
   tar_map(
     values = tibble(
-        forecast_date_int = forecast_date,
-        forecast_generation_date_int = forecast_generation_date,
-        forecast_date_chr = as.character(forecast_date_int)
-      ),
+      forecast_date_int = forecast_date,
+      forecast_generation_date_int = forecast_generation_date,
+      forecast_date_chr = as.character(forecast_date_int)
+    ),
     names = "forecast_date_chr",
     tar_target(
       name = geo_forecasters_weights,
@@ -196,8 +196,8 @@ rlang::list2(
           filter(geo_value %nin% geo_exclusions) %>%
           ungroup() %>%
           bind_rows(forecast_res %>%
-                    filter(forecaster == "windowed_seasonal_extra_sources") %>%
-                    filter(forecast_date < target_end_date)) %>% # don't use for neg aheads
+            filter(forecaster == "windowed_seasonal_extra_sources") %>%
+            filter(forecast_date < target_end_date)) %>% # don't use for neg aheads
           group_by(geo_value, forecast_date, target_end_date, quantile) %>%
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
           sort_by_quantile()
