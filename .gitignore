@@ -16,3 +16,5 @@ aux_data
 reports/*.html
 reports/report.md
 cache
+data
+.vscode
