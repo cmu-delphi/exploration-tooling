@@ -155,8 +155,8 @@ rlang::list2(
           epix_as_of(min(forecast_date, current_nssp_archive$versions_end)) %>%
           mutate(time_value = time_value)
         attributes(train_data)$metadata$as_of <- as.Date(forecast_date_int)
-        print(names(forecaster_fns[forecasters]))
-        browser()
+        # print(names(forecaster_fns[forecasters]))
+        # browser()
         # train_data %>% autoplot(value, .facet_by = "geo_value")
         train_data %>%
           forecaster_fns[[forecasters]](ahead = aheads, extra_data = nssp) %>%
