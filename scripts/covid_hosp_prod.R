@@ -50,7 +50,7 @@ forecaster_fns <- list2(
         trainer = epipredict::quantile_reg(),
         drop_non_seasons = TRUE,
         pop_scaling = FALSE,
-        lags = list(c(0, 7), c(0, 7))
+        lags = list(c(0, 7))
       ) %>%
       mutate(target_end_date = target_end_date + 3)
     fcst
@@ -135,7 +135,7 @@ rlang::list2(
       }
     ),
     tar_target(
-      forecast_res,
+      name = forecast_res,
       command = {
         if (as.Date(forecast_generation_date_int) < Sys.Date()) {
           train_data <- nhsn_archive_data %>%
@@ -149,15 +149,13 @@ rlang::list2(
           train_data <-
             nhsn_latest_data %>%
             data_substitutions(disease = "covid") %>%
-            as_epi_df(as_of = as.Date(forecast_date_int))
+            as_epi_df(as_of = as.Date(forecast_date_int)) %>%
+            mutate(time_value = time_value - 3)
         }
         nssp <- current_nssp_archive %>%
           epix_as_of(min(forecast_date, current_nssp_archive$versions_end)) %>%
           mutate(time_value = time_value)
         attributes(train_data)$metadata$as_of <- as.Date(forecast_date_int)
-        # print(names(forecaster_fns[forecasters]))
-        # browser()
-        # train_data %>% autoplot(value, .facet_by = "geo_value")
         train_data %>%
           forecaster_fns[[forecasters]](ahead = aheads, extra_data = nssp) %>%
           mutate(
