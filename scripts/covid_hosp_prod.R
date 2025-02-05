@@ -64,7 +64,7 @@ rlang::list2(
   tar_target(aheads, command = -1:3),
   tar_target(forecasters, command = indices),
   tar_target(
-    download_latest,
+    name = nhsn_latest_data,
     command = {
       if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
         # download from the preliminary data source from Wednesday to Friday
@@ -78,28 +78,9 @@ rlang::list2(
         filter(disease == "nhsn_covid") %>%
         select(-disease) %>%
         filter(geo_value %nin% insufficient_data_geos)
-      # if there's not already a result we need to save it no matter what
-      if (file.exists(here::here(".nhsn_covid_cache.parquet"))) {
-        previous_result <- qs::qread(here::here(".nhsn_covid_cache.parquet"))
-      } else
-      # if something is different, update the file
-      if (!isTRUE(all.equal(previous_result, most_recent_result))) {
-        qs::qsave(most_recent_result, here::here(".nhsn_covid_cache.parquet"))
-      } else {
-        qs::qsave(most_recent_result, here::here(".nhsn_covid_cache.parquet"))
-      }
-      NULL
+      most_recent_result
     },
-    description = "Download the result, and update the file only if it's actually different",
-    priority = 1,
-    cue = tar_cue(mode = "always")
-  ),
-  tar_change(
-    name = nhsn_latest_data,
-    command = {
-      qs::qread(here::here(".nhsn_covid_cache.parquet"))
-    },
-    change = tools::md5sum(here::here(".nhsn_covid_cache.parquet"))
+    cue = tar_cue("always")
   ),
   tar_target(
     name = nhsn_archive_data,
@@ -159,6 +140,8 @@ rlang::list2(
           mutate(time_value = time_value)
         attributes(train_data)$metadata$as_of <- as.Date(forecast_date_int)
         print(names(forecaster_fns[forecasters]))
+        browser()
+        train_data %>% autoplot(value, .facet_by = "geo_value")
         train_data %>%
           forecaster_fns[[forecasters]](ahead = aheads, extra_data = nssp) %>%
           mutate(
