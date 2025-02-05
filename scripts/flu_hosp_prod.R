@@ -125,7 +125,7 @@ rlang::list2(
     }
   ),
   tar_target(
-    download_latest_nhsn,
+    nhsn_latest_data,
     command = {
       if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
         # download from the preliminary data source from Wednesday to Friday
@@ -148,30 +148,11 @@ rlang::list2(
         select(-version) %>%
         data_substitutions(disease = "flu") %>%
         as_epi_df(other_keys = "source", as_of = Sys.Date())
-      # if there's not already a result we need to save it no matter what
-      if (file.exists(here::here(".nhsn_flu_cache.parquet"))) {
-        previous_result <- qs::qread(here::here(".nhsn_flu_cache.parquet"))
-        # if something is different, update the file
-        # !isTRUE(all.equal) is true iff there's at least one difference
-        # can't use isFALSE(all.equal) because a bunch of strings are not, in fact, false
-        if (!isTRUE(all.equal(previous_result, most_recent_result))) {
-          qs::qsave(most_recent_result, here::here(".nhsn_flu_cache.parquet"))
-        }
-      } else {
-        qs::qsave(most_recent_result, here::here(".nhsn_flu_cache.parquet"))
-      }
-      NULL
+      most_recent_result
     },
     description = "Download the result, and update the file only if it's actually different",
     priority = 1,
     cue = tar_cue(mode="always")
-  ),
-  tar_change(
-    name = nhsn_latest_data,
-    command = {
-      qs::qread(here::here(".nhsn_flu_cache.parquet"))
-    },
-    change = tools::md5sum(here::here(".nhsn_flu_cache.parquet"))
   ),
   tar_map(
     # Because targets relies on R metaprogramming, it loses the Date class.
