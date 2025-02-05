@@ -24,34 +24,38 @@ prod: prod-covid prod-flu update_site netlify
 
 submit-covid:
 	cd ../covid19-forecast-hub; \
-	git pull delphi main; \
+	git pull origin main; \
 	git add model-output/CMU-TimeSeries/*; \
+	git add model-output/CMU-climate_baseline/*; \
 	git commit -am "CMU-Delphi submission $(current_date)"; \
 	git push delphi main; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcgov/covid19-forecast-hub
 
 submit-flu:
 	cd ../FluSight-forecast-hub; \
-	git pull delphi main; \
+	git pull origin main; \
 	git add model-output/CMU-TimeSeries/*; \
+	git add model-output/CMU-climate_baseline/*; \
 	git commit -am "CMU-Delphi submission $(current_date)"; \
-	git push delphi; \
+	git push delphi main; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcepi/FluSight-forecast-hub
 
 submit-covid-dry:
 	cd ../covid19-forecast-hub; \
-	git pull delphi main; \
+	git pull origin main; \
 	git add model-output/CMU-TimeSeries/*; \
+	git add model-output/CMU-climate_baseline/*; \
 	git commit -am "CMU-Delphi submission $(current_date)"; \
 	git push delphi main; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcgov/covid19-forecast-hub --dry-run
 
 submit-flu-dry:
 	cd ../FluSight-forecast-hub; \
-	git pull delphi main; \
+	git pull origin main; \
 	git add model-output/CMU-TimeSeries/*; \
+	git add model-output/CMU-climate_baseline/*; \
 	git commit -am "CMU-Delphi submission $(current_date)"; \
-	git push delphi; \
+	git push delphi main; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcepi/FluSight-forecast-hub --dry-run
 
 submit: submit-covid submit-flu

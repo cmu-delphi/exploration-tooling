@@ -70,7 +70,9 @@ forecaster_fns <- list2(
         pop_scaling = FALSE,
         lags = list(c(0, 7), c(0, 7))
       ) %>%
-      mutate(target_end_date = target_end_date + 3)
+      mutate(target_end_date = target_end_date + 3) %>%
+      # Wyoming has no data for NSSP since July 2024
+      filter(geo_value != "wy")
     fcst
   }
 )
@@ -193,7 +195,7 @@ rlang::list2(
           filter(geo_value %nin% geo_exclusions) %>%
           ungroup() %>%
           bind_rows(forecast_res %>%
-            filter(forecaster == "windowed_seasonal_extra_sources") %>%
+            filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources")) %>%
             filter(forecast_date < target_end_date)) %>% # don't use for neg aheads
           group_by(geo_value, forecast_date, target_end_date, quantile) %>%
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
