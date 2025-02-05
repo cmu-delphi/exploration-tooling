@@ -39,6 +39,22 @@ forecaster_fns <- list2(
       geo_agg = TRUE
     )
   },
+  windowed_seasonal = function(epi_data, ahead, extra_data, ...) {
+    fcst <-
+      epi_data %>%
+      scaled_pop_seasonal(
+        outcome = "value",
+        ahead = ahead * 7,
+        ...,
+        seasonal_method = "none",
+        trainer = epipredict::quantile_reg(),
+        drop_non_seasons = TRUE,
+        pop_scaling = FALSE,
+        lags = list(c(0, 7), c(0, 7))
+      ) %>%
+      mutate(target_end_date = target_end_date + 3)
+    fcst
+  },
   windowed_seasonal_extra_sources = function(epi_data, ahead, extra_data, ...) {
     fcst <-
       epi_data %>%
@@ -141,7 +157,7 @@ rlang::list2(
         attributes(train_data)$metadata$as_of <- as.Date(forecast_date_int)
         print(names(forecaster_fns[forecasters]))
         browser()
-        train_data %>% autoplot(value, .facet_by = "geo_value")
+        # train_data %>% autoplot(value, .facet_by = "geo_value")
         train_data %>%
           forecaster_fns[[forecasters]](ahead = aheads, extra_data = nssp) %>%
           mutate(
