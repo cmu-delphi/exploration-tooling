@@ -15,4 +15,6 @@ aux_data
 .netlify
 reports/*.html
 reports/report.md
-cache
+cache/
+data/
+.vscode/

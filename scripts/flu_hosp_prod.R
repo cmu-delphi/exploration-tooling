@@ -125,7 +125,7 @@ rlang::list2(
     }
   ),
   tar_target(
-    download_latest_nhsn,
+    nhsn_latest_data,
     command = {
       if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
         # download from the preliminary data source from Wednesday to Friday
@@ -148,30 +148,11 @@ rlang::list2(
         select(-version) %>%
         data_substitutions(disease = "flu") %>%
         as_epi_df(other_keys = "source", as_of = Sys.Date())
-      # if there's not already a result we need to save it no matter what
-      if (file.exists(here::here(".nhsn_flu_cache.parquet"))) {
-        previous_result <- qs::qread(here::here(".nhsn_flu_cache.parquet"))
-        # if something is different, update the file
-        # !isTRUE(all.equal) is true iff there's at least one difference
-        # can't use isFALSE(all.equal) because a bunch of strings are not, in fact, false
-        if (!isTRUE(all.equal(previous_result, most_recent_result))) {
-          qs::qsave(most_recent_result, here::here(".nhsn_flu_cache.parquet"))
-        }
-      } else {
-        qs::qsave(most_recent_result, here::here(".nhsn_flu_cache.parquet"))
-      }
-      NULL
+      most_recent_result
     },
     description = "Download the result, and update the file only if it's actually different",
     priority = 1,
-    cue = tar_cue(mode="always")
-  ),
-  tar_change(
-    name = nhsn_latest_data,
-    command = {
-      qs::qread(here::here(".nhsn_flu_cache.parquet"))
-    },
-    change = tools::md5sum(here::here(".nhsn_flu_cache.parquet"))
+    cue = tar_cue(mode = "always")
   ),
   tar_map(
     # Because targets relies on R metaprogramming, it loses the Date class.
@@ -275,38 +256,47 @@ rlang::list2(
           ensemble_linear_climate(aheads, other_weights = geo_forecasters_weights) %>%
           filter(geo_value %nin% geo_exclusions) %>%
           ungroup() %>%
-          # Ensemble with windowed_seasonal
-          bind_rows(forecast_res %>% filter(forecaster == "windowed_seasonal")) %>%
-          group_by(geo_value, forecast_date, target_end_date, quantile) %>%
-          summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
           sort_by_quantile()
       }
     ),
     tar_target(
       name = ens_climate_linear_window_season,
       command = {
-        forecast_res %>%
-          # Apply the ahead-by-quantile weighting scheme
-          ensemble_linear_climate(aheads, other_weights = geo_forecasters_weights) %>%
-          filter(geo_value %nin% geo_exclusions) %>%
-          ungroup() %>%
-          # Ensemble with windowed_seasonal
-          bind_rows(forecast_res %>% filter(forecaster == "windowed_seasonal", forecaster == "windowed_seasonal_extra_sources")) %>%
+        climate_linear %>%
+          # Ensemble with windowed_seasonal and windowed_seasonal_extra_sources
+          bind_rows(forecast_res %>% filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources"))) %>%
           group_by(geo_value, forecast_date, target_end_date, quantile) %>%
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
           sort_by_quantile()
       }
     ),
     tar_target(
-      name = ens_climate_linear_window_season_ave_data,
+      name = ens_ar_only,
+      command = {
+        forecast_res %>%
+          filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources")) %>%
+          group_by(geo_value, forecast_date, target_end_date, quantile) %>%
+          summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+          sort_by_quantile()
+      }
+    ),
+    tar_target(
+      name = climate_linear_modified,
       command = {
         forecast_res_modified %>%
           # Apply the ahead-by-quantile weighting scheme
           ensemble_linear_climate(aheads, other_weights = geo_forecasters_weights) %>%
           filter(geo_value %nin% geo_exclusions) %>%
           ungroup() %>%
+          sort_by_quantile()
+      }
+    ),
+    tar_target(
+      name = ens_climate_linear_window_season_modified,
+      command = {
+        climate_linear_modified %>%
           # Ensemble with windowed_seasonal
-          bind_rows(forecast_res_modified %>% filter(forecaster == "windowed_seasonal")) %>%
+          bind_rows(forecast_res_modified %>% filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources"))) %>%
           group_by(geo_value, forecast_date, target_end_date, quantile) %>%
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
           sort_by_quantile()
@@ -316,7 +306,7 @@ rlang::list2(
       name = combo_ens_climate_linear_window_season,
       command = {
         inner_join(
-          ens_climate_linear_window_season, ens_climate_linear_window_season_ave_data,
+          ens_climate_linear_window_season, ens_climate_linear_window_season_modified,
           by = join_by(geo_value, forecast_date, target_end_date, quantile)
         ) %>%
           rowwise() %>%
@@ -332,10 +322,10 @@ rlang::list2(
       command = {
         bind_rows(
           forecast_res,
-          climate_linear %>% mutate(forecaster = "ensemble"),
+          climate_linear %>% mutate(forecaster = "climate_linear"),
+          ens_ar_only %>% mutate(forecaster = "ens_ar_only"),
           ens_climate_linear_window_season %>% mutate(forecaster = "ensemble_linclim_windowed_seasonal"),
-          ens_climate_linear_window_season_ave_data %>% mutate(forecaster = "ensemble_ave_data"),
-          combo_ens_climate_linear_window_season %>% mutate(forecaster = "ensemble_overall")
+          combo_ens_climate_linear_window_season %>% mutate(forecaster = "ensemble_combo")
         )
       }
     ),

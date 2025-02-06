@@ -39,6 +39,22 @@ forecaster_fns <- list2(
       geo_agg = TRUE
     )
   },
+  windowed_seasonal = function(epi_data, ahead, extra_data, ...) {
+    fcst <-
+      epi_data %>%
+      scaled_pop_seasonal(
+        outcome = "value",
+        ahead = ahead * 7,
+        ...,
+        seasonal_method = "none",
+        trainer = epipredict::quantile_reg(),
+        drop_non_seasons = TRUE,
+        pop_scaling = FALSE,
+        lags = list(c(0, 7))
+      ) %>%
+      mutate(target_end_date = target_end_date + 3)
+    fcst
+  },
   windowed_seasonal_extra_sources = function(epi_data, ahead, extra_data, ...) {
     fcst <-
       epi_data %>%
@@ -54,7 +70,9 @@ forecaster_fns <- list2(
         pop_scaling = FALSE,
         lags = list(c(0, 7), c(0, 7))
       ) %>%
-      mutate(target_end_date = target_end_date + 3)
+      mutate(target_end_date = target_end_date + 3) %>%
+      # Wyoming has no data for NSSP since July 2024
+      filter(geo_value != "wy")
     fcst
   }
 )
@@ -64,7 +82,7 @@ rlang::list2(
   tar_target(aheads, command = -1:3),
   tar_target(forecasters, command = indices),
   tar_target(
-    download_latest,
+    name = nhsn_latest_data,
     command = {
       if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
         # download from the preliminary data source from Wednesday to Friday
@@ -78,28 +96,9 @@ rlang::list2(
         filter(disease == "nhsn_covid") %>%
         select(-disease) %>%
         filter(geo_value %nin% insufficient_data_geos)
-      # if there's not already a result we need to save it no matter what
-      if (file.exists(here::here(".nhsn_covid_cache.parquet"))) {
-        previous_result <- qs::qread(here::here(".nhsn_covid_cache.parquet"))
-      } else
-      # if something is different, update the file
-      if (!isTRUE(all.equal(previous_result, most_recent_result))) {
-        qs::qsave(most_recent_result, here::here(".nhsn_covid_cache.parquet"))
-      } else {
-        qs::qsave(most_recent_result, here::here(".nhsn_covid_cache.parquet"))
-      }
-      NULL
+      most_recent_result
     },
-    description = "Download the result, and update the file only if it's actually different",
-    priority = 1,
-    cue = tar_cue(mode = "always")
-  ),
-  tar_change(
-    name = nhsn_latest_data,
-    command = {
-      qs::qread(here::here(".nhsn_covid_cache.parquet"))
-    },
-    change = tools::md5sum(here::here(".nhsn_covid_cache.parquet"))
+    cue = tar_cue("always")
   ),
   tar_target(
     name = nhsn_archive_data,
@@ -138,7 +137,7 @@ rlang::list2(
       }
     ),
     tar_target(
-      forecast_res,
+      name = forecast_res,
       command = {
         if (as.Date(forecast_generation_date_int) < Sys.Date()) {
           train_data <- nhsn_archive_data %>%
@@ -152,13 +151,13 @@ rlang::list2(
           train_data <-
             nhsn_latest_data %>%
             data_substitutions(disease = "covid") %>%
-            as_epi_df(as_of = as.Date(forecast_date_int))
+            as_epi_df(as_of = as.Date(forecast_date_int)) %>%
+            mutate(time_value = time_value - 3)
         }
         nssp <- current_nssp_archive %>%
           epix_as_of(min(forecast_date, current_nssp_archive$versions_end)) %>%
           mutate(time_value = time_value)
         attributes(train_data)$metadata$as_of <- as.Date(forecast_date_int)
-        print(names(forecaster_fns[forecasters]))
         train_data %>%
           forecaster_fns[[forecasters]](ahead = aheads, extra_data = nssp) %>%
           mutate(
@@ -196,7 +195,7 @@ rlang::list2(
           filter(geo_value %nin% geo_exclusions) %>%
           ungroup() %>%
           bind_rows(forecast_res %>%
-            filter(forecaster == "windowed_seasonal_extra_sources") %>%
+            filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources")) %>%
             filter(forecast_date < target_end_date)) %>% # don't use for neg aheads
           group_by(geo_value, forecast_date, target_end_date, quantile) %>%
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
