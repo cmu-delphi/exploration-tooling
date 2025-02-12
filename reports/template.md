@@ -27,7 +27,14 @@ Simplistic/low data methods:
 - [Flu flatline](flu-notebook-flatline.html)
 - [Flu climate](flu-notebook-climate_linear.html)
 
-### Covid
+### Covid (new)
+
+- [Covid AR with population scaling](covid-notebook-scaled_pop_main.html)
+- [Covid AR with population scaling and seasonal features](covid-notebook-scaled_pop_season.html)
+- [Covid AR with population scaling, and exogenous features](covid-notebook-scaled_pop_exogenous.html)
+- [Covid Flatline](covid-notebook-flatline_forecaster.html)
+
+### Covid (old)
 
 - [Covid AR with population scaling](covid-notebook-1.html)
 - [Covid AR with population scaling and smoothed features](covid-notebook-2.html)
