@@ -66,12 +66,60 @@ step_season_week_sine <- function(preproc, season = 35) {
     )
 }
 
-#' Append the state population and state population density, taken from the census and interpolated in the most straightforward way.
-#' apportionment data taken from here: https://www.census.gov/data/tables/time-series/dec/popchange-data-text.html
-#' there's probably a better way of doing this buried in
-#' https://www.census.gov/data/developers/data-sets/popest-popproj/popest.html,
-#' but for now it's not worth the time
-#' @param original_dataset tibble or epi_df, should have states as 2 letter lower case
+get_state_codes_crosswalk <- function() {
+  readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_codes_table.csv", show_col_types = FALSE, progress = FALSE) %>%
+    left_join(
+      readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_code_hhs_table.csv", show_col_types = FALSE, progress = FALSE),
+      by = join_by(state_code == state_code)
+    ) %>%
+    # Zero pad the hhs column
+    mutate(hhs = str_pad(hhs, width = 2, side = "left", pad = "0"))
+}
+
+#' Convenience function for adding a geo column to an epi_df.
+#'
+#' TODO: Add more geos.
+#'
+#' @param epi_data An epi_df.
+#' @param from_geo The column to convert from.
+#' @param to_geo The column to convert to.
+#'
+#' @return An epi_df with the new geo column.
+add_geo_column <- function(epi_data, from_geo, to_geo) {
+  checkmate::assert_character(from_geo)
+  checkmate::assert_character(to_geo)
+  checkmate::assert_subset(from_geo, c("state_code", "state_id", "state_name", "hhs"))
+  checkmate::assert_subset(to_geo, c("state_code", "state_id", "state_name", "hhs", "nation"))
+
+  if (from_geo %in% c("state_code", "state_id", "state_name") && to_geo %in% c("state_code", "state_id", "state_name", "hhs")) {
+    state_codes_crosswalk <- get_state_codes_crosswalk() %>%
+      select(all_of(c(from_geo, to_geo)))
+    epi_data %<>%
+      left_join(state_codes_crosswalk, by = join_by(geo_value == !!from_geo))
+  } else if (to_geo == "nation") {
+    epi_data %<>% mutate(nation = "us")
+  } else {
+    stop("Unsupported geo conversion: ", from_geo, " to ", to_geo)
+  }
+
+  return(epi_data)
+}
+
+#' Convenience function for recoding the geo column of an epi_df.
+#'
+#' @param epi_data An epi_df.
+#' @param from_geo The column to convert from.
+#' @param to_geo The column to convert to.
+#'
+#' @return An epi_df with the new geo column.
+replace_geo_column <- function(epi_data, from_geo, to_geo) {
+  epi_data %>%
+    add_geo_column(from_geo, to_geo) %>%
+    select(-any_of("geo_value")) %>%
+    rename(geo_value = !!to_geo) %>%
+    relocate(geo_value)
+}
+
 add_pop_and_density <-
   function(original_dataset,
            apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
@@ -299,6 +347,13 @@ drop_non_seasons <- function(epi_data, min_window = 12) {
     )
 }
 
+get_nwss_coarse_data <- function(disease = c("covid", "flu")) {
+  disease <- arg_match(disease)
+  aws.s3::get_bucket_df(prefix = glue::glue("exploration/aux_data/nwss_{disease}_data"), bucket = "forecasting-team-data") %>%
+    slice_max(LastModified) %>%
+    pull(Key) %>%
+    aws.s3::s3read_using(FUN = readr::read_csv, object = ., bucket = "forecasting-team-data")
+}
 
 #' add a column summing the values in the hhs region
 #' @param hhs_region_table the region table
