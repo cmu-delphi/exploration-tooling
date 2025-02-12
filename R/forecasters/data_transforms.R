@@ -234,8 +234,7 @@ data_whitening <- function(epi_data, colname, learned_params, nonlin_method = c(
     join_cols <- key_colnames(epi_data, exclude = "time_value")
   }
   nonlin_method <- arg_match(nonlin_method)
-  res <- epi_data %>%
-    left_join(learned_params, by = join_cols)
+  res <- epi_data %>% left_join(learned_params, by = join_cols)
   if (nonlin_method == "quart_root") {
     res %<>% mutate(across(all_of(colname), ~ (.x + 0.01)^(1 / 4)))
   }

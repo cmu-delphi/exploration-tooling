@@ -40,15 +40,15 @@ library(purrr)
 ```
 
 ```{r}
+# outside_forecaster_subset <- c("COVIDhub-baseline", "COVIDhub-trained_ensemble", "COVIDhub_CDC-ensemble")
+# i <- 1
 # params <- list(
-#     forecaster_parameter_combinations = tar_read(forecaster_parameter_combinations),
-#     forecaster_family = "scaled_pop_season",
-#     joined_forecasts = tar_read(joined_forecasts),
-#     joined_scores = tar_read(joined_scores),
-#     truth_data = tar_read(hhs_evaluation_data) %>%
-#         select(-population) %>%
-#         mutate(target_end_date = target_end_date + 3),
-#     disease = "flu"
+#   forecaster_family = forecaster_families[[i]],
+#   forecaster_parameters = forecaster_parameter_combinations[[i]],
+#   forecasts = tar_read(joined_forecasts) %>% filter(forecaster %in% c(forecaster_parameter_combinations[[i]]$id, outside_forecaster_subset)),
+#   scores = tar_read(joined_scores) %>% filter(forecaster %in% c(forecaster_parameter_combinations[[i]]$id, outside_forecaster_subset)),
+#   truth_data = tar_read(hhs_evaluation_data),
+#   disease = "covid"
 # )
 
 if (params$disease == "flu") {
@@ -56,7 +56,7 @@ if (params$disease == "flu") {
   ensemble_forecaster_name <- "FluSight-ensemble"
 } else {
   base_forecaster_name <- "COVIDhub-baseline"
-  ensemble_forecaster_name <- "COVIDhub-ensemble"
+  ensemble_forecaster_name <- "COVIDhub_CDC-ensemble"
 }
 
 # Load scores and filter them, get global variables
@@ -96,17 +96,23 @@ The table is sorted by ascending WIS and contains all the forecasters in this no
 if (params$disease == "flu") {
   ignore_keys <- c("forecaster", "keys_to_ignore", "pop_scaling")
 } else {
-  ignore_keys <- c("forecaster", "keys_to_ignore")
+  ignore_keys <- c("forecaster", "keys_to_ignore", "outcome")
 }
 
 param_table <- params$forecaster_parameters %>%
   select(-any_of(ignore_keys)) %>%
   {
     if ("n_training" %in% colnames(.)) {
-      (.) %>% mutate(n_training = as.character(n_training))
+      . <- (.) %>% mutate(n_training = as.character(n_training))
     } else {
       .
     }
+    if ("trainer" %in% colnames(.)) {
+      . <- (.) %>% mutate(trainer = trainer[[1]])
+    } else {
+      .
+    }
+    .
   } %>%
   full_join(
     scores %>%
@@ -171,21 +177,11 @@ subtitle <- sprintf(
   format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-  normalized_df %>% filter(forecaster != ensemble_forecaster_name),
+  normalized_df,
   aes(x = forecast_date, y = !!sym(var))
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   facet_grid(rows = vars(ahead)) +
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
@@ -499,7 +495,7 @@ ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
 ```
 
-#### % Coverage by Forecast Date
+#### 90% Coverage by Forecast Date
 
 ```{r}
 var <- "coverage_90"
@@ -545,7 +541,7 @@ ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
 ```
 
-#### % Coverage by Ahead
+#### 90% Coverage by Ahead
 
 ```{r}
 var <- "coverage_90"
@@ -596,7 +592,7 @@ Fan plots showing the 90% prediction intervals for the forecasts made by the CMU
 if (params$disease == "flu") {
   plot_dates <- seq.Date(as.Date("2023-10-07"), by = "4 weeks", length.out = 8)
 } else {
-  plot_dates <- seq.Date(as.Date("2023-07-03"), by = "4 weeks", length.out = 7)
+  plot_dates <- seq.Date(as.Date("2023-10-07"), by = "4 weeks", length.out = 7)
 }
 ```
 
@@ -605,6 +601,7 @@ if (params$disease == "flu") {
 ```{r}
 # We plot a subset of the dates and geos for the fan plot
 geo_vals <- c("ca", "fl", "pa", "tx", "ny")
+# geo_vals <- c("ca")
 forecast_subset <- params$forecasts %>%
   filter(
     geo_value %in% geo_vals,
