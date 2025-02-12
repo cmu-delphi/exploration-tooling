@@ -1,5 +1,5 @@
 source(here::here("R", "load_all.R"))
-real_ex <- epipredict::case_death_rate_subset %>%
+real_ex <- epidatasets::cases_deaths_subset %>%
   as_tibble() %>%
   mutate(source = "same") %>%
   as_epi_df(other_keys = "source")

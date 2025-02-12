@@ -155,7 +155,7 @@ get_exclusions <- function(
 }
 
 data_substitutions <- function(dataset, disease, forecast_generation_date) {
-  disease <- "flu"
+  # Get the substitutions from the table, matched by forecast generation date
   substitutions <- readr::read_csv(
     glue::glue("{disease}_data_substitutions.csv"),
     comment = "#",
@@ -163,15 +163,23 @@ data_substitutions <- function(dataset, disease, forecast_generation_date) {
   ) %>%
     filter(forecast_date == forecast_generation_date) %>%
     select(-forecast_date) %>%
-    rename(new_value = value)
-  dataset %>%
-    left_join(substitutions) %>%
+    rename(new_value = value) %>%
+    select(-time_value)
+  # Replace the most recent values in the appropriate keys with the substitutions
+  new_values <- dataset %>%
+    group_by(geo_value) %>%
+    slice_max(time_value) %>%
+    inner_join(substitutions) %>%
     mutate(value = ifelse(!is.na(new_value), new_value, value)) %>%
     select(-new_value)
+  # Remove keys from dataset that have been substituted
+  dataset %>%
+    anti_join(new_values, by = c("geo_value", "time_value")) %>%
+    bind_rows(new_values)
 }
 
 parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv"),
-                               forecast_date_int, forecaster_fns) {
+                               forecast_date_int, forecaster_fn_names) {
   forecast_date <- as.Date(forecast_date_int)
   all_states <- c(
     unique(readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE)$state_id),
@@ -191,7 +199,7 @@ parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv")
     ) %>%
     unnest_longer(geo_value) %>%
     mutate(
-      forecaster = ifelse(forecaster == "all", list(names(forecaster_fns)), forecaster),
+      forecaster = ifelse(forecaster == "all", list(forecaster_fn_names), forecaster),
     ) %>%
     unnest_longer(forecaster) %>%
     group_by(forecast_date, forecaster, geo_value) %>%
@@ -280,11 +288,18 @@ write_submission_file <- function(pred, forecast_reference_date, submission_dire
 #' Utility to get the reference date for a given date. This is the last day of
 #' the epiweek that the date falls in.
 get_forecast_reference_date <- function(date) {
-    date <- as.Date(date)
+  date <- as.Date(date)
   MMWRweek::MMWRweek2Date(lubridate::epiyear(date), lubridate::epiweek(date)) + 6
 }
 
-update_site <- function() {
+#' Update the site with the latest reports.
+#'
+#' Looks at that `reports/` directory and updates `template.md` with new reports
+#' that follow a naming convention. This is translated into `report.md` which is
+#' then converted to `index.html` with pandoc.
+#'
+#' @param sync_to_s3 Whether to sync the reports to the S3 bucket.
+update_site <- function(sync_to_s3 = TRUE) {
   library(fs)
   library(stringr)
   # Define the directories
@@ -297,7 +312,9 @@ update_site <- function() {
   }
 
   # Sync the reports directory with the S3 bucket
-  aws.s3::s3sync(path = reports_dir, bucket = "forecasting-team-data", prefix = "reports-2024/", verbose = FALSE)
+  if (sync_to_s3) {
+    aws.s3::s3sync(path = reports_dir, bucket = "forecasting-team-data", prefix = "reports-2024/", verbose = FALSE)
+  }
 
   # Read the template file
   if (!file_exists(template_path)) {
@@ -322,8 +339,7 @@ update_site <- function() {
   # forecast date
   used_reports <- report_table %>%
     group_by(forecast_date, disease) %>%
-    arrange(generation_date) %>%
-    filter(generation_date == max(generation_date)) %>%
+    slice_max(generation_date) %>%
     ungroup() %>%
     arrange(forecast_date)
 
@@ -333,8 +349,9 @@ update_site <- function() {
     file_parts <- str_split(fs::path_ext_remove(file_name), "_", simplify = TRUE)
     date <- file_parts[1]
     disease <- file_parts[2]
+    generation_date <- file_parts[5]
 
-    report_link <- sprintf("- [%s Forecasts %s](%s)", str_to_title(disease), date, file_name)
+    report_link <- sprintf("- [%s Forecasts %s, Rendered %s](%s)", str_to_title(disease), date, generation_date, file_name)
 
     # Insert into Production Reports section, skipping a line
     prod_reports_index <- which(grepl("## Production Reports", report_md_content)) + 1
@@ -349,6 +366,76 @@ update_site <- function() {
   system("pandoc reports/report.md -s -o reports/index.html --css=reports/style.css --mathjax='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js' --metadata pagetitle='Delphi Reports'")
 }
 
+#' Delete unused reports from the S3 bucket.
+#'
+#' @param dry_run List files that would be deleted if `dry_run` is `FALSE`.
+delete_extra_s3_files <- function(dry_run = TRUE) {
+  local_path <- "reports"
+  bucket <- "forecasting-team-data"
+  prefix <- "reports-2024/"
+  # Get list of local files (relative paths)
+  local_files <- list.files(local_path, recursive = TRUE)
+
+  # Get list of S3 files
+  s3_objects <- aws.s3::get_bucket(bucket, prefix = prefix)
+  s3_files <- sapply(s3_objects, function(x) x$Key)
+
+  # Find files that exist in S3 but not locally
+  # Remove prefix from s3_files for comparison
+  s3_files_clean <- gsub(prefix, "", s3_files)
+  files_to_delete <- s3_files[!(s3_files_clean %in% local_files)]
+
+  if (dry_run) {
+    message("Would delete ", length(files_to_delete), " files from S3")
+    message("Files: ", paste(files_to_delete, collapse = ", "))
+    return(invisible(files_to_delete))
+  }
+
+  # Delete each extra file
+  if (length(files_to_delete) > 0) {
+    message("Deleting ", length(files_to_delete), " files from S3")
+    for (file in files_to_delete) {
+      message("Deleting: ", file)
+      aws.s3::delete_object(file, bucket)
+    }
+  } else {
+    message("No files to delete")
+  }
+}
+
+#' Find unused report files in index.html.
+find_unused_report_files <- function() {
+  library(rvest)
+  library(fs)
+  library(stringr)
+
+  # Read all files in reports directory
+  all_files <- dir_ls("reports", recurse = TRUE) %>%
+    path_file() # just get filenames, not full paths
+
+  # Read index.html and extract all href links
+  index_html <- read_html("reports/index.html")
+  used_files <- index_html %>%
+    html_elements("a") %>%
+    html_attr("href") %>%
+    # Add known required files like CSS
+    c("style.css", "template.md", "report.md", "index.html", .) %>%
+    # Remove links like "https://" from the list
+    keep(~ !grepl("^https?://", .))
+
+  # Find files that exist but aren't referenced
+  unused_files <- setdiff(all_files, used_files)
+
+  if (length(unused_files) > 0) {
+    cat("The following files in 'reports' are not referenced in index.html:\n")
+    cat(paste("-", unused_files), sep = "\n")
+  } else {
+    cat("All files in 'reports' are referenced in index.html\n")
+  }
+
+  return(invisible(unused_files))
+}
+
 #' Ensure that forecast values are monotically increasing
 #' in quantile order.
 sort_by_quantile <- function(forecasts) {
@@ -357,4 +444,84 @@ sort_by_quantile <- function(forecasts) {
     group_by(geo_value, forecast_date, target_end_date) %>%
     mutate(value = sort(value)) %>%
     ungroup()
+}
+
+
+#' Print recent targets errors.
+get_recent_targets_errors <- function(time_since = minutes(60)) {
+  meta_df <- targets::tar_meta()
+  forecast_errors <- meta_df %>%
+    filter(time > Sys.time() - time_since, !is.na(parent), !is.na(error)) %>%
+    arrange(desc(time)) %>%
+    distinct(parent, error, .keep_all = TRUE) %>%
+    select(time, parent, error) %>%
+    mutate(parent = gsub("forecast_", "", parent))
+
+  # Print each error message, along with the parent target.
+  if (nrow(forecast_errors) > 0) {
+    cat("Forecast errors:\n")
+    for (i in 1:nrow(forecast_errors)) {
+      cli::cli_inform(c(
+        "Parent target: {forecast_errors$parent[i]}",
+        "Time: {forecast_errors$time[i]}",
+        "Error: {forecast_errors$error[i]}"
+      ))
+    }
+  }
+
+  other_errors <- meta_df %>%
+    filter(time > Sys.time() - time_since, !is.na(error)) %>%
+    arrange(desc(time)) %>%
+    distinct(error, .keep_all = TRUE) %>%
+    select(time, name, error)
+
+  # Print each error message, along with the parent target.
+  if (nrow(other_errors) > 0) {
+    cat("Other errors:\n")
+    for (i in 1:nrow(other_errors)) {
+      cli::cli_inform(c(
+        "Target: {other_errors$name[i]}",
+        "Time: {other_errors$time[i]}",
+        "Error: {other_errors$error[i]}"
+      ))
+    }
+  }
+
+  return(invisible(meta_df %>% filter(time > Sys.time() - time_since)))
+}
+
+#' Retry a function.
+#'
+#' @param max_attempts The maximum number of attempts.
+#' @param wait_seconds The number of seconds to wait between attempts.
+#' @param fn The function to retry.
+#' @param ... Additional arguments to pass to the function.
+#'
+#' @examples
+#' retry_fn(
+#'   max_attempts = 10,
+#'   wait_seconds = 1,
+#'   fn = pub_covidcast,
+#'   source = "nssp",
+#'   signal = "pct_ed_visits_covid",
+#'   geo_type = "state",
+#'   geo_values = "*",
+#'   time_type = "week"
+#' )
+retry_fn <- function(max_attempts = 10, wait_seconds = 1, fn, ...) {
+  for (attempt in 1:max_attempts) {
+    tryCatch(
+      {
+        result <- fn(...)
+        return(result) # Return successful result
+      },
+      error = function(e) {
+        if (attempt == max_attempts) {
+          stop("Maximum retry attempts reached. Last error: ", e$message)
+        }
+        message(sprintf("Attempt %d failed. Retrying in %d second(s)...", attempt, wait_seconds))
+        Sys.sleep(wait_seconds)
+      }
+    )
+  }
 }

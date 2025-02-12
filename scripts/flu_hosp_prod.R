@@ -2,7 +2,8 @@
 source("scripts/targets-common.R")
 source("scripts/targets-exploration-common.R")
 
-submit_climatological <- TRUE
+# submit_climatological <- Sys.getenv("SUBMIT_CLIMATOLOGICAL", "TRUE") == "TRUE"
+# submit_anything <- Sys.getenv("SUBMIT_ANYTHING", "TRUE") == "TRUE"
 submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
 excluded_geos <- c("as", "gu", "mh")
@@ -15,15 +16,24 @@ end_date <- Sys.Date()
 # today, which is a Wednesday. Sometimes, if we're doing a delayed forecast,
 # it's a Thursday. It's used for stamping the data and for determining the
 # appropriate as_of when creating the forecast.
-forecast_generation_date <- Sys.Date()
+forecast_generation_dates <- Sys.Date()
 # Usually, the forecast_date is the same as the generation date, but you can
 # override this. It should be a Wednesday.
-forecast_date <- round_date(forecast_generation_date, "weeks", week_start = 3)
+forecast_dates <- round_date(forecast_generation_dates, "weeks", week_start = 3)
 # If doing backfill, you can set the forecast_date to a sequence of dates.
-# forecast_date <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
+# forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 # forecast_generation_date needs to follow suit, but it's more complicated
 # because sometimes we forecast on Thursday.
-# forecast_generation_date <- c(as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
+# forecast_generation_dates <- c(as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
+
+# Whether we're running in backtest mode.
+# If TRUE, we don't run the report notebook, which is (a) slow and (b) should be
+# preserved as an ASOF snapshot of our production results for that week.
+# If TRUE, we run a scoring notebook, which scores the historical forecasts
+# against the truth data and compares them to the ensemble.
+# If FALSE, we run the weekly report notebook.
+backtest_mode <- length(forecast_dates) > 1
+
 
 very_latent_locations <- list(list(
   c("source"),
@@ -146,7 +156,7 @@ rlang::list2(
         ) %>%
         filter(version == max(version)) %>%
         select(-version) %>%
-        data_substitutions(disease = "flu", forecast_generation_date) %>%
+        data_substitutions(disease = "flu", last(forecast_generation_dates)) %>%
         as_epi_df(other_keys = "source", as_of = Sys.Date())
       most_recent_result
     },
@@ -157,15 +167,15 @@ rlang::list2(
   tar_map(
     # Because targets relies on R metaprogramming, it loses the Date class.
     values = tibble(
-      forecast_date_int = forecast_date,
-      forecast_generation_date_int = forecast_generation_date,
-      forecast_date_chr = as.character(forecast_date_int)
+      forecast_date_int = forecast_dates,
+      forecast_generation_date_int = forecast_generation_dates,
+      forecast_date_chr = as.character(forecast_dates)
     ),
     names = "forecast_date_chr",
     tar_change(
       name = geo_forecasters_weights,
       command = {
-        geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"), forecast_date_int, forecaster_fns)
+        geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"), forecast_date_int, names(forecaster_fns))
         if (nrow(geo_forecasters_weights %>% filter(forecast_date == as.Date(forecast_date_int))) == 0) {
           cli_abort("there are no weights  for the forecast date {forecast_date}")
         }
@@ -332,23 +342,27 @@ rlang::list2(
     tar_target(
       name = make_submission_csv,
       command = {
-        combo_ens_climate_linear_window_season %>%
-          format_flusight(disease = "flu") %>%
-          write_submission_file(
-            get_forecast_reference_date(forecast_date_int),
-            file.path(submission_directory, "model-output/CMU-TimeSeries")
-          )
+        if (!backtest_mode && submission_directory != "cache") {
+          combo_ens_climate_linear_window_season %>%
+            format_flusight(disease = "flu") %>%
+            write_submission_file(
+              get_forecast_reference_date(forecast_date_int),
+              file.path(submission_directory, "model-output/CMU-TimeSeries")
+            )
+        } else {
+          cli_alert_info("Not making submission csv because we're in backtest mode or submission directory is cache")
+        }
       }
     ),
     tar_target(
       name = make_climate_submission_csv,
       command = {
-        if (submit_climatological) {
+        if (!backtest_mode && submission_directory != "cache") {
           forecasts <- forecast_res
           forecasts %>%
             filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
             group_by(geo_value, target_end_date, quantile) %>%
-            summarize(forecast_date = first(forecast_date), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+            summarize(forecast_date = as.Date(forecast_date_int), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
             ungroup() %>%
             filter(!(geo_value %in% excluded_geos)) %>%
             format_flusight(disease = "flu") %>%
@@ -358,6 +372,8 @@ rlang::list2(
               submission_directory = file.path(submission_directory, "model-output/CMU-climate_baseline"),
               file_name = "CMU-climate_baseline"
             )
+        } else {
+          cli_alert_info("Not making climate submission csv because we're in backtest mode or submission directory is cache")
         }
       },
       priority = 0.99
@@ -367,7 +383,7 @@ rlang::list2(
       command = {
         make_submission_csv
         # only validate if we're saving the result to a hub
-        if (submission_directory != "cache") {
+        if (!backtest_mode && submission_directory != "cache") {
           validation <- validate_submission(
             submission_directory,
             file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(forecast_date_int))
@@ -383,7 +399,7 @@ rlang::list2(
       command = {
         make_climate_submission_csv
         # only validate if we're saving the result to a hub
-        if (submission_directory != "cache" && submit_climatological) {
+        if (!backtest_mode && submission_directory != "cache") {
           validation <- validate_submission(
             submission_directory,
             file_path = sprintf("CMU-climate_baseline/%s-CMU-climate_baseline.csv", get_forecast_reference_date(forecast_date_int))
@@ -436,28 +452,31 @@ rlang::list2(
     tar_target(
       notebook,
       command = {
-        if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
-        rmarkdown::render(
-          "scripts/reports/forecast_report.Rmd",
-          output_file = here::here(
-            "reports",
-            sprintf("%s_flu_prod_on_%s.html", as.Date(forecast_date_int), Sys.Date())
-          ),
-          params = list(
-            disease = "flu",
-            forecast_res = forecasts_and_ensembles,
-            forecast_date = as.Date(forecast_date_int),
-            truth_data = truth_data
+        if (!backtest_mode) {
+          if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
+          rmarkdown::render(
+            "scripts/reports/forecast_report.Rmd",
+            output_file = here::here(
+              "reports",
+              sprintf("%s_flu_prod_on_%s.html", as.Date(forecast_date_int), Sys.Date())
+            ),
+            params = list(
+              disease = "flu",
+              forecast_res = forecasts_and_ensembles,
+              forecast_date = as.Date(forecast_date_int),
+              truth_data = truth_data
+            )
           )
-        )
+        }
       },
       cue = tar_cue(mode = "always")
     )
   ),
-  tar_target(
-    new_data_notebook,
-    command = {
-      rmarkdown::render("scripts/reports/new_data.Rmd", output_file = here::here("reports", "new_data.html"))
-    }
-  )
+  # TODO
+  # tar_target(
+  #   new_data_notebook,
+  #   command = {
+  #     rmarkdown::render("scripts/reports/new_data.Rmd", output_file = here::here("reports", "new_data.html"))
+  #   }
+  # )
 )

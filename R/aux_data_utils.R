@@ -188,38 +188,56 @@ daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), day_of_week =
     select(-epiweek, -year)
 }
 
+#' Aggregate a daily archive to a weekly archive.
+#'
+#' @param epi_arch the archive to aggregate.
+#' @param agg_columns the columns to aggregate.
+#' @param agg_method the method to use to aggregate the data, one of "sum" or "mean".
+#' @param day_of_week the day of the week to use as the reference day.
+#' @param day_of_week_end the day of the week to use as the end of the week.
 daily_to_weekly_archive <- function(epi_arch,
                                     agg_columns,
                                     agg_method = c("sum", "mean"),
                                     day_of_week = 4L,
                                     day_of_week_end = 7L) {
+  # How to aggregate the windowed data.
   agg_method <- arg_match(agg_method)
+  # The columns we will later group by when aggregating.
   keys <- key_colnames(epi_arch, exclude = c("time_value", "version"))
+  # The versions we will slide over.
   ref_time_values <- epi_arch$DT$version %>%
     unique() %>%
     sort()
+  # Choose a fast function to use to slide and aggregate.
   if (agg_method == "sum") {
     slide_fun <- epi_slide_sum
   } else if (agg_method == "mean") {
     slide_fun <- epi_slide_mean
   }
-  too_many_tibbles <- epix_slide(
+  # Slide over the versions and aggregate.
+  epix_slide(
     epi_arch,
-    .before = 99999999L,
     .versions = ref_time_values,
-    function(x, group, ref_time) {
+    function(x, group_keys, ref_time) {
+      # The last day of the week we will slide over.
       ref_time_last_week_end <-
         floor_date(ref_time, "week", day_of_week_end - 1) # this is over by 1
+      # The last day of the week we will slide over.
       max_time <- max(x$time_value)
+      # The days we will slide over.
       valid_slide_days <- seq.Date(
         from = ceiling_date(min(x$time_value), "week", week_start = day_of_week_end - 1),
         to = floor_date(max(x$time_value), "week", week_start = day_of_week_end - 1),
         by = 7L
       )
+      # If the last day of the week is not the end of the week, add it to the
+      # list of valid slide days (this will produce an incomplete slide, but
+      # that's fine for us, since it should only be 1 day, historically.)
       if (wday(max_time) != day_of_week_end) {
         valid_slide_days <- c(valid_slide_days, max_time)
       }
-      slid_result <- x %>%
+      # Slide over the days and aggregate.
+      x %>%
         group_by(across(all_of(keys))) %>%
         slide_fun(
           agg_columns,
@@ -229,18 +247,13 @@ daily_to_weekly_archive <- function(epi_arch,
         ) %>%
         select(-all_of(agg_columns)) %>%
         rename_with(~ gsub("slide_value_", "", .x)) %>%
-        # only keep 1/week
-        # group_by week, keep the largest in each week
-        # alternatively
-        # switch time_value to the designated day of the week
+        rename_with(~ gsub("_7dsum", "", .x)) %>%
+        # Round all dates to reference day of the week. These will get
+        # de-duplicated by compactify in as_epi_archive below.
         mutate(time_value = round_date(time_value, "week", day_of_week - 1)) %>%
         as_tibble()
     }
-  )
-  too_many_tibbles %>%
-    pull(time_value) %>%
-    max()
-  too_many_tibbles %>%
+  ) %>%
     as_epi_archive(compactify = TRUE)
 }
 
@@ -313,9 +326,8 @@ get_health_data <- function(as_of, disease = c("covid", "flu")) {
 
   most_recent_row <- meta_data %>%
     # update_date is actually a time, so we need to filter for the day after.
-    filter(update_date <= as_of + 1) %>%
-    arrange(desc(update_date)) %>%
-    slice(1)
+    filter(update_date <= as.Date(as_of) + 1) %>%
+    slice_max(update_date)
 
   if (nrow(most_recent_row) == 0) {
     cli::cli_abort("No data available for the given date.")
@@ -331,9 +343,7 @@ get_health_data <- function(as_of, disease = c("covid", "flu")) {
   if (disease == "covid") {
     data %<>% mutate(
       hhs = previous_day_admission_adult_covid_confirmed +
-        previous_day_admission_adult_covid_suspected +
-        previous_day_admission_pediatric_covid_confirmed +
-        previous_day_admission_pediatric_covid_suspected
+        previous_day_admission_pediatric_covid_confirmed
     )
   } else if (disease == "flu") {
     data %<>% mutate(hhs = previous_day_admission_influenza_confirmed)
@@ -709,10 +719,12 @@ create_nhsn_data_archive <- function(disease_name) {
     as_epi_archive(compactify = TRUE)
 }
 
-
 up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
   disease <- arg_match(disease)
-  nssp_state <- pub_covidcast(
+  nssp_state <- retry_fn(
+    max_attempts = 10,
+    wait_seconds = 1,
+    fn = pub_covidcast,
     source = "nssp",
     signal = glue::glue("pct_ed_visits_{disease}"),
     time_type = "week",
@@ -727,4 +739,27 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     # End of week to midweek correction.
     mutate(time_value = time_value + 3) %>%
     as_epi_archive(compactify = TRUE)
+}
+
+# Get the last time the signal was updated.
+get_covidcast_signal_last_update <- function(source, signal) {
+  pub_covidcast_meta() %>%
+    filter(source == !!source, signal == !!signal) %>%
+    pull(last_update) %>%
+    as.POSIXct()
+}
+
+# Get the last time the Socrata dataset was updated.
+get_socrata_updated_at <- function(dataset_url) {
+  httr::GET(dataset_url) %>%
+    httr::content() %>%
+    pluck("rowsUpdatedAt") %>%
+    as.POSIXct()
+}
+
+get_s3_object_last_modified <- function(bucket, key) {
+  # Format looks like "Fri, 31 Jan 2025 22:01:16 GMT"
+  attr(aws.s3::head_object(key, bucket = bucket), "last-modified") %>%
+    str_replace_all(" GMT", "") %>%
+    as.POSIXct(format = "%a, %d %b %Y %H:%M:%S")
 }

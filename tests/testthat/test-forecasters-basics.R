@@ -10,7 +10,7 @@ forecasters <- list(
 )
 for (forecaster in forecasters) {
   test_that(paste(forecaster[[1]], "gets the date and columns right"), {
-    jhu <- epipredict::case_death_rate_subset %>%
+    jhu <- epidatasets::cases_deaths_subset %>%
       dplyr::filter(time_value >= as.Date("2021-11-01"))
     # the as_of for this is wildly far in the future
     attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
@@ -28,7 +28,7 @@ for (forecaster in forecasters) {
   })
 
   test_that(paste(forecaster[[1]], "handles only using 1 column correctly"), {
-    jhu <- epipredict::case_death_rate_subset %>%
+    jhu <- epidatasets::cases_deaths_subset %>%
       dplyr::filter(time_value >= as.Date("2021-11-01"))
     # the as_of for this is wildly far in the future
     attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
@@ -40,7 +40,7 @@ for (forecaster in forecasters) {
   })
 
   test_that(paste(forecaster[[1]], "deals with no as_of"), {
-    jhu <- epipredict::case_death_rate_subset %>%
+    jhu <- epidatasets::cases_deaths_subset %>%
       dplyr::filter(time_value >= as.Date("2021-11-01"))
     # what if we have no as_of date? assume they mean the last available data
     attributes(jhu)$metadata$as_of <- NULL
@@ -54,7 +54,7 @@ for (forecaster in forecasters) {
   test_that(paste(forecaster[[1]], "handles last second NA's"), {
     # if the last entries are NA, we should still predict
     # TODO: currently this checks that we DON'T predict
-    jhu <- epipredict::case_death_rate_subset %>%
+    jhu <- epidatasets::cases_deaths_subset %>%
       dplyr::filter(time_value >= as.Date("2021-11-01"))
     geo_values <- jhu$geo_value %>% unique()
     one_day_nas <- tibble(
@@ -84,7 +84,7 @@ for (forecaster in forecasters) {
 
   test_that(paste(forecaster[[1]], "handles unused extra sources with NAs"), {
     # if there is an extra source we aren't using, we should ignore any NA's it has
-    jhu <- epipredict::case_death_rate_subset %>%
+    jhu <- epidatasets::cases_deaths_subset %>%
       dplyr::filter(time_value >= as.Date("2021-11-01"))
     jhu_nad <- jhu %>%
       as_tibble() %>%
@@ -103,7 +103,7 @@ for (forecaster in forecasters) {
   # any forecaster specific tests
   if (forecaster[[1]] == "scaled_pop" || forecaster[[1]] == "smoothed_scaled") {
     test_that(paste(forecaster[[1]], "scaled and unscaled don't make the same predictions"), {
-      jhu <- epipredict::case_death_rate_subset %>%
+      jhu <- epidatasets::cases_deaths_subset %>%
         dplyr::filter(time_value >= as.Date("2021-11-01"))
       # the as_of for this is wildly far in the future
       attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
@@ -125,7 +125,7 @@ for (forecaster in forecasters) {
     })
   } else if (forecaster[[1]] == "smoothed_scaled") {
     testthat("smoothed_scaled handles variable lags correctly", {
-      jhu <- epipredict::case_death_rate_subset %>%
+      jhu <- epidatasets::cases_deaths_subset %>%
         dplyr::filter(time_value >= as.Date("2021-11-01"))
       # the as_of for this is wildly far in the future
       attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
@@ -136,7 +136,7 @@ for (forecaster in forecasters) {
   # test case where extra_sources is "empty"
   # test case where the epi_df is empty
   test_that(paste(forecaster[[1]], "empty epi_df predicts nothing"), {
-    jhu <- epipredict::case_death_rate_subset %>%
+    jhu <- epidatasets::cases_deaths_subset %>%
       dplyr::filter(time_value >= as.Date("2021-11-01"))
     # the as_of for this is wildly far in the future
     attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
@@ -153,7 +153,7 @@ for (forecaster in forecasters) {
 
 # unique tests
 test_that("flatline_fc same across aheads", {
-  jhu <- epipredict::case_death_rate_subset %>%
+  jhu <- epidatasets::cases_deaths_subset %>%
     dplyr::filter(time_value >= as.Date("2021-11-01"))
   attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
   resM2 <- flatline_fc(jhu, "case_rate", c("death_rate"), -2L) %>%
@@ -170,7 +170,7 @@ test_that("flatline_fc same across aheads", {
 })
 
 test_that("ensemble_average", {
-  jhu <- epipredict::case_death_rate_subset %>%
+  jhu <- epidatasets::cases_deaths_subset %>%
     dplyr::filter(time_value >= as.Date("2021-11-01"))
   # the as_of for this is wildly far in the future
   attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3

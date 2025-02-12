@@ -1,0 +1,92 @@
+---
+title: "`r `r params$disease` score report"
+author: Delphi Forecast Team
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: True
+    # self_contained: False
+    # lib_dir: libs
+params:
+  disease: "covid"
+  scores: ""
+  forecast_dates: ""
+---
+
+```{css, echo=FALSE}
+body {
+  display: block;
+  max-width: 1280px !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+body .main-container {
+  max-width: 1280px !important;
+  width: 1280px !important;
+}
+```
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{r setup, include=FALSE}
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+library(DT)
+
+# Define aggregation functions
+Mean <- function(x) mean(x, na.rm = TRUE)
+GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
+scores <- params$scores
+```
+
+# Forecaster Predictions for `r params$disease`:  {.tabset}
+
+Forecast dates: `r params$forecast_dates`
+
+## Scores Aggregated By Forecaster
+
+```{r, fig.height = 60, fig.width = 12, echo=FALSE}
+scores %>%
+  group_by(forecaster) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae), 2),
+    geomean_ae = round(GeoMean(ae), 2),
+    mean_coverage_90 = round(Mean(coverage_90), 2),
+  ) %>%
+  rename(id = forecaster) %>%
+  datatable()
+```
+
+## Scores Aggregated By Forecast Date
+
+```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+agg <- scores %>%
+  group_by(forecaster, forecast_date) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae), 2),
+    geomean_ae = round(GeoMean(ae), 2),
+    mean_coverage_90 = round(Mean(coverage_90), 2),
+  )
+
+# Plot the scores as lines across forecast_date
+p <- ggplot(agg, aes(x = forecast_date, y = mean_wis, color = forecaster)) +
+  geom_line() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Forecast Date", y = "Mean WIS")
+
+ggplotly(p)
+```

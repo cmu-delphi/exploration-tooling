@@ -2,23 +2,24 @@
 # specifically in the data-processed folder
 # to get the rds, run
 #
-# full_results <- readr::read_csv("../covid19-forecast-hub/data-processed/covid19-2023season-results.csv")
-# aws.s3::s3save(full_results, object = "covid19_forecast_hub_2023.rds", bucket = "forecasting-team-data")
+# full_results <- readr::read_csv("../OLDcovid19-forecast-hub/data-processed/covid19-2023season-results.csv")
+# aws.s3::s3save(full_results, object = "covid19_forecast_hub_2023_full_summed.rds", bucket = "forecasting-team-data")
 #
+using Base: floatrange
 using CSV
 using DataFrames
 using DataFramesMeta
 using Dates
 using RData
+import Base.lowercase
 pwd()
-res = CSV.read("COVIDhub-ensemble/2023-10-02-COVIDhub-ensemble.csv", DataFrame)
-pathname = "COVIDhub-ensemble/"
-filename = "2023-10-02-COVIDhub-ensemble.csv"
+res = CSV.read("COVIDhub_CDC-ensemble/2023-10-02-COVIDhub_CDC-ensemble.csv", DataFrame)
+pathname = "COVIDhub_CDC-ensemble/"
+filename = "2023-10-02-COVIDhub_CDC-ensemble.csv"
 state_names = CSV.read("../data-locations/locations.csv", DataFrame)
 lowercase(m::Missing) = m
 @rtransform! state_names @passmissing :abbreviation = lowercase(:abbreviation)
 @select! state_names :abbreviation :location
-
 function format_file(pathname, filename, state_names)
     if length(filename) < 10 ||
        match(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", filename[1:10]) == nothing ||
@@ -26,9 +27,7 @@ function format_file(pathname, filename, state_names)
         return DataFrame()
     end
     println(joinpath(pathname, filename))
-
-    res = CSV.read(joinpath(pathname, filename), DataFrame, missingstring="NA")
-
+    res = CSV.read(joinpath(pathname, filename), DataFrame, missingstring="NA", types=Dict("value" => Float64))
     if !("forecast_date" in names(res)) ||
        res[!, :forecast_date] |> minimum < Date(2023, 1, 1)
         return DataFrame()
@@ -41,7 +40,11 @@ function format_file(pathname, filename, state_names)
     end
     res = leftjoin(res, state_names, on=:location)
     @select! res :forecaster :geo_value = :abbreviation :forecast_date :target_end_date :ahead = :target :quantile :value
-    res
+    @chain res begin
+        @rtransform :week_ahead = div(:ahead, 7)
+        @groupby :forecaster :geo_value :forecast_date :week_ahead :quantile
+        @combine :value = sum(:value)
+    end
 end
 results = DataFrame[]
 for (root, dirs, files) in walkdir(".")
@@ -51,10 +54,3 @@ for (root, dirs, files) in walkdir(".")
 end
 full_results = vcat(results...)
 CSV.write("covid19-2023season-results.csv", full_results)
-full_results[!, :forecaster] |> unique
-@rsubset! full_results :ahead % 7 == 0
-@rtransform! full_results :forecaster = :forecaster[3:end]
-"./fqfae"[3:end]
-3 % 7
-@rsubset full_results !ismissing(:geo_value) :forecast_date == Date(2023,11,13)
-@rsubset res :forecast_date == Date(2023,11,0)
