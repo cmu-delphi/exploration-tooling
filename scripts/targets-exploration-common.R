@@ -338,7 +338,7 @@ make_historical_flu_data_targets <- function() {
           add_season_info() %>%
           mutate(agg_level = ifelse(grepl("[0-9]{2}", geo_value), "hhs_region", ifelse("us" == geo_value, "nation", "state"))) %>%
           add_pop_and_density() %>%
-          mutate(hhs = hhs / population * 10L^5) %>%
+          mutate(hhs = hhs_7dsum / population * 10L^5) %>%
           mutate(source = "nhsn") %>%
           mutate(agg_level = ifelse(geo_value == "us", "nation", "state")) %>%
           as_epi_archive(other_keys = "source", compactify = TRUE) %>%

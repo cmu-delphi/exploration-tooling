@@ -146,7 +146,7 @@ rlang::list2(
         ) %>%
         filter(version == max(version)) %>%
         select(-version) %>%
-        data_substitutions(disease = "flu") %>%
+        data_substitutions(disease = "flu", forecast_generation_date) %>%
         as_epi_df(other_keys = "source", as_of = Sys.Date())
       most_recent_result
     },
@@ -397,7 +397,6 @@ rlang::list2(
     tar_target(
       name = truth_data,
       command = {
-        browser()
         date <- forecast_generation_date_int
         nssp_state <-
           current_nssp_archive %>%

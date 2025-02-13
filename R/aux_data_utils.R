@@ -194,7 +194,7 @@ daily_to_weekly_archive <- function(epi_arch,
                                     day_of_week = 4L,
                                     day_of_week_end = 7L) {
   agg_method <- arg_match(agg_method)
-  keys <- key_colnames(epi_arch, exclude = "time_value")
+  keys <- key_colnames(epi_arch, exclude = c("time_value", "version"))
   ref_time_values <- epi_arch$DT$version %>%
     unique() %>%
     sort()

@@ -150,7 +150,7 @@ rlang::list2(
         } else {
           train_data <-
             nhsn_latest_data %>%
-            data_substitutions(disease = "covid") %>%
+            data_substitutions(disease = "covid", forecast_generation_date) %>%
             as_epi_df(as_of = as.Date(forecast_date_int)) %>%
             mutate(time_value = time_value - 3)
         }
@@ -195,7 +195,7 @@ rlang::list2(
           filter(geo_value %nin% geo_exclusions) %>%
           ungroup() %>%
           bind_rows(forecast_res %>%
-            filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources")) %>%
+            filter(forecaster %in% c("windowed_seasonal_extra_sources")) %>%
             filter(forecast_date < target_end_date)) %>% # don't use for neg aheads
           group_by(geo_value, forecast_date, target_end_date, quantile) %>%
           summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%

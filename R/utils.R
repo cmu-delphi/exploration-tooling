@@ -156,7 +156,6 @@ get_exclusions <- function(
 
 data_substitutions <- function(dataset, disease, forecast_generation_date) {
   disease <- "flu"
-  forecast_generation_date <- as.Date("2025-01-08")
   substitutions <- readr::read_csv(
     glue::glue("{disease}_data_substitutions.csv"),
     comment = "#",
