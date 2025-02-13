@@ -220,22 +220,42 @@ daily_to_weekly_archive <- function(epi_arch,
     .versions = ref_time_values,
     function(x, group_keys, ref_time) {
       # The last day of the week we will slide over.
-      ref_time_last_week_end <-
-        floor_date(ref_time, "week", day_of_week_end - 1) # this is over by 1
-      # The last day of the week we will slide over.
+      ref_time_last_week_end <- floor_date(ref_time, "week", day_of_week_end - 1)
+
+      # To find the days we will slide over, we need to find the first and last
+      # complete weeks of data. Get the max and min times, and then find the
+      # first and last complete weeks of data.
+      min_time <- min(x$time_value)
       max_time <- max(x$time_value)
-      # The days we will slide over.
-      valid_slide_days <- seq.Date(
-        from = ceiling_date(min(x$time_value), "week", week_start = day_of_week_end - 1),
-        to = floor_date(max(x$time_value), "week", week_start = day_of_week_end - 1),
-        by = 7L
-      )
+
+      # Let's determine if the min and max times are in the same week.
+      ceil_min_time <- ceiling_date(min_time, "week", week_start = day_of_week_end - 1)
+      ceil_max_time <- ceiling_date(max_time, "week", week_start = day_of_week_end - 1)
+
+      # If they're not in the same week, this means we have at least one
+      # complete week of data to slide over.
+      if (ceil_min_time < ceil_max_time) {
+        valid_slide_days <- seq.Date(
+          from = ceiling_date(min_time, "week", week_start = day_of_week_end - 1),
+          to = floor_date(max_time, "week", week_start = day_of_week_end - 1),
+          by = 7L
+        )
+      } else {
+        # This is the degenerate case, where we have about 1 week or less of
+        # data. In this case, we opt to return nothing for two reasons:
+        # 1. in most cases here, the data is incomplete for a single week,
+        # 2. if the data is complete, a single week of data is not enough to
+        #    reasonably perform any kind of aggregation.
+        return(tibble())
+      }
+
       # If the last day of the week is not the end of the week, add it to the
       # list of valid slide days (this will produce an incomplete slide, but
       # that's fine for us, since it should only be 1 day, historically.)
       if (wday(max_time) != day_of_week_end) {
         valid_slide_days <- c(valid_slide_days, max_time)
       }
+
       # Slide over the days and aggregate.
       x %>%
         group_by(across(all_of(keys))) %>%

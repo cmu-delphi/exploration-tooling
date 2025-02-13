@@ -1,7 +1,7 @@
 source(here::here("R", "load_all.R"))
 
 test_that("sanitize_args_predictors_trainer", {
-  epi_data <- epidatasets::cases_deaths_subset
+  epi_data <- epidatasets::covid_case_death_rates
   # don't need to test validate_forecaster_inputs as that's inherited
   # testing args_list inheritance
   ex_args <- default_args_list()

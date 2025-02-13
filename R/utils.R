@@ -525,3 +525,13 @@ retry_fn <- function(max_attempts = 10, wait_seconds = 1, fn, ...) {
     )
   }
 }
+
+validate_epi_data <- function(epi_data) {
+  if (!inherits(epi_data, "epi_df")) {
+    epi_data <- epi_data %>% as_epi_df(as_of = max(epi_data$time_value))
+  }
+  if (is.null(attributes(epi_data)$metadata$as_of)) {
+    attributes(epi_data)$metadata$as_of <- max(epi_data$time_value)
+  }
+  return(epi_data)
+}

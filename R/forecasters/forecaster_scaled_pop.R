@@ -62,6 +62,9 @@ scaled_pop <- function(epi_data,
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
+
+  epi_data <- validate_epi_data(epi_data)
+
   # perform any preprocessing not supported by epipredict
   #
   # this is for the case where there are multiple sources in the same column
