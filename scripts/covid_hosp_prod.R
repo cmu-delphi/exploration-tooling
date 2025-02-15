@@ -180,6 +180,8 @@ combined_forecasts <- tar_combine(
     dplyr::bind_rows(!!!.x)
   }
 )
+
+# ================================ ENSEMBLE TARGETS ================================
 ensemble_targets <- tar_map(
   values = tibble(
     forecast_date_int = forecast_dates,
