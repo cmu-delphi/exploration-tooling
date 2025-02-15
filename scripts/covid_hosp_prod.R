@@ -155,7 +155,7 @@ forecast_targets <- tar_map(
       } else {
         train_data <-
           nhsn_latest_data %>%
-          data_substitutions(disease = "covid", last(forecast_generation_dates)) %>%
+          data_substitutions(disease = "covid", as.Date(forecast_generation_date_int)) %>%
           as_epi_df(as_of = as.Date(forecast_date_int)) %>%
           mutate(time_value = time_value - 3)
       }
