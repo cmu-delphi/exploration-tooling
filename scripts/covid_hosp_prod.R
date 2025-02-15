@@ -1,8 +1,6 @@
 # The COVID Hospitalization Production Forecasting Pipeline.
 source("scripts/targets-common.R")
 
-# submit_climatological <- Sys.getenv("SUBMIT_CLIMATOLOGICAL", "TRUE") == "TRUE"
-# submit_anything <- Sys.getenv("SUBMIT_ANYTHING", "TRUE") == "TRUE"
 submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
 # date to cut the truth data off at, so we don't have too much of the past
