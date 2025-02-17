@@ -90,3 +90,26 @@ p <- ggplot(agg, aes(x = forecast_date, y = mean_wis, color = forecaster)) +
 
 ggplotly(p)
 ```
+
+## Scores Aggregated By Ahead
+
+```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+agg <- scores %>%
+  group_by(forecaster, ahead) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae), 2),
+    geomean_ae = round(GeoMean(ae), 2),
+    mean_coverage_90 = round(Mean(coverage_90), 2),
+  )
+
+# Plot the scores as lines across forecast_date
+p <- ggplot(agg, aes(x = ahead, y = mean_wis, color = forecaster)) +
+  geom_line() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Forecast Date", y = "Mean WIS")
+
+ggplotly(p)
+```

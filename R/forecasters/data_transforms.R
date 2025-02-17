@@ -26,7 +26,7 @@ get_nonkey_names <- function(epi_data) {
 
 #' Get a rolling average for the named columns
 #'
-#' Add column(s) that are the rolling means of the specified columns, as
+#' Add a column that is the rolling means of the specified column, as
 #' implemented by slider. Defaults to the previous 7 days. Currently only
 #' group_by's on the geo_value. Should probably extend to more keys if you have
 #' them.

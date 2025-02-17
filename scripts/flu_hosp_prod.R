@@ -2,8 +2,6 @@
 source("scripts/targets-common.R")
 source("scripts/targets-exploration-common.R")
 
-# submit_climatological <- Sys.getenv("SUBMIT_CLIMATOLOGICAL", "TRUE") == "TRUE"
-# submit_anything <- Sys.getenv("SUBMIT_ANYTHING", "TRUE") == "TRUE"
 submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
 insufficient_data_geos <- c("as", "mp", "vi", "gu")
 excluded_geos <- c("as", "gu", "mh")

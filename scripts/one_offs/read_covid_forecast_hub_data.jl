@@ -2,7 +2,7 @@
 # specifically in the data-processed folder
 # to get the rds, run
 #
-# full_results <- readr::read_csv("../OLDcovid19-forecast-hub/data-processed/covid19-2023season-results.csv")
+# full_results <- readr::read_csv("../covid19-forecast-hub/data-processed/covid19-2023season-results.csv")
 # aws.s3::s3save(full_results, object = "covid19_forecast_hub_2023_full_summed.rds", bucket = "forecasting-team-data")
 #
 using Base: floatrange
@@ -35,7 +35,7 @@ function format_file(pathname, filename, state_names)
     @transform(res, :target = (:target))
     res = @chain res begin
         @rtransform :target = parse(Int64, match(r"[0-9]*", :target).match)
-        @transform :forecaster = pathname
+        @transform :forecaster = pathname[3:end]
         @rsubset :type == "quantile"
     end
     res = leftjoin(res, state_names, on=:location)

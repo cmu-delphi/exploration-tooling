@@ -146,7 +146,7 @@ forecast_targets <- tar_map(
     command = {
       if (as.Date(forecast_generation_date_int) < Sys.Date()) {
         train_data <- nhsn_archive_data %>%
-          epix_as_of(min(as.Date(forecast_date_int), current_nssp_archive$versions_end)) %>%
+          epix_as_of(min(as.Date(forecast_date_int), nhsn_archive_data$versions_end)) %>%
           add_season_info() %>%
           mutate(
             geo_value = ifelse(geo_value == "usa", "us", geo_value),
