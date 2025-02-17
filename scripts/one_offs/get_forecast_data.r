@@ -20,12 +20,22 @@ options(readr.show_col_types = FALSE)
 
 
 # Configuration
+## config <- list(
+##   base_url = "https://raw.githubusercontent.com/cdcgov/covid19-forecast-hub/main/model-output",
+##   forecasters = c("CMU-TimeSeries", "CovidHub-baseline", "CovidHub-ensemble"),
+##   s3_bucket = "forecasting-team-data",
+##   s3_key = "covid/covid_hosp_forecasts.parquet",
+##   disease = "covid"
+## )
+# same but for flu
 config <- list(
-  base_url = "https://raw.githubusercontent.com/cdcgov/covid19-forecast-hub/main/model-output",
-  forecasters = c("CMU-TimeSeries", "CovidHub-baseline", "CovidHub-ensemble"),
+  base_url = "https://raw.githubusercontent.com/cdcepi/FluSight-forecast-hub/main/model-output",
+  forecasters = c("FluSight-baseline", "FluSight-ensemble", "CMU-TimeSeries"),
   s3_bucket = "forecasting-team-data",
-  s3_key = "covid/covid_hosp_forecasts.parquet"
+  s3_key = "flu/flu_hosp_forecasts.parquet",
+  disease = "flu"
 )
+
 
 # Function to check if file exists on GitHub
 check_github_file <- function(forecaster, filename) {
@@ -44,8 +54,10 @@ download_forecast_file <- function(forecaster, filename) {
       df <- readr::read_csv(url) %>%
         mutate(
           forecaster = forecaster,
-          forecast_date = as.Date(str_extract(filename, "\\d{4}-\\d{2}-\\d{2}"))
-        )
+          forecast_date = as.Date(str_extract(filename, "\\d{4}-\\d{2}-\\d{2}")),
+          output_type_id = as.numeric(output_type_id)
+        ) %>%
+        filter(output_type == "quantile")
       return(df)
     },
     error = function(e) {
@@ -116,4 +128,4 @@ fetch_forecast_files <- function(days_back = 7 * 4 * 5, sync_to_s3 = TRUE) {
 }
 
 df <- fetch_forecast_files(sync_to_s3 = FALSE)
-arrow::write_parquet(df, "data/forecasts/covid_hosp_forecasts.parquet")
+arrow::write_parquet(df, here::here(glue::glue("data/forecasts/{config$disease}_hosp_forecasts.parquet")))
