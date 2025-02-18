@@ -118,14 +118,22 @@ parameters_and_date_targets <- rlang::list2(
     tar_target(aheads, command = -1:3),
     tar_target(forecasters, command = indices),
     tar_target(name = ref_time_values, command = ref_time_values_),
+    tar_file(
+      forecast_report_rmd,
+      command = "scripts/reports/forecast_report.Rmd"
+    ),
+    tar_file(
+      score_report_rmd,
+      command = "scripts/reports/score_report.Rmd"
+    )
   ),
   make_historical_flu_data_targets(),
-  tar_target(
+  tar_change(
     current_nssp_archive,
+    change = get_covidcast_signal_last_update("nssp", "pct_ed_visits_influenza", "state"),
     command = {
       up_to_date_nssp_state_archive("influenza")
-    },
-    cue = tar_cue(mode = "always")
+    }
   ),
   tar_target(
     joined_latest_extra_data,
@@ -139,8 +147,9 @@ parameters_and_date_targets <- rlang::list2(
         filter(source != "nhsn")
     }
   ),
-  tar_target(
+  tar_change(
     nhsn_latest_data,
+    change = get_socrata_updated_at("https://data.cdc.gov/api/views/mpgq-jmmr"),
     command = {
       if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
         # download from the preliminary data source from Wednesday to Friday
@@ -165,9 +174,6 @@ parameters_and_date_targets <- rlang::list2(
         as_epi_df(other_keys = "source", as_of = Sys.Date())
       most_recent_result
     },
-    description = "Download the result, and update the file only if it's actually different",
-    priority = 1,
-    cue = tar_cue(mode = "always")
   ),
   tar_change(
     name = nhsn_archive_data,
@@ -317,7 +323,7 @@ ensemble_targets <- tar_map(
     name = make_submission_csv,
     command = {
       if (!backtest_mode && submission_directory != "cache") {
-        combo_ens_climate_linear_window_season %>%
+        ens_climate_linear_window_season %>%
           format_flusight(disease = "flu") %>%
           write_submission_file(
             get_forecast_reference_date(forecast_date_int),
@@ -332,8 +338,7 @@ ensemble_targets <- tar_map(
     name = make_climate_submission_csv,
     command = {
       if (!backtest_mode && submission_directory != "cache") {
-        forecasts <- forecast_res
-        forecasts %>%
+        forecast_full_filtered %>%
           filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
           group_by(geo_value, target_end_date, quantile) %>%
           summarize(forecast_date = as.Date(forecast_date_int), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
@@ -437,7 +442,7 @@ ensemble_targets <- tar_map(
       if (!backtest_mode) {
         if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
         rmarkdown::render(
-          "scripts/reports/forecast_report.Rmd",
+          forecast_report_rmd,
           output_file = here::here(
             "reports",
             sprintf("%s_flu_prod_on_%s.html", as.Date(forecast_date_int), Sys.Date())
@@ -450,8 +455,7 @@ ensemble_targets <- tar_map(
           )
         )
       }
-    },
-    cue = tar_cue(mode = "always")
+    }
   )
 )
 
@@ -498,7 +502,7 @@ if (backtest_mode) {
       name = score_plot,
       command = {
         rmarkdown::render(
-          "scripts/reports/score_report.Rmd",
+          score_report_rmd,
           params = list(
             scores = scores,
             forecast_dates = forecast_dates,

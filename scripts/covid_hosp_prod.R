@@ -94,6 +94,14 @@ forecaster_fn_names_ <- names(forecaster_fns)
 # ================================ PARAMETERS AND DATE TARGETS ================================
 parameters_and_date_targets <- rlang::list2(
   tar_target(aheads, command = -1:3),
+  tar_file(
+    forecast_report_rmd,
+    command = "scripts/reports/forecast_report.Rmd"
+  ),
+  tar_file(
+    score_report_rmd,
+    command = "scripts/reports/score_report.Rmd"
+  ),
   tar_change(
     nhsn_latest_data,
     change = get_socrata_updated_at("https://data.cdc.gov/api/views/mpgq-jmmr"),
@@ -120,9 +128,9 @@ parameters_and_date_targets <- rlang::list2(
       create_nhsn_data_archive(disease = "nhsn_covid")
     }
   ),
-  # TODO: tar_change maybe?
-  tar_target(
+  tar_change(
     current_nssp_archive,
+    change = get_covidcast_signal_last_update("nssp", "pct_ed_visits_covid", "state"),
     command = {
       up_to_date_nssp_state_archive("covid")
     }
@@ -375,7 +383,7 @@ ensemble_targets <- tar_map(
       if (!backtest_mode) {
         if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
         rmarkdown::render(
-          "scripts/reports/forecast_report.Rmd",
+          forecast_report_rmd,
           output_file = here::here(
             "reports",
             sprintf("%s_covid_prod_on_%s.html", as.Date(forecast_date_int), as.Date(Sys.Date()))
@@ -432,7 +440,7 @@ if (backtest_mode) {
       name = score_plot,
       command = {
         rmarkdown::render(
-          "scripts/reports/score_report.Rmd",
+          score_report_rmd,
           params = list(
             scores = scores,
             forecast_dates = forecast_dates,

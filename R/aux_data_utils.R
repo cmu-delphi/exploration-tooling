@@ -762,9 +762,9 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
 }
 
 # Get the last time the signal was updated.
-get_covidcast_signal_last_update <- function(source, signal) {
+get_covidcast_signal_last_update <- function(source, signal, geo_type) {
   pub_covidcast_meta() %>%
-    filter(source == !!source, signal == !!signal) %>%
+    filter(source == !!source, signal == !!signal, geo_type == !!geo_type) %>%
     pull(last_update) %>%
     as.POSIXct()
 }
