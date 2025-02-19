@@ -60,9 +60,10 @@ scores %>%
   summarize(
     mean_wis = round(Mean(wis), 2),
     geomean_wis = round(GeoMean(wis), 2),
-    mean_ae = round(Mean(ae), 2),
-    geomean_ae = round(GeoMean(ae), 2),
-    mean_coverage_90 = round(Mean(coverage_90), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_coverage_90 = round(Mean(interval_coverage_90), 2),
+    n = n()
   ) %>%
   rename(id = forecaster) %>%
   datatable()
@@ -76,9 +77,9 @@ agg <- scores %>%
   summarize(
     mean_wis = round(Mean(wis), 2),
     geomean_wis = round(GeoMean(wis), 2),
-    mean_ae = round(Mean(ae), 2),
-    geomean_ae = round(GeoMean(ae), 2),
-    mean_coverage_90 = round(Mean(coverage_90), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_interval_coverage_90 = round(Mean(interval_coverage_90), 2),
   )
 
 # Plot the scores as lines across forecast_date
@@ -99,9 +100,9 @@ agg <- scores %>%
   summarize(
     mean_wis = round(Mean(wis), 2),
     geomean_wis = round(GeoMean(wis), 2),
-    mean_ae = round(Mean(ae), 2),
-    geomean_ae = round(GeoMean(ae), 2),
-    mean_coverage_90 = round(Mean(coverage_90), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_interval_coverage_90 = round(Mean(interval_coverage_90), 2),
   )
 
 # Plot the scores as lines across forecast_date

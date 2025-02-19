@@ -20,6 +20,10 @@ forecast_dates <- round_date(forecast_generation_dates, "weeks", week_start = 3)
 # If doing backfill, you can set the forecast_date to a sequence of dates.
 # forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 
+# Select first two for debugging
+# forecast_generation_dates <- forecast_generation_dates[1:2]
+# forecast_dates <- forecast_dates[1:2]
+
 # Whether we're running in backtest mode.
 # If TRUE, we don't run the report notebook, which is (a) slow and (b) should be
 # preserved as an ASOF snapshot of our production results for that week.
@@ -27,10 +31,6 @@ forecast_dates <- round_date(forecast_generation_dates, "weeks", week_start = 3)
 # against the truth data and compares them to the ensemble.
 # If FALSE, we run the weekly report notebook.
 backtest_mode <- length(forecast_dates) > 1
-
-# Select first two for debugging
-# forecast_generation_dates <- forecast_generation_dates[1:2]
-# forecast_dates <- forecast_dates[1:2]
 
 
 forecaster_fns <- list2(
@@ -428,12 +428,41 @@ if (backtest_mode) {
     tar_target(
       name = scores,
       command = {
-        truth_data <- nhsn_latest_data %>%
-          select(geo_value, target_end_date = time_value, true_value = value)
-        joined_forecasts_and_ensembles %>%
-          rename("model" = "forecaster", "prediction" = "value") %>%
-          evaluate_predictions(forecasts = ., truth_data = truth_data) %>%
-          rename("forecaster" = "model")
+        truth_data <-
+          nhsn_latest_data %>%
+          select(geo_value, target_end_date = time_value, oracle_value = value) %>%
+          left_join(
+            get_population_data() %>%
+              select(state_id, state_code),
+            by = c("geo_value" = "state_id")
+          ) %>%
+          drop_na() %>%
+          rename(location = state_code) %>%
+          select(-geo_value)
+        forecasts_formatted <-
+          joined_forecasts_and_ensembles %>%
+          format_scoring_utils(disease = "covid")
+        scores <- forecasts_formatted %>%
+          filter(location != "US") %>%
+          hubEvals::score_model_out(
+            truth_data,
+            metrics = c("wis", "ae_median", "interval_coverage_50", "interval_coverage_90"),
+            summarize = FALSE,
+            by = c("model_id")
+          )
+        scores %>%
+          left_join(
+            get_population_data() %>%
+              select(state_id, state_code),
+            by = c("location" = "state_code")
+          ) %>%
+          rename(
+            forecaster = model_id,
+            forecast_date = reference_date,
+            ahead = horizon,
+            geo_value = state_id
+          ) %>%
+          select(-location)
       }
     ),
     tar_target(
@@ -451,7 +480,8 @@ if (backtest_mode) {
             sprintf("covid_backtesting_2024_2025_on_%s.html", as.Date(Sys.Date()))
           )
         )
-      }
+      },
+      cue = tar_cue("always")
     )
   )
 } else {
