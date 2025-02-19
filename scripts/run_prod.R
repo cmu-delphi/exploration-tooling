@@ -26,7 +26,9 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 #   )
 #   # Save to disk
 #   saveRDS(scorecards, "exploration-scorecards-2023-10-04.RDS")
-print(glue::glue("starting a run at {Sys.time()}"))
+print("########################################################")
+print("########################################################")
+print(glue::glue("Starting a run at {Sys.time()}"))
 tar_project <- Sys.getenv("TAR_RUN_PROJECT", "flu_hosp_prod")
 external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
 debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", FALSE))
@@ -47,24 +49,17 @@ cli::cli_inform(
   )
 )
 
-suppressPackageStartupMessages({
-  library(targets)
-  library(shiny)
-})
-
 
 # targets needs the output dir to already exist.
 store_dir <- tar_path_store()
 if (!dir.exists(store_dir)) dir.create(store_dir)
 
-tar_manifest()
-print(Sys.time())
 tar_make(
   store = tar_config_get("store", project = tar_project),
   script = tar_config_get("script", project = tar_project),
   use_crew = TRUE
 )
 
-print(Sys.time())
+print(glue::glue("Finished at {Sys.time()}"))
 print("########################################################")
 print("########################################################")
