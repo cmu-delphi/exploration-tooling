@@ -467,15 +467,7 @@ if (backtest_mode) {
     tar_target(
       external_forecasts,
       command = {
-        locations_crosswalk <- get_population_data() %>%
-          select(state_id, state_code) %>%
-          filter(state_id != "usa")
-        arrow::read_parquet("data/forecasts/flu_hosp_forecasts.parquet") %>%
-          filter(output_type == "quantile") %>%
-          select(forecaster, geo_value = location, forecast_date, target_end_date, quantile = output_type_id, value) %>%
-          inner_join(locations_crosswalk, by = c("geo_value" = "state_code")) %>%
-          mutate(geo_value = state_id) %>%
-          select(forecaster, geo_value, forecast_date, target_end_date, quantile, value)
+        get_external_forecasts("flu")
       }
     ),
     tar_combine(
@@ -488,31 +480,18 @@ if (backtest_mode) {
     tar_target(
       name = scores,
       command = {
-        truth_data <- nhsn_latest_data %>%
-          select(geo_value, target_end_date = time_value, true_value = value) %>%
-          mutate(target_end_date = target_end_date + 3)
-        joined_forecasts_and_ensembles %>%
-          select(-source) %>%
-          rename("model" = "forecaster", "prediction" = "value") %>%
-          evaluate_predictions(forecasts = ., truth_data = truth_data) %>%
-          rename("forecaster" = "model")
+        nhsn_latest_end_of_week <-
+          nhsn_latest_data %>%
+          mutate(
+            time_value = ceiling_date(time_value, unit = "week", week_start = 6)
+          )
+        score_forecasts(nhsn_latest_end_of_week, joined_forecasts_and_ensembles)
       }
     ),
     tar_target(
       name = score_plot,
       command = {
-        rmarkdown::render(
-          score_report_rmd,
-          params = list(
-            scores = scores,
-            forecast_dates = forecast_dates,
-            disease = "flu"
-          ),
-          output_file = here::here(
-            "reports",
-            sprintf("flu_backtesting_2024_2025_on_%s.html", as.Date(Sys.Date()))
-          )
-        )
+        render_score_plot(score_report_rmd, scores, forecast_dates, "flu")
       }
     )
   )

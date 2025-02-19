@@ -2,7 +2,7 @@ get_external_forecasts <- function(disease) {
   locations_crosswalk <- get_population_data() %>%
     select(state_id, state_code) %>%
     filter(state_id != "usa")
-  arrow::read_parquet(paste::paste("data/forecasts/{disease}_hosp_forecasts.parquet")) %>%
+  arrow::read_parquet(glue::glue("data/forecasts/{disease}_hosp_forecasts.parquet")) %>%
     filter(output_type == "quantile") %>%
     select(forecaster, geo_value = location, forecast_date, target_end_date, quantile = output_type_id, value) %>%
     inner_join(locations_crosswalk, by = c("geo_value" = "state_code")) %>%
@@ -49,7 +49,7 @@ score_forecasts <- function(nhsn_latest_data, joined_forecasts_and_ensembles) {
 }
 
 
-render_score_plot <- function(disease) {
+render_score_plot <- function(score_report_rmd, scores, forecast_dates, disease) {
   rmarkdown::render(
     score_report_rmd,
     params = list(

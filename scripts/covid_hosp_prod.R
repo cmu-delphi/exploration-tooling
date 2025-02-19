@@ -14,6 +14,8 @@ forecast_generation_dates <- Sys.Date()
 # Usually, the forecast_date is the same as the generation date, but you can
 # override this. It should be a Wednesday.
 forecast_dates <- round_date(forecast_generation_dates, "weeks", week_start = 3)
+
+
 # forecast_generation_date needs to follow suit, but it's more complicated
 # because sometimes we forecast on Thursday.
 # forecast_generation_dates <- c(as.Date(c("2024-11-20", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
@@ -412,15 +414,7 @@ if (backtest_mode) {
     tar_target(
       external_forecasts,
       command = {
-        locations_crosswalk <- get_population_data() %>%
-          select(state_id, state_code) %>%
-          filter(state_id != "usa")
-        arrow::read_parquet("data/forecasts/covid_hosp_forecasts.parquet") %>%
-          filter(output_type == "quantile") %>%
-          select(forecaster, geo_value = location, forecast_date, target_end_date, quantile = output_type_id, value) %>%
-          inner_join(locations_crosswalk, by = c("geo_value" = "state_code")) %>%
-          mutate(geo_value = state_id) %>%
-          select(forecaster, geo_value, forecast_date, target_end_date, quantile, value)
+        get_external_forecasts("covid")
       }
     ),
     tar_combine(
@@ -433,58 +427,13 @@ if (backtest_mode) {
     tar_target(
       name = scores,
       command = {
-        truth_data <-
-          nhsn_latest_data %>%
-          select(geo_value, target_end_date = time_value, oracle_value = value) %>%
-          left_join(
-            get_population_data() %>%
-              select(state_id, state_code),
-            by = c("geo_value" = "state_id")
-          ) %>%
-          drop_na() %>%
-          rename(location = state_code) %>%
-          select(-geo_value)
-        forecasts_formatted <-
-          joined_forecasts_and_ensembles %>%
-          format_scoring_utils(disease = "covid")
-        scores <- forecasts_formatted %>%
-          filter(location != "US") %>%
-          hubEvals::score_model_out(
-            truth_data,
-            metrics = c("wis", "ae_median", "interval_coverage_50", "interval_coverage_90"),
-            summarize = FALSE,
-            by = c("model_id")
-          )
-        scores %>%
-          left_join(
-            get_population_data() %>%
-              select(state_id, state_code),
-            by = c("location" = "state_code")
-          ) %>%
-          rename(
-            forecaster = model_id,
-            forecast_date = reference_date,
-            ahead = horizon,
-            geo_value = state_id
-          ) %>%
-          select(-location)
+        score_forecasts(nhsn_latest_data, joined_forecasts_and_ensembles)
       }
     ),
     tar_target(
       name = score_plot,
       command = {
-        rmarkdown::render(
-          score_report_rmd,
-          params = list(
-            scores = scores,
-            forecast_dates = forecast_dates,
-            disease = "covid"
-          ),
-          output_file = here::here(
-            "reports",
-            sprintf("covid_backtesting_2024_2025_on_%s.html", as.Date(Sys.Date()))
-          )
-        )
+        render_score_plot(score_report_rmd, scores, forecast_dates, "covid")
       },
       cue = tar_cue("always")
     )
