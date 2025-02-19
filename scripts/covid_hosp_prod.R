@@ -221,7 +221,7 @@ ensemble_targets <- tar_map(
     }
   ),
   tar_target(
-    name = ensemble_res,
+    name = ensemble_lin_clim,
     command = {
       forecast_full_filtered %>%
         ensemble_linear_climate(
@@ -236,23 +236,27 @@ ensemble_targets <- tar_map(
     },
   ),
   tar_target(
-    name = ensemble_mixture_res,
+    name = ens_ar_only,
     command = {
       forecast_full_filtered %>%
-        ensemble_linear_climate(
-          aheads,
-          other_weights = geo_forecasters_weights,
-          max_climate_ahead_weight = 0.6,
-          max_climate_quantile_weight = 0.6
-        ) %>%
-        filter(geo_value %nin% geo_exclusions) %>%
-        ungroup() %>%
-        bind_rows(forecast_full_filtered %>%
-          filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources")) %>%
-          filter(forecast_date < target_end_date)) %>% # don't use for neg aheads
+        filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources")) %>%
         group_by(geo_value, forecast_date, target_end_date, quantile) %>%
         summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
         sort_by_quantile()
+    }
+  ),
+  tar_target(
+    name = ensemble_mixture_res,
+    command = {
+      all_ensembled <-
+        ensemble_lin_clim %>%
+        mutate(forecaster = "linear_climate") %>%
+        bind_rows(
+          forecast_full_filtered %>%
+            filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources")) %>%
+            filter(forecast_date < target_end_date) # don't use for neg aheads
+        ) %>%
+        ensemble_weighted(geo_forecasters_weights)
     },
   ),
   tar_target(
@@ -260,8 +264,9 @@ ensemble_targets <- tar_map(
     command = {
       bind_rows(
         forecast_full_filtered,
-        ensemble_res %>% mutate(forecaster = "ensemble"),
+        ensemble_lin_clim %>% mutate(forecaster = "linear_climate"),
         ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix"),
+        ens_ar_only %>% mutate(forecaster = "ens_ar_only")
         # TODO: Maybe later, match with flu_hosp_prod
         # ensemble_mixture_res_2 %>% mutate(forecaster = "ensemble_mix_2"),
         # combo_ensemble_mixture_res %>% mutate(forecaster = "combo_ensemble_mix")

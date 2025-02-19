@@ -180,33 +180,40 @@ data_substitutions <- function(dataset, disease, forecast_generation_date) {
 
 parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv"),
                                forecast_date_int, forecaster_fn_names) {
-  forecast_date <- as.Date(forecast_date_int)
+  forecast_date_val <- as.Date(forecast_date_int)
   all_states <- c(
     unique(readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE)$state_id),
     "usa", "us"
   )
   all_prod_weights <- readr::read_csv(filename, comment = "#", show_col_types = FALSE)
   # if we haven't set specific weights, use the overall defaults
-  useful_prod_weights <- filter(all_prod_weights, forecast_date == forecast_date)
+  useful_prod_weights <- filter(all_prod_weights, forecast_date == forecast_date_val)
   if (nrow(useful_prod_weights) == 0) {
     useful_prod_weights <- all_prod_weights %>%
       filter(forecast_date == min(forecast_date)) %>%
-      mutate(forecast_date = forecast_date)
+      mutate(forecast_date = forecast_date_val)
   }
-  useful_prod_weights %>%
-    mutate(
-      geo_value = ifelse(geo_value == "all", list(all_states), geo_value),
-    ) %>%
-    unnest_longer(geo_value) %>%
+  # weights that apply to specific states
+  state_weights <- useful_prod_weights %>%
+    filter(geo_value != "all") %>%
     mutate(
       forecaster = ifelse(forecaster == "all", list(forecaster_fn_names), forecaster),
     ) %>%
-    unnest_longer(forecaster) %>%
+    unnest_longer(forecaster)
+  forecaster_weights <-
+    useful_prod_weights %>%
+    filter(geo_value == "all") %>%
+    mutate(
+      geo_value = list(all_states)
+    ) %>%
+    unnest_longer(geo_value)
+  # bind together and overwrite any generic weights with geo_specific ones
+  forecaster_weights %>%
+    bind_rows(state_weights) %>%
     group_by(forecast_date, forecaster, geo_value) %>%
-    summarize(weight = min(weight), .groups = "drop") %>%
+    filter(row_number() == n()) %>%
     mutate(forecast_date = as.Date(forecast_date_int)) %>%
-    group_by(forecast_date, geo_value) %>%
-    mutate(weight = ifelse(near(weight, 0), 0, weight / sum(weight)))
+    ungroup()
 }
 
 exclude_geos <- function(geo_forecasters_weights) {
