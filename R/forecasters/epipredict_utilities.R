@@ -114,6 +114,11 @@ run_workflow_and_format <- function(preproc,
   if (is.null(as_of)) {
     as_of <- max(train_data$time_value)
   }
+
+  # Look at the train data (uncomment for debuggin).
+  # df <- preproc %>% prep(train_data) %>% bake(train_data)
+  # browser()
+
   workflow <- epi_workflow(preproc, trainer) %>%
     fit(train_data) %>%
     add_frosting(postproc)
@@ -125,9 +130,7 @@ run_workflow_and_format <- function(preproc,
   # keeping only the last time_value for any given location/key
   pred %<>%
     group_by(across(all_of(key_colnames(train_data, exclude = "time_value")))) %>%
-    # TODO: slice_max(time_value)?
-    arrange(time_value) %>%
-    filter(row_number() == n()) %>%
+    slice_max(time_value) %>%
     ungroup()
   return(format_storage(pred, as_of))
 }

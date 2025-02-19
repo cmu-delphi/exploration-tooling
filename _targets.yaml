@@ -2,11 +2,12 @@ covid_hosp_explore:
   script: scripts/covid_hosp_explore.R
   store: covid_hosp_explore
   use_crew: no
-  error: null
+  reporter_make: timestamp
 flu_hosp_explore:
   script: scripts/flu_hosp_explore.R
   store: flu_hosp_explore
   use_crew: no
+  reporter_make: timestamp
 flu_hosp_tiny:
   script: scripts/flu_hosp_tiny.R
   store: flu_hosp_tiny
@@ -15,7 +16,9 @@ flu_hosp_prod:
   script: scripts/flu_hosp_prod.R
   store: flu_hosp_prod
   use_crew: no
+  reporter_make: timestamp
 covid_hosp_prod:
   script: scripts/covid_hosp_prod.R
   store: covid_hosp_prod
   use_crew: no
+  reporter_make: timestamp

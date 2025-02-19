@@ -18,3 +18,7 @@ reports/report.md
 cache/
 data/
 .vscode/
+.envrc
+.nhsn_covid_cache.parquet
+.nhsn_flu_cache.parquet
+meta/

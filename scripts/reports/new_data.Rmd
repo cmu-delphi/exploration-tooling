@@ -4,6 +4,9 @@ date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
 output:
   html_document:
     code_folding: hide
+    toc: True
+    # self_contained: False
+    # lib_dir: libs
 editor_options:
   chunk_output_type: console
 ---
@@ -40,7 +43,7 @@ if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
 most_recent_result %<>% process_nhsn_data()
 df <- most_recent_result %>%
   filter(disease == "nhsn_flu")
-df %>%
+p <- df %>%
   filter(geo_value %in% c("ca", "fl", "tx", "ny", "pa", "mn", "nm")) %>%
   ggplot(aes(x = time_value, y = value, color = geo_value)) +
   geom_line() +
@@ -51,6 +54,7 @@ df %>%
     y = "Total Confirmed Flu Admissions"
   ) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplotly(p, tooltip = "text", height = 800, width = 1000)
 ```
 
 # State Season Comparison {.tabset}
@@ -58,7 +62,7 @@ df %>%
 ## California
 
 ```{r}
-df %>%
+p <- df %>%
   filter(geo_value == "ca") %>%
   ggplot(aes(x = season_week, y = value, color = season)) +
   geom_line() +
@@ -69,12 +73,13 @@ df %>%
     y = "Total Confirmed Flu Admissions"
   ) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplotly(p, tooltip = "text", height = 800, width = 1000)
 ```
 
 ## Florida
 
 ```{r}
-df %>%
+p <- df %>%
   filter(geo_value == "fl") %>%
   ggplot(aes(x = season_week, y = value, color = season)) +
   geom_line() +
@@ -85,12 +90,13 @@ df %>%
     y = "Total Confirmed Flu Admissions"
   ) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplotly(p, tooltip = "text", height = 800, width = 1000)
 ```
 
 ## Texas
 
 ```{r}
-df %>%
+p <- df %>%
   filter(geo_value == "tx") %>%
   ggplot(aes(x = season_week, y = value, color = season)) +
   geom_line() +
@@ -101,12 +107,13 @@ df %>%
     y = "Total Confirmed Flu Admissions"
   ) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplotly(p, tooltip = "text", height = 800, width = 1000)
 ```
 
 ## New York
 
 ```{r}
-df %>%
+p <- df %>%
   filter(geo_value == "ny") %>%
   ggplot(aes(x = season_week, y = value, color = season)) +
   geom_line() +
@@ -117,12 +124,13 @@ df %>%
     y = "Total Confirmed Flu Admissions"
   ) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplotly(p, tooltip = "text", height = 800, width = 1000)
 ```
 
 ## Pennsylvania
 
 ```{r}
-df %>%
+p <- df %>%
   filter(geo_value == "pa") %>%
   ggplot(aes(x = season_week, y = value, color = season)) +
   geom_line() +
@@ -133,12 +141,13 @@ df %>%
     y = "Total Confirmed Flu Admissions"
   ) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplotly(p, tooltip = "text", height = 800, width = 1000)
 ```
 
 ## Minnesota
 
 ```{r}
-df %>%
+p <- df %>%
   filter(geo_value == "mn") %>%
   ggplot(aes(x = season_week, y = value, color = season)) +
   geom_line() +
@@ -149,12 +158,13 @@ df %>%
     y = "Total Confirmed Flu Admissions"
   ) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplotly(p, tooltip = "text", height = 800, width = 1000)
 ```
 
 ## New Mexico
 
 ```{r}
-df %>%
+p <- df %>%
   filter(geo_value == "nm") %>%
   ggplot(aes(x = season_week, y = value, color = season)) +
   geom_line() +
@@ -165,6 +175,7 @@ df %>%
     y = "Total Confirmed Flu Admissions"
   ) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplotly(p, tooltip = "text", height = 800, width = 1000)
 ```
 
 # Comparing with Old NHSN Data

@@ -22,6 +22,9 @@ no_recent_outcome <- function(epi_data,
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
   week_method <- arg_match(week_method)
+
+  epi_data <- validate_epi_data(epi_data)
+
   # this is for the case where there are multiple sources in the same column
   epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   args_input <- list(...)

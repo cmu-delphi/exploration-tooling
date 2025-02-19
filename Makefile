@@ -63,9 +63,10 @@ submit: submit-covid submit-flu
 get_nwss:
 	mkdir -p aux_data/nwss_covid_data; \
 	mkdir -p aux_data/nwss_flu_data; \
+	. .venv/bin/activate; \
 	cd scripts/nwss_export_tool/; \
 	python nwss_covid_export.py; \
-	python nwss_covid_export.py
+	python nwss_influenza_export.py
 
 run-nohup:
 	nohup Rscript scripts/run.R &

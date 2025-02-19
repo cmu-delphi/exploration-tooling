@@ -5,6 +5,9 @@
 ## Production Reports
 
 
+### Scoring this season
+
+
 ## Exploration Reports
 
 - [NHSN 2024-2025 Data Analysis](new_data.html)

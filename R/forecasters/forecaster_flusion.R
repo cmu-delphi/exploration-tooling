@@ -22,6 +22,9 @@ flusion <- function(epi_data,
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
   derivative_estimator <- arg_match(derivative_estimator)
+
+  epi_data <- validate_epi_data(epi_data)
+
   # perform any preprocessing not supported by epipredict
   args_input <- list(...)
   # this next part is basically unavoidable boilerplate you'll want to copy

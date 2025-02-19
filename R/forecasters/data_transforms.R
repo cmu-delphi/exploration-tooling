@@ -26,7 +26,7 @@ get_nonkey_names <- function(epi_data) {
 
 #' Get a rolling average for the named columns
 #'
-#' Add column(s) that are the rolling means of the specified columns, as
+#' Add a column that is the rolling means of the specified column, as
 #' implemented by slider. Defaults to the previous 7 days. Currently only
 #' group_by's on the geo_value. Should probably extend to more keys if you have
 #' them.
@@ -40,15 +40,10 @@ get_nonkey_names <- function(epi_data) {
 #' @export
 rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
   cols_to_mean <- get_trainable_names(epi_data, cols_to_mean)
-  epi_data %<>% group_by(across(key_colnames(epi_data, exclude = "time_value")))
-  for (col in cols_to_mean) {
-    mean_name <- paste0("slide_", col, "_m", width)
-    epi_data %<>%
-      epi_slide_mean(all_of(col), .window_size = width) %>%
-      rename(!!mean_name := paste0("slide_value_", col))
-  }
-  epi_data %<>% ungroup()
-  return(epi_data)
+  epi_data %>%
+    group_by(across(key_colnames(epi_data, exclude = "time_value"))) %>%
+    epi_slide_mean(all_of(cols_to_mean), .window_size = width, .new_col_names = paste0("slide_", cols_to_mean, "_m", width)) %>%
+    ungroup()
 }
 
 #' Get a rolling standard deviation for the named columns
@@ -75,20 +70,18 @@ rolling_sd <- function(epi_data, sd_width = 29L, mean_width = NULL, cols_to_sd =
   cols_to_sd <- get_trainable_names(epi_data, cols_to_sd)
   result <- epi_data
   result %<>% group_by(across(key_colnames(epi_data, exclude = "time_value")))
-  for (col in cols_to_sd) {
-    mean_name <- glue::glue("slide_{col}_m{mean_width}")
-    sd_name <- glue::glue("slide_{col}_sd{sd_width}")
+  for (col_name in cols_to_sd) {
+    mean_name <- glue::glue("slide_{col_name}_m{mean_width}")
+    sd_name <- glue::glue("slide_{col_name}_sd{sd_width}")
 
     result %<>%
-      epi_slide_mean(all_of(col), .window_size = mean_width) %>%
-      rename(!!mean_name := paste0("slide_value_", col))
+      epi_slide_mean(all_of(col_name), .window_size = mean_width, .new_col_names = mean_name)
 
     result %<>%
-      mutate(.temp = (.data[[mean_name]] - .data[[col]])^2) %>%
-      epi_slide_mean(all_of(".temp"), .window_size = sd_width) %>%
-      select(-.temp) %>%
-      rename(!!sd_name := "slide_value_.temp") %>%
-      mutate(!!sd_name := sqrt(.data[[sd_name]]))
+      mutate(.temp = (.data[[mean_name]] - .data[[col_name]])^2) %>%
+      epi_slide_mean(all_of(".temp"), .window_size = sd_width, .new_col_names = sd_name) %>%
+      mutate(!!sd_name := sqrt(.data[[sd_name]])) %>%
+      select(-.temp)
 
     if (!keep_mean) {
       result %<>% select(-{{ mean_name }})

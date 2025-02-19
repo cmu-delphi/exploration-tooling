@@ -128,3 +128,38 @@ make_ahead_weights <- function(aheads,
     tibble(forecast_family = "linear", ahead = sort(aheads), weight = 1 - ahead_weight_values)
   )
 }
+ensemble_weighted <- function(forecasts, other_weights) {
+  forecasters <- unique(forecasts$forecaster)
+  full_weights <-
+    other_weights %>%
+    filter(
+      geo_value %in% unique(forecasts$geo_value),
+      forecaster %in% forecasters
+    ) %>%
+    left_join(
+      forecasts %>% mutate(ahead = target_end_date - forecast_date) %>% distinct(forecaster, ahead),
+      by = "forecaster",
+      relationship = "many-to-many"
+    )
+  grouping_cols <- c("geo_value", "ahead")
+  renorm <-
+    full_weights %>%
+    group_by(across(all_of(grouping_cols))) %>%
+    summarize(mass = sum(weight), .groups = "drop")
+  full_weights <- full_weights %>%
+    left_join(renorm, by = grouping_cols) %>%
+    mutate(weight = weight / mass) %>%
+    select(-mass)
+  weighted_forecasts <-
+    forecasts %>%
+    mutate(ahead = target_end_date - forecast_date) %>%
+    left_join(
+      full_weights,
+      by = c("forecaster", "forecast_date", grouping_cols)
+    ) %>%
+    mutate(value = weight * value) %>%
+    group_by(geo_value, forecast_date, target_end_date, quantile) %>%
+    summarize(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+    sort_by_quantile()
+  return(weighted_forecasts)
+}
