@@ -326,6 +326,7 @@ update_site <- function(sync_to_s3 = TRUE) {
   if (!file_exists(template_path)) {
     stop("Template file does not exist.")
   }
+
   report_md_content <- readLines(template_path)
   # Get the list of files in the reports directory
   report_files <- dir_ls(reports_dir, regexp = ".*_prod_on_.*.html")
@@ -478,14 +479,13 @@ sort_by_quantile <- function(forecasts) {
 
 
 #' Print recent targets errors.
-get_recent_targets_errors <- function(time_since = minutes(60)) {
-  meta_df <- targets::tar_meta()
+get_targets_errors <- function(project = tar_path_store(), top_n = 10) {
+  meta_df <- targets::tar_meta(store = project)
   forecast_errors <- meta_df %>%
-    filter(time > Sys.time() - time_since, !is.na(parent), !is.na(error)) %>%
-    arrange(desc(time)) %>%
+    filter(!is.na(parent), !is.na(error)) %>%
     distinct(parent, error, .keep_all = TRUE) %>%
-    select(time, parent, error) %>%
-    mutate(parent = gsub("forecast_", "", parent))
+    mutate(parent = gsub("forecast_", "", parent)) %>%
+    slice_max(time, n = top_n)
 
   # Print each error message, along with the parent target.
   if (nrow(forecast_errors) > 0) {
@@ -500,10 +500,9 @@ get_recent_targets_errors <- function(time_since = minutes(60)) {
   }
 
   other_errors <- meta_df %>%
-    filter(time > Sys.time() - time_since, !is.na(error)) %>%
-    arrange(desc(time)) %>%
+    filter(!is.na(error)) %>%
     distinct(error, .keep_all = TRUE) %>%
-    select(time, name, error)
+    slice_max(time, n = top_n)
 
   # Print each error message, along with the parent target.
   if (nrow(other_errors) > 0) {
@@ -517,7 +516,7 @@ get_recent_targets_errors <- function(time_since = minutes(60)) {
     }
   }
 
-  return(invisible(meta_df %>% filter(time > Sys.time() - time_since)))
+  return(invisible(meta_df %>% slice_max(time, n = top_n)))
 }
 
 #' Retry a function.
