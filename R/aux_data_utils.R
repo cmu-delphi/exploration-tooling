@@ -624,15 +624,16 @@ gen_ili_data <- function(default_day_of_week = 1) {
     as_epi_archive(compactify = TRUE)
 }
 
+#' Process Raw NHSN Data
+#'
+#' Turns the raw NHSN data into a tidy format with the following columns:
+#' - geo_value: the jurisdiction of the data
+#' - disease: the disease of the data
+#' - time_value: the date of the data
+#' - version: the version of the data
+#' - value: the value of the data
+#'
 process_nhsn_data <- function(raw_nhsn_data) {
-  # These are exception dates when the data was available on a different day
-  # than usual. In these two cases, it was the Thursday after. But to keep
-  # the rest of the pipeline the same, we pretend it was available on Wednesday.
-  remap_exceptions <- list(
-    "2024-12-26" = "2024-12-25",
-    "2025-01-02" = "2025-01-01"
-  )
-  fixed_version <- remap_exceptions[[as.character(Sys.Date())]] %||% Sys.Date()
   raw_nhsn_data %>%
     mutate(
       geo_value = tolower(jurisdiction),
@@ -644,7 +645,7 @@ process_nhsn_data <- function(raw_nhsn_data) {
     select(-weekendingdate, -jurisdiction, -starts_with("totalconf")) %>%
     pivot_longer(cols = starts_with("nhsn"), names_to = "disease") %>%
     filter(!is.na(value)) %>%
-    mutate(version = fixed_version) %>%
+    mutate(version = Sys.Date()) %>%
     relocate(geo_value, disease, time_value, version)
 }
 
