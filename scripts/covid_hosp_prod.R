@@ -104,6 +104,14 @@ parameters_and_date_targets <- rlang::list2(
     score_report_rmd,
     command = "scripts/reports/score_report.Rmd"
   ),
+  tar_file(
+    covid_geo_exclusions,
+    command = "covid_geo_exclusions.csv"
+  ),
+  tar_file(
+    covid_data_substitutions,
+    command = "covid_data_substitutions.csv"
+  ),
   tar_change(
     nhsn_latest_data,
     change = get_socrata_updated_at("https://data.cdc.gov/api/views/mpgq-jmmr"),
@@ -163,6 +171,7 @@ forecast_targets <- tar_map(
             time_value = time_value - 3
           )
       } else {
+        covid_data_substitutions
         train_data <-
           nhsn_latest_data %>%
           data_substitutions(disease = "covid", as.Date(forecast_generation_date_int)) %>%
@@ -209,7 +218,7 @@ ensemble_targets <- tar_map(
   tar_target(
     name = geo_forecasters_weights,
     command = {
-      geo_forecasters_weights <- parse_prod_weights(here::here("covid_geo_exclusions.csv"), forecast_date_int, forecaster_fn_names_)
+      geo_forecasters_weights <- parse_prod_weights(covid_geo_exclusions, forecast_date_int, forecaster_fn_names_)
       if (nrow(geo_forecasters_weights %>% filter(forecast_date == as.Date(forecast_date_int))) == 0) {
         cli_abort("there are no weights for the forecast date {forecast_date}")
       }
@@ -269,9 +278,6 @@ ensemble_targets <- tar_map(
         ensemble_lin_clim %>% mutate(forecaster = "linear_climate"),
         ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix"),
         ens_ar_only %>% mutate(forecaster = "ens_ar_only")
-        # TODO: Maybe later, match with flu_hosp_prod
-        # ensemble_mixture_res_2 %>% mutate(forecaster = "ensemble_mix_2"),
-        # combo_ensemble_mixture_res %>% mutate(forecaster = "combo_ensemble_mix")
       )
     }
   ),

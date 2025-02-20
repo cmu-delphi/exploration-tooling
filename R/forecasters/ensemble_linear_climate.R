@@ -128,14 +128,16 @@ make_ahead_weights <- function(aheads,
     tibble(forecast_family = "linear", ahead = sort(aheads), weight = 1 - ahead_weight_values)
   )
 }
+
 ensemble_weighted <- function(forecasts, other_weights) {
   forecasters <- unique(forecasts$forecaster)
-  full_weights <-
-    other_weights %>%
-    filter(
-      geo_value %in% unique(forecasts$geo_value),
-      forecaster %in% forecasters
-    ) %>%
+  filtered_weights <- other_weights %>%
+   filter(forecaster %in% forecasters) %>%
+   inner_join(
+      forecasts %>% distinct(forecaster, geo_value),
+      by = c("forecaster", "geo_value"),
+    )
+  full_weights <- filtered_weights %>%
     left_join(
       forecasts %>% mutate(ahead = target_end_date - forecast_date) %>% distinct(forecaster, ahead),
       by = "forecaster",

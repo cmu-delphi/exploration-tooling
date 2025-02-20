@@ -178,8 +178,7 @@ data_substitutions <- function(dataset, disease, forecast_generation_date) {
     bind_rows(new_values)
 }
 
-parse_prod_weights <- function(filename = here::here("covid_geo_exclusions.csv"),
-                               forecast_date_int, forecaster_fn_names) {
+parse_prod_weights <- function(filename, forecast_date_int, forecaster_fn_names) {
   forecast_date_val <- as.Date(forecast_date_int)
   all_states <- c(
     unique(readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE)$state_id),

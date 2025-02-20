@@ -14,15 +14,15 @@ end_date <- Sys.Date()
 # today, which is a Wednesday. Sometimes, if we're doing a delayed forecast,
 # it's a Thursday. It's used for stamping the data and for determining the
 # appropriate as_of when creating the forecast.
-# forecast_generation_dates <- Sys.Date()
+forecast_generation_dates <- Sys.Date()
 # Usually, the forecast_date is the same as the generation date, but you can
 # override this. It should be a Wednesday.
-# forecast_dates <- round_date(forecast_generation_dates, "weeks", week_start = 3)
+forecast_dates <- round_date(forecast_generation_dates, "weeks", week_start = 3)
 # If doing backfill, you can set the forecast_date to a sequence of dates.
-forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
+# forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 # forecast_generation_date needs to follow suit, but it's more complicated
 # because sometimes we forecast on Thursday.
-forecast_generation_dates <- c(as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
+# forecast_generation_dates <- c(as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
 
 # Whether we're running in backtest mode.
 # If TRUE, we don't run the report notebook, which is (a) slow and (b) should be
@@ -125,6 +125,14 @@ parameters_and_date_targets <- rlang::list2(
     tar_file(
       score_report_rmd,
       command = "scripts/reports/score_report.Rmd"
+    ),
+    tar_file(
+      flu_geo_exclusions,
+      command = "flu_geo_exclusions.csv"
+    ),
+    tar_file(
+      flu_data_substitutions,
+      command = "flu_data_substitutions.csv"
     )
   ),
   make_historical_flu_data_targets(),
@@ -157,6 +165,7 @@ parameters_and_date_targets <- rlang::list2(
       } else {
         most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
       }
+      flu_data_substitutions
       most_recent_result <-
         most_recent_result %>%
         process_nhsn_data() %>%
@@ -179,7 +188,7 @@ parameters_and_date_targets <- rlang::list2(
     name = nhsn_archive_data,
     change = get_s3_object_last_modified("forecasting-team-data", "archive_timestamped.parquet"),
     command = {
-      create_nhsn_data_archive(disease = "nhsn_covid")
+      create_nhsn_data_archive(disease = "nhsn_flu")
     }
   )
 )
@@ -260,7 +269,7 @@ ensemble_targets <- tar_map(
   tar_target(
     name = geo_forecasters_weights,
     command = {
-      geo_forecasters_weights <- parse_prod_weights(here::here("flu_geo_exclusions.csv"), forecast_date_int, forecaster_fn_names_)
+      geo_forecasters_weights <- parse_prod_weights(flu_geo_exclusions, forecast_date_int, forecaster_fn_names_)
       if (nrow(geo_forecasters_weights %>% filter(forecast_date == as.Date(forecast_date_int))) == 0) {
         cli_abort("there are no weights for the forecast date {forecast_date}")
       }
@@ -288,14 +297,13 @@ ensemble_targets <- tar_map(
     name = ens_climate_linear_window_season,
     command = {
       climate_linear %>%
+        mutate(forecaster = "climate_linear") %>%
         # Ensemble with windowed_seasonal and windowed_seasonal_extra_sources
         bind_rows(
           forecast_full_filtered %>%
             filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources"))
         ) %>%
-        group_by(geo_value, forecast_date, target_end_date, quantile) %>%
-        summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
-        sort_by_quantile()
+        ensemble_weighted(geo_forecasters_weights)
     }
   ),
   tar_target(

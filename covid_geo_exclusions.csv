@@ -3,6 +3,9 @@ forecast_date,forecaster,geo_value,weight
 "2024-10-01", "all", "mp", 0
 "2024-10-01", "windowed_seasonal", "all", 3
 "2024-10-01", "windowed_seasonal_extra_sources", "all", 3
+"2024-10-01", "windowed_seasonal_extra_sources", "mo", 0
+"2024-10-01", "windowed_seasonal_extra_sources", "usa", 0
+"2024-10-01", "windowed_seasonal_extra_sources", "wy", 0
 "2024-10-01", "linear", "all", 3
 "2024-10-01", "linearlog", "all", 0
 "2024-10-01", "climate_base", "all", 2
@@ -10,11 +13,17 @@ forecast_date,forecaster,geo_value,weight
 "2024-10-01", "climate_quantile_extrapolated", "all", 0
 # feb 19
 "2025-02-19", "all", "mp", 0
-"2025-02-19", "windowed_seasonal", "all", 3
+"2025-02-19", "windowed_seasonal", "all", 0
 "2025-02-19", "windowed_seasonal_extra_sources", "all", 3
 # this is weighing the linear climate ensemble
 "2025-02-19", "linear_climate", "all", 0.0001
 "2025-02-19", "linear_climate", "ma", 3
+"2025-02-19", "linear_climate", "nh", 3
+"2025-02-19", "linear_climate", "nm", 3
+"2025-02-19", "windowed_seasonal", "pr", 3
+"2025-02-19", "windowed_seasonal", "mo", 3
+"2025-02-19", "windowed_seasonal", "wy", 3
+"2025-02-19", "windowed_seasonal", "usa", 3
 # creating linear climate
 "2025-02-19", "linear", "all", 3
 "2025-02-19", "linearlog", "all", 0
