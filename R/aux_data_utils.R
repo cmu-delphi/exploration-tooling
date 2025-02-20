@@ -653,7 +653,50 @@ process_nhsn_data <- function(raw_nhsn_data) {
 # for filenames of the form nhsn_data_2024-11-19_16-29-43.191649.rds
 get_version_timestamp <- function(filename) ymd_hms(str_match(filename, "[0-9]{4}-..-.._..-..-..\\.[^.^_]*"))
 
-#' all in one function to get and cache a nhsn archive from raw files
+#' Remove duplicate files from S3
+#'
+#' Removes duplicate files from S3 by keeping only the earliest timestamp file for each ETag.
+#' You can modify keep_df, if this doesn't suit your needs.
+#'
+#' @param bucket The name of the S3 bucket.
+#' @param prefix The prefix of the files to remove duplicates from.
+#' @param dry_run Whether to actually delete the files.
+#' @param .progress Whether to show a progress bar.
+delete_duplicates_from_s3_by_etag <- function(bucket, prefix, dry_run = TRUE, .progress = TRUE) {
+  # Get a list of all new dataset snapshots from S3
+  files_df <- aws.s3::get_bucket_df(bucket = bucket, prefix = prefix) %>% as_tibble()
+
+  # Create a list of all the files to keep by keeping the earliest timestamp file for each ETag
+  keep_df <- files_df %>%
+    group_by(ETag) %>%
+    slice_min(LastModified) %>%
+    ungroup()
+  delete_df <- files_df %>%
+    anti_join(keep_df, by = "Key")
+  if (nrow(delete_df) > 0) {
+    if (dry_run) {
+      cli::cli_alert_info("Would delete {nrow(delete_df)} files from {bucket} with prefix {prefix}")
+      print(delete_df)
+      return(invisible(delete_df))
+    } else {
+      delete_files_from_s3(bucket = bucket, keys = delete_df$Key, .progress = .progress)
+    }
+  }
+}
+
+#' Delete files from S3
+#'
+#' Faster than aws.s3::delete_object, when there are many files to delete (thousands).
+#'
+#' @param bucket The name of the S3 bucket.
+#' @param keys The keys of the files to delete, as a character vector.
+#' @param batch_size The number of files to delete in each batch.
+#' @param .progress Whether to show a progress bar.
+delete_files_from_s3 <- function(bucket, keys, batch_size = 500, .progress = TRUE) {
+  split(keys, ceiling(seq_along(keys) / batch_size)) %>%
+    purrr::walk(~aws.s3::delete_object(bucket = bucket, object = .x), .progress = .progress)
+}
+
 #' @description
 #' This takes in all of the raw data files for the nhsn data, creates a
 #'   quasi-archive (it keeps one example per version-day, rather than one per
