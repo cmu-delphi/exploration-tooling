@@ -22,7 +22,7 @@ forecast_dates <- round_date(forecast_generation_dates, "weeks", week_start = 3)
 # forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 # forecast_generation_date needs to follow suit, but it's more complicated
 # because sometimes we forecast on Thursday.
-# forecast_generation_dates <- c(as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
+# forecast_generation_dates <- c(as.Date(c("2024-11-22", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
 
 # Whether we're running in backtest mode.
 # If TRUE, we don't run the report notebook, which is (a) slow and (b) should be
