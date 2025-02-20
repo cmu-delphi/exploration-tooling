@@ -95,3 +95,9 @@ update_site:
 
 netlify:
 	netlify deploy --dir=reports --prod
+
+get_flu_prod_errors:
+	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'flu_hosp_prod')"
+
+get_covid_prod_errors:
+	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'covid_hosp_prod')"
