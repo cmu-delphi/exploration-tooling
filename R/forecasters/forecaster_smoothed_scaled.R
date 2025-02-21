@@ -71,6 +71,9 @@ smoothed_scaled <- function(epi_data,
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
+
+  epi_data <- validate_epi_data(epi_data)
+
   # perform any preprocessing not supported by epipredict
   #
   # this is for the case where there are multiple sources in the same column
@@ -170,6 +173,7 @@ smoothed_scaled <- function(epi_data,
       keep_mean = keep_mean
     )
   }
+
   # need to make a version with the non seasonal and problematic flu seasons removed
   if (drop_non_seasons) {
     season_data <- epi_data %>% drop_non_seasons()

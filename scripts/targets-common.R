@@ -4,25 +4,19 @@ suppressPackageStartupMessages({
 
 # On tanka, we have 64 cores, but we leave some free to try to reduce thrashing
 # and to allow for other users.
-if (parallel::detectCores() < 30) {
-  num_workers <- parallel::detectCores() - 1L
+if (parallel::detectCores() == 64) {
+  num_workers <- 30L
 } else {
-  num_workers <- parallel::detectCores() - 20L
+  num_workers <- parallel::detectCores() - 1L
 }
 
 main_controller <- crew_controller_local(
   name = "main_controller",
   workers = num_workers,
-  # These settings were cobbled together from various discussion threads on the
-  # targets Github. There's been an ongoing issue in a dependency of {crew}
-  # called {mirai}, where workers mysteriously stop working. The settings below
-  # are an attempt to mitigate that.
   seconds_idle = 60L,
-  seconds_timeout = 7 * 24 * 60 * 60L, # 7 days is probably enough
+  seconds_timeout = 24 * 60 * 60L,
   garbage_collection = TRUE,
-  options_local = crew_options_local(log_directory = "local_logs"),
-  tasks_max = 1L,
-  launch_max = 10000L
+  options_local = crew_options_local(log_directory = "local_logs")
 )
 # The external scores processing causes the pipeline to exit with an error,
 # apparently due to running out of memory. Set up a non-parallel `crew`
@@ -33,10 +27,8 @@ serial_controller <- crew_controller_local(
   workers = 1L,
   options_local = crew_options_local(log_directory = "local_logs"),
   seconds_idle = 60L,
-  seconds_timeout = 7 * 24 * 60 * 60L,
-  garbage_collection = TRUE,
-  tasks_max = 1L,
-  launch_max = 10000L
+  seconds_timeout = 24 * 60 * 60L,
+  garbage_collection = TRUE
 )
 
 # Serial mode is better for debugging.

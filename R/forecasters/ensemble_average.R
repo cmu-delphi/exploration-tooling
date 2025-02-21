@@ -32,12 +32,12 @@ ensemble_average <- function(epi_data,
   # their names are separated for obscure target related reasons
   names(ensemble_args) <- ensemble_args_names %||% names(ensemble_args)
   average_type <- ensemble_args$average_type %||% median
-  join_columns <- ensemble_args$join_columns %||% setdiff(names(forecasts[[1]]), "prediction")
+  join_columns <- ensemble_args$join_columns %||% setdiff(names(forecasts[[1]]), "value")
 
   # begin actual analysis
   forecasts %>%
     bind_rows(.id = "id") %>%
     group_by(across(all_of(join_columns))) %>%
-    summarize(prediction = average_type(prediction, na.rm = TRUE), .groups = "drop") %>%
+    summarize(value = average_type(value, na.rm = TRUE), .groups = "drop") %>%
     ungroup()
 }

@@ -56,6 +56,9 @@ scaled_pop_seasonal <- function(epi_data,
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
+
+  epi_data <- validate_epi_data(epi_data)
+
   if (typeof(seasonal_method) == "list") {
     seasonal_method <- seasonal_method[[1]]
   }

@@ -1,10 +1,10 @@
 # Scoring and Evaluation Functions
 
-evaluate_predictions <- function(predictions_cards, truth_data) {
-  checkmate::assert_data_frame(predictions_cards)
+evaluate_predictions <- function(forecasts, truth_data) {
+  checkmate::assert_data_frame(forecasts)
   checkmate::assert_data_frame(truth_data)
   checkmate::assert_names(
-    names(predictions_cards),
+    names(forecasts),
     must.include = c("model", "geo_value", "forecast_date", "target_end_date", "quantile", "prediction")
   )
   checkmate::assert_names(
@@ -12,19 +12,23 @@ evaluate_predictions <- function(predictions_cards, truth_data) {
     must.include = c("geo_value", "target_end_date", "true_value")
   )
 
-  left_join(predictions_cards, truth_data, by = c("geo_value", "target_end_date")) %>%
-    scoringutils::score(metrics = c("interval_score", "ae_median", "coverage")) %>%
-    scoringutils::add_coverage(by = c("model", "geo_value", "forecast_date", "target_end_date"), ranges = c(80)) %>%
-    scoringutils::summarize_scores(by = c("model", "geo_value", "forecast_date", "target_end_date")) %>%
+  forecast_obj <- left_join(forecasts, truth_data, by = c("geo_value", "target_end_date")) %>%
+    scoringutils::as_forecast_quantile(
+      quantile_level = "quantile",
+      observed = "true_value",
+      predicted = "prediction",
+      forecast_unit = c("model", "geo_value", "forecast_date", "target_end_date")
+    )
+
+  scores <- forecast_obj %>%
+    scoringutils::score(metrics = get_metrics(.)) %>%
     as_tibble() %>%
     select(
-      model,
-      geo_value,
-      forecast_date,
-      target_end_date,
-      wis = interval_score,
+      model, geo_value, forecast_date, target_end_date,
+      wis,
       ae = ae_median,
-      coverage_80
+      coverage_50 = interval_coverage_50,
+      coverage_90 = interval_coverage_90
     ) %>%
     mutate(ahead = as.numeric(target_end_date - forecast_date))
 }

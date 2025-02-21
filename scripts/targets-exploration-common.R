@@ -11,7 +11,10 @@ make_data_targets <- function() {
     tar_target(
       name = hhs_latest_data,
       command = {
-        epidatr::pub_covidcast(
+        retry_fn(
+          max_attempts = 10,
+          wait_seconds = 1,
+          fn = pub_covidcast,
           source = "hhs",
           signals = hhs_signal,
           geo_type = "state",
@@ -25,7 +28,10 @@ make_data_targets <- function() {
     tar_target(
       name = chng_latest_data,
       command = {
-        epidatr::pub_covidcast(
+        retry_fn(
+          max_attempts = 10,
+          wait_seconds = 1,
+          fn = pub_covidcast,
           source = "chng",
           signals = chng_signal,
           geo_type = "state",
@@ -67,7 +73,10 @@ make_data_targets <- function() {
     tar_target(
       name = hhs_archive_data,
       command = {
-        epidatr::pub_covidcast(
+        retry_fn(
+          max_attempts = 10,
+          wait_seconds = 1,
+          fn = pub_covidcast,
           source = "hhs",
           signals = hhs_signal,
           geo_type = "state",
@@ -85,7 +94,10 @@ make_data_targets <- function() {
         start_time <- as.Date(training_time$from, format = "%Y%m%d")
         stop_time <- Sys.Date()
         half <- floor((stop_time - start_time) / 2)
-        first_half <- epidatr::pub_covidcast(
+        first_half <- retry_fn(
+          max_attempts = 10,
+          wait_seconds = 1,
+          fn = pub_covidcast,
           source = "chng",
           signals = chng_signal,
           geo_type = "state",
@@ -95,7 +107,10 @@ make_data_targets <- function() {
           issues = epidatr::epirange(from = start_time, to = start_time + half),
           fetch_args = fetch_args
         )
-        second_half <- epidatr::pub_covidcast(
+        second_half <- retry_fn(
+          max_attempts = 10,
+          wait_seconds = 1,
+          fn = pub_covidcast,
           source = "chng",
           signals = chng_signal,
           geo_type = "state",
@@ -338,7 +353,7 @@ make_historical_flu_data_targets <- function() {
           add_season_info() %>%
           mutate(agg_level = ifelse(grepl("[0-9]{2}", geo_value), "hhs_region", ifelse("us" == geo_value, "nation", "state"))) %>%
           add_pop_and_density() %>%
-          mutate(hhs = hhs_7dsum / population * 10L^5) %>%
+          mutate(hhs = hhs / population * 10L^5) %>%
           mutate(source = "nhsn") %>%
           mutate(agg_level = ifelse(geo_value == "us", "nation", "state")) %>%
           as_epi_archive(other_keys = "source", compactify = TRUE) %>%
@@ -402,14 +417,20 @@ make_historical_flu_data_targets <- function() {
     tar_target(
       name = nssp_archive,
       command = {
-        nssp_state <- pub_covidcast(
+        nssp_state <- retry_fn(
+          max_attempts = 10,
+          wait_seconds = 1,
+          fn = pub_covidcast,
           source = "nssp",
           signal = "pct_ed_visits_influenza",
           time_type = "week",
           geo_type = "state",
           geo_values = "*"
         )
-        nssp_hhs <- pub_covidcast(
+        nssp_hhs <- retry_fn(
+          max_attempts = 10,
+          wait_seconds = 1,
+          fn = pub_covidcast,
           source = "nssp",
           signal = "pct_ed_visits_influenza",
           time_type = "week",
@@ -439,14 +460,20 @@ make_historical_flu_data_targets <- function() {
         # source going down completely, which means we're actually just comparing
         # with the version without this source
         all_of_them <- lapply(used_searches, \(search_name) {
-          google_symptoms_state_archive <- pub_covidcast(
+          google_symptoms_state_archive <- retry_fn(
+            max_attempts = 10,
+            wait_seconds = 1,
+            fn = pub_covidcast,
             source = "google-symptoms",
             signal = glue::glue("s0{search_name}_smoothed_search"),
             time_type = "day",
             geo_type = "state",
             geo_values = "*"
           )
-          google_symptoms_hhs_archive <- pub_covidcast(
+          google_symptoms_hhs_archive <- retry_fn(
+            max_attempts = 10,
+            wait_seconds = 1,
+            fn = pub_covidcast,
             source = "google-symptoms",
             signal = glue::glue("s0{search_name}_smoothed_search"),
             time_type = "day",

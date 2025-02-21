@@ -50,9 +50,9 @@ make prod-flu
 make prod-covid
 
 # The job output can be found in nohup.out
-# If there are errors, you can view them with the following command (replace with appropriate project)
-Sys.setenv(TAR_PROJECT = "covid_hosp_prod");
-targets::tar_meta(fields = error, complete_only = FALSE)
+# If there are errors, you can view the top n with the following command (replace with appropriate project)
+source("scripts/targets-common.R");
+get_targets_errors("covid_hosp_prod", top_n = 10)
 
 # Automatically append the new reports to the site index and host the site on netlify
 # (this requires the netlify CLI to be installed and configured, talk to Dmitry about this)

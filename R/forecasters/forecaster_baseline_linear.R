@@ -1,5 +1,6 @@
 #' epi_data is expected to have: geo_value, time_value, and value columns.
 forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALSE, residual_tail = 0.85, residual_center = 0.085, no_intercept = FALSE) {
+  epi_data <- validate_epi_data(epi_data)
   forecast_date <- attributes(epi_data)$metadata$as_of
   population_data <- get_population_data() %>%
     rename(geo_value = state_id) %>%
