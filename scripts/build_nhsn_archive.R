@@ -15,22 +15,24 @@
 # 4. Your S3 bucket storage layout
 #
 # The crontab (every minute):
-# * * * * * cd /path/to/root/of/this/project && R -q -f scripts/nhsn_download.R >> cache/nhsn_download.log 2>&1
-
-library(aws.s3)
-library(cli)
-library(epiprocess)
-library(glue)
-library(here)
-library(httr)
-library(nanoparquet)
-library(qs)
-library(tidyverse)
+# * * * * * cd /path/to/root/of/this/project && R -s -q -f scripts/build_nhsn_archive.R >> cache/build_nhsn_archive.log 2>&1
+suppressPackageStartupMessages({
+  library(aws.s3)
+  library(cli)
+  library(epiprocess)
+  library(glue)
+  library(here)
+  library(httr)
+  library(nanoparquet)
+  library(qs)
+  library(tidyverse)
+  source("R/aux_data_utils.R")
+})
 
 # Needed for: get_s3_object_last_modified, get_socrata_updated_at
-source("R/aux_data_utils.R")
 
-
+run_time <- with_tz(Sys.time(), tzone = "UTC")
+run_time_local <- with_tz(run_time, tzone = "America/New_York")
 config <- list(
   raw_query_url = "https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm",
   prelim_query_url = "https://data.cdc.gov/resource/mpgq-jmmr.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm",
@@ -49,7 +51,7 @@ config <- list(
 #' every minute or so, to make sure you are always working with the latest data.
 #'
 #' @param verbose Whether to print verbose output.
-update_nhsn_data_raw <- function(verbose = FALSE) {
+update_nhsn_data_raw <- function() {
   # Get the last updated metadata for the archive and the raw and prelim data
   last_updated_at <- get_s3_object_last_modified(config$archive_s3_key, config$s3_bucket)
   raw_update_at <- get_socrata_updated_at(config$raw_metadata_url)
@@ -58,22 +60,18 @@ update_nhsn_data_raw <- function(verbose = FALSE) {
   prelim_update_at_local <- with_tz(prelim_update_at)
 
   if (raw_update_at > last_updated_at) {
-    if (verbose) {
-      cli_inform("The raw data has been updated at {raw_update_at_local} (UTC: {raw_update_at}).")
-      cli_inform("Downloading the raw data...")
-    }
-    format_time <- format(with_tz(Sys.time(), tzone = "UTC"), "%Y-%m-%d_%H-%M-%OS5")
-    raw_file <- glue("{config$raw_file_name_prefix}_{format_time}.parquet")
+    cli_inform("The raw data has been updated at {raw_update_at_local} (UTC: {raw_update_at}).")
+    cli_inform("Downloading the raw data...")
+    download_time <- format(with_tz(Sys.time(), tzone = "UTC"), "%Y-%m-%d_%H-%M-%OS5")
+    raw_file <- glue("{config$raw_file_name_prefix}_{download_time}.parquet")
     read_csv(config$raw_query_url) %>% s3write_using(write_parquet, object = raw_file, bucket = config$s3_bucket)
   }
 
   if (prelim_update_at > last_updated_at) {
-    if (verbose) {
-      cli_inform("The prelim data has been updated at {prelim_update_at_local} (UTC: {prelim_update_at}).")
-      cli_inform("Downloading the prelim data...")
-    }
-    format_time <- format(with_tz(Sys.time(), tzone = "UTC"), "%Y-%m-%d_%H-%M-%OS5")
-    prelim_file <- glue("{config$raw_file_name_prefix}_{format_time}_prelim.parquet")
+    cli_inform("The prelim data has been updated at {prelim_update_at_local} (UTC: {prelim_update_at}).")
+    cli_inform("Downloading the prelim data...")
+    download_time <- format(with_tz(Sys.time(), tzone = "UTC"), "%Y-%m-%d_%H-%M-%OS5")
+    prelim_file <- glue("{config$raw_file_name_prefix}_{download_time}_prelim.parquet")
     read_csv(config$prelim_query_url) %>% s3write_using(write_parquet, object = prelim_file, bucket = config$s3_bucket)
   }
 }
@@ -148,16 +146,12 @@ update_nhsn_data_archive <- function(verbose = FALSE) {
     slice_max(is_prelim) %>%
     ungroup()
 
-  if (length(new_data_files_latest_per_day) == 0) {
-    if (verbose) {
-      cli_inform("No new NHSN data found, no updates needed.")
-    }
+  if (nrow(new_data_files_latest_per_day) == 0) {
     return(invisible(NULL))
   }
 
-  if (verbose) {
-    cli_inform("Processing {nrow(new_data_files_latest_per_day)} new NHSN datasets.")
-  }
+  cli_inform("New datasets available at {run_time_local} (UTC: {run_time}).")
+  cli_inform("Adding {nrow(new_data_files_latest_per_day)} new NHSN datasets to the archive.")
 
   # Process each new dataset snapshot
   new_data <- new_data_files_latest_per_day$Key %>%
@@ -173,19 +167,18 @@ update_nhsn_data_archive <- function(verbose = FALSE) {
     new_archive <- new_data
   }
 
-  if (verbose) {
-    cli_inform("Saving new archive to S3.")
-  }
   new_archive %>%
     arrange(disease, geo_value, time_value, version_timestamp) %>%
     s3write_using(write_parquet, object = config$archive_s3_key, bucket = config$s3_bucket)
 }
 
 update_nhsn_data <- function(verbose = FALSE) {
-  time <- with_tz(Sys.time(), tzone = "UTC")
-  local_time <- with_tz(time, tzone = "America/New_York")
-  cli_inform(glue("Updating NHSN data at {local_time} (UTC: {time})..."))
-  update_nhsn_data_raw(verbose = verbose)
+  options(cli.width = 120)
+  if (verbose) {
+    cli_inform(glue("Checking for updates to NHSN data at {run_time_local} (UTC: {run_time})..."))
+  }
+  update_nhsn_data_raw()
   update_nhsn_data_archive(verbose = verbose)
 }
 
+update_nhsn_data(verbose = TRUE)

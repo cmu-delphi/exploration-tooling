@@ -1702,8 +1702,7 @@
       "URL": "https://gitlab.com/luke-tierney/codetools",
       "License": "GPL",
       "NeedsCompilation": "no",
-      "Repository": "RSPM",
-      "Encoding": "UTF-8"
+      "Repository": "CRAN"
     },
     "collections": {
       "Package": "collections",
@@ -2953,11 +2952,11 @@
       "Author": "Jacob Bien [ctb], Logan Brooks [aut, cre], Rafael Catoia [ctb], Nat DeFries [aut], Daniel McDonald [aut], Rachel Lobay [ctb], Ken Mawer [ctb], Chloe You [ctb], Quang Nguyen [ctb], Evan Ray [aut], Dmitry Shemetov [aut], Ryan Tibshirani [aut], David Weber [ctb], Lionel Henry [ctb] (Author of included rlang fragments), Hadley Wickham [ctb] (Author of included rlang fragments), Posit [cph] (Copyright holder of included rlang fragments), Johns Hopkins University Center for Systems Science and Engineering [dtc] (Owner of COVID-19 cases and deaths data from the COVID-19 Data Repository), Johns Hopkins University [cph] (Copyright holder of COVID-19 cases and deaths data from the COVID-19 Data Repository), Carnegie Mellon University Delphi Group [dtc] (Owner of claims-based CLI data from the Delphi Epidata API)",
       "Maintainer": "Logan Brooks <lcbrooks+github@andrew.cmu.edu>",
       "RemoteType": "github",
-      "RemoteHost": "api.github.com",
       "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epiprocess",
       "RemoteRef": "dev",
       "RemoteSha": "a699ae8f7c77aabd6a72cdb0209dd34960402047",
+      "RemoteHost": "api.github.com",
       "Remotes": "cmu-delphi/delphidocs, cmu-delphi/epidatasets, cmu-delphi/epidatr, cmu-delphi/epipredict, glmgen/trendfilter, reconverse/outbreaks"
     },
     "evaluate": {
@@ -4621,6 +4620,46 @@
       "RemoteSha": "12410dac86a861785e80b84bfa9b5c5d1565cab5",
       "Remotes": "hubverse-org/hubUtils"
     },
+    "hubEvals": {
+      "Package": "hubEvals",
+      "Version": "0.0.0.9001",
+      "Source": "GitHub",
+      "Title": "Basic tools for scoring hubverse forecasts",
+      "Authors@R": "c( person(given = \"Nicholas\",  family = \"Reich\", email = \"nick@umass.edu\",  role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0003-3503-9899\")), person(given = \"Evan\",  family = \"Ray\",  email = \"elray1@umass.edu\",  role = c(\"aut\")), person(given = \"Nikos\", family = \"Bosse\", role = c(\"aut\"), email = \"nikosbosse@gmail.com\", comment = c(ORCID = \"0000-0002-7750-5280\")), person(given = \"Matthew\", family = \"Cornell\", email = \"cornell@schoolph.umass.edu\", role = c(\"aut\")), person(given = \"Zhian\", family = \"Kamvar\", email = \"zkamvar@umass.edu\", comment = c(ORCID = \"0000-0003-1458-7108\"), role = c(\"ctb\")), person(given = \"Becky\",  family = \"Sweger\", email = \"rsweger@umass.edu\",  role = c(\"aut\")), person(given = \"Kimberlyn\",  family = \"Roosa\", email = \"kimberlyn626@gmail.com\",  role = c(\"aut\")) )",
+      "Description": "Using functionality from the scoringutils package, this software provides basic tools for scoring hubverse forecasts.",
+      "License": "MIT + file LICENSE",
+      "Encoding": "UTF-8",
+      "Imports": [
+        "cli",
+        "dplyr",
+        "hubUtils",
+        "purrr",
+        "rlang",
+        "scoringutils (>= 1.2.2.9000)"
+      ],
+      "Roxygen": "list(markdown = TRUE)",
+      "RoxygenNote": "7.3.2",
+      "URL": "https://hubverse-org.github.io/hubEvals/",
+      "Depends": [
+        "R (>= 2.10)"
+      ],
+      "LazyData": "true",
+      "Config/Needs/website": "hubverse-org/hubStyle",
+      "Suggests": [
+        "hubExamples",
+        "testthat (>= 3.0.0)"
+      ],
+      "Config/testthat/edition": "3",
+      "Author": "Nicholas Reich [aut, cre] (<https://orcid.org/0000-0003-3503-9899>), Evan Ray [aut], Nikos Bosse [aut] (<https://orcid.org/0000-0002-7750-5280>), Matthew Cornell [aut], Zhian Kamvar [ctb] (<https://orcid.org/0000-0003-1458-7108>), Becky Sweger [aut], Kimberlyn Roosa [aut]",
+      "Maintainer": "Nicholas Reich <nick@umass.edu>",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteUsername": "hubverse-org",
+      "RemoteRepo": "hubEvals",
+      "RemoteRef": "main",
+      "RemoteSha": "513bf667c5821d4350b7f1e08a6d8a6cc43d70bd",
+      "Remotes": "epiforecasts/scoringutils, hubverse-org/hubExamples, hubverse-org/hubUtils"
+    },
     "hubUtils": {
       "Package": "hubUtils",
       "Version": "0.4.0.9000",
@@ -5229,8 +5268,7 @@
       "NeedsCompilation": "yes",
       "Author": "Deepayan Sarkar [aut, cre] (<https://orcid.org/0000-0003-4107-1553>), Felix Andrews [ctb], Kevin Wright [ctb] (documentation), Neil Klepeis [ctb], Johan Larsson [ctb] (miscellaneous improvements), Zhijian (Jason) Wen [cph] (filled contour code), Paul Murrell [ctb], Stefan Eng [ctb] (violin plot improvements), Achim Zeileis [ctb] (modern colors), Alexandre Courtiol [ctb] (generics for larrows, lpolygon, lrect and lsegments)",
       "Maintainer": "Deepayan Sarkar <deepayan.sarkar@r-project.org>",
-      "Repository": "RSPM",
-      "Encoding": "UTF-8"
+      "Repository": "CRAN"
     },
     "lava": {
       "Package": "lava",
@@ -5847,6 +5885,44 @@
       "NeedsCompilation": "yes",
       "Author": "Charlie Gao [aut, cre] (<https://orcid.org/0000-0002-0750-061X>), Hibiki AI Limited [cph], R Consortium [fnd]",
       "Maintainer": "Charlie Gao <charlie.gao@shikokuchuo.net>",
+      "Repository": "RSPM"
+    },
+    "nanoparquet": {
+      "Package": "nanoparquet",
+      "Version": "0.4.1",
+      "Source": "Repository",
+      "Title": "Read and Write 'Parquet' Files",
+      "Authors@R": "c( person(\"Gábor\", \"Csárdi\", role = c(\"aut\", \"cre\"), email = \"csardi.gabor@gmail.com\"), person(\"Hannes\", \"Mühleisen\", role = c(\"aut\", \"cph\"), comment = c(ORCID = \"0000-0001-8552-0029\")), person(\"Google Inc.\", role = \"cph\"), person(\"Apache Software Foundation\", role = \"cph\"), person(\"Posit Software, PBC\", role = \"cph\"), person(\"RAD Game Tools\", role = \"cph\"), person(\"Valve Software\", role = \"cph\"), person(\"Tenacious Software LLC\", role = \"cph\"), person(\"Facebook, Inc.\", role = \"cph\"))",
+      "Description": "Self-sufficient reader and writer for flat 'Parquet' files. Can read most 'Parquet' data types. Can write many 'R' data types, including factors and temporal types. See docs for limitations.",
+      "Depends": [
+        "R (>= 4.0.0)"
+      ],
+      "License": "MIT + file LICENSE",
+      "URL": "https://github.com/r-lib/nanoparquet, https://nanoparquet.r-lib.org/",
+      "BugReports": "https://github.com/r-lib/nanoparquet/issues",
+      "Encoding": "UTF-8",
+      "Suggests": [
+        "arrow",
+        "bit64",
+        "DBI",
+        "duckdb",
+        "hms",
+        "mockery",
+        "pillar",
+        "processx",
+        "rprojroot",
+        "spelling",
+        "testthat",
+        "tzdb",
+        "withr"
+      ],
+      "RoxygenNote": "7.3.2.9000",
+      "Config/testthat/edition": "3",
+      "Config/Needs/website": "tidyverse/tidytemplate, r-lib/pkgdown, dplyr, gt, gtExtras, knitr, nycflights13, prettyunits, quarto, rmarkdown, sessioninfo, svglite",
+      "Language": "en-US",
+      "NeedsCompilation": "yes",
+      "Author": "Gábor Csárdi [aut, cre], Hannes Mühleisen [aut, cph] (<https://orcid.org/0000-0001-8552-0029>), Google Inc. [cph], Apache Software Foundation [cph], Posit Software, PBC [cph], RAD Game Tools [cph], Valve Software [cph], Tenacious Software LLC [cph], Facebook, Inc. [cph]",
+      "Maintainer": "Gábor Csárdi <csardi.gabor@gmail.com>",
       "Repository": "RSPM"
     },
     "nlme": {
@@ -8186,12 +8262,12 @@
     },
     "scoringutils": {
       "Package": "scoringutils",
-      "Version": "2.0.0",
-      "Source": "Repository",
+      "Version": "2.0.0.9000",
+      "Source": "GitHub",
       "Title": "Utilities for Scoring and Assessing Predictions",
       "Language": "en-GB",
-      "Authors@R": "c( person(given = \"Nikos\", family = \"Bosse\", role = c(\"aut\", \"cre\"), email = \"nikosbosse@gmail.com\", comment = c(ORCID = \"0000-0002-7750-5280\")), person(given = \"Sam\", family = \"Abbott\", role = c(\"aut\"), email = \"contact@samabbott.co.uk\", comment = c(ORCID = \"0000-0001-8057-8037\")),  person(given = \"Hugo\", family = \"Gruson\", role = c(\"aut\"), email = \"hugo.gruson+R@normalesup.org\", comment = c(ORCID = \"0000-0002-4094-1476\")), person(given = \"Johannes\", family = \"Bracher\", role = c(\"ctb\"), email = \"johannes.bracher@kit.edu\", comment = c(ORCID = \"0000-0002-3777-1410\")),  person(given = \"Toshiaki Asakura\", role = c(\"ctb\"), email = \"toshiaki.asa9ra@gmail.com\", comment = c(ORCID = \"0000-0001-8838-785X\")), person(given = \"James Mba\", family = \"Azam\", role = c(\"ctb\"), email = \"james.azam@lshtm.ac.uk\", comment = c(ORCID = \"0000-0001-5782-7330\")), person(\"Sebastian\", \"Funk\",  email = \"sebastian.funk@lshtm.ac.uk\",  role = c(\"aut\")), person(given = \"Michael\", family = \"Chirico\", role = c(\"ctb\"), email = \"michaelchirico4@gmail.com\", comment = c(ORCID = \"0000-0003-0787-087X\")))",
-      "Description": "Facilitate the evaluation of forecasts in a convenient  framework based on data.table. It allows user to to check their forecasts  and diagnose issues, to visualise forecasts and missing data, to transform  data before scoring, to handle missing forecasts, to aggregate scores, and  to visualise the results of the evaluation. The package mostly focuses on  the evaluation of probabilistic forecasts and allows evaluating several  different forecast types and input formats. Find more information about the  package in the Vignettes as well as in the accompanying paper,  <doi:10.48550/arXiv.2205.07090>.",
+      "Authors@R": "c( person(given = \"Nikos\", family = \"Bosse\", role = c(\"aut\", \"cre\"), email = \"nikosbosse@gmail.com\", comment = c(ORCID = \"0000-0002-7750-5280\")), person(given = \"Sam\", family = \"Abbott\", role = c(\"aut\"), email = \"contact@samabbott.co.uk\", comment = c(ORCID = \"0000-0001-8057-8037\")), person(given = \"Hugo\", family = \"Gruson\", role = c(\"aut\"), email = \"hugo.gruson+R@normalesup.org\", comment = c(ORCID = \"0000-0002-4094-1476\")), person(given = \"Johannes\", family = \"Bracher\", role = c(\"ctb\"), email = \"johannes.bracher@kit.edu\", comment = c(ORCID = \"0000-0002-3777-1410\")), person(given = \"Toshiaki Asakura\", role = c(\"ctb\"), email = \"toshiaki.asa9ra@gmail.com\", comment = c(ORCID = \"0000-0001-8838-785X\")), person(given = \"James Mba\", family = \"Azam\", role = c(\"ctb\"), email = \"james.azam@lshtm.ac.uk\", comment = c(ORCID = \"0000-0001-5782-7330\")), person(\"Sebastian\", \"Funk\", email = \"sebastian.funk@lshtm.ac.uk\", role = c(\"aut\")), person(given = \"Michael\", family = \"Chirico\", role = c(\"ctb\"), email = \"michaelchirico4@gmail.com\", comment = c(ORCID = \"0000-0003-0787-087X\")))",
+      "Description": "Facilitate the evaluation of forecasts in a convenient framework based on data.table. It allows user to to check their forecasts and diagnose issues, to visualise forecasts and missing data, to transform data before scoring, to handle missing forecasts, to aggregate scores, and to visualise the results of the evaluation. The package mostly focuses on the evaluation of probabilistic forecasts and allows evaluating several different forecast types and input formats. Find more information about the package in the Vignettes as well as in the accompanying paper, <doi:10.48550/arXiv.2205.07090>.",
       "License": "MIT + file LICENSE",
       "Encoding": "UTF-8",
       "LazyData": "true",
@@ -8200,6 +8276,7 @@
         "cli",
         "data.table",
         "ggplot2 (>= 3.4.0)",
+        "lifecycle",
         "methods",
         "Metrics",
         "purrr",
@@ -8224,10 +8301,15 @@
       "Depends": [
         "R (>= 4.0)"
       ],
-      "NeedsCompilation": "no",
+      "Roxygen": "list(markdown = TRUE)",
       "Author": "Nikos Bosse [aut, cre] (<https://orcid.org/0000-0002-7750-5280>), Sam Abbott [aut] (<https://orcid.org/0000-0001-8057-8037>), Hugo Gruson [aut] (<https://orcid.org/0000-0002-4094-1476>), Johannes Bracher [ctb] (<https://orcid.org/0000-0002-3777-1410>), Toshiaki Asakura [ctb] (<https://orcid.org/0000-0001-8838-785X>), James Mba Azam [ctb] (<https://orcid.org/0000-0001-5782-7330>), Sebastian Funk [aut], Michael Chirico [ctb] (<https://orcid.org/0000-0003-0787-087X>)",
       "Maintainer": "Nikos Bosse <nikosbosse@gmail.com>",
-      "Repository": "RSPM"
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteUsername": "epiforecasts",
+      "RemoteRepo": "scoringutils",
+      "RemoteRef": "main",
+      "RemoteSha": "dbe5da6691ea3cb7265df4b6bc5815e933d89c32"
     },
     "secretbase": {
       "Package": "secretbase",
