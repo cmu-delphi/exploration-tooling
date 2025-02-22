@@ -624,34 +624,21 @@ gen_ili_data <- function(default_day_of_week = 1) {
     as_epi_archive(compactify = TRUE)
 }
 
-#' Process Raw NHSN Data
+#' Get the NHSN data archive from S3
 #'
-#' Turns the raw NHSN data into a tidy format with the following columns:
-#' - geo_value: the jurisdiction of the data
-#' - disease: the disease of the data
-#' - time_value: the date of the data
-#' - version: the version of the data
-#' - value: the value of the data
-#'
-process_nhsn_data <- function(raw_nhsn_data) {
-  raw_nhsn_data %>%
-    mutate(
-      geo_value = tolower(jurisdiction),
-      time_value = as.Date(weekendingdate),
-      nhsn_covid = totalconfc19newadm,
-      nhsn_flu = totalconfflunewadm
-    ) %>%
-    add_season_info() %>%
-    select(-weekendingdate, -jurisdiction, -starts_with("totalconf")) %>%
-    pivot_longer(cols = starts_with("nhsn"), names_to = "disease") %>%
-    filter(!is.na(value)) %>%
-    mutate(version = Sys.Date()) %>%
-    relocate(geo_value, disease, time_value, version)
+#' @param disease_name The name of the disease to get the archive for.
+#' @return An epi_archive of the NHSN data.
+get_nhsn_data_archive <- function(disease_name) {
+  if (!dir.exists(here::here("cache"))) {
+    dir.create(here::here("cache"))
+  }
+  aws.s3::save_object("archive_timestamped.parquet", bucket = "forecasting-team-data", file = here::here("cache/archive_timestamped.parquet"))
+  archive <- qs::qread(here::here("cache/archive_timestamped.parquet"))
+  archive %>%
+    filter(disease == disease_name) %>%
+    select(-version_timestamp, -endpoint, -disease) %>%
+    as_epi_archive(compactify = TRUE)
 }
-
-
-# for filenames of the form nhsn_data_2024-11-19_16-29-43.191649.rds
-get_version_timestamp <- function(filename) ymd_hms(str_match(filename, "[0-9]{4}-..-.._..-..-..\\.[^.^_]*"))
 
 #' Remove duplicate files from S3
 #'
@@ -692,94 +679,23 @@ delete_duplicates_from_s3_by_etag <- function(bucket, prefix, dry_run = TRUE, .p
 #' @param keys The keys of the files to delete, as a character vector.
 #' @param batch_size The number of files to delete in each batch.
 #' @param .progress Whether to show a progress bar.
-delete_files_from_s3 <- function(bucket, keys, batch_size = 500, .progress = TRUE) {
+delete_files_from_s3 <- function(keys, bucket, batch_size = 500, .progress = TRUE) {
   split(keys, ceiling(seq_along(keys) / batch_size)) %>%
     purrr::walk(~aws.s3::delete_object(bucket = bucket, object = .x), .progress = .progress)
 }
 
-#' @description
-#' This takes in all of the raw data files for the nhsn data, creates a
-#'   quasi-archive (it keeps one example per version-day, rather than one per
-#'   change), and puts it in the bucket. The stored value has the columns
-#'   geo_value, time_value, disease, endpoint (either basic or prelim), version,
-#'   version_timestamp (to enable keeping the most recent value), and value.
-#'   The returned value on the other hand is an actual epi_archive, only
-#'   containing the data for `disease_name`.
-create_nhsn_data_archive <- function(disease_name) {
-  if (aws.s3::head_object("archive_timestamped.parquet", bucket = "forecasting-team-data")) {
-    aws.s3::save_object("archive_timestamped.parquet", bucket = "forecasting-team-data", file = here::here("cache/archive_timestamped.parquet"))
-    previous_archive <- qs::qread(here::here("cache/archive_timestamped.parquet"))
-    last_timestamp <- max(previous_archive$version_timestamp)
-  } else {
-    # there is no remote
-    previous_archive <- NULL
-    last_timestamp <- as.Date("1000-01-01")
-  }
-  new_data <- aws.s3::get_bucket_df(bucket = "forecasting-team-data", prefix = "nhsn_data_") %>%
-    filter(get_version_timestamp(Key) > last_timestamp) %>%
-    pull(Key) %>%
-    lapply(
-      function(filename) {
-        version_timestamp <- get_version_timestamp(filename)
-        res <- NULL
-        tryCatch(
-          {
-            s3load(object = filename, bucket = "forecasting-team-data")
-            if (grepl("prelim", filename)) {
-              res <- epi_data_raw_prelim
-              endpoint_val <- "prelim"
-            } else {
-              res <- epi_data_raw
-              endpoint_val <- "basic"
-            }
-            res <- res %>%
-              process_nhsn_data() %>%
-              select(geo_value, disease, time_value, value) %>%
-              mutate(version_timestamp = version_timestamp, endpoint = endpoint_val)
-          },
-          error = function(cond) {}
-        )
-        res
-      }
-    )
-  # drop any duplicates on the same day
-  compactified <-
-    new_data %>%
-    bind_rows()
-  if (nrow(compactified) == 0) {
-    one_per_day <- previous_archive
-  } else {
-    compactified <-
-      compactified %>%
-      arrange(geo_value, time_value, disease, endpoint, version_timestamp) %>%
-      mutate(version = as.Date(version_timestamp)) %>%
-      filter(if_any(
-        c(everything(), -endpoint, -version_timestamp), # all non-version, non-endpoint columns
-        ~ !epiprocess:::is_locf(., .Machine$double.eps^0.5)
-      ))
-
-    unchanged <- previous_archive %>% filter(!(version %in% unique(compactified$version)))
-    # only keep the last value for a given version (so across version_timestamps)
-    # we only need to do this for the versions in compactified, as the other versions can't possibly change
-    one_per_day <-
-      previous_archive %>%
-      filter(version %in% unique(compactified$version)) %>%
-      bind_rows(compactified) %>%
-      group_by(geo_value, disease, time_value, version) %>%
-      arrange(version_timestamp) %>%
-      filter(row_number() == n()) %>%
-      ungroup() %>%
-      bind_rows(unchanged)
-    qs::qsave(one_per_day, here::here("cache/archive_timestamped.parquet"))
-    aws.s3::put_object(here::here("cache/archive_timestamped.parquet"), "archive_timestamped.parquet", bucket = "forecasting-team-data")
-  }
-  one_per_day %>%
+#' Get the NHSN data archive from S3
+#'
+#' If you want to avoid downloading the archive from S3 every time, you can
+#' call `get_s3_object_last_modified` to check if the archive has been updated
+#' since the last time you downloaded it.
+#'
+#' @param disease_name The name of the disease to get the archive for.
+#' @return An epi_archive of the NHSN data.
+get_nhsn_data_archive <- function(disease_name) {
+  aws.s3::s3read_using(nanoparquet::read_parquet, object = "nhsn_data_archive.parquet", bucket = "forecasting-team-data") %>%
     filter(disease == disease_name) %>%
-    select(-version_timestamp, -endpoint, -disease) %>%
-    mutate(
-      geo_value = ifelse(geo_value == "usa", "us", geo_value)
-    ) %>%
-    filter(geo_value != "mp") %>%
+    select(-version_timestamp, -disease) %>%
     as_epi_archive(compactify = TRUE)
 }
 
@@ -805,25 +721,64 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     as_epi_archive(compactify = TRUE)
 }
 
-# Get the last time the signal was updated.
-get_covidcast_signal_last_update <- function(source, signal, geo_type) {
-  pub_covidcast_meta() %>%
-    filter(source == !!source, signal == !!signal, geo_type == !!geo_type) %>%
-    pull(last_update) %>%
-    as.POSIXct()
+MIN_TIMESTAMP = as.POSIXct("2000-01-01 00:00:00S", tz="UTC")
+MAX_TIMESTAMP = as.POSIXct("2040-01-01 00:00:00S", tz="UTC")
+
+#' Get the last time a covidcast signal was updated.
+#'
+#' @param source The source of the signal.
+#' @param signal The signal of the signal.
+#' @param geo_type The geo type of the signal.
+#' @param missing_value The value to return if the signal is not found.
+#'
+#' @return The last time the signal was updated in POSIXct format.
+get_covidcast_signal_last_update <- function(source, signal, geo_type, missing_value = MAX_TIMESTAMP) {
+  tryCatch(
+    {
+      pub_covidcast_meta() %>%
+        filter(source == !!source, signal == !!signal, geo_type == !!geo_type) %>%
+        pull(last_update) %>%
+        as.POSIXct()
+    },
+    error = function(cond) {
+      return(missing_value)
+    }
+  )
 }
 
-# Get the last time the Socrata dataset was updated.
-get_socrata_updated_at <- function(dataset_url) {
-  httr::GET(dataset_url) %>%
-    httr::content() %>%
-    pluck("rowsUpdatedAt") %>%
-    as.POSIXct()
-}
-
-get_s3_object_last_modified <- function(bucket, key) {
+#' Get the last modified date of an S3 object
+#'
+#' @param bucket The name of the S3 bucket.
+#' @param key The key of the S3 object.
+#'
+#' @return The last modified date of the S3 object in POSIXct format.
+get_s3_object_last_modified <- function(key, bucket, missing_value = MIN_TIMESTAMP) {
+  metadata <- head_object(key, bucket = bucket)
+  if (!metadata) {
+    return(missing_value)
+  }
   # Format looks like "Fri, 31 Jan 2025 22:01:16 GMT"
-  attr(aws.s3::head_object(key, bucket = bucket), "last-modified") %>%
+  attr(metadata, "last-modified") %>%
     str_replace_all(" GMT", "") %>%
-    as.POSIXct(format = "%a, %d %b %Y %H:%M:%S")
+    as.POSIXct(format = "%a, %d %b %Y %H:%M:%S", tz = "UTC")
+}
+
+#' Get the last updated date of a Socrata dataset
+#'
+#' @param dataset_url The URL of the Socrata dataset.
+#'
+#' @return The last updated date of the Socrata dataset in POSIXct format.
+get_socrata_updated_at <- function(dataset_url, missing_value = MAX_TIMESTAMP) {
+  tryCatch(
+    {
+      with_config(config(timeout=10), httr::GET(dataset_url)) %>%
+        httr::content() %>%
+        # This field comes in as integer seconds since epoch, so we need to convert it.
+        pluck("rowsUpdatedAt") %>%
+        as.POSIXct(origin = "1970-01-01", tz="UTC")
+    },
+    error = function(cond) {
+      return(missing_value)
+    }
+  )
 }

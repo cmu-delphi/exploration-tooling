@@ -154,10 +154,10 @@ get_exclusions <- function(
   return("")
 }
 
-data_substitutions <- function(dataset, disease, forecast_generation_date) {
+data_substitutions <- function(dataset, substitutions_path, forecast_generation_date) {
   # Get the substitutions from the table, matched by forecast generation date
   substitutions <- readr::read_csv(
-    glue::glue("{disease}_data_substitutions.csv"),
+    substitutions_path,
     comment = "#",
     show_col_types = FALSE
   ) %>%
@@ -169,7 +169,7 @@ data_substitutions <- function(dataset, disease, forecast_generation_date) {
   new_values <- dataset %>%
     group_by(geo_value) %>%
     slice_max(time_value) %>%
-    inner_join(substitutions) %>%
+    inner_join(substitutions, by = "geo_value") %>%
     mutate(value = ifelse(!is.na(new_value), new_value, value)) %>%
     select(-new_value)
   # Remove keys from dataset that have been substituted
