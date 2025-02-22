@@ -624,22 +624,6 @@ gen_ili_data <- function(default_day_of_week = 1) {
     as_epi_archive(compactify = TRUE)
 }
 
-#' Get the NHSN data archive from S3
-#'
-#' @param disease_name The name of the disease to get the archive for.
-#' @return An epi_archive of the NHSN data.
-get_nhsn_data_archive <- function(disease_name) {
-  if (!dir.exists(here::here("cache"))) {
-    dir.create(here::here("cache"))
-  }
-  aws.s3::save_object("archive_timestamped.parquet", bucket = "forecasting-team-data", file = here::here("cache/archive_timestamped.parquet"))
-  archive <- qs::qread(here::here("cache/archive_timestamped.parquet"))
-  archive %>%
-    filter(disease == disease_name) %>%
-    select(-version_timestamp, -endpoint, -disease) %>%
-    as_epi_archive(compactify = TRUE)
-}
-
 #' Remove duplicate files from S3
 #'
 #' Removes duplicate files from S3 by keeping only the earliest timestamp file for each ETag.
