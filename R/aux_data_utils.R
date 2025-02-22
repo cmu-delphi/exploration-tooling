@@ -626,8 +626,9 @@ gen_ili_data <- function(default_day_of_week = 1) {
 
 #' Remove duplicate files from S3
 #'
-#' Removes duplicate files from S3 by keeping only the earliest timestamp file for each ETag.
-#' You can modify keep_df, if this doesn't suit your needs.
+#' Removes duplicate files from S3 by keeping only the earliest LastModified
+#' file for each ETag. You can modify the logic of keep_df, if this doesn't suit
+#' your needs.
 #'
 #' @param bucket The name of the S3 bucket.
 #' @param prefix The prefix of the files to remove duplicates from.
@@ -642,17 +643,23 @@ delete_duplicates_from_s3_by_etag <- function(bucket, prefix, dry_run = TRUE, .p
     group_by(ETag) %>%
     slice_min(LastModified) %>%
     ungroup()
+
+  # Create a list of all the files to delete by taking the complement of keep_df
   delete_df <- files_df %>%
     anti_join(keep_df, by = "Key")
-  if (nrow(delete_df) > 0) {
-    if (dry_run) {
-      cli::cli_alert_info("Would delete {nrow(delete_df)} files from {bucket} with prefix {prefix}")
-      print(delete_df)
-      return(invisible(delete_df))
-    } else {
-      delete_files_from_s3(bucket = bucket, keys = delete_df$Key, .progress = .progress)
-    }
+
+  if (nrow(delete_df) == 0) {
+    return(invisible(delete_df))
   }
+
+  if (dry_run) {
+    cli::cli_alert_info("Would delete {nrow(delete_df)} files from {bucket} with prefix {prefix}")
+    print(delete_df)
+    return(invisible(delete_df))
+  }
+
+  # Delete
+  delete_files_from_s3(bucket = bucket, keys = delete_df$Key, .progress = .progress)
 }
 
 #' Delete files from S3
@@ -674,7 +681,7 @@ delete_files_from_s3 <- function(keys, bucket, batch_size = 500, .progress = TRU
 #' call `get_s3_object_last_modified` to check if the archive has been updated
 #' since the last time you downloaded it.
 #'
-#' @param disease_name The name of the disease to get the archive for.
+#' @param disease_name The name of the disease ("nhsn_covid" or "nhsn_flu")
 #' @return An epi_archive of the NHSN data.
 get_nhsn_data_archive <- function(disease_name) {
   aws.s3::s3read_using(nanoparquet::read_parquet, object = "nhsn_data_archive.parquet", bucket = "forecasting-team-data") %>%
