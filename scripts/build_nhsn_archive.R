@@ -118,21 +118,6 @@ process_nhsn_data_file <- function(key) {
 # for filenames of the form nhsn_data_2024-11-19_16-29-43.191649.rds
 get_version_timestamp <- function(filename) ymd_hms(str_match(filename, "[0-9]{4}-..-.._..-..-..\\.[^.^_]*"))
 
-# Convert RDS files to Parquet files
-df <- get_bucket_df(bucket = config$s3_bucket, prefix = 'nhsn_data_') %>%
-  filter(grepl("rds", Key))
-df$Key %>% map(function(key) {
-  s3load(key, bucket = config$s3_bucket)
-  if (grepl("prelim", key)) {
-    out <- epi_data_raw_prelim
-  } else {
-    out <- epi_data_raw
-  }
-  new_key <- str_replace(key, "nhsn_data_", "nhsn_data_raw_")
-  new_key <- str_replace(new_key, ".rds", ".parquet")
-  out %>% s3write_using(write_parquet, object = new_key, bucket = config$s3_bucket)
-})
-
 #' Update NHSN archive from raw files.
 #'
 #' This function considers all the raw data files stored in S3 and creates or
