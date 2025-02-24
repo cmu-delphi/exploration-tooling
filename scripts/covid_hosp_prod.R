@@ -113,36 +113,32 @@ parameters_and_date_targets <- rlang::list2(
     command = "covid_data_substitutions.csv"
   ),
   tar_change(
-    nhsn_latest_data,
-    change = get_socrata_updated_at("https://data.cdc.gov/api/views/mpgq-jmmr"),
-    command = {
-      if (wday(Sys.Date()) < 6 & wday(Sys.Date()) > 3) {
-        # download from the preliminary data source from Wednesday to Friday
-        most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/mpgq-jmmr.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
-      } else {
-        most_recent_result <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm")
-      }
-      most_recent_result <-
-        most_recent_result %>%
-        process_nhsn_data() %>%
-        filter(disease == "nhsn_covid") %>%
-        select(-disease) %>%
-        filter(geo_value %nin% insufficient_data_geos)
-      most_recent_result
-    }
-  ),
-  tar_change(
     name = nhsn_archive_data,
-    change = get_s3_object_last_modified("forecasting-team-data", "archive_timestamped.parquet"),
+    change = get_s3_object_last_modified("nhsn_data_archive.parquet", "forecasting-team-data"),
     command = {
-      create_nhsn_data_archive(disease = "nhsn_covid")
+      get_nhsn_data_archive("nhsn_covid")
+    }
+  ),
+  tar_target(
+    nhsn_latest_data,
+    command = {
+      nhsn_archive_data %>%
+        epix_as_of(min(Sys.Date(), nhsn_archive_data$versions_end)) %>%
+        filter(geo_value %nin% insufficient_data_geos)
     }
   ),
   tar_change(
-    current_nssp_archive,
+    nssp_archive_data,
     change = get_covidcast_signal_last_update("nssp", "pct_ed_visits_covid", "state"),
     command = {
       up_to_date_nssp_state_archive("covid")
+    }
+  ),
+  tar_target(
+    nssp_latest_data,
+    command = {
+      nssp_archive_data %>%
+        epix_as_of(min(Sys.Date(), nssp_archive_data$versions_end))
     }
   )
 )
@@ -162,26 +158,22 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_res,
     command = {
-      if (as.Date(forecast_generation_date_int) < Sys.Date()) {
-        train_data <- nhsn_archive_data %>%
-          epix_as_of(min(as.Date(forecast_date_int), nhsn_archive_data$versions_end)) %>%
-          add_season_info() %>%
-          mutate(
-            geo_value = ifelse(geo_value == "usa", "us", geo_value),
-            time_value = time_value - 3
-          )
-      } else {
-        covid_data_substitutions
-        train_data <-
-          nhsn_latest_data %>%
-          data_substitutions(disease = "covid", as.Date(forecast_generation_date_int)) %>%
-          as_epi_df(as_of = as.Date(forecast_date_int)) %>%
-          mutate(time_value = time_value - 3)
-      }
-      nssp <- current_nssp_archive %>%
-        epix_as_of(min(as.Date(forecast_date_int), current_nssp_archive$versions_end)) %>%
-        mutate(time_value = time_value)
+      # Train data
+      train_data <- nhsn_archive_data %>%
+        epix_as_of(min(as.Date(forecast_date_int), nhsn_archive_data$versions_end)) %>%
+        add_season_info() %>%
+        mutate(
+          geo_value = ifelse(geo_value == "usa", "us", geo_value),
+          time_value = time_value - 3
+        ) %>%
+        data_substitutions(covid_data_substitutions, as.Date(forecast_generation_date_int)) %>%
+        filter(geo_value %nin% insufficient_data_geos)
       attributes(train_data)$metadata$as_of <- as.Date(forecast_date_int)
+
+      # Extra data
+      nssp <- nssp_archive_data %>%
+        epix_as_of(min(as.Date(forecast_date_int), nssp_archive_data$versions_end))
+
       train_data %>%
         forecaster_fns[[forecaster_fn_names]](ahead = aheads, extra_data = nssp) %>%
         mutate(
@@ -350,32 +342,21 @@ ensemble_targets <- tar_map(
   tar_target(
     name = truth_data,
     command = {
-      nssp_state <- retry_fn(
-        max_attempts = 20,
-        wait_seconds = 2,
-        fn = pub_covidcast,
-        source = "nssp",
-        signal = "pct_ed_visits_covid",
-        time_type = "week",
-        geo_type = "state",
-        geo_values = "*",
-        fetch_args = epidatr::fetch_args_list(timeout_seconds = 400)
-      ) %>%
-        select(geo_value, source, target_end_date = time_value, value) %>%
+      nssp_data <- nssp_latest_data %>%
+        select(geo_value, target_end_date = time_value, value = nssp) %>%
         filter(target_end_date > truth_data_date, geo_value %nin% insufficient_data_geos) %>%
-        mutate(target_end_date = target_end_date + 6)
-      truth_data <- nhsn_latest_data %>%
-        mutate(target_end_date = time_value) %>%
-        filter(time_value > truth_data_date) %>%
-        mutate(source = "nhsn") %>%
-        select(geo_value, target_end_date, source, value)
+        mutate(target_end_date = target_end_date + 3, source = "nssp")
+      nhsn_data <- nhsn_latest_data %>%
+        select(geo_value, target_end_date = time_value, value) %>%
+        filter(target_end_date > truth_data_date, geo_value %nin% insufficient_data_geos) %>%
+        mutate(source = "nhsn")
       nssp_renormalized <-
-        nssp_state %>%
+        nssp_data %>%
         left_join(
-          nssp_state %>%
+          nssp_data %>%
             rename(nssp = value) %>%
             full_join(
-              truth_data %>%
+              nhsn_data %>%
                 select(geo_value, target_end_date, value),
               by = join_by(geo_value, target_end_date)
             ) %>%
@@ -385,7 +366,7 @@ ensemble_targets <- tar_map(
         ) %>%
         mutate(value = value * rel_max_value) %>%
         select(-rel_max_value)
-      truth_data %>% bind_rows(nssp_renormalized)
+      nhsn_data %>% bind_rows(nssp_renormalized)
     },
   ),
   tar_target(
