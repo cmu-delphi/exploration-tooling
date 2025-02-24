@@ -717,6 +717,8 @@ MAX_TIMESTAMP = as.POSIXct("2040-01-01 00:00:00S", tz="UTC")
 
 #' Get the last time a covidcast signal was updated.
 #'
+#' FYI: This hits a cache layer, which is only updated ~every 4 hours.
+#'
 #' @param source The source of the signal.
 #' @param signal The signal of the signal.
 #' @param geo_type The geo type of the signal.
