@@ -31,8 +31,15 @@ suppressPackageStartupMessages({
 
 # Needed for: get_s3_object_last_modified, get_socrata_updated_at
 
+# Suppresses read_csv progress and column type messages
+options(readr.show_progress = FALSE)
+options(readr.show_col_types = FALSE)
+
+# Script run time
 run_time <- with_tz(Sys.time(), tzone = "UTC")
 run_time_local <- with_tz(run_time, tzone = "America/New_York")
+
+# Configuration
 config <- list(
   raw_query_url = "https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm",
   prelim_query_url = "https://data.cdc.gov/resource/mpgq-jmmr.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfc19newadm,totalconfflunewadm",

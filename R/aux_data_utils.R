@@ -756,13 +756,15 @@ get_s3_object_last_modified <- function(key, bucket, missing_value = MIN_TIMESTA
 
 #' Get the last updated date of a Socrata dataset
 #'
+#' FYI: This hits a cache layer, which is only updated ~every 4 hours.
+#'
 #' @param dataset_url The URL of the Socrata dataset.
 #'
 #' @return The last updated date of the Socrata dataset in POSIXct format.
 get_socrata_updated_at <- function(dataset_url, missing_value = MAX_TIMESTAMP) {
   tryCatch(
     {
-      with_config(config(timeout=10), httr::GET(dataset_url)) %>%
+      httr::with_config(httr::config(timeout=30), httr::RETRY("GET", dataset_url)) %>%
         httr::content() %>%
         # This field comes in as integer seconds since epoch, so we need to convert it.
         pluck("rowsUpdatedAt") %>%
