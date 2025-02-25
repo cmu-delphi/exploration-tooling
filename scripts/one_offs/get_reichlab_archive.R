@@ -153,15 +153,20 @@ cli::cli_alert_success("Data written to {.file {config$output_file}}")
 cli::cli_h1("Process Complete")
 
 
+cli::cli_h1("Comparing archives")
+
 library(nanoparquet)
 # Get archives
-df1 <- combined_data %>% filter(disease == "total_influenza_admissions")
-nhsn_archive <- s3read_using(read_parquet, object = "nhsn_data_archive.parquet", bucket = "forecasting-team-data")
-df2 <- nhsn_archive %>% filter(disease == "nhsn_flu", !grepl("region", geo_value))
+df1 <- combined_data %>%
+  filter(disease == "total_influenza_admissions") %>%
+  filter(!is.na(value)) %>%
+  select(-disease) %>%
+  as_epi_archive(compactify = TRUE)
+df2 <- s3read_using(read_parquet, object = "nhsn_data_archive.parquet", bucket = "forecasting-team-data") %>%
+  filter(disease == "nhsn_flu", !grepl("region", geo_value)) %>%
+  select(-disease, -version_timestamp) %>%
+  as_epi_archive(compactify = TRUE)
 
-# Create archives
-ea1 <- df1 %>% filter(!is.na(value)) %>% select(-disease) %>% as_epi_archive(compactify = TRUE)
-ea2 <- df2 %>% select(-disease, -version_timestamp) %>% as_epi_archive(compactify = TRUE)
 
 # Compare versions
 as_ofs <- combined_data %>% distinct(version) %>% pull(version)
@@ -170,36 +175,37 @@ as_ofs <- c(
   as.Date(c("2024-11-22", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")),
   seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L)
 )
-as_of <- as_ofs[[10]]
 
 for (as_of in as_ofs) {
   as_of <- as.Date(as_of)
-  out1 <- ea1 %>% epix_as_of(version = as_of)
-  out2 <- ea2 %>% epix_as_of(version = as_of + 2)
+  out1 <- df1 %>% epix_as_of(version = as_of)
+  out2 <- df2 %>% epix_as_of(version = as_of)
   out <- identical(out1$value, out2$value)
   if (!out) {
-    cli::cli_alert_danger("Values are not equal for {as_of}")
+    cli::cli_alert_danger("Snapshot not equal for {as_of}")
   } else {
-    cli::cli_alert_success("Values are equal for {as_of}")
+    cli::cli_alert_success("Snapshot equal for {as_of}")
   }
 }
 
-df <- readr::read_csv("cache/reichlab_archive/nhsn-2025-02-19.csv") %>%
-  select(
-    weekendingdate = `Week Ending Date`,
-    jurisdiction = `Geographic aggregation`,
-    totalconfflunewadm = `Total Influenza Admissions`,
-    totalconfc19newadm = `Total COVID-19 Admissions`
+if (FALSE) {
+  # Get a Reichlab file
+  df <- readr::read_csv("cache/reichlab_archive/nhsn-2025-02-19.csv") %>%
+    select(
+      weekendingdate = `Week Ending Date`,
+      jurisdiction = `Geographic aggregation`,
+      totalconfflunewadm = `Total Influenza Admissions`,
+      totalconfc19newadm = `Total COVID-19 Admissions`
+    )
+
+  # Overwrite one of our raw files with it
+  s3write_using(
+    df,
+    write_parquet,
+    object = "nhsn_data_raw_2025-02-19_11-01-08.128958_prelim.parquet",
+    bucket = "forecasting-team-data"
   )
 
-s3write_using(
-  df,
-  write_parquet,
-  object = "nhsn_data_raw_2025-02-19_11-01-08.128958_prelim.parquet",
-  bucket = "forecasting-team-data"
-)
-df <- get_bucket_df(bucket = "forecasting-team-data", prefix = "nhsn_data_raw_") %>% tibble()
-df %>% print(n = 45)
-
-
-s3read_using(read_parquet, object = "nhsn_data_archive.parquet", bucket = "forecasting-team-data")
+  # Delete archive so it regenerates
+  delete_object(object = "nhsn_data_archive.parquet", bucket = "forecasting-team-data")
+}
