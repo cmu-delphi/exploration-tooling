@@ -22,11 +22,19 @@ score_forecasts <- function(nhsn_latest_data, joined_forecasts_and_ensembles) {
     drop_na() %>%
     rename(location = state_code) %>%
     select(-geo_value)
+  # limit the forecasts to the same set of forecasting times
+  max_forecast_date <-
+    joined_forecasts_and_ensembles %>%
+    group_by(forecaster) %>%
+    summarize(max_forecast = max(forecast_date)) %>%
+    pull(max_forecast) %>%
+    min()
   forecasts_formatted <-
     joined_forecasts_and_ensembles %>%
++    filter(forecast_date <= max_forecast_date) %>%
     format_scoring_utils(disease = "covid")
   scores <- forecasts_formatted %>%
-    filter(location != "US") %>%
+    filter(location %nin% c("US", "60", "66", "78")) %>%
     hubEvals::score_model_out(
       truth_data,
       metrics = c("wis", "ae_median", "interval_coverage_50", "interval_coverage_90"),

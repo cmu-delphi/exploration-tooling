@@ -342,14 +342,27 @@ ensemble_targets <- tar_map(
   tar_target(
     name = truth_data,
     command = {
+      if (as.Date(forecast_generation_date_int) < Sys.Date()) {
+        truth_dat <- nhsn_archive_data %>% epix_as_of(min(as.Date(forecast_generation_date_int), nhsn_archive_data$versions_end))
+        truth_dat <- truth_dat %>%
+          mutate(source = "nhsn as_of forecast") %>%
+          bind_rows(
+            nhsn_latest_data %>% mutate(source = "nhsn")
+          )
+      } else {
+        truth_dat <- nhsn_latest_data %>%
+          mutate(source = "nhsn")
+      }
+      nhsn_data <- truth_dat %>%
+        select(geo_value, target_end_date = time_value, value) %>%
+        filter(
+          target_end_date > truth_data_date,
+          geo_value %nin% insufficient_data_geos
+        )
       nssp_data <- nssp_latest_data %>%
         select(geo_value, target_end_date = time_value, value = nssp) %>%
         filter(target_end_date > truth_data_date, geo_value %nin% insufficient_data_geos) %>%
         mutate(target_end_date = target_end_date + 3, source = "nssp")
-      nhsn_data <- nhsn_latest_data %>%
-        select(geo_value, target_end_date = time_value, value) %>%
-        filter(target_end_date > truth_data_date, geo_value %nin% insufficient_data_geos) %>%
-        mutate(source = "nhsn")
       nssp_renormalized <-
         nssp_data %>%
         left_join(

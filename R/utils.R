@@ -383,8 +383,12 @@ update_site <- function(sync_to_s3 = TRUE) {
       slice_max(generation_date)
     # iterating over the diseases
     for (row_num in seq_along(used_files$filename)) {
+      file_name <- path_file(used_files$filename[[row_num]])
       scoring_index <- which(grepl("### Scoring this season", report_md_content)) + 1
-      score_link <- sprintf("- [%s Scoring, Rendered %s](%s)", str_to_title(used_files$disease[[row_num]]), used_files$generation_date[[row_num]], used_files$filename[[row_num]])
+      score_link <-
+        sprintf("- [%s Scoring, Rendered %s](%s)",
+                str_to_title(used_files$disease[[row_num]]), used_files$generation_date[[row_num]],
+                file_name)
       report_md_content <- append(report_md_content, score_link, after = scoring_index)
     }
   }
