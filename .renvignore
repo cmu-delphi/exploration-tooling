@@ -1,3 +1,13 @@
 tmp.R
 node_modules/*
 local_logs/
+.github
+.exploration_cache
+.netlify
+aux_data
+cache/
+covid_hosp_explore
+covid_hosp_prod
+dashboard-proj
+flu_hosp_explore
+flu_hosp_prod

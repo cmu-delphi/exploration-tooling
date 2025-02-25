@@ -26,10 +26,10 @@ suppressPackageStartupMessages({
   library(nanoparquet)
   library(qs)
   library(tidyverse)
+  # Needed for: get_s3_object_last_modified, get_socrata_updated_at, MIN_TIMESTAMP
   source("R/aux_data_utils.R")
 })
 
-# Needed for: get_s3_object_last_modified, get_socrata_updated_at
 
 # Suppresses read_csv progress and column type messages
 options(readr.show_progress = FALSE)
@@ -51,6 +51,34 @@ config <- list(
 )
 
 
+# for filenames of the form nhsn_data_2024-11-19_16-29-43.191649.rds
+get_version_timestamp <- function(filename) ymd_hms(str_match(filename, "[0-9]{4}-..-.._..-..-..\\.[^.^_]*"))
+
+get_last_raw_update_at <- function(type = c("raw", "prelim"), missing_value = MIN_TIMESTAMP) {
+  type <- match.arg(type)
+  tryCatch(
+    {
+      if (type == "raw") {
+        get_bucket_df(bucket = config$s3_bucket, prefix = config$raw_file_name_prefix) %>%
+          filter(!grepl("prelim", Key)) %>%
+          mutate(version_timestamp = get_version_timestamp(Key)) %>%
+          slice_max(version_timestamp) %>%
+          pull(version_timestamp)
+      } else {
+        get_bucket_df(bucket = config$s3_bucket, prefix = config$raw_file_name_prefix) %>%
+          filter(grepl("prelim", Key)) %>%
+          mutate(version_timestamp = get_version_timestamp(Key)) %>%
+          slice_max(version_timestamp) %>%
+          pull(version_timestamp)
+      }
+    },
+    error = function(cond) {
+      cli_warn("Error getting last {type} update at: {cond}")
+      return(missing_value)
+    }
+  )
+}
+
 #' Download the latest NHSN data from Socrata
 #'
 #' This function downloads the latest NHSN data from Socrata, if it has been
@@ -59,14 +87,13 @@ config <- list(
 #'
 #' @param verbose Whether to print verbose output.
 update_nhsn_data_raw <- function() {
-  # Get the last updated metadata for the archive and the raw and prelim data
-  last_updated_at <- get_s3_object_last_modified(config$archive_s3_key, config$s3_bucket)
   raw_update_at <- get_socrata_updated_at(config$raw_metadata_url)
   prelim_update_at <- get_socrata_updated_at(config$prelim_metadata_url)
-  raw_update_at_local <- with_tz(raw_update_at)
-  prelim_update_at_local <- with_tz(prelim_update_at)
+  last_raw_file_update_at <- get_last_raw_update_at("raw")
+  last_prelim_file_update_at <- get_last_raw_update_at("prelim")
 
-  if (raw_update_at > last_updated_at) {
+  if (raw_update_at > last_raw_file_update_at) {
+    raw_update_at_local <- with_tz(raw_update_at)
     cli_inform("The raw data has been updated at {raw_update_at_local} (UTC: {raw_update_at}).")
     cli_inform("Downloading the raw data...")
     download_time <- format(with_tz(Sys.time(), tzone = "UTC"), "%Y-%m-%d_%H-%M-%OS5")
@@ -74,7 +101,8 @@ update_nhsn_data_raw <- function() {
     read_csv(config$raw_query_url) %>% s3write_using(write_parquet, object = raw_file, bucket = config$s3_bucket)
   }
 
-  if (prelim_update_at > last_updated_at) {
+  if (prelim_update_at > last_prelim_file_update_at) {
+    prelim_update_at_local <- with_tz(prelim_update_at)
     cli_inform("The prelim data has been updated at {prelim_update_at_local} (UTC: {prelim_update_at}).")
     cli_inform("Downloading the prelim data...")
     download_time <- format(with_tz(Sys.time(), tzone = "UTC"), "%Y-%m-%d_%H-%M-%OS5")
@@ -120,9 +148,6 @@ process_nhsn_data_file <- function(key) {
   )
 }
 
-# for filenames of the form nhsn_data_2024-11-19_16-29-43.191649.rds
-get_version_timestamp <- function(filename) ymd_hms(str_match(filename, "[0-9]{4}-..-.._..-..-..\\.[^.^_]*"))
-
 #' Update NHSN archive from raw files.
 #'
 #' This function considers all the raw data files stored in S3 and creates or
@@ -166,7 +191,7 @@ update_nhsn_data_archive <- function(verbose = FALSE) {
     bind_rows()
 
   # Look through the existing archive to see if there were updates today. If so, replace them with the new data.
-  if (object_exists(config$archive_s3_key, bucket = config$s3_bucket)) {
+  if (suppressMessages(object_exists(config$archive_s3_key, bucket = config$s3_bucket))) {
     previous_archive <- s3read_using(read_parquet, object = config$archive_s3_key, bucket = config$s3_bucket)
     older_versions <- previous_archive %>% filter(!(version %in% unique(new_data$version)))
     new_archive <- bind_rows(older_versions, new_data)

@@ -712,12 +712,10 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     as_epi_archive(compactify = TRUE)
 }
 
-MIN_TIMESTAMP = as.POSIXct("2000-01-01 00:00:00S", tz="UTC")
-MAX_TIMESTAMP = as.POSIXct("2040-01-01 00:00:00S", tz="UTC")
+MIN_TIMESTAMP = as.POSIXct("2000-01-01 00:00:00S", tz = "UTC")
+MAX_TIMESTAMP = as.POSIXct("2040-01-01 00:00:00S", tz = "UTC")
 
 #' Get the last time a covidcast signal was updated.
-#'
-#' FYI: This hits a cache layer, which is only updated ~every 4 hours.
 #'
 #' @param source The source of the signal.
 #' @param signal The signal of the signal.
@@ -746,7 +744,7 @@ get_covidcast_signal_last_update <- function(source, signal, geo_type, missing_v
 #'
 #' @return The last modified date of the S3 object in POSIXct format.
 get_s3_object_last_modified <- function(key, bucket, missing_value = MIN_TIMESTAMP) {
-  metadata <- head_object(key, bucket = bucket)
+  metadata <- suppressMessages(head_object(key, bucket = bucket))
   if (!metadata) {
     return(missing_value)
   }
@@ -766,11 +764,11 @@ get_s3_object_last_modified <- function(key, bucket, missing_value = MIN_TIMESTA
 get_socrata_updated_at <- function(dataset_url, missing_value = MAX_TIMESTAMP) {
   tryCatch(
     {
-      httr::with_config(httr::config(timeout=30), httr::RETRY("GET", dataset_url)) %>%
+      httr::with_config(httr::config(timeout = 30), httr::RETRY("GET", dataset_url)) %>%
         httr::content() %>%
         # This field comes in as integer seconds since epoch, so we need to convert it.
         pluck("rowsUpdatedAt") %>%
-        as.POSIXct(origin = "1970-01-01", tz="UTC")
+        as.POSIXct(origin = "1970-01-01", tz = "UTC")
     },
     error = function(cond) {
       return(missing_value)
