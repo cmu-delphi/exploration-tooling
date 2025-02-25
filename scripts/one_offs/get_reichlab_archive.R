@@ -200,3 +200,6 @@ s3write_using(
 )
 df <- get_bucket_df(bucket = "forecasting-team-data", prefix = "nhsn_data_raw_") %>% tibble()
 df %>% print(n = 45)
+
+
+s3read_using(read_parquet, object = "nhsn_data_archive.parquet", bucket = "forecasting-team-data")
