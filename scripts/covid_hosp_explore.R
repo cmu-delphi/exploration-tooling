@@ -22,7 +22,6 @@ dummy_mode <- as.logical(Sys.getenv("DUMMY_MODE", FALSE))
 # forecast_generation_dates <- forecast_generation_dates[1:10]
 # forecast_dates <- forecast_dates[1:10]
 
-
 # ================================ FORECASTER PARAMETERS ====================
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
 forecaster_parameter_combinations <- rlang::list2(
@@ -139,7 +138,13 @@ forecaster_parameter_combinations <- rlang::list2(
     ),
     pop_scaling = FALSE,
     n_training = Inf,
-    seasonal_method = list(c("covid"), c("window"), c("covid", "window"), c("climatological"), c("climatological", "window"))
+    seasonal_method = list(
+      c("covid"),
+      c("window"),
+      c("covid", "window"),
+      c("climatological"),
+      c("climatological", "window")
+    )
   )
 ) %>%
   map(function(x) {
@@ -210,6 +215,8 @@ parameter_targets <- list2(
   # This is used for generating notebooks.
   tar_target(name = forecaster_families, command = forecaster_parameter_combinations %>% names()),
 )
+
+
 # ================================ DATA TARGETS ==============================
 data_targets <- list2(
   tar_target(
@@ -346,7 +353,8 @@ data_targets <- list2(
         as_epi_archive(compactify = TRUE)
       # not just using dplyr to allow for na.rm
       google_symptoms_archive$DT$google_symptoms <-
-        rowSums(google_symptoms_archive$DT[, c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia")],
+        rowSums(
+          google_symptoms_archive$DT[, c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia")],
           na.rm = TRUE
         )
       pre_pipeline <- google_symptoms_archive %>%
@@ -370,8 +378,14 @@ data_targets <- list2(
       nwss <- readr::read_csv(most_recent) %>%
         rename(value = state_med_conc) %>%
         arrange(geo_value, time_value)
-      state_code <- readr::read_csv(here::here("aux_data", "flusion_data", "state_codes_table.csv"), show_col_types = FALSE)
-      hhs_codes <- readr::read_csv(here::here("aux_data", "flusion_data", "state_code_hhs_table.csv"), show_col_types = FALSE)
+      state_code <- readr::read_csv(
+        here::here("aux_data", "flusion_data", "state_codes_table.csv"),
+        show_col_types = FALSE
+      )
+      hhs_codes <- readr::read_csv(
+        here::here("aux_data", "flusion_data", "state_code_hhs_table.csv"),
+        show_col_types = FALSE
+      )
       state_to_hhs <- hhs_codes %>%
         left_join(state_code, by = "state_code") %>%
         select(hhs_region = hhs, geo_value = state_id)
@@ -408,8 +422,12 @@ data_targets <- list2(
   tar_target(
     name = hhs_region_data,
     command = {
-      state_to_hhs <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_code_hhs_table.csv")
-      state_to_id <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_codes_table.csv")
+      state_to_hhs <- readr::read_csv(
+        "https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_code_hhs_table.csv"
+      )
+      state_to_id <- readr::read_csv(
+        "https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_codes_table.csv"
+      )
       state_to_hhs %>%
         left_join(state_to_id, by = "state_code") %>%
         select(hhs_region = hhs, geo_value = state_id) %>%
@@ -440,7 +458,8 @@ data_targets <- list2(
       joined_archive_data$geo_type <- "custom"
       joined_archive_data %<>%
         epix_merge(google_symptoms_archive, sync = "locf")
-      joined_archive_data$DT %<>% filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% c("as", "pr", "vi", "gu", "mp")))
+      joined_archive_data$DT %<>%
+        filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% c("as", "pr", "vi", "gu", "mp")))
       joined_archive_data$geo_type <- "state"
       # TODO: This is a hack to ensure the as_of data is cached. Maybe there's a better way.
       epix_slide_simple(joined_archive_data, dummy_forecaster, ref_time_values, cache_key = "joined_archive_data")
@@ -456,8 +475,12 @@ data_targets <- list2(
         pull(time_value) %>%
         min()
       if (min_time_value > (ref_time_values[1] - 30)) {
-        stop("Joined archive data does not have at least 30 days of training data for the earliest forecast date.
-             Update your forecast_dates to be later than ", min_time_value + 30, ".")
+        stop(
+          "Joined archive data does not have at least 30 days of training data for the earliest forecast date.
+             Update your forecast_dates to be later than ",
+          min_time_value + 30,
+          "."
+        )
       }
     }
   )
