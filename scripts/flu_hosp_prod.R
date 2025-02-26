@@ -97,7 +97,8 @@ forecaster_fns <- list2(
         keys_to_ignore = very_latent_locations
       ) %>%
       select(-source) %>%
-      mutate(target_end_date = target_end_date + 3)
+      mutate(target_end_date = target_end_date + 3) %>%
+      filter(geo_value != c("mo", "us", "wy"))
     fcst
   }
 )
