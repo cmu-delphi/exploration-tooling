@@ -86,7 +86,7 @@ forecaster_fns <- list2(
       ) %>%
       mutate(target_end_date = target_end_date + 3) %>%
       # Wyoming has no data for NSSP since July 2024
-      filter(geo_value != "wy")
+      filter(geo_value != c("mo", "usa", "wy"))
     fcst
   }
 )
@@ -253,7 +253,7 @@ ensemble_targets <- tar_map(
     command = {
       all_ensembled <-
         ensemble_lin_clim %>%
-        mutate(forecaster = "linear_climate") %>%
+        mutate(forecaster = "climate_linear") %>%
         bind_rows(
           forecast_full_filtered %>%
             filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources")) %>%
@@ -267,7 +267,7 @@ ensemble_targets <- tar_map(
     command = {
       bind_rows(
         forecast_full_filtered,
-        ensemble_lin_clim %>% mutate(forecaster = "linear_climate"),
+        ensemble_lin_clim %>% mutate(forecaster = "climate_linear"),
         ensemble_mixture_res %>% mutate(forecaster = "ensemble_mix"),
         ens_ar_only %>% mutate(forecaster = "ens_ar_only")
       )
