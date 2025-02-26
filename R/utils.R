@@ -163,13 +163,11 @@ data_substitutions <- function(dataset, substitutions_path, forecast_generation_
   ) %>%
     filter(forecast_date == forecast_generation_date) %>%
     select(-forecast_date) %>%
-    rename(new_value = value) %>%
-    select(-time_value)
+    rename(new_value = value)
   # Replace the most recent values in the appropriate keys with the substitutions
+  dataset %>% arrange(desc(time_value))
   new_values <- dataset %>%
-    group_by(geo_value) %>%
-    slice_max(time_value) %>%
-    inner_join(substitutions, by = "geo_value") %>%
+    inner_join(substitutions, by = join_by(geo_value, time_value)) %>%
     mutate(value = ifelse(!is.na(new_value), new_value, value)) %>%
     select(-new_value)
   # Remove keys from dataset that have been substituted

@@ -686,6 +686,7 @@ delete_files_from_s3 <- function(keys, bucket, batch_size = 500, .progress = TRU
 get_nhsn_data_archive <- function(disease_name) {
   aws.s3::s3read_using(nanoparquet::read_parquet, object = "nhsn_data_archive.parquet", bucket = "forecasting-team-data") %>%
     filter(disease == disease_name) %>%
+    filter(!grepl("region.*", geo_value)) %>%
     select(-version_timestamp, -disease) %>%
     as_epi_archive(compactify = TRUE)
 }
