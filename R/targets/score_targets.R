@@ -31,7 +31,7 @@ score_forecasts <- function(nhsn_latest_data, joined_forecasts_and_ensembles) {
     min()
   forecasts_formatted <-
     joined_forecasts_and_ensembles %>%
-+    filter(forecast_date <= max_forecast_date) %>%
+    filter(forecast_date <= max_forecast_date) %>%
     format_scoring_utils(disease = "covid")
   scores <- forecasts_formatted %>%
     filter(location %nin% c("US", "60", "66", "78")) %>%
