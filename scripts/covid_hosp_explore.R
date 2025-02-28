@@ -203,11 +203,11 @@ get_partially_applied_forecaster <- function(id) {
   function(epi_data, ...) {
     forecaster_args <- rlang::dots_list(
       ...,
-      !!!params_list[[id]],
+      !!!config$params_list[[id]],
       .homonyms = "last"
     )
     # This uses string lookup to get the function.
-    forecaster_fn <- get(forecaster_functions_list[[id]])
+    forecaster_fn <- get(config$forecaster_functions_list[[id]])
     rlang::inject(forecaster_fn(epi_data = epi_data, !!!forecaster_args))
   }
 }
@@ -362,7 +362,8 @@ data_targets <- list2(
       latest_data_before_test_season <- google_symptoms_archive %>%
         epix_as_of(as.Date("2023-10-04")) %>%
         mutate(source = "none")
-      # Google Symptoms has two signals that have different scales, so we need to whiten them.
+      # Google Symptoms has two signals that have different and unknown scales,
+      # so we need to whiten them.
       colnames <- c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia")
       for (colname in colnames) {
         learned_params <- calculate_whitening_params(latest_data_before_test_season, colname = colname)
@@ -371,11 +372,8 @@ data_targets <- list2(
       # Sum the two signals.
       google_symptoms_archive$DT %>%
         mutate(
-          # Not just using dplyr to allow for na.rm
-          google_symptoms = rowSums(
-            google_symptoms_archive$DT[, c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia")],
-            na.rm = TRUE
-          )
+          google_symptoms = ifelse(is.na(google_symptoms_4_bronchitis), 0, google_symptoms_4_bronchitis) +
+            ifelse(is.na(google_symptoms_5_ageusia), 0, google_symptoms_5_ageusia)
         ) %>%
         select(-starts_with("source")) %>%
         as_epi_archive(compactify = TRUE)
@@ -397,8 +395,7 @@ data_targets <- list2(
         drop_na() %>%
         select(-agg_level, -year, -agg_level, -population, -density)
       pop_data <- gen_pop_and_density_data()
-      nwss_hhs_region <-
-        nwss %>%
+      nwss_hhs_region <- nwss %>%
         left_join(state_to_hhs_crosswalk, by = "geo_value") %>%
         mutate(year = year(time_value)) %>%
         left_join(pop_data, by = join_by(geo_value, year)) %>%
@@ -431,18 +428,14 @@ data_targets <- list2(
         rename("hhs" := value) %>%
         add_hhs_region_sum(state_to_hhs_crosswalk) %>%
         filter(geo_value != "us") %>%
-        as_epi_archive(
-          compactify = TRUE
-        )
+        as_epi_archive(compactify = TRUE)
       joined_archive_data$geo_type <- "custom"
-      # drop aggregated geo_values
       joined_archive_data <- joined_archive_data %>% epix_merge(nwss_coarse, sync = "locf")
       joined_archive_data$geo_type <- "custom"
-      # TODO: Maybe bring these back
-      # epix_merge(doctor_visits_weekly_archive, sync = "locf") %>%
       joined_archive_data %<>% epix_merge(nssp_archive, sync = "locf")
       joined_archive_data$geo_type <- "custom"
       joined_archive_data %<>% epix_merge(google_symptoms_archive, sync = "locf")
+      # drop aggregated geo_values
       joined_archive_data$DT %<>% filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% config$insufficient_data_geos))
       joined_archive_data$geo_type <- "state"
       # TODO: This is a hack to ensure the as_of data is cached. Maybe there's a better way.
@@ -455,6 +448,7 @@ data_targets <- list2(
     command = {
       # TODO: This can be a bit more granular (per geo, per source, etc.)
       min_time_value <- joined_archive_data$DT %>%
+        filter(if_all(all_of(c("hhs")), ~ !is.na(.))) %>%
         distinct(time_value) %>%
         pull(time_value) %>%
         min()
@@ -471,13 +465,16 @@ data_targets <- list2(
 )
 
 forecasts_and_scores <- tar_map(
-  values = list(id = config$forecaster_names_list),
+  values = list(forecaster_id = config$forecaster_names_list),
   unlist = FALSE,
   tar_target(
     name = forecast,
     command = {
-      forecaster_fn <- function(epi_data) get_partially_applied_forecaster(id)(epi_data = epi_data, ahead = aheads)
-      epix_slide_simple(
+      forecaster_fn <- function(epi_data) get_partially_applied_forecaster(forecaster_id)(epi_data = epi_data, ahead = aheads)
+      # debugonce(scaled_pop)
+      # debugonce(run_workflow_and_format)
+      # browser()
+      out <- epix_slide_simple(
         joined_archive_data,
         forecaster_fn,
         forecast_dates,
@@ -485,34 +482,21 @@ forecasts_and_scores <- tar_map(
       ) %>%
         rename(prediction = value) %>%
         mutate(ahead = as.numeric(target_end_date - forecast_date)) %>%
-        mutate(id = id)
+        mutate(id = forecaster_id)
+      # browser()
+      out
     },
     pattern = map(aheads)
   ),
   tar_target(
     name = score,
     command = {
-      # If the data has already been scaled, hhs needs to include the
-      # population and undo scaling.
-      if ("population" %in% colnames(hhs_evaluation_data)) {
-        actual_eval_data <- hhs_evaluation_data %>% select(-population)
-        forecast_scaled <- forecast %>%
-          left_join(
-            hhs_evaluation_data %>% distinct(geo_value, population),
-            by = "geo_value"
-          ) %>%
-          mutate(prediction = prediction * population / 10L**5)
-      } else {
-        forecast_scaled <- forecast
-        actual_eval_data <- hhs_evaluation_data
-      }
-      forecast_scaled <- forecast_scaled %>%
+      forecasts <- forecast %>%
         # Push the Wednesday markers to Saturday, to match targets with truth data.
         mutate(forecast_date = forecast_date + 3, target_end_date = target_end_date + 3) %>%
         rename("model" = "id")
-
-      # Score
-      evaluate_predictions(forecasts = forecast_scaled, truth_data = actual_eval_data) %>%
+      # browser()
+      evaluate_predictions(forecasts = forecasts, truth_data = hhs_evaluation_data) %>%
         rename("id" = "model")
     }
   )

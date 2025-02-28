@@ -15,7 +15,7 @@ forecaster_lookup <- function(pattern, forecaster_parameter_combinations = NULL)
   }
 
   # Remove the "forecaster_" prefix from the pattern if it exists.
-  if (grepl("forecaster_", pattern)) {
+  if (grepl("forecast_", pattern)) {
     pattern <- gsub("forecaster_", "", pattern)
   }
 
