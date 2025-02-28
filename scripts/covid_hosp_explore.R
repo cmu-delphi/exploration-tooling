@@ -445,14 +445,9 @@ data_targets <- list2(
       joined_archive_data %<>% epix_merge(google_symptoms_archive, sync = "locf")
       joined_archive_data$DT %<>% filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% config$insufficient_data_geos))
       joined_archive_data$geo_type <- "state"
-      joined_archive_data
-    }
-  ),
-  tar_target(
-    cache_joined_archive_data,
-    command = {
       # TODO: This is a hack to ensure the as_of data is cached. Maybe there's a better way.
       epix_slide_simple(joined_archive_data, dummy_forecaster, forecast_dates, cache_key = "joined_archive_data")
+      joined_archive_data
     }
   ),
   tar_target(
