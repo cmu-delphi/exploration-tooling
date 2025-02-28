@@ -9,7 +9,7 @@ if (!exists("ref_time_values_")) {
   start_date <- as.Date("2023-10-04")
   end_date <- as.Date("2024-04-24")
   date_step <- 7L
-  # ref_time_values_ <- as.Date(c("2023-11-08", "2023-11-22"))
+  ref_time_values_ <- seq.Date(start_date, end_date, by = date_step)
 }
 time_value_adjust <- 3 # this moves the week marker from Saturday to Wednesday
 
@@ -409,7 +409,7 @@ rlang::list2(
         colnames <- c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia", "google_symptoms")
         for (colname in colnames) {
           learned_params <- calculate_whitening_params(pre_pipeline, colname = colname)
-          google_symptoms_archive$DT %<>% data_whitening(colname = colname, learned_params)
+          google_symptoms_archive$DT %<>% data_whitening(colname = colname, learned_params, join_cols = "geo_value")
         }
         google_symptoms_archive$DT %>%
           select(-starts_with("source")) %>%
