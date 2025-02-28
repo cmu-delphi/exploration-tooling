@@ -66,115 +66,129 @@ step_season_week_sine <- function(preproc, season = 35) {
     )
 }
 
-#' Append the state population and state population density, taken from the census and interpolated in the most straightforward way.
+get_state_codes_crosswalk <- function() {
+  readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_codes_table.csv", show_col_types = FALSE, progress = FALSE) %>%
+    left_join(
+      readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_code_hhs_table.csv", show_col_types = FALSE, progress = FALSE),
+      by = join_by(state_code == state_code)
+    ) %>%
+    # Zero pad the hhs column
+    mutate(hhs = str_pad(hhs, width = 2, side = "left", pad = "0"))
+}
+
+#' Convenience function for adding a geo column to an epi_df.
+#'
+#' TODO: Add more geos.
+#'
+#' @param epi_data An epi_df.
+#' @param from_geo The column to convert from.
+#' @param to_geo The column to convert to.
+#'
+#' @return An epi_df with the new geo column.
+add_geo_column <- function(epi_data, from_geo, to_geo) {
+  checkmate::assert_character(from_geo)
+  checkmate::assert_character(to_geo)
+  checkmate::assert_subset(from_geo, c("state_code", "state_id", "state_name", "hhs"))
+  checkmate::assert_subset(to_geo, c("state_code", "state_id", "state_name", "hhs", "nation"))
+
+  if (from_geo %in% c("state_code", "state_id", "state_name") && to_geo %in% c("state_code", "state_id", "state_name", "hhs")) {
+    state_codes_crosswalk <- get_state_codes_crosswalk() %>%
+      select(all_of(c(from_geo, to_geo)))
+    epi_data %<>%
+      left_join(state_codes_crosswalk, by = join_by(geo_value == !!from_geo))
+  } else if (to_geo == "nation") {
+    epi_data %<>% mutate(nation = "us")
+  } else {
+    stop("Unsupported geo conversion: ", from_geo, " to ", to_geo)
+  }
+
+  return(epi_data)
+}
+
+#' Convenience function for recoding the geo column of an epi_df.
+#'
+#' @param epi_data An epi_df.
+#' @param from_geo The column to convert from.
+#' @param to_geo The column to convert to.
+#'
+#' @return An epi_df with the new geo column.
+replace_geo_column <- function(epi_data, from_geo, to_geo) {
+  epi_data %>%
+    add_geo_column(from_geo, to_geo) %>%
+    select(-any_of("geo_value")) %>%
+    rename(geo_value = !!to_geo) %>%
+    relocate(geo_value)
+}
+
+#' Append the state population and state population density to the dataset.
+#' @param original_dataset tibble or epi_df, should have states as 2 letter lower case
+add_pop_and_density <- function(original_dataset) {
+  pops_by_geo <- gen_pop_and_density_data()
+  # If the dataset uses "usa" instead of "us", substitute that
+  original_dataset %<>% mutate(geo_value = ifelse(geo_value == "usa", "us", geo_value))
+  # If the dataset doesn't have an agg_level column, figure it out, and add it
+  if (!("agg_level" %in% names(original_dataset))) {
+    original_dataset %<>% mutate(
+      agg_level = ifelse(grepl("[0-9]{2}", geo_value), "hhs_region", ifelse(("us" == geo_value), "nation", "state"))
+    )
+  }
+  original_dataset %>%
+    mutate(year = year(time_value)) %>%
+    left_join(
+      pops_by_geo,
+      by = join_by(year, geo_value, agg_level)
+    ) %>%
+    arrange(geo_value, time_value) %>%
+    ungroup() %>%
+    fill(population, density)
+}
+
+#' Get the state population and state population density, taken from the census and interpolated in the most straightforward way.
 #' apportionment data taken from here: https://www.census.gov/data/tables/time-series/dec/popchange-data-text.html
 #' there's probably a better way of doing this buried in
 #' https://www.census.gov/data/developers/data-sets/popest-popproj/popest.html,
-#' but for now it's not worth the time
-#' @param original_dataset tibble or epi_df, should have states as 2 letter lower case
-add_pop_and_density <-
-  function(original_dataset,
-           apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
-           state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
-           hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")) {
-    pops_by_state_hhs <- gen_pop_and_density_data(apportion_filename, state_code_filename, hhs_code_filename)
-    # if the dataset uses "usa" instead of "us", substitute that
-    if ("usa" %in% unique(original_dataset)$geo_value) {
-      pops_by_state_hhs %<>%
-        mutate(
-          geo_value = ifelse(geo_value == "us", "usa", geo_value),
-          agg_level = ifelse(grepl("[0-9]{2}", geo_value),
-            "hhs_region",
-            ifelse(("us" == geo_value) | ("usa" == geo_value), "nation", "state")
-          )
-        )
-    }
-    if (!("agg_level" %in% names(original_dataset))) {
-      original_dataset %<>%
-        mutate(agg_level = ifelse(grepl("[0-9]{2}", geo_value), "hhs_region", ifelse(("us" == geo_value) | ("usa" == geo_value), "nation", "state")))
-    }
-    original_dataset %>%
-      mutate(year = year(time_value)) %>%
-      left_join(
-        pops_by_state_hhs,
-        by = join_by(year, geo_value, agg_level)
-      ) %>%
-      # virgin islands data too limited for now
-      filter(geo_value != "vi") %>%
-      arrange(geo_value, time_value) %>%
-      ungroup() %>%
-      fill(population, density)
-  }
+#' but for now it's not worth the time.
+#'
+#' Aggregated to hhs regions and national.
+gen_pop_and_density_data <- function() {
+  imputed_pop_data <- s3read_using(readr::read_csv, object = "exploration/aux_data/flusion_data/apportionment.csv", bucket = "forecasting-team-data") %>%
+    filter(`Geography Type` %in% c("State", "Nation")) %>%
+    select(geo_value = Name, Year, `Resident Population`, `Resident Population Density`) %>%
+    group_by(geo_value) %>%
+    reframe(
+      population = spline(Year, `Resident Population`, n = 2020 - 1910 + 1)$y,
+      density = spline(Year, `Resident Population Density`, n = 2020 - 1910 + 1)$y,
+      year = seq(1910, 2020, by = 1)
+    )
 
-gen_pop_and_density_data <-
-  function(apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
-           state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
-           hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")) {
-    apportionment_data <- readr::read_csv(apportion_filename, show_col_types = FALSE) %>% as_tibble()
-    imputed_pop_data <- apportionment_data %>%
-      filter(`Geography Type` %in% c("State", "Nation")) %>%
-      select(Name, Year, `Resident Population`, `Resident Population Density`) %>%
-      group_by(Name) %>%
-      reframe(
-        population = spline(Year, `Resident Population`, n = 2020 - 1910 + 1)$y,
-        density = spline(Year, `Resident Population Density`, n = 2020 - 1910 + 1)$y,
-        Year = seq(1910, 2020, by = 1)
-      )
-    # converting names and adding to hhs_regions
-    state_codes <- readr::read_csv(state_code_filename, show_col_types = FALSE) %>%
-      mutate(state_code = as.character(as.integer(state_code)))
-
-    hhs_codes <- readr::read_csv(hhs_code_filename, show_col_types = FALSE) %>%
-      mutate(state_code = as.character(as.integer(state_code)))
-
-    # switching the names to codes, getting the hhs region sums
-    pops_by_state_hhs <-
-      state_codes %>%
-      left_join(hhs_codes, by = join_by(state_code)) %>%
-      mutate(hhs = as.character(hhs)) %>%
-      right_join(imputed_pop_data, by = join_by(state_name == Name)) %>%
-      select(-state_name, -state_code) %>%
-      rename(state = state_id, hhs_region = hhs, year = Year) %>%
-      pivot_longer(
-        cols = c(state, hhs_region),
-        values_to = "geo_value",
-        names_to = "agg_level"
-      )
-    # remove hhs_region na geo_values (this is national, and should only be
-    # present once)
-    pops_by_state_hhs %<>%
-      filter(!(is.na(geo_value) & (agg_level == "hhs_region"))) %>%
-      group_by(year, agg_level, geo_value) %>%
-      summarize(
-        area = sum(population / density),
-        population = sum(population),
-        density = population / area,
-        .groups = "drop"
-      ) %>%
-      select(-area)
-    # deal with us missing from the state_codes/ hhs_codes tables
-    pops_by_state_hhs %<>%
-      mutate(
-        geo_value = ifelse(is.na(geo_value), "us", geo_value)
-      )
-    # "project" populations forward into 2024 (should probably find the real data for this)
-    pops_by_state_hhs %<>%
-      bind_rows(
-        expand_grid(
-          year = c(2021, 2022, 2023, 2024),
-          pops_by_state_hhs %>%
-            select(agg_level, geo_value) %>%
-            distinct()
-        )
-      ) %>%
-      arrange(geo_value, year) %>%
-      fill(population, density)
-    # add us as both a nation and state
-    pops_by_state_hhs %>%
-      bind_rows(
-        (.) %>% filter(geo_value == "us") %>% mutate(agg_level = "nation")
-      )
-  }
+  # Convert from state names to state ids and "project" populations forward into
+  # 2024 (should probably find the real data for this)
+  pops_by_state <- imputed_pop_data %>% replace_geo_column("state_name", "state_id")
+  pops_by_state %<>% bind_rows(
+      expand_grid(
+        year = c(2021, 2022, 2023, 2024),
+        pops_by_state %>%
+        select(geo_value) %>%
+        distinct()
+    )
+    ) %>%
+    arrange(geo_value, year) %>%
+    fill(population, density)
+  # Convert to hhs regions and aggregate
+  pops_by_hhs <- pops_by_state %>%
+    replace_geo_column("state_id", "hhs") %>%
+    summarize(across(all_of(c("population", "density")), ~ sum(.x, na.rm = TRUE)), .by = c("geo_value", "year"))
+  # Convert to national and aggregate
+  pops_by_nation <- imputed_pop_data %>%
+    replace_geo_column("state_id", "nation") %>%
+    summarize(across(all_of(c("population", "density")), ~ sum(.x, na.rm = TRUE)), .by = c("geo_value", "year"))
+  # Add agg_level column and combine
+  bind_rows(
+    pops_by_state %>% mutate(agg_level = "state"),
+    pops_by_hhs %>% mutate(agg_level = "hhs_region"),
+    pops_by_nation %>% mutate(agg_level = "nation")
+  )
+}
 
 daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), day_of_week = 4L, day_of_week_end = 7L, keys = "geo_value", values = c("value")) {
   epi_df %>%
@@ -296,6 +310,13 @@ drop_non_seasons <- function(epi_data, min_window = 12) {
     )
 }
 
+get_nwss_coarse_data <- function(disease = c("covid", "flu")) {
+  disease <- arg_match(disease)
+  aws.s3::get_bucket_df(prefix = glue::glue("exploration/aux_data/nwss_{disease}_data"), bucket = "forecasting-team-data") %>%
+    slice_max(LastModified) %>%
+    pull(Key) %>%
+    aws.s3::s3read_using(FUN = readr::read_csv, object = ., bucket = "forecasting-team-data")
+}
 
 #' add a column summing the values in the hhs region
 #' @param hhs_region_table the region table

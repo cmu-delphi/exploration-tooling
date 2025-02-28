@@ -7,25 +7,25 @@
 #' @param pattern string to search in the forecaster name.
 #'
 #' @export
-forecaster_lookup <- function(pattern, forecaster_grid = NULL, printing = TRUE) {
-  if (is.null(forecaster_grid)) {
-    cli::cli_warn("Reading `forecaster_param_combinations` target. If it's not up to date, results will be off. Update with `tar_make(forecaster_parameter_combinations)`.")
-    forecaster_grid <- tar_read_raw("forecaster_parameter_combinations") %>%
-      map(make_forecaster_grid) %>%
-      bind_rows()
+forecaster_lookup <- function(pattern, forecaster_parameter_combinations = NULL) {
+  if (is.null(forecaster_parameter_combinations)) {
+    cli::cli_warn("Reading `forecaster_param_combinations` target. If it's not up to date, results will be off.
+    Update with `tar_make(forecaster_parameter_combinations)`.")
+    forecaster_parameter_combinations <- tar_read_raw("forecaster_parameter_combinations")
   }
-  fc_row <- forecaster_grid %>% filter(grepl(pattern, id))
-  if (printing) {
-    params <- fc_row$params[[1]]
-    if (!is.null(params$trainer)) {
-      params$trainer <- as_string(params$trainer)
+
+  # Remove the "forecaster_" prefix from the pattern if it exists.
+  if (grepl("forecast_", pattern)) {
+    pattern <- gsub("forecaster_", "", pattern)
+  }
+
+  for (table in forecaster_parameter_combinations) {
+    filtered_table <- table %>% filter(grepl(pattern, id))
+    if (nrow(filtered_table) > 0) {
+      filtered_table %>% glimpse()
+      break
     }
-    print(glue::glue("name: {fc_row %>% pull(id)}"))
-    print(glue::glue("forecaster: {fc_row$forecaster[[1]]}"))
-    print(glue::glue("params:"))
-    print(params %>% data.table::as.data.table())
   }
-  return(fc_row)
 }
 
 #' Add a unique id based on the column contents
@@ -60,52 +60,42 @@ get_single_id <- function(param_list) {
     paste(sep = ".", collapse = ".")
 }
 
-#' Make a forecaster grid.
-#'
-#' Convert a tibble of forecasters and their parameters to a specific format
-#' that we can iterate over in targets. Currently only `forecaster` and
-#' `trainer` can be symbols.
-#'
-#' @param tib the tibble of parameters. Must have the forecaster and trainer
-#' columns, everything else is optional.
-#'
-#' @export
-make_forecaster_grid <- function(tib) {
-  if ("trainer" %in% colnames(tib)) {
-    tib$trainer <- rlang::syms(tib$trainer)
-  }
-  # turns a tibble into a list of named lists
-  params_list <-
-    tib %>%
+#' Turn a tibble of parameters into a list of named lists.
+make_params_list <- function(df, unlist_cols = c("lags", "trainer"), get_cols = c("trainer")) {
+  params_list <- df %>%
     select(-forecaster, -id) %>%
     split(seq_len(nrow(.))) %>%
     unname() %>%
     lapply(as.list)
-  # for whatever reason, trainer ends up being a list of lists, which we do not want
-  params_list %<>% lapply(function(x) {
-    x$trainer <- x$trainer[[1]]
-    x$lags <- x$lags[[1]]
-    x
-  })
+  names(params_list) <- df$id
 
-  if (length(params_list) == 0) {
-    out <- tibble(
-      id = tib$id,
-      forecaster = rlang::syms(tib$forecaster),
-      params = list(list()),
-      param_names = list(list())
-    )
-  } else {
-    out <- tibble(
-      id = tib$id,
-      forecaster = rlang::syms(tib$forecaster),
-      params = params_list,
-      param_names = map(params_list, names)
-    )
+  # Some columns need to be unlisted.
+  unlist_cols <- unlist_cols[unlist_cols %in% names(params_list[[1]])]
+  if (length(unlist_cols) > 0) {
+    params_list %<>% lapply(function(x) {
+      for (col in unlist_cols) {
+        if (length(x[[col]]) == 1) {
+          x[[col]] <- x[[col]][[1]]
+        }
+      }
+      x
+    })
   }
 
-  return(out)
+  # Some columns need to be converted to symbols.
+  get_cols <- get_cols[get_cols %in% names(params_list[[1]])]
+  if (length(get_cols) > 0) {
+    params_list %<>% lapply(function(x) {
+      for (col in get_cols) {
+        x[[col]] <- get(x[[col]])
+      }
+      x
+    })
+  }
+
+  return(params_list)
 }
+
 
 #' Make an ensemble grid.
 #'
@@ -477,7 +467,6 @@ sort_by_quantile <- function(forecasts) {
     ungroup()
 }
 
-
 #' Print recent targets errors.
 get_targets_errors <- function(project = tar_path_store(), top_n = 10) {
   meta_df <- targets::tar_meta(store = project)
@@ -563,4 +552,8 @@ validate_epi_data <- function(epi_data) {
     attributes(epi_data)$metadata$as_of <- max(epi_data$time_value)
   }
   return(epi_data)
+}
+
+get_bucket_df_delphi <- function(prefix = "", bucket = "forecasting-team-data") {
+  aws.s3::get_bucket_df(prefix = prefix, bucket = bucket)
 }
