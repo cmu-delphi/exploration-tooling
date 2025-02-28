@@ -7,11 +7,11 @@
 #' @param pattern string to search in the forecaster name.
 #'
 #' @export
-forecaster_lookup <- function(pattern, forecaster_grid = NULL) {
-  if (is.null(forecaster_grid)) {
+forecaster_lookup <- function(pattern, forecaster_parameter_combinations = NULL) {
+  if (is.null(forecaster_parameter_combinations)) {
     cli::cli_warn("Reading `forecaster_param_combinations` target. If it's not up to date, results will be off.
     Update with `tar_make(forecaster_parameter_combinations)`.")
-    forecaster_grid <- tar_read_raw("forecaster_parameter_grid")
+    forecaster_parameter_combinations <- tar_read_raw("forecaster_parameter_combinations")
   }
 
   # Remove the "forecaster_" prefix from the pattern if it exists.
@@ -19,7 +19,7 @@ forecaster_lookup <- function(pattern, forecaster_grid = NULL) {
     pattern <- gsub("forecaster_", "", pattern)
   }
 
-  for (table in forecaster_grid) {
+  for (table in forecaster_parameter_combinations) {
     filtered_table <- table %>% filter(grepl(pattern, id))
     if (nrow(filtered_table) > 0) {
       filtered_table %>% glimpse()
@@ -467,7 +467,6 @@ sort_by_quantile <- function(forecasts) {
     ungroup()
 }
 
-
 #' Print recent targets errors.
 get_targets_errors <- function(project = tar_path_store(), top_n = 10) {
   meta_df <- targets::tar_meta(store = project)
@@ -553,4 +552,8 @@ validate_epi_data <- function(epi_data) {
     attributes(epi_data)$metadata$as_of <- max(epi_data$time_value)
   }
   return(epi_data)
+}
+
+get_bucket_df_delphi <- function(prefix = "", bucket = "forecasting-team-data") {
+  aws.s3::get_bucket_df(prefix = prefix, bucket = bucket)
 }

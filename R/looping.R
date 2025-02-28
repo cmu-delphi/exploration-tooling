@@ -2,7 +2,7 @@ epix_slide_simple <- function(epi_archive, forecaster, ref_time_values, before =
   # this is so that changing the object without changing the name doesn't result in pulling the wrong cache
   cache_hash <- rlang::hash(epi_archive)
   dir.create(".exploration_cache/slide_cache", showWarnings = FALSE, recursive = TRUE)
-  purrr::map(ref_time_values, function(tv) {
+  out <- purrr::map(ref_time_values, function(tv) {
     if (is.null(cache_key)) {
       epi_df <- epi_archive %>%
         epix_as_of(tv, min_time_value = tv - before)
@@ -18,4 +18,6 @@ epix_slide_simple <- function(epi_archive, forecaster, ref_time_values, before =
     }
     epi_df %>% forecaster()
   }) %>% bind_rows()
+  gc()
+  return(out)
 }
