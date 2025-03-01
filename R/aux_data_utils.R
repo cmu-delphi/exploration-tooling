@@ -274,7 +274,10 @@ daily_to_weekly_archive <- function(epi_arch,
         as_tibble()
     }
   ) %>%
-    as_epi_archive(compactify = TRUE)
+  # Always convert to data.frame after dplyr operations on data.table.
+  # https://github.com/cmu-delphi/epiprocess/issues/618
+  as.data.frame() %>%
+  as_epi_archive(compactify = TRUE)
 }
 
 

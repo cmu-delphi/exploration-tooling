@@ -6,8 +6,9 @@ source("scripts/targets-exploration-common.R")
 hhs_signal <- "confirmed_admissions_covid_1d"
 if (!exists("ref_time_values_")) {
   # Alternatively you can let slide_forecaster figure out ref_time_values
-  start_date <- as.Date("2023-10-04")
+  start_date <- as.Date("2023-11-08")
   end_date <- as.Date("2024-04-24")
+  # end_date <- start_date + 7
   date_step <- 7L
   ref_time_values_ <- seq.Date(start_date, end_date, by = date_step)
 }
@@ -62,12 +63,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       ),
       pop_scaling = FALSE,
       scale_method = "quantile",
-      center_method = "median",
-      nonlin_method = "quart_root",
-      filter_source = "",
-      filter_agg_level = "",
-      n_training = Inf,
-      drop_non_seasons = FALSE,
+      n_training = Inf
     ),
     expand_grid(
       forecaster = "scaled_pop",
@@ -93,12 +89,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       ),
       pop_scaling = FALSE,
       scale_method = "quantile",
-      center_method = "median",
-      nonlin_method = "quart_root",
-      filter_source = "",
-      filter_agg_level = "",
-      n_training = Inf,
-      drop_non_seasons = FALSE,
+      n_training = Inf
     ),
     expand_grid(
       forecaster = "scaled_pop",
@@ -124,12 +115,7 @@ forecaster_parameter_combinations_ <- rlang::list2(
       ),
       pop_scaling = FALSE,
       scale_method = "quantile",
-      center_method = "median",
-      nonlin_method = "quart_root",
-      filter_source = "",
-      filter_agg_level = "",
-      n_training = Inf,
-      drop_non_seasons = FALSE,
+      n_training = Inf
     )
   ),
   scled_pop_season = tidyr::expand_grid(
@@ -141,7 +127,13 @@ forecaster_parameter_combinations_ <- rlang::list2(
     ),
     pop_scaling = FALSE,
     n_training = Inf,
-    seasonal_method = list(c("covid"), c("window"), c("covid", "window"), c("climatological"), c("climatological", "window"))
+    seasonal_method = list(
+      c("covid"),
+      c("window"),
+      c("covid", "window"),
+      c("climatological"),
+      c("climatological", "window")
+    )
   )
 ) %>%
   map(function(x) {
@@ -178,9 +170,8 @@ scaled_pop_scaled <- list(
 smooth_scaled <- list(
   forecaster = "smoothed_scaled",
   trainer = "quantreg",
-  lags =
-  # list(smoothed, sd)
-    list(c(0, 7, 14, 21, 28), c(0)),
+  # lags = list(smoothed, sd)
+  lags = list(c(0, 7, 14, 21, 28), c(0)),
   smooth_width = as.difftime(2, units = "weeks"),
   sd_width = as.difftime(4, units = "weeks"),
   sd_mean_width = as.difftime(2, units = "weeks"),
@@ -188,6 +179,7 @@ smooth_scaled <- list(
   n_training = Inf
 )
 # Human-readable object to be used for inspecting the ensembles in the pipeline.
+# fmt: skip
 ensemble_parameter_combinations_ <- tribble(
   ~ensemble, ~ensemble_args, ~forecasters,
   # mean forecaster
@@ -240,7 +232,12 @@ ensemble_parameter_combinations_ <- tribble(
   ) %>%
   add_id(exclude = "forecasters")
 # spoofing ensembles for right now
-ensemble_parameter_combinations_ <- tibble::tibble(id = character(), ensemble = character(), ensemble_args = character(), children_ids = character())
+ensemble_parameter_combinations_ <- tibble::tibble(
+  id = character(),
+  ensemble = character(),
+  ensemble_args = character(),
+  children_ids = character()
+)
 # Check that every ensemble dependent is actually included.
 missing_forecasters <- setdiff(
   ensemble_parameter_combinations_ %>% pull(children_ids) %>% unlist() %>% unique(),
@@ -272,7 +269,7 @@ rlang::list2(
     tar_target(
       name = hhs_archive_data_asof,
       command = {
-        get_health_data(as.Date(ref_time_values)) %>%
+        get_health_data(as.Date(ref_time_values), disease = "covid") %>%
           mutate(version = as.Date(ref_time_values)) %>%
           relocate(geo_value, time_value, version, hhs)
       },
@@ -348,6 +345,9 @@ rlang::list2(
           # weekly data is indexed from the start of the week
           mutate(time_value = time_value + 6 - time_value_adjust) %>%
           mutate(version = time_value) %>%
+          # Always convert to data.frame after dplyr operations on data.table.
+          # https://github.com/cmu-delphi/epiprocess/issues/618
+          as.data.frame() %>%
           as_epi_archive(compactify = TRUE)
         nssp_archive
       }
@@ -380,27 +380,39 @@ rlang::list2(
             geo_type = "hhs",
             geo_values = "*"
           )
-          google_symptoms_archive_min <-
-            google_symptoms_state_archive %>%
+          google_symptoms_archive_min <- google_symptoms_state_archive %>%
             bind_rows(google_symptoms_hhs_archive) %>%
             select(geo_value, time_value, value) %>%
             daily_to_weekly() %>%
             mutate(version = time_value) %>%
-            as_epi_archive(compactify = TRUE)
-          google_symptoms_archive_min$DT %>%
             filter(!is.na(value)) %>%
             relocate(geo_value, time_value, version, value) %>%
+            as.data.frame() %>%
             as_epi_archive(compactify = TRUE)
         })
-        all_of_them[[1]]$DT %<>% rename(google_symptoms_4_bronchitis = value)
-        all_of_them[[2]]$DT %<>% rename(google_symptoms_5_ageusia = value)
+        all_of_them[[1]] <- all_of_them[[1]]$DT %>%
+          rename(google_symptoms_4_bronchitis = value) %>%
+          # Always convert to data.frame after dplyr operations on data.table.
+          # https://github.com/cmu-delphi/epiprocess/issues/618
+          as.data.frame() %>%
+          as_epi_archive(compactify = TRUE)
+        all_of_them[[2]] <- all_of_them[[2]]$DT %>%
+          rename(google_symptoms_5_ageusia = value) %>%
+          # Always convert to data.frame after dplyr operations on data.table.
+          # https://github.com/cmu-delphi/epiprocess/issues/618
+          as.data.frame() %>%
+          as_epi_archive(compactify = TRUE)
         google_symptoms_archive <- epix_merge(all_of_them[[1]], all_of_them[[2]])
         google_symptoms_archive <- google_symptoms_archive$DT %>%
           mutate(google_symptoms = google_symptoms_4_bronchitis + google_symptoms_5_ageusia) %>%
+          # Always convert to data.frame after dplyr operations on data.table.
+          # https://github.com/cmu-delphi/epiprocess/issues/618
+          as.data.frame() %>%
           as_epi_archive(compactify = TRUE)
         # not just using dplyr to allow for na.rm
         google_symptoms_archive$DT$google_symptoms <-
-          rowSums(google_symptoms_archive$DT[, c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia")],
+          rowSums(
+            google_symptoms_archive$DT[, c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia")],
             na.rm = TRUE
           )
         pre_pipeline <- google_symptoms_archive %>%
@@ -413,6 +425,9 @@ rlang::list2(
         }
         google_symptoms_archive$DT %>%
           select(-starts_with("source")) %>%
+          # Always convert to data.frame after dplyr operations on data.table
+          # https://github.com/cmu-delphi/epiprocess/issues/618
+          as.data.frame() %>%
           as_epi_archive(compactify = TRUE)
       }
     ),
@@ -479,8 +494,14 @@ rlang::list2(
         nwss <- readr::read_csv(most_recent) %>%
           rename(value = state_med_conc) %>%
           arrange(geo_value, time_value)
-        state_code <- readr::read_csv(here::here("aux_data", "flusion_data", "state_codes_table.csv"), show_col_types = FALSE)
-        hhs_codes <- readr::read_csv(here::here("aux_data", "flusion_data", "state_code_hhs_table.csv"), show_col_types = FALSE)
+        state_code <- readr::read_csv(
+          here::here("aux_data", "flusion_data", "state_codes_table.csv"),
+          show_col_types = FALSE
+        )
+        hhs_codes <- readr::read_csv(
+          here::here("aux_data", "flusion_data", "state_code_hhs_table.csv"),
+          show_col_types = FALSE
+        )
         state_to_hhs <- hhs_codes %>%
           left_join(state_code, by = "state_code") %>%
           select(hhs_region = hhs, geo_value = state_id)
@@ -489,8 +510,7 @@ rlang::list2(
           drop_na() %>%
           select(-agg_level, -year, -agg_level, -population, -density)
         pop_data <- gen_pop_and_density_data()
-        nwss_hhs_region <-
-          nwss %>%
+        nwss_hhs_region <- nwss %>%
           left_join(state_to_hhs, by = "geo_value") %>%
           mutate(year = year(time_value)) %>%
           left_join(pop_data, by = join_by(geo_value, year)) %>%
@@ -517,8 +537,12 @@ rlang::list2(
     tar_target(
       name = hhs_region,
       command = {
-        hhs_region <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_code_hhs_table.csv")
-        state_id <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_codes_table.csv")
+        hhs_region <- readr::read_csv(
+          "https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_code_hhs_table.csv"
+        )
+        state_id <- readr::read_csv(
+          "https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_codes_table.csv"
+        )
         hhs_region %>%
           left_join(state_id, by = "state_code") %>%
           select(hhs_region = hhs, geo_value = state_id) %>%
@@ -534,22 +558,22 @@ rlang::list2(
           rename("hhs" := value) %>%
           add_hhs_region_sum(hhs_region) %>%
           filter(geo_value != "us") %>%
-          as_epi_archive(
-            compactify = TRUE
-          )
+          # Always convert to data.frame after dplyr operations on data.table
+          # https://github.com/cmu-delphi/epiprocess/issues/618
+          as.data.frame() %>%
+          as_epi_archive(compactify = TRUE)
         joined_archive_data$geo_type <- "custom"
         # drop aggregated geo_values
-        joined_archive_data <- joined_archive_data %>%
-          epix_merge(nwss_coarse, sync = "locf")
+        joined_archive_data <- joined_archive_data %>% epix_merge(nwss_coarse, sync = "locf")
+        joined_archive_data %<>% epix_merge(nssp_archive, sync = "locf")
         joined_archive_data$geo_type <- "custom"
-        # TODO: Maybe bring these back
-        # epix_merge(doctor_visits_weekly_archive, sync = "locf") %>%
-        joined_archive_data %<>%
-          epix_merge(nssp_archive, sync = "locf")
-        joined_archive_data$geo_type <- "custom"
-        joined_archive_data %<>%
-          epix_merge(google_symptoms_archive, sync = "locf")
-        joined_archive_data$DT %<>% filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% c("as", "pr", "vi", "gu", "mp")))
+        joined_archive_data %<>% epix_merge(google_symptoms_archive, sync = "locf")
+        joined_archive_data$DT %<>%
+          filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% c("as", "pr", "vi", "gu", "mp"))) %>%
+          # Always convert to data.frame after dplyr operations on data.table
+          # https://github.com/cmu-delphi/epiprocess/issues/618
+          as.data.frame() %>%
+          as_epi_archive(compactify = TRUE)
         joined_archive_data$geo_type <- "state"
         slide_forecaster(
           epi_archive = joined_archive_data,
@@ -591,7 +615,7 @@ rlang::list2(
         rename(model = forecaster) %>%
         rename(prediction = value) %>%
         filter(!is.na(geo_value))
-      evaluate_predictions(predictions_cards = filtered_forecasts, truth_data = actual_eval_data) %>%
+      evaluate_predictions(forecasts = filtered_forecasts, truth_data = actual_eval_data) %>%
         rename(forecaster = model)
     }
   ),
