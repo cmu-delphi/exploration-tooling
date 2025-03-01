@@ -219,7 +219,7 @@ make_forecasts_and_scores <- function() {
           rename("model" = "id")
 
         # Score
-        evaluate_predictions(predictions_cards = forecast_scaled, truth_data = actual_eval_data) %>%
+        evaluate_predictions(forecasts = forecast_scaled, truth_data = actual_eval_data) %>%
           rename("id" = "model")
       }
     )
