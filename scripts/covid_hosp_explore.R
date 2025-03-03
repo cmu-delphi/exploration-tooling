@@ -409,21 +409,19 @@ rlang::list2(
           # https://github.com/cmu-delphi/epiprocess/issues/618
           as.data.frame() %>%
           as_epi_archive(compactify = TRUE)
-        # not just using dplyr to allow for na.rm
-        google_symptoms_archive$DT$google_symptoms <-
-          rowSums(
-            google_symptoms_archive$DT[, c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia")],
-            na.rm = TRUE
-          )
         pre_pipeline <- google_symptoms_archive %>%
           epix_as_of(as.Date("2023-10-04")) %>%
           mutate(source = "none")
-        colnames <- c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia", "google_symptoms")
+        colnames <- c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia")
         for (colname in colnames) {
           learned_params <- calculate_whitening_params(pre_pipeline, colname = colname)
           google_symptoms_archive$DT %<>% data_whitening(colname = colname, learned_params, join_cols = "geo_value")
         }
         google_symptoms_archive$DT %>%
+          mutate(
+            google_symptoms = ifelse(is.na(google_symptoms_4_bronchitis), 0, google_symptoms_4_bronchitis) +
+              ifelse(is.na(google_symptoms_5_ageusia), 0, google_symptoms_5_ageusia)
+          ) %>%
           select(-starts_with("source")) %>%
           # Always convert to data.frame after dplyr operations on data.table
           # https://github.com/cmu-delphi/epiprocess/issues/618
@@ -568,7 +566,7 @@ rlang::list2(
         joined_archive_data %<>% epix_merge(nssp_archive, sync = "locf")
         joined_archive_data$geo_type <- "custom"
         joined_archive_data %<>% epix_merge(google_symptoms_archive, sync = "locf")
-        joined_archive_data$DT %<>%
+        joined_archive_data <- joined_archive_data$DT %>%
           filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% c("as", "pr", "vi", "gu", "mp"))) %>%
           # Always convert to data.frame after dplyr operations on data.table
           # https://github.com/cmu-delphi/epiprocess/issues/618
