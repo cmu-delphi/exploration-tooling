@@ -661,6 +661,7 @@ external_forecasts_and_scores <- rlang::list2(
     external_forecasts_file,
     command = s3read_using(
       nanoparquet::read_parquet,
+      # TODO: How was this generated? Was there any date shifting there?
       object = "covid19_forecast_hub_2023_full_summed.parquet",
       bucket = "forecasting-team-data"
     )
@@ -671,9 +672,11 @@ external_forecasts_and_scores <- rlang::list2(
       external_forecasts_file %>%
         filter(geo_value %in% state_geo_values, forecaster %in% outside_forecaster_subset) %>%
         rename(ahead = week_ahead, prediction = value) %>%
-        mutate(target_end_date = as.Date(forecast_date) + 7 * as.numeric(ahead)) %>%
-        mutate(forecast_date = forecast_date + 5, target_end_date = target_end_date + 5) %>%
+        # Push the label to Saturday from Monday.
+        mutate(forecast_date = forecast_date + 5) %>%
+        # Filter to only forecasts we care about.
         filter(forecast_date %in% (forecast_dates + 3)) %>%
+        mutate(target_end_date = as.Date(forecast_date) + 7 * as.numeric(ahead)) %>%
         mutate(prediction = prediction * 7)
     }
   ),
