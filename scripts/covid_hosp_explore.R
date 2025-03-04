@@ -5,7 +5,7 @@ source("scripts/targets-exploration-common.R")
 # These globals are needed by make_forecasts_and_scores (and they need to persist
 # during the actual targets run, since the commands are frozen as expressions).
 config <- list(
-  aheads = c(0, 7, 14, 21, 28),
+  aheads = 0:4 * 7,
   hhs_signal = "confirmed_admissions_covid_1d",
   # The date when the forecast was generated (this is effectively the AS OF date).
   forecast_generation_dates = seq.Date(as.Date("2023-11-08"), as.Date("2024-04-24"), by = 7L),
@@ -23,8 +23,8 @@ config <- list(
   insufficient_data_geos = c("as", "pr", "vi", "gu", "mp")
 )
 # For testing, reduce dates
-# config$forecast_generation_dates <- config$forecast_generation_dates[1:3]
-# config$forecast_dates <- config$forecast_dates[1:3]
+config$forecast_generation_dates <- config$forecast_generation_dates[1:3]
+config$forecast_dates <- config$forecast_dates[1:3]
 
 # ================================ FORECASTER PARAMETERS ====================
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
@@ -340,6 +340,8 @@ data_targets <- list2(
         fetch_args = config$fetch_args
       ) %>%
         select(signal, geo_value, time_value, value) %>%
+        # This aggregates the data to the week and labels each Sunday - Saturday
+        # summation with the Wednesday of that week.
         daily_to_weekly(keys = c("geo_value", "signal")) %>%
         select(signal, geo_value, target_end_date = time_value, true_value = value) %>%
         # Correction for timing offsets
@@ -678,7 +680,6 @@ external_forecasts_and_scores <- rlang::list2(
   tar_target(
     external_scores,
     command = {
-      # TODO: Maybe +5 time_value?
       evaluate_predictions(
         forecasts = external_forecasts %>% rename(model = forecaster),
         truth_data = hhs_evaluation_data
@@ -700,20 +701,6 @@ joined_forecasts_and_scores <- rlang::list2(
       filtered_scores <- joined_scores %>%
         filter(forecaster %in% c(forecaster_family_subset, outside_forecaster_subset))
 
-      # TODO: Write an assert to make sure that these dates are similar. It's a bit tricky.
-      # actual_eval_data %>%
-      #   filter(target_end_date > "2023-09-01") %>%
-      #   distinct(target_end_date) %>%
-      #   pull(target_end_date) %>%
-      #   sort()
-      # filtered_forecasts %>%
-      #   distinct(target_end_date) %>%
-      #   pull(target_end_date) %>%
-      #   sort()
-      # filtered_scores %>%
-      #   distinct(target_end_date) %>%
-      #   pull(target_end_date) %>%
-      #   sort()
       rmarkdown::render(
         "scripts/reports/comparison-notebook.Rmd",
         params = list(
@@ -724,7 +711,7 @@ joined_forecasts_and_scores <- rlang::list2(
           truth_data = hhs_evaluation_data,
           disease = "covid"
         ),
-        output_file = here::here(reports_dir, paste0("covid-notebook-", forecaster_families, ".html"))
+        output_file = here::here(config$reports_dir, paste0("covid-notebook-", forecaster_families, ".html"))
       )
     },
     pattern = map(forecaster_families)
