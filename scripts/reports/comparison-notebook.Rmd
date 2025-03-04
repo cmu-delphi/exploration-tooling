@@ -109,7 +109,7 @@ param_table <- params$forecaster_parameters %>%
       .
     }
     if ("trainer" %in% colnames(.)) {
-      . <- (.) %>% mutate(trainer = trainer[[1]])
+      . <- (.) %>% mutate(trainer = unlist(trainer))
     } else {
       .
     }
