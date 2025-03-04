@@ -43,12 +43,13 @@ library(purrr)
 # outside_forecaster_subset <- c("COVIDhub-baseline", "COVIDhub-trained_ensemble", "COVIDhub_CDC-ensemble")
 # i <- 1
 # params <- list(
-#   forecaster_family = forecaster_families[[i]],
-#   forecaster_parameters = forecaster_parameter_combinations[[i]],
-#   forecasts = tar_read(joined_forecasts) %>% filter(forecaster %in% c(forecaster_parameter_combinations[[i]]$id, outside_forecaster_subset)),
-#   scores = tar_read(joined_scores) %>% filter(forecaster %in% c(forecaster_parameter_combinations[[i]]$id, outside_forecaster_subset)),
+#   forecaster_family = tar_read(forecaster_families)[[i]],
+#   forecaster_parameters = tar_read(forecaster_parameter_combinations)[[i]],
+#   forecasts = tar_read(joined_forecasts) %>% filter(forecaster %in% c(tar_read(forecaster_parameter_combinations)[[i]]$id, outside_forecaster_subset)),
+#   scores = tar_read(joined_scores) %>% filter(forecaster %in% c(tar_read(forecaster_parameter_combinations)[[i]]$id, outside_forecaster_subset)),
 #   truth_data = tar_read(hhs_evaluation_data),
-#   disease = "covid"
+#   disease = "covid",
+#   forecast_dates = config$forecast_dates
 # )
 
 if (params$disease == "flu") {
@@ -590,9 +591,9 @@ Fan plots showing the 90% prediction intervals for the forecasts made by the CMU
 
 ```{r}
 if (params$disease == "flu") {
-  plot_dates <- seq.Date(as.Date("2023-10-07"), by = "4 weeks", length.out = 8)
+  plot_dates <- config$forecast_dates[seq(1, length(config$forecast_dates), by = 4)] + 3
 } else {
-  plot_dates <- seq.Date(as.Date("2023-10-07"), by = "4 weeks", length.out = 7)
+  plot_dates <- config$forecast_dates[seq(1, length(config$forecast_dates), by = 4)] + 3
 }
 ```
 
@@ -601,7 +602,6 @@ if (params$disease == "flu") {
 ```{r}
 # We plot a subset of the dates and geos for the fan plot
 geo_vals <- c("ca", "fl", "pa", "tx", "ny")
-# geo_vals <- c("ca")
 forecast_subset <- params$forecasts %>%
   filter(
     geo_value %in% geo_vals,
@@ -623,7 +623,7 @@ p <- ggplot(
       filter(
         geo_value %in% geo_vals,
         target_end_date >= min(plot_dates),
-        target_end_date <= max(plot_dates)
+        target_end_date <= max(plot_dates) + 5 * 7
       ),
     aes(x = target_end_date, y = true_value),
     inherit.aes = FALSE, na.rm = TRUE,
@@ -633,7 +633,6 @@ p <- ggplot(
   facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
-
 
 ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
@@ -653,7 +652,6 @@ forecast_subset <- params$forecasts %>%
   pivot_wider(names_from = "quantile", values_from = "prediction") %>%
   mutate(ahead = as.numeric(target_end_date - forecast_date))
 
-
 p <- ggplot(
   data = forecast_subset,
   aes(x = target_end_date, group = forecast_date)
@@ -666,7 +664,7 @@ p <- ggplot(
       filter(
         geo_value %in% geo_vals,
         target_end_date >= min(plot_dates),
-        target_end_date <= max(plot_dates)
+        target_end_date <= max(plot_dates) + 5 * 7
       ),
     aes(x = target_end_date, y = true_value),
     inherit.aes = FALSE, na.rm = TRUE,
@@ -676,7 +674,6 @@ p <- ggplot(
   facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
-
 
 ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
@@ -696,7 +693,6 @@ forecast_subset <- params$forecasts %>%
   pivot_wider(names_from = "quantile", values_from = "prediction") %>%
   mutate(ahead = as.numeric(target_end_date - forecast_date))
 
-
 p <- ggplot(
   data = forecast_subset,
   aes(x = target_end_date, group = forecast_date)
@@ -709,7 +705,7 @@ p <- ggplot(
       filter(
         geo_value %in% geo_vals,
         target_end_date >= min(plot_dates),
-        target_end_date <= max(plot_dates)
+        target_end_date <= max(plot_dates) + 5 * 7
       ),
     aes(x = target_end_date, y = true_value),
     inherit.aes = FALSE, na.rm = TRUE,
@@ -719,7 +715,6 @@ p <- ggplot(
   facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
-
 
 ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
