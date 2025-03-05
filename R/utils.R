@@ -165,7 +165,6 @@ data_substitutions <- function(dataset, substitutions_path, forecast_generation_
     select(-forecast_date) %>%
     rename(new_value = value)
   # Replace the most recent values in the appropriate keys with the substitutions
-  dataset %>% arrange(desc(time_value))
   new_values <- dataset %>%
     inner_join(substitutions, by = join_by(geo_value, time_value)) %>%
     mutate(value = ifelse(!is.na(new_value), new_value, value)) %>%
@@ -383,10 +382,12 @@ update_site <- function(sync_to_s3 = TRUE) {
     for (row_num in seq_along(used_files$filename)) {
       file_name <- path_file(used_files$filename[[row_num]])
       scoring_index <- which(grepl("### Scoring this season", report_md_content)) + 1
-      score_link <-
-        sprintf("- [%s Scoring, Rendered %s](%s)",
-                str_to_title(used_files$disease[[row_num]]), used_files$generation_date[[row_num]],
-                file_name)
+      score_link <- sprintf(
+        "- [%s Scoring, Rendered %s](%s)",
+        str_to_title(used_files$disease[[row_num]]),
+        used_files$generation_date[[row_num]],
+        file_name
+      )
       report_md_content <- append(report_md_content, score_link, after = scoring_index)
     }
   }
