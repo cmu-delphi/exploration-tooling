@@ -49,7 +49,6 @@ library(purrr)
 #   scores = tar_read(joined_scores) %>% filter(forecaster %in% c(tar_read(forecaster_parameter_combinations)[[i]]$id, outside_forecaster_subset)),
 #   truth_data = tar_read(hhs_evaluation_data),
 #   disease = "covid",
-#   forecast_dates = config$forecast_dates
 # )
 
 if (params$disease == "flu") {
@@ -582,9 +581,9 @@ Fan plots showing the 90% prediction intervals for the forecasts made by the CMU
 
 ```{r}
 if (params$disease == "flu") {
-  plot_dates <- config$forecast_dates[seq(1, length(config$forecast_dates), by = 4)] + 3
+  plot_dates <- forecast_dates[seq(1, length(forecast_dates), by = 4)] + 3
 } else {
-  plot_dates <- config$forecast_dates[seq(1, length(config$forecast_dates), by = 4)] + 3
+  plot_dates <- forecast_dates[seq(1, length(forecast_dates), by = 4)] + 3
 }
 ```
 
