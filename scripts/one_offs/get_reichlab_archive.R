@@ -4,11 +4,14 @@
 # Pattern: https://infectious-disease-data.s3.amazonaws.com/data-raw/influenza-nhsn/nhsn-YYYY-MM-DD.csv
 
 # Load required packages
+library(aws.s3)
+library(cli)
+library(dplyr)
+library(epiprocess)
 library(httr)
 library(lubridate)
-library(dplyr)
+library(nanoparquet)
 library(purrr)
-library(cli)
 
 options(readr.show_col_types = FALSE)
 options(readr.show_progress = FALSE)
@@ -25,12 +28,10 @@ config <- list(
   output_file = "cache/reichlab_archive/reichlab_archive.parquet",
   timeout_seconds = 10
 )
-
 # Create date sequence from start_date to end_date
-all_dates <- seq.Date(config$start_date, config$end_date, by = 1L)
-
+config$all_dates <- seq.Date(config$start_date, config$end_date, by = 1L)
 # Format dates as YYYY-MM-DD
-formatted_dates <- format(all_dates, "%Y-%m-%d")
+config$formatted_dates <- format(config$all_dates, "%Y-%m-%d")
 
 # Create directory for downloads if it doesn't exist
 dir.create(config$download_dir, recursive = TRUE, showWarnings = FALSE)
@@ -69,11 +70,11 @@ download_file <- function(date_str) {
 # Download all files
 cli::cli_h1("Downloading Reichlab Archive")
 cli::cli_alert_info("Date range: {config$start_date} to {config$end_date}")
-cli::cli_alert_info("Checking {length(formatted_dates)} potential dates...")
+cli::cli_alert_info("Checking {length(config$formatted_dates)} potential dates...")
 
 # Download files with progress updates
 results <- map_lgl(
-  formatted_dates,
+  config$formatted_dates,
   function(date) {
     result <- download_file(date)
     return(result)
@@ -84,14 +85,18 @@ results <- map_lgl(
 # Summary
 successful_downloads <- sum(results)
 cli::cli_h2("Download Summary")
-cli::cli_alert_info("Total dates checked: {length(formatted_dates)}")
+cli::cli_alert_info("Total dates checked: {length(config$formatted_dates)}")
 cli::cli_alert_success("Successfully downloaded: {successful_downloads}")
-cli::cli_alert_warning("Files not found or errors: {length(formatted_dates) - successful_downloads}")
+cli::cli_alert_warning("Files not found or errors: {length(config$formatted_dates) - successful_downloads}")
 cli::cli_alert_info("Downloaded files are in the {.file {config$download_dir}} directory")
 
 
 process_csv <- function(file_path) {
   df <- readr::read_csv(file_path, show_col_types = FALSE)
+  process_nhsn_dataset(df)
+}
+
+process_nhsn_dataset <- function(df) {
   if ("Week Ending Date" %in% colnames(df)) {
     df <- df %>%
       rename(
@@ -154,10 +159,7 @@ cli::cli_h1("Process Complete")
 
 
 cli::cli_h1("Comparing archives")
-
-library(nanoparquet)
-# Get archives
-df1 <- combined_data %>%
+df1 <- read_parquet(config$output_file) %>%
   filter(disease == "total_influenza_admissions") %>%
   filter(!is.na(value)) %>%
   select(-disease) %>%
@@ -167,14 +169,15 @@ df2 <- s3read_using(read_parquet, object = "nhsn_data_archive.parquet", bucket =
   select(-disease, -version_timestamp) %>%
   as_epi_archive(compactify = TRUE)
 
-
 # Compare versions
-as_ofs <- combined_data %>% distinct(version) %>% pull(version)
-as_ofs <- as_ofs[2:length(as_ofs)]
+# as_ofs <- df1$DT %>% distinct(version) %>% pull(version)
+# as_ofs <- as_ofs[2:length(as_ofs)]
+# Forecast generation dates
 as_ofs <- c(
   as.Date(c("2024-11-22", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")),
   seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L)
 )
+as_of <- as_ofs[1]
 
 for (as_of in as_ofs) {
   as_of <- as.Date(as_of)
@@ -186,11 +189,17 @@ for (as_of in as_ofs) {
   } else {
     cli::cli_alert_success("Snapshot equal for {as_of}")
   }
+  if (FALSE) {
+    waldo::compare(out1, out2)
+    out1 %>% filter(geo_value != "us") %>% autoplot()
+    out2 %>% filter(geo_value != "us") %>% autoplot()
+  }
 }
+
 
 if (FALSE) {
   # Get a Reichlab file
-  df <- readr::read_csv("cache/reichlab_archive/nhsn-2025-02-19.csv") %>%
+  df <- readr::read_csv("cache/reichlab_archive/nhsn-2024-11-20.csv") %>%
     select(
       weekendingdate = `Week Ending Date`,
       jurisdiction = `Geographic aggregation`,
