@@ -102,19 +102,10 @@ if (params$disease == "flu") {
 
 param_table <- params$forecaster_parameters %>%
   select(-any_of(ignore_keys)) %>%
-  {
-    if ("n_training" %in% colnames(.)) {
-      . <- (.) %>% mutate(n_training = as.character(n_training))
-    } else {
-      .
-    }
-    if ("trainer" %in% colnames(.)) {
-      . <- (.) %>% mutate(trainer = unlist(trainer))
-    } else {
-      .
-    }
-    .
-  } %>%
+  mutate(
+    across(matches("^n_training$"), ~ as.character(.x)),
+    across(matches("^trainer$"), ~ unlist(.x))
+  ) %>%
   full_join(
     scores %>%
       group_by(forecaster) %>%
