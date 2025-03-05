@@ -61,3 +61,7 @@ tar_option_set(
 linreg <- parsnip::linear_reg()
 quantreg <- epipredict::quantile_reg()
 randforest_grf <- rand_forest(engine = "grf_quantiles", mode = "regression")
+
+# Suppress readr::read_csv progress and column type messages
+options(readr.show_progress = FALSE)
+options(readr.show_col_types = FALSE)
