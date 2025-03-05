@@ -558,5 +558,5 @@ validate_epi_data <- function(epi_data) {
 }
 
 get_bucket_df_delphi <- function(prefix = "", bucket = "forecasting-team-data") {
-  aws.s3::get_bucket_df(prefix = prefix, bucket = bucket)
+  aws.s3::get_bucket_df(prefix = prefix, bucket = bucket) %>% tibble()
 }
