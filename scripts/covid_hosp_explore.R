@@ -23,8 +23,8 @@ config <- list(
   insufficient_data_geos = c("as", "pr", "vi", "gu", "mp")
 )
 # For testing, reduce dates
-config$forecast_generation_dates <- config$forecast_generation_dates[1:3]
-config$forecast_dates <- config$forecast_dates[1:3]
+# config$forecast_generation_dates <- config$forecast_generation_dates[1:3]
+# config$forecast_dates <- config$forecast_dates[1:3]
 
 # ================================ FORECASTER PARAMETERS ====================
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
