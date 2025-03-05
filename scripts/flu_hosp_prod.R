@@ -98,7 +98,7 @@ forecaster_fns <- list2(
       ) %>%
       select(-source) %>%
       mutate(target_end_date = target_end_date + 3) %>%
-      filter(geo_value != c("mo", "us", "wy"))
+      filter(geo_value %nin% c("mo", "us", "wy"))
     fcst
   }
 )

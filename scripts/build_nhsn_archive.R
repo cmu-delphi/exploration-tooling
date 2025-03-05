@@ -37,7 +37,7 @@ options(readr.show_col_types = FALSE)
 
 # Script run time
 run_time <- with_tz(Sys.time(), tzone = "UTC")
-run_time_local <- with_tz(run_time, tzone = "America/New_York")
+run_time_local <- with_tz(run_time)
 
 # Configuration
 config <- list(

@@ -86,7 +86,7 @@ forecaster_fns <- list2(
       ) %>%
       mutate(target_end_date = target_end_date + 3) %>%
       # Wyoming has no data for NSSP since July 2024
-      filter(geo_value != c("mo", "usa", "wy"))
+      filter(geo_value %nin% c("mo", "usa", "wy"))
     fcst
   }
 )
