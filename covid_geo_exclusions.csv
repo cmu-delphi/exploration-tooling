@@ -1,133 +1,250 @@
 forecast_date,forecaster,geo_value,weight
+##################
 # defaults
-"2024-10-01", "all", "mp", 0
-"2024-10-01", "windowed_seasonal", "all", 3
-"2024-10-01", "windowed_seasonal_extra_sources", "all", 3
-"2024-10-01", "windowed_seasonal_extra_sources", "mo", 0
-"2024-10-01", "windowed_seasonal_extra_sources", "usa", 0
-"2024-10-01", "windowed_seasonal_extra_sources", "wy", 0
-"2024-10-01", "linear", "all", 3
-"2024-10-01", "linearlog", "all", 0
-"2024-10-01", "climate_base", "all", 2
-"2024-10-01", "climate_geo_agged", "all", 0.5
-"2024-10-01", "climate_quantile_extrapolated", "all", 0
+##################
+2024-10-01, all, mp, 0
+2024-10-01, windowed_seasonal, all, 0
+2024-10-01, windowed_seasonal_extra_sources, all, 3
+2024-10-01, climate_linear, all, 3
+2024-10-01, linear, all, 3
+2024-10-01, linearlog, all, 0
+2024-10-01, climate_base, all, 2
+2024-10-01, climate_geo_agged, all, 0.5
+2024-10-01, climate_quantile_extrapolated, all, 0
+##################
+# Feb 26
+##################
+2025-02-26, all, mp, 0
+2025-02-26, windowed_seasonal, all, 0.0001
+2025-02-26, windowed_seasonal_extra_sources, all, 3
+2025-02-26, climate_linear, all, 0.0001
+2025-02-26, linear, all, 3
+2025-02-26, linearlog, all, 0
+2025-02-26, climate_base, all, 2
+2025-02-26, climate_geo_agged, all, 0.5
+2025-02-26, climate_quantile_extrapolated, all, 0
+##################
 # feb 19
-"2025-02-19", "all", "mp", 0
-"2025-02-19", "windowed_seasonal", "all", 0
-"2025-02-19", "windowed_seasonal_extra_sources", "all", 3
+##################
+2025-02-19, all, mp, 0
+2025-02-19, windowed_seasonal, all, 0
+2025-02-19, windowed_seasonal_extra_sources, all, 3
 # this is weighing the linear climate ensemble
-"2025-02-19", "linear_climate", "all", 0.0001
-"2025-02-19", "linear_climate", "ma", 3
-"2025-02-19", "linear_climate", "nh", 3
-"2025-02-19", "linear_climate", "nm", 3
-"2025-02-19", "windowed_seasonal", "pr", 3
-"2025-02-19", "windowed_seasonal", "mo", 3
-"2025-02-19", "windowed_seasonal", "wy", 3
-"2025-02-19", "windowed_seasonal", "usa", 3
+2025-02-19, climate_linear, all, 0.0001
+2025-02-19, climate_linear, ma, 3
+2025-02-19, climate_linear, nh, 3
+2025-02-19, climate_linear, nm, 3
+2025-02-19, windowed_seasonal, pr, 3
+2025-02-19, windowed_seasonal, mo, 3
+2025-02-19, windowed_seasonal, wy, 3
+2025-02-19, windowed_seasonal, usa, 3
 # creating linear climate
-"2025-02-19", "linear", "all", 3
-"2025-02-19", "linearlog", "all", 0
-"2025-02-19", "climate_base", "all", 2
-"2025-02-19", "climate_geo_agged", "all", 0.5
-"2025-02-19", "climate_quantile_extrapolated", "all", 0
-
+2025-02-19, linear, all, 3
+2025-02-19, linearlog, all, 0
+2025-02-19, climate_base, all, 2
+2025-02-19, climate_geo_agged, all, 0.5
+2025-02-19, climate_quantile_extrapolated, all, 0
+##################
 # feb 12
+##################
 2025-02-05, all, mp, 0
 2025-02-05, windowed_seasonal, all, 3
 2025-02-05, windowed_seasonal_extra_sources, all, 0.0
+2025-02-05, climate_linear, all, 3
 2025-02-05, linear, all, 0.5
 2025-02-05, linearlog, all, 0
 2025-02-05, climate_base, all, 0
 2025-02-05, climate_geo_agged, all, 0.0
+##################
 # feb 5
+##################
 2025-02-05, all, mp, 0
 2025-02-05, windowed_seasonal, all, 3
 2025-02-05, windowed_seasonal_extra_sources, all, 3
+2025-02-05, climate_linear, all, 3
 2025-02-05, linear, all, 0.5
 2025-02-05, linearlog, all, 0
 2025-02-05, climate_base, all, 0
 2025-02-05, climate_geo_agged, all, 0.0
+##################
+# Jan 29
+##################
+2025-01-29, all, mp, 0
+2025-01-29, windowed_seasonal, all, 0
+2025-01-29, windowed_seasonal_extra_sources, all, 3
+2025-01-29, climate_linear, all, 3
+2025-01-29, linear, all, 3
+2025-01-29, linearlog, all, 0
+2025-01-29, climate_base, all, 2
+2025-01-29, climate_geo_agged, all, 0.5
+2025-01-29, climate_quantile_extrapolated, all, 0
+##################
+# Jan 22
+##################
+2025-01-22, all, mp, 0
+2025-01-22, windowed_seasonal, all, 0
+2025-01-22, windowed_seasonal_extra_sources, all, 3
+2025-01-22, climate_linear, all, 3
+2025-01-22, linear, all, 3
+2025-01-22, linearlog, all, 0
+2025-01-22, climate_base, all, 2
+2025-01-22, climate_geo_agged, all, 0.5
+2025-01-22, climate_quantile_extrapolated, all, 0
+##################
+# jan 15
+##################
+2025-01-15, all, mp, 0
+2025-01-15, windowed_seasonal, all, 0
+2025-01-15, windowed_seasonal_extra_sources, all, 0
+2025-01-15, climate_linear, all, 3
+2025-01-15, linear, all, 3
+2025-01-15, linearlog, all, 0
+2025-01-15, climate_base, all, 2
+2025-01-15, climate_geo_agged, all, 0.5
+2025-01-15, climate_quantile_extrapolated, all, 0
+##################
+# jan 8
+##################
+2025-01-08, all, mp, 0
+2025-01-08, windowed_seasonal, all, 0
+2025-01-08, windowed_seasonal_extra_sources, all, 0
+2025-01-08, climate_linear, all, 3
+2025-01-08, linear, all, 3
+2025-01-08, linearlog, all, 0
+2025-01-08, climate_base, all, 2
+2025-01-08, climate_geo_agged, all, 0.5
+2025-01-08, climate_quantile_extrapolated, all, 0
+##################
+# jan 1
+##################
+2025-01-01, all, mp, 0
+2025-01-01, windowed_seasonal, all, 0
+2025-01-01, windowed_seasonal_extra_sources, all, 0
+2025-01-01, climate_linear, all, 3
+2025-01-01, linear, all, 3
+2025-01-01, linearlog, all, 0
+2025-01-01, climate_base, all, 2
+2025-01-01, climate_geo_agged, all, 0.5
+2025-01-01, climate_quantile_extrapolated, all, 0
+##################
+# dec 25
+##################
+2024-12-25, all, mp, 0
+2024-12-25, windowed_seasonal, all, 0
+2024-12-25, windowed_seasonal_extra_sources, all, 0
+2024-12-25, climate_linear, all, 3
+2024-12-25, linear, all, 3
+2024-12-25, linearlog, all, 0
+2024-12-25, climate_base, all, 2
+2024-12-25, climate_geo_agged, all, 0.5
+2024-12-25, climate_quantile_extrapolated, all, 0
+##################
+# dec 11
+##################
+2024-12-11, all, mp, 0
+2024-12-11, windowed_seasonal, all, 0
+2024-12-11, windowed_seasonal_extra_sources, all, 0
+2024-12-11, climate_linear, all, 3
+2024-12-11, linear, all, 3
+2024-12-11, linearlog, all, 0
+2024-12-11, climate_base, all, 2
+2024-12-11, climate_geo_agged, all, 0.5
+2024-12-11, climate_quantile_extrapolated, all, 0
+##################
 # dec 4th
-"2024-12-04", "all", "mp", 0
-"2024-12-04", "linear", "all", 3
-"2024-12-04", "linearlog", "all", 0
-"2024-12-04", "climate_base", "all", 2
-"2024-12-04", "climate_geo_agged", "all", 0.5
-"2024-12-04", "climate_quantile_extrapolated", "all", 0
+##################
+2024-12-04, all, mp, 0
+2024-12-04, windowed_seasonal, all, 0
+2024-12-04, windowed_seasonal_extra_sources, all, 0
+2024-12-04, climate_linear, all, 3
+2024-12-04, linear, all, 3
+2024-12-04, linearlog, all, 0
+2024-12-04, climate_base, all, 2
+2024-12-04, climate_geo_agged, all, 0.5
+2024-12-04, climate_quantile_extrapolated, all, 0
+##################
 # nov 27th
-"2024-11-27", "all", "mp", 0
-"2024-11-27", "linear", "all", 3
-"2024-11-27", "linearlog", "all", 0
-"2024-11-27", "climate_base", "all", 2
-"2024-11-27", "climate_geo_agged", "all", 0.5
-"2024-11-27", "climate_quantile_extrapolated", "all", 0
-"2024-11-27", "climate_base", "fl", 1
-"2024-11-27", "climate_base", "de", 0.5
-"2024-11-27", "climate_base", "mi", 0.5
-"2024-11-27", "linear", "az", 0
-"2024-11-27", "linear", "ma", 0
+##################
+2024-11-27, all, mp, 0
+2024-11-27, windowed_seasonal, all, 0
+2024-11-27, windowed_seasonal_extra_sources, all, 0
+2024-11-27, climate_linear, all, 3
+2024-11-27, linear, all, 3
+2024-11-27, linearlog, all, 0
+2024-11-27, climate_base, all, 2
+2024-11-27, climate_geo_agged, all, 0.5
+2024-11-27, climate_quantile_extrapolated, all, 0
+2024-11-27, climate_base, fl, 1
+2024-11-27, climate_base, de, 0.5
+2024-11-27, climate_base, mi, 0.5
+2024-11-27, linear, az, 0
+2024-11-27, linear, ma, 0
 ################################################
 # minor blip, the uploaded data was wildly wrong
 # this does mean the forecasts will probably be more accurate
 ################################################
-"2024-11-21", "linear", "all", 9
-"2024-11-21", "linearlog", "all", 0
-"2024-11-21", "climate_base", "all", 2
-"2024-11-21", "climate_geo_agged", "all", 1
-"2024-11-21", "climate_quantile_extrapolated", "all", 0
-# "2024-11-21", "climate_quantile_extrapolated", "ca", 0
-# "2024-11-21", "climate_geo_agged", "ca", 0
+2024-11-20, all, mp, 0
+2024-11-20, windowed_seasonal, all, 0
+2024-11-20, windowed_seasonal_extra_sources, all, 0
+2024-11-20, climate_linear, all, 3
+2024-11-20, linear, all, 9
+2024-11-20, linearlog, all, 0
+2024-11-20, climate_base, all, 2
+2024-11-20, climate_geo_agged, all, 1
+2024-11-20, climate_quantile_extrapolated, all, 0
+# 2024-11-21, climate_quantile_extrapolated, ca, 0
+# 2024-11-21, climate_geo_agged, ca, 0
 # co needs a stronger linear part
-"2024-11-21", "climate_base", "co", 0.5
-"2024-11-21", "climate_geo_agged", "co", 0.5
+2024-11-20, climate_base, co, 0.5
+2024-11-20, climate_geo_agged, co, 0.5
 # de needs a stronger linear part
-"2024-11-21", "climate_base", "de", 0.5
-"2024-11-21", "climate_geo_agged", "de", 0.5
+2024-11-20, climate_base, de, 0.5
+2024-11-20, climate_geo_agged, de, 0.5
 # ga needs a stronger linear part
-"2024-11-21", "climate_base", "ga", 0.5
-"2024-11-21", "climate_geo_agged", "ga", 0.5
+2024-11-20, climate_base, ga, 0.5
+2024-11-20, climate_geo_agged, ga, 0.5
 # hi needs a stronger linear part
-"2024-11-21", "climate_base", "hi", 0.5
-"2024-11-21", "climate_geo_agged", "hi", 0.5
+2024-11-20, climate_base, hi, 0.5
+2024-11-20, climate_geo_agged, hi, 0.5
 # ia needs a stronger linear part
-"2024-11-21", "climate_base", "ia", 0.5
-"2024-11-21", "climate_geo_agged", "ia", 0.5
+2024-11-20, climate_base, ia, 0.5
+2024-11-20, climate_geo_agged, ia, 0.5
 # md needs a stronger linear part
-"2024-11-21", "climate_base", "md", 0.5
-"2024-11-21", "climate_geo_agged", "md", 0.5
+2024-11-20, climate_base, md, 0.5
+2024-11-20, climate_geo_agged, md, 0.5
 # mi needs a stronger climate part
-"2024-11-21", "linear", "mi", 0.5
-"2024-11-21", "climate_base", "mi", 0.5
+2024-11-20, linear, mi, 0.5
+2024-11-20, climate_base, mi, 0.5
 # nd needs a stronger linear part
-"2024-11-21", "climate_base", "nd", 0.25
-"2024-11-21", "climate_geo_agged", "nd", 0.25
+2024-11-20, climate_base, nd, 0.25
+2024-11-20, climate_geo_agged, nd, 0.25
 # ne needs a stronger linear part
-"2024-11-21", "climate_base", "ne", 0.25
-"2024-11-21", "climate_geo_agged", "ne", 0.25
+2024-11-20, climate_base, ne, 0.25
+2024-11-20, climate_geo_agged, ne, 0.25
 # nj needs a stronger linear part
-"2024-11-21", "climate_base", "nj", 0.25
-"2024-11-21", "climate_geo_agged", "nj", 0.25
+2024-11-20, climate_base, nj, 0.25
+2024-11-20, climate_geo_agged, nj, 0.25
 # or needs a stronger linear part
-"2024-11-21", "climate_base", "or", 0.5
-"2024-11-21", "climate_geo_agged", "or", 0.5
+2024-11-20, climate_base, or, 0.5
+2024-11-20, climate_geo_agged, or, 0.5
 # pa needs a weaker linear part (data is *very* steep)
-"2024-11-21", "linear", "pa", 0.5
+2024-11-20, linear, pa, 0.5
 ################################################
 #first forecast
 ################################################
-"2024-11-20", "linear", "all", 2
-"2024-11-20", "linearlog", "all", 0
-"2024-11-20", "climate_base", "all", 2
-"2024-11-20", "climate_geo_agged", "all", 0.5
-"2024-11-20", "climate_quantile_extrapolated", "all", 0.5
-"2024-11-20", "linear", "az", 0
-"2024-11-20", "linear", "mi", 0
-"2024-11-20", "linear", "ma", 0
-"2024-11-20", "climate_geo_agged", "ma", 0
-"2024-11-20", "climate_quantile_extrapolated", "ma", 0
-"2024-11-20", "linear", "mn", 0
-"2024-11-20", "linear", "mt", 0
-"2024-11-20", "linear", "nm", 0
-"2024-11-20", "linear", "pa", 0
-"2024-11-20", "linear", "vt", 0
-"2024-11-20", "linear", "wy", 0
+# 2024-11-20, linear, all, 2
+# 2024-11-20, linearlog, all, 0
+# 2024-11-20, climate_base, all, 2
+# 2024-11-20, climate_geo_agged, all, 0.5
+# 2024-11-20, climate_quantile_extrapolated, all, 0.5
+# 2024-11-20, linear, az, 0
+# 2024-11-20, linear, mi, 0
+# 2024-11-20, linear, ma, 0
+# 2024-11-20, climate_geo_agged, ma, 0
+# 2024-11-20, climate_quantile_extrapolated, ma, 0
+# 2024-11-20, linear, mn, 0
+# 2024-11-20, linear, mt, 0
+# 2024-11-20, linear, nm, 0
+# 2024-11-20, linear, pa, 0
+# 2024-11-20, linear, vt, 0
+# 2024-11-20, linear, wy, 0
