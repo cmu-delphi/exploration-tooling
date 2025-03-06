@@ -48,7 +48,6 @@ score_forecasts <- function(nhsn_latest_data, joined_forecasts_and_ensembles) {
     select(-location)
 }
 
-
 render_score_plot <- function(score_report_rmd, scores, forecast_dates, disease) {
   rmarkdown::render(
     score_report_rmd,

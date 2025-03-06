@@ -1,5 +1,5 @@
 ---
-title: Evaluation of Hospitalization Forecasters 2024-2025
+title: Overall Comparison of Hospitalization Forecasters
 date: "`r format(Sys.time(), '%d %B %Y')`"
 output:
   html_document:
@@ -9,7 +9,7 @@ params:
   forecasts: ""
   scores: ""
   truth_data: ""
-  disease: "flu"
+  disease: ""
 editor_options:
   chunk_output_type: console
 ---
@@ -39,14 +39,14 @@ library(purrr)
 ```
 
 ```{r}
+# i <- 1
+# forecaster_family <- tar_read(forecaster_families)[[i]]
 # params <- list(
-#     forecaster_parameter_combinations = tar_read(forecaster_parameter_combinations),
-#     forecaster_family = "scaled_pop_season",
-#     joined_forecasts = tar_read(joined_forecasts),
-#     joined_scores = tar_read(joined_scores),
-#     truth_data = tar_read(hhs_evaluation_data) %>%
-#         select(-population) %>%
-#         mutate(target_end_date = target_end_date + 3),
+#     forecaster_parameter_combinations = tar_read(forecaster_parameter_combinations)[[i]],
+#     forecaster_family = forecaster_family,
+#     forecasts = tar_read(joined_forecasts),
+#     scores = tar_read(joined_scores),
+#     truth_data = tar_read(hhs_evaluation_data),
 #     disease = "flu"
 # )
 
