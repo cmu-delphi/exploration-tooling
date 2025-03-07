@@ -473,10 +473,6 @@ data_targets <- list2(
         as_epi_archive(compactify = TRUE)
       }
     ),
-  tar_target(
-    name = state_to_hhs_crosswalk,
-    command = get_state_codes_crosswalk() %>% select(hhs_region = hhs, geo_value = state_id)
-  ),
   # TODO: Might be able to simplify this with some utilities:
   # - add_geo_column, aggregate_to_hhs_region, etc.
   tar_target(
