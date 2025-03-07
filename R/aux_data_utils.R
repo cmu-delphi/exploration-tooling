@@ -66,6 +66,46 @@ step_season_week_sine <- function(preproc, season = 35) {
     )
 }
 
+#' Append the state population and state population density, taken from the census and interpolated in the most straightforward way.
+#' apportionment data taken from here: https://www.census.gov/data/tables/time-series/dec/popchange-data-text.html
+#' there's probably a better way of doing this buried in
+#' https://www.census.gov/data/developers/data-sets/popest-popproj/popest.html,
+#' but for now it's not worth the time
+#' @param original_dataset tibble or epi_df, should have states as 2 letter lower case
+add_pop_and_density <-
+  function(original_dataset,
+           apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
+           state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
+           hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")) {
+    pops_by_state_hhs <- gen_pop_and_density_data(apportion_filename, state_code_filename, hhs_code_filename)
+    # if the dataset uses "usa" instead of "us", substitute that
+    if ("usa" %in% unique(original_dataset)$geo_value) {
+      pops_by_state_hhs %<>%
+        mutate(
+          geo_value = ifelse(geo_value == "us", "usa", geo_value),
+          agg_level = ifelse(grepl("[0-9]{2}", geo_value),
+            "hhs_region",
+            ifelse(("us" == geo_value) | ("usa" == geo_value), "nation", "state")
+          )
+        )
+    }
+    if (!("agg_level" %in% names(original_dataset))) {
+      original_dataset %<>%
+        mutate(agg_level = ifelse(grepl("[0-9]{2}", geo_value), "hhs_region", ifelse(("us" == geo_value) | ("usa" == geo_value), "nation", "state")))
+    }
+    original_dataset %>%
+      mutate(year = year(time_value)) %>%
+      left_join(
+        pops_by_state_hhs,
+        by = join_by(year, geo_value, agg_level)
+      ) %>%
+      # virgin islands data too limited for now
+      filter(geo_value != "vi") %>%
+      arrange(geo_value, time_value) %>%
+      ungroup() %>%
+      fill(population, density)
+  }
+
 gen_pop_and_density_data <-
   function(apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
            state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
