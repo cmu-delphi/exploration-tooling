@@ -25,10 +25,12 @@ forecaster_lookup <- function(pattern, forecaster_parameter_combinations = NULL)
   for (table in forecaster_parameter_combinations) {
     filtered_table <- table %>% filter(grepl(pattern, id))
     if (nrow(filtered_table) > 0) {
-      filtered_table %>% glimpse()
+      out <- filtered_table
+      out %>% glimpse()
       break
     }
   }
+  return(invisible(out))
 }
 
 #' Add a unique id based on the column contents
@@ -557,6 +559,7 @@ validate_epi_data <- function(epi_data) {
   return(epi_data)
 }
 
+#' Convenience wrapper for working with Delphi S3 bucket.
 get_bucket_df_delphi <- function(prefix = "", bucket = "forecasting-team-data") {
   aws.s3::get_bucket_df(prefix = prefix, bucket = bucket) %>% tibble()
 }
