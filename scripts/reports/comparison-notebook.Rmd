@@ -42,13 +42,19 @@ library(purrr)
 ```{r}
 # outside_forecaster_subset <- c("COVIDhub-baseline", "COVIDhub-trained_ensemble", "COVIDhub_CDC-ensemble")
 # i <- 1
+# forecaster_families <- tar_read(forecaster_params_grid)$family %>% unique()
+# forecaster_family <- forecaster_families[[i]]
+# params_subset <- tar_read(forecaster_params_grid) %>% filter(family == forecaster_family)
+# forecasts_subset <- tar_read(joined_forecasts) %>% filter(forecaster %in% c(params_subset$id, outside_forecaster_subset))
+# scores_subset <- tar_read(joined_scores) %>% filter(forecaster %in% c(params_subset$id, outside_forecaster_subset))
+
 # params <- list(
-#   forecaster_family = tar_read(forecaster_families)[[i]],
-#   forecaster_parameters = tar_read(forecaster_parameter_combinations)[[i]],
-#   forecasts = tar_read(joined_forecasts) %>% filter(forecaster %in% c(tar_read(forecaster_parameter_combinations)[[i]]$id, outside_forecaster_subset)),
-#   scores = tar_read(joined_scores) %>% filter(forecaster %in% c(tar_read(forecaster_parameter_combinations)[[i]]$id, outside_forecaster_subset)),
+#   forecaster_family = forecaster_family,
+#   forecaster_parameters = params_subset,
+#   forecasts = forecasts_subset,
+#   scores = scores_subset,
 #   truth_data = tar_read(hhs_evaluation_data),
-#   disease = "covid",
+#   disease = "covid"
 # )
 
 if (params$disease == "flu") {
@@ -581,9 +587,9 @@ Fan plots showing the 90% prediction intervals for the forecasts made by the CMU
 
 ```{r}
 if (params$disease == "flu") {
-  plot_dates <- forecast_dates[seq(1, length(forecast_dates), by = 4)] + 3
+  plot_dates <- forecast_dates[seq(1, length(forecast_dates), by = 4)]
 } else {
-  plot_dates <- forecast_dates[seq(1, length(forecast_dates), by = 4)] + 3
+  plot_dates <- forecast_dates[seq(1, length(forecast_dates), by = 4)]
 }
 ```
 
