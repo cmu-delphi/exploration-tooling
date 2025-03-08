@@ -7,11 +7,13 @@
 #' @param pattern string to search in the forecaster name.
 #'
 #' @export
-forecaster_lookup <- function(pattern, forecaster_parameter_combinations = NULL) {
-  if (is.null(forecaster_parameter_combinations)) {
-    cli::cli_warn("Reading `forecaster_param_combinations` target. If it's not up to date, results will be off.
-    Update with `tar_make(forecaster_parameter_combinations)`.")
-    forecaster_parameter_combinations <- tar_read_raw("forecaster_parameter_combinations")
+forecaster_lookup <- function(pattern) {
+  if (!exists("g_forecaster_params_grid")) {
+    cli::cli_warn("Reading `forecaster_params_grid` target. If it's not up to date, results will be off.
+    Update with `tar_make(g_forecaster_params_grid)`.")
+    forecaster_params_grid <- tar_read_raw("forecaster_params_grid")
+  } else {
+    forecaster_params_grid <- g_forecaster_params_grid
   }
 
   # Remove common prefix for convenience.
@@ -22,15 +24,11 @@ forecaster_lookup <- function(pattern, forecaster_parameter_combinations = NULL)
     pattern <- gsub("forecaster_", "", pattern)
   }
 
-  for (table in forecaster_parameter_combinations) {
-    filtered_table <- table %>% filter(grepl(pattern, id))
-    if (nrow(filtered_table) > 0) {
-      out <- filtered_table
-      out %>% glimpse()
-      break
-    }
+  out <- forecaster_params_grid %>% filter(.data$id == pattern)
+  if (nrow(out) > 0) {
+    out %>% glimpse()
+    return(invisible(out))
   }
-  return(invisible(out))
 }
 
 #' Add a unique id based on the column contents
@@ -65,42 +63,51 @@ get_single_id <- function(param_list) {
     paste(sep = ".", collapse = ".")
 }
 
-#' Turn a tibble of parameters into a list of named lists.
-make_params_list <- function(df, unlist_cols = c("lags", "trainer"), get_cols = c("trainer")) {
-  params_list <- df %>%
+#' Make a forecaster grid.
+#'
+#' Convert a tibble of forecasters and their parameters to a specific format
+#' that we can iterate over in targets. Currently only `forecaster` and
+#' `trainer` can be symbols.
+#'
+#' @param tib the tibble of parameters. Must have the forecaster and trainer
+#' columns, everything else is optional.
+#'
+#' @export
+make_forecaster_grid <- function(tib) {
+  if ("trainer" %in% colnames(tib)) {
+    tib$trainer <- rlang::syms(tib$trainer)
+  }
+  # turns a tibble into a list of named lists
+  params_list <- tib %>%
     select(-forecaster, -id) %>%
     split(seq_len(nrow(.))) %>%
     unname() %>%
     lapply(as.list)
-  names(params_list) <- df$id
+  # for whatever reason, trainer ends up being a list of lists, which we do not want
+  params_list %<>% lapply(function(x) {
+    x$trainer <- x$trainer[[1]]
+    x$lags <- x$lags[[1]]
+    x
+  })
 
-  # Some columns need to be unlisted.
-  unlist_cols <- unlist_cols[unlist_cols %in% names(params_list[[1]])]
-  if (length(unlist_cols) > 0) {
-    params_list %<>% lapply(function(x) {
-      for (col in unlist_cols) {
-        if (length(x[[col]]) == 1) {
-          x[[col]] <- x[[col]][[1]]
-        }
-      }
-      x
-    })
+  if (length(params_list) == 0) {
+    out <- tibble(
+      id = tib$id,
+      forecaster = rlang::syms(tib$forecaster),
+      params = list(list()),
+      param_names = list(list())
+    )
+  } else {
+    out <- tibble(
+      id = tib$id,
+      forecaster = rlang::syms(tib$forecaster),
+      params = params_list,
+      param_names = map(params_list, names)
+    )
   }
 
-  # Some columns need to be converted to symbols.
-  get_cols <- get_cols[get_cols %in% names(params_list[[1]])]
-  if (length(get_cols) > 0) {
-    params_list %<>% lapply(function(x) {
-      for (col in get_cols) {
-        x[[col]] <- get(x[[col]])
-      }
-      x
-    })
-  }
-
-  return(params_list)
+  return(out)
 }
-
 
 #' Make an ensemble grid.
 #'

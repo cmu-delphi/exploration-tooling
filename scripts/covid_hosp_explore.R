@@ -2,33 +2,31 @@ source("scripts/targets-common.R")
 source("scripts/targets-exploration-common.R")
 
 # ================================ GLOBALS =================================
-# These globals are needed by make_forecasts_and_scores (and they need to persist
-# during the actual targets run, since the commands are frozen as expressions).
-config <- list(
-  aheads = 0:4 * 7,
-  hhs_signal = "confirmed_admissions_covid_1d",
-  # The date when the forecast was generated (this is effectively the AS OF date).
-  forecast_generation_dates = seq.Date(as.Date("2023-11-08"), as.Date("2024-04-24"), by = 7L),
-  # The reference date for the forecast.
-  forecast_dates = seq.Date(as.Date("2023-11-08"), as.Date("2024-04-24"), by = 7L),
-  # This moves the week marker from Saturday to Wednesday
-  time_value_adjust = 3,
-  # Directory for reports.
-  reports_dir = "reports",
-  # Fetch arguments for epidatr.
-  fetch_args = epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400),
-  # Debug mode will replace all forecaster functions with a fast dummy forecaster. Helps
-  # with prototyping the pipeline.
-  dummy_mode = as.logical(Sys.getenv("DUMMY_MODE", FALSE)),
-  insufficient_data_geos = c("as", "pr", "vi", "gu", "mp")
-)
-# For testing, reduce dates
-# config$forecast_generation_dates <- config$forecast_generation_dates[1:3]
-# config$forecast_dates <- config$forecast_dates[1:3]
+# Variables prefixed with 'g_' are globals needed by the targets pipeline (they
+# need to persist during the actual targets run, since the commands are frozen
+# as expressions).
+g_aheads = 0:4 * 7
+g_hhs_signal = "confirmed_admissions_covid_1d"
+# The date when the forecast was generated (this is effectively the AS OF date).
+g_forecast_generation_dates = seq.Date(as.Date("2023-11-08"), as.Date("2024-04-24"), by = 7L)[1:4]
+# The reference date for the forecast.
+g_forecast_dates = seq.Date(as.Date("2023-11-08"), as.Date("2024-04-24"), by = 7L)[1:4]
+# This moves the week marker from Saturday to Wednesday
+g_time_value_adjust = 3
+# Directory for reports.
+g_reports_dir = "reports"
+# Fetch arguments for epidatr.
+g_fetch_args = epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
+# Debug mode will replace all forecaster functions with a fast dummy forecaster. Helps
+# with prototyping the pipeline.
+g_dummy_mode = as.logical(Sys.getenv("DUMMY_MODE", FALSE))
+# Geos that have insufficient data for forecasting.
+g_insufficient_data_geos = c("as", "pr", "vi", "gu", "mp")
+
 
 # ================================ FORECASTER PARAMETERS ====================
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
-config$forecaster_parameter_combinations <- rlang::list2(
+g_forecaster_parameter_combinations <- rlang::list2(
   scaled_pop_main = tidyr::expand_grid(
     forecaster = "scaled_pop",
     trainer = list("linreg", "quantreg"),
@@ -137,7 +135,7 @@ config$forecaster_parameter_combinations <- rlang::list2(
   )
 ) %>%
   map(function(x) {
-    if (config$dummy_mode) {
+    if (g_dummy_mode) {
       x$forecaster <- "dummy_forecaster"
     }
     x
@@ -148,157 +146,22 @@ config$forecaster_parameter_combinations <- rlang::list2(
     x$outcome <- "hhs"
     x
   })
-
 # Make sure all ids are unique.
 stopifnot(
-  length(config$forecaster_parameter_combinations$id %>% unique()) ==
-    length(config$forecaster_parameter_combinations$id)
+  length(g_forecaster_parameter_combinations$id %>% unique()) == length(g_forecaster_parameter_combinations$id)
 )
-
-# scaled_pop_not_scaled <- list(
-#   forecaster = "scaled_pop",
-#   trainer = "quantreg",
-#   lags = c(0, 7, 14, 28),
-#   pop_scaling = FALSE,
-#   n_training = Inf
-# )
-# scaled_pop_scaled <- list(
-#   forecaster = "scaled_pop",
-#   trainer = "quantreg",
-#   lags = c(0, 7, 14, 28),
-#   pop_scaling = TRUE,
-#   n_training = Inf
-# )
-# smooth_scaled <- list(
-#   forecaster = "smoothed_scaled",
-#   trainer = "quantreg",
-#   # lags = list(smoothed, sd)
-#   lags = list(c(0, 7, 14, 21, 28), c(0)),
-#   smooth_width = as.difftime(2, units = "weeks"),
-#   sd_width = as.difftime(4, units = "weeks"),
-#   sd_mean_width = as.difftime(2, units = "weeks"),
-#   pop_scaling = TRUE,
-#   n_training = Inf
-# )
-# # Human-readable object to be used for inspecting the ensembles in the pipeline.
-# # fmt: skip
-# ensemble_parameter_combinations_ <- tribble(
-#   ~ensemble, ~ensemble_args, ~forecasters,
-#   # mean forecaster
-#   "ensemble_average",
-#   list(average_type = "mean"),
-#   list(
-#     scaled_pop_scaled,
-#     list(forecaster = "flatline_fc")
-#   ),
-#   # median forecaster
-#   "ensemble_average",
-#   list(average_type = "median"),
-#   list(
-#     scaled_pop_scaled,
-#     scaled_pop_not_scaled,
-#     smooth_scaled
-#   ),
-#   # mean forecaster with baseline
-#   "ensemble_average",
-#   list(average_type = "mean"),
-#   list(
-#     scaled_pop_not_scaled,
-#     list(forecaster = "flatline_fc")
-#   ),
-#   # median forecaster with baseline
-#   "ensemble_average",
-#   list(average_type = "median"),
-#   list(
-#     scaled_pop_not_scaled,
-#     list(forecaster = "flatline_fc")
-#   )
-# ) %>%
-#   {
-#     if (dummy_mode) {
-#       .$forecasters <- map(.$forecasters, function(x) {
-#         map(x, function(y) {
-#           y$forecaster <- "dummy_forecaster"
-#           y
-#         })
-#       })
-#     }
-#     .
-#   } %>%
-#   mutate(
-#     children_ids = map(.$forecasters, function(x) {
-#       map_chr(x, function(y) {
-#         get_single_id(y)
-#       })
-#     })
-#   ) %>%
-#   add_id(exclude = "forecasters")
-# # spoofing ensembles for right now
-# ensemble_parameter_combinations_ <- tibble::tibble(
-#   id = character(),
-#   ensemble = character(),
-#   ensemble_args = character(),
-#   children_ids = character()
-# )
-# # Check that every ensemble dependent is actually included.
-# missing_forecasters <- setdiff(
-#   ensemble_parameter_combinations_ %>% pull(children_ids) %>% unlist() %>% unique(),
-#   forecaster_grid$id
-# )
-# if (length(missing_forecasters) > 0) {
-#   cli_abort("Ensemble depends on forecasters not included in pipeline: {missing_forecasters}.")
-# }
-# Internals for targets pipeline.
-# Three lists which are used at runtime and must maintain the same order.
-# - forecaster_functions_list: list of forecaster base functions (e.g. scaled_pop)
-# - forecaster_names_list: list of forecaster names (e.g. 'spiniferous.lcont')
-# - params_list: list of parameters for each forecaster (a list of lists)
-# The last one can also be used for parameter lookup, given a forecaster name.
-config$forecaster_functions_list <- config$forecaster_parameter_combinations %>%
-  map(function(x) {
-    x %>% select(forecaster)
-  }) %>%
-  bind_rows() %>%
-  pull(forecaster)
-config$forecaster_names_list <- config$forecaster_parameter_combinations %>%
-  map(function(x) {
-    x %>% select(id)
-  }) %>%
-  bind_rows() %>%
-  pull(id)
-names(config$forecaster_functions_list) <- config$forecaster_names_list
-config$params_list <- config$forecaster_parameter_combinations %>%
-  map(make_params_list) %>%
-  set_names(NULL) %>%
-  unlist(recursive = FALSE)
-names(config$params_list) <- config$forecaster_names_list
-# Create a partially applied forecaster function for each id. This function
-# depends on params_list and forecaster_functions_list, which are defined above.
-# If we don't define these variables here, then targets won't have access at
-# runtime.
-get_partially_applied_forecaster <- function(id) {
-  function(epi_data, ...) {
-    forecaster_args <- rlang::dots_list(
-      ...,
-      !!!config$params_list[[id]],
-      .homonyms = "last"
-    )
-    # This uses string lookup to get the function.
-    forecaster_fn <- get(config$forecaster_functions_list[[id]])
-    rlang::inject(forecaster_fn(epi_data = epi_data, !!!forecaster_args))
-  }
-}
+g_forecaster_params_grid <- map(g_forecaster_parameter_combinations, ~ make_forecaster_grid(.)) %>% bind_rows()
 
 
 # ================================ TARGETS =================================
 # ================================ PARAMETERS TARGETS ======================
 parameter_targets <- list2(
-  tar_target(name = aheads, command = config$aheads),
-  tar_target(name = forecast_dates, command = config$forecast_dates),
+  tar_target(name = aheads, command = g_aheads),
+  tar_target(name = forecast_dates, command = g_forecast_dates),
   # This is used for parameter lookup.
-  tar_target(name = forecaster_parameter_combinations, command = config$forecaster_parameter_combinations),
+  tar_target(name = forecaster_params_grid, command = g_forecaster_params_grid),
   # This is used for generating notebooks.
-  tar_target(name = forecaster_families, command = config$forecaster_parameter_combinations %>% names()),
+  tar_target(name = forecaster_families, command = g_forecaster_parameter_combinations %>% names()),
 )
 
 
@@ -332,12 +195,12 @@ data_targets <- list2(
         wait_seconds = 1,
         fn = pub_covidcast,
         source = "hhs",
-        signals = config$hhs_signal,
+        signals = g_hhs_signal,
         geo_type = "state",
         time_type = "day",
         geo_values = "*",
         time_values = "*",
-        fetch_args = config$fetch_args
+        fetch_args = g_fetch_args
       ) %>%
         select(signal, geo_value, time_value, value) %>%
         # This aggregates the data to the week and labels each Sunday - Saturday
@@ -368,7 +231,7 @@ data_targets <- list2(
         time_type = "week",
         geo_type = "state",
         geo_values = "*",
-        fetch_args = config$fetch_args
+        fetch_args = g_fetch_args
       )
       nssp_hhs <- retry_fn(
         max_attempts = 10,
@@ -379,7 +242,7 @@ data_targets <- list2(
         time_type = "week",
         geo_type = "hhs",
         geo_values = "*",
-        fetch_args = config$fetch_args
+        fetch_args = g_fetch_args
       )
       nssp_state %>%
         bind_rows(nssp_hhs) %>%
@@ -387,7 +250,7 @@ data_targets <- list2(
         as_epi_archive(compactify = TRUE) %>%
         `$`("DT") %>%
         # weekly data is indexed from the start of the week
-        mutate(time_value = time_value + 6 - config$time_value_adjust) %>%
+        mutate(time_value = time_value + 6 - g_time_value_adjust) %>%
         mutate(version = time_value) %>%
         # Always convert to data.frame after dplyr operations on data.table.
         # https://github.com/cmu-delphi/epiprocess/issues/618
@@ -412,7 +275,7 @@ data_targets <- list2(
           time_type = "day",
           geo_type = "state",
           geo_values = "*",
-          fetch_args = config$fetch_args
+          fetch_args = g_fetch_args
         )
         google_symptoms_hhs_archive <- retry_fn(
           max_attempts = 10,
@@ -423,7 +286,7 @@ data_targets <- list2(
           time_type = "day",
           geo_type = "hhs",
           geo_values = "*",
-          fetch_args = config$fetch_args
+          fetch_args = g_fetch_args
         )
         google_symptoms_archive_min <- google_symptoms_state_archive %>%
           bind_rows(google_symptoms_hhs_archive) %>%
@@ -471,8 +334,8 @@ data_targets <- list2(
         # https://github.com/cmu-delphi/epiprocess/issues/618
         as.data.frame() %>%
         as_epi_archive(compactify = TRUE)
-      }
-    ),
+    }
+  ),
   # TODO: Might be able to simplify this with some utilities:
   # - add_geo_column, aggregate_to_hhs_region, etc.
   tar_target(
@@ -519,22 +382,26 @@ data_targets <- list2(
         mutate(agg_level = "state") %>%
         bind_rows(nwss_hhs_region) %>%
         select(geo_value, time_value, nwss = value, nwss_region = region_value, nwss_national = national_value) %>%
-        mutate(time_value = time_value - config$time_value_adjust, version = time_value) %>%
+        mutate(time_value = time_value - g_time_value_adjust, version = time_value) %>%
         arrange(geo_value, time_value) %>%
         as_epi_archive(compactify = TRUE)
     }
   ),
   tar_target(
-  name = hhs_region,
-  command = {
-    hhs_region <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_code_hhs_table.csv")
-    state_id <- readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_codes_table.csv")
-    hhs_region %>%
-      left_join(state_id, by = "state_code") %>%
-      select(hhs_region = hhs, geo_value = state_id) %>%
-      mutate(hhs_region = as.character(hhs_region))
-  }
-),
+    name = hhs_region,
+    command = {
+      hhs_region <- readr::read_csv(
+        "https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_code_hhs_table.csv"
+      )
+      state_id <- readr::read_csv(
+        "https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_codes_table.csv"
+      )
+      hhs_region %>%
+        left_join(state_id, by = "state_code") %>%
+        select(hhs_region = hhs, geo_value = state_id) %>%
+        mutate(hhs_region = as.character(hhs_region))
+    }
+  ),
   tar_target(
     name = joined_archive_data,
     command = {
@@ -555,7 +422,7 @@ data_targets <- list2(
       joined_archive_data$geo_type <- "custom"
       joined_archive_data %<>% epix_merge(google_symptoms_archive, sync = "locf")
       joined_archive_data <- joined_archive_data$DT %>%
-        filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% config$insufficient_data_geos)) %>%
+        filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% g_insufficient_data_geos)) %>%
         # Always convert to data.frame after dplyr operations on data.table
         # https://github.com/cmu-delphi/epiprocess/issues/618
         as.data.frame() %>%
@@ -587,27 +454,30 @@ data_targets <- list2(
   )
 )
 
+# params and param_names are defined by the values of the
+# tar_map. params is a list of lists, and param_names is the
+# names of parameters in each list. These are separate because
+# targets::tar_map strips the names from lists in a tibble.
+# Defining this function inside the target causes scope issues.
+get_partially_applied_forecaster <- function(forecaster, ahead, params, param_names) {
+  function(epi_data) rlang::inject(forecaster(epi_data, ahead = ahead, !!!(set_names(params, param_names))))
+}
 forecasts_and_scores <- tar_map(
-  values = list(forecaster_id = config$forecaster_names_list),
+  values = g_forecaster_params_grid,
+  names = id,
   unlist = FALSE,
   tar_target(
     name = forecast,
     command = {
-      forecaster_fn <- function(epi_data)
-        get_partially_applied_forecaster(forecaster_id)(epi_data = epi_data, ahead = aheads)
-      # debugonce(scaled_pop)
-      # debugonce(run_workflow_and_format)
-      # browser()
       out <- epix_slide_simple(
         joined_archive_data,
-        forecaster_fn,
+        get_partially_applied_forecaster(forecaster, aheads, params, param_names),
         forecast_dates,
         cache_key = "joined_archive_data"
       ) %>%
         rename(prediction = value) %>%
         mutate(ahead = as.numeric(target_end_date - forecast_date)) %>%
-        mutate(id = forecaster_id)
-      # browser()
+        mutate(id = id)
       out
     },
     pattern = map(aheads)
@@ -710,7 +580,7 @@ joined_forecasts_and_scores <- rlang::list2(
           truth_data = hhs_evaluation_data,
           disease = "covid"
         ),
-        output_file = here::here(config$reports_dir, paste0("covid-notebook-", forecaster_families, ".html"))
+        output_file = here::here(g_reports_dir, paste0("covid-notebook-", forecaster_families, ".html"))
       )
     },
     pattern = map(forecaster_families)
