@@ -150,8 +150,11 @@ g_forecaster_parameter_combinations <- rlang::list2(
 stopifnot(
   length(g_forecaster_parameter_combinations$id %>% unique()) == length(g_forecaster_parameter_combinations$id)
 )
-g_forecaster_params_grid <- map(g_forecaster_parameter_combinations, ~ make_forecaster_grid(.)) %>% bind_rows()
-
+g_forecaster_params_grid <- imap(
+  g_forecaster_parameter_combinations,
+  \(x, i) make_forecaster_grid(x, i)
+) %>%
+  bind_rows()
 
 # ================================ TARGETS =================================
 # ================================ PARAMETERS TARGETS ======================
@@ -160,8 +163,6 @@ parameter_targets <- list2(
   tar_target(name = forecast_dates, command = g_forecast_dates),
   # This is used for parameter lookup.
   tar_target(name = forecaster_params_grid, command = g_forecaster_params_grid),
-  # This is used for generating notebooks.
-  tar_target(name = forecaster_families, command = g_forecaster_parameter_combinations %>% names()),
 )
 
 
@@ -560,30 +561,31 @@ external_forecasts_and_scores <- rlang::list2(
 joined_forecasts_and_scores <- rlang::list2(
   tar_target(joined_forecasts, command = delphi_forecasts %>% bind_rows(external_forecasts)),
   tar_target(joined_scores, command = delphi_scores %>% bind_rows(external_scores)),
-  tar_target(
-    family_notebooks,
-    command = {
-      forecaster_family_subset <- forecaster_parameter_combinations[[forecaster_families]]$id
+  tar_map(
+    values = list(forecaster_family = unique(g_forecaster_params_grid$family)),
+    tar_target(
+      name = notebook,
+      command = {
+        params_subset <- g_forecaster_parameter_combinations[[forecaster_family]]
+        filtered_forecasts <- joined_forecasts %>%
+          filter(forecaster %in% c(params_subset$id, outside_forecaster_subset))
+        filtered_scores <- joined_scores %>%
+          filter(forecaster %in% c(params_subset$id, outside_forecaster_subset))
 
-      filtered_forecasts <- joined_forecasts %>%
-        filter(forecaster %in% c(forecaster_family_subset, outside_forecaster_subset))
-      filtered_scores <- joined_scores %>%
-        filter(forecaster %in% c(forecaster_family_subset, outside_forecaster_subset))
-
-      rmarkdown::render(
-        "scripts/reports/comparison-notebook.Rmd",
-        params = list(
-          forecaster_parameters = forecaster_parameter_combinations[[forecaster_families]],
-          forecaster_family = forecaster_families,
-          forecasts = filtered_forecasts,
-          scores = filtered_scores,
-          truth_data = hhs_evaluation_data,
-          disease = "covid"
-        ),
-        output_file = here::here(g_reports_dir, paste0("covid-notebook-", forecaster_families, ".html"))
-      )
-    },
-    pattern = map(forecaster_families)
+        rmarkdown::render(
+          "scripts/reports/comparison-notebook.Rmd",
+          params = list(
+            forecaster_parameters = params_subset,
+            forecaster_family = forecaster_family,
+            forecasts = filtered_forecasts,
+            scores = filtered_scores,
+            truth_data = hhs_evaluation_data,
+            disease = "covid"
+          ),
+          output_file = here::here(g_reports_dir, paste0("covid-notebook-", forecaster_family, ".html"))
+        )
+      }
+    )
   )
 )
 

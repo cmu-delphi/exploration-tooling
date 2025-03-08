@@ -73,7 +73,7 @@ get_single_id <- function(param_list) {
 #' columns, everything else is optional.
 #'
 #' @export
-make_forecaster_grid <- function(tib) {
+make_forecaster_grid <- function(tib, family) {
   if ("trainer" %in% colnames(tib)) {
     tib$trainer <- rlang::syms(tib$trainer)
   }
@@ -92,6 +92,7 @@ make_forecaster_grid <- function(tib) {
 
   if (length(params_list) == 0) {
     out <- tibble(
+      family = family,
       id = tib$id,
       forecaster = rlang::syms(tib$forecaster),
       params = list(list()),
@@ -99,6 +100,7 @@ make_forecaster_grid <- function(tib) {
     )
   } else {
     out <- tibble(
+      family = family,
       id = tib$id,
       forecaster = rlang::syms(tib$forecaster),
       params = params_list,
