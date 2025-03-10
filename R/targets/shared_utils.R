@@ -39,6 +39,15 @@ create_parameter_targets <- function() {
 
 #' Create forecast and score targets
 #'
+#' Variables with 'g_' prefix are globals defined in the calling script.
+#' implicit global dependencies:
+#' - g_forecaster_params_grid
+#' - g_time_value_adjust
+#' implicit target dependencies:
+#' - joined_archive_data
+#' - hhs_evaluation_data
+#' - aheads
+#' - state_geo_values
 #' @return A list of targets for forecasts and scores
 #' @export
 create_forecast_targets <- function() {
@@ -112,7 +121,11 @@ create_forecast_targets <- function() {
 
 #' Create joined forecast and score targets
 #'
-#' Assumes the global `config` object is set.
+#' Variables with 'g_' prefix are globals defined in the calling script.
+#' Target dependencies:
+#' - delphi_forecasts
+#' - external_forecasts
+#' - hhs_evaluation_data
 #'
 #' @param disease Disease name (e.g., "covid" or "flu")
 #' @return A list of targets for joined forecasts and scores

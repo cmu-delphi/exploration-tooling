@@ -191,8 +191,12 @@ for (as_of in as_ofs) {
   }
   if (FALSE) {
     waldo::compare(out1, out2)
-    out1 %>% filter(geo_value != "us") %>% autoplot()
-    out2 %>% filter(geo_value != "us") %>% autoplot()
+    out1 %>%
+      filter(geo_value != "us") %>%
+      autoplot()
+    out2 %>%
+      filter(geo_value != "us") %>%
+      autoplot()
   }
 }
 
