@@ -26,10 +26,9 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 #   )
 #   # Save to disk
 #   saveRDS(scorecards, "exploration-scorecards-2023-10-04.RDS")
-print(glue::glue("starting a run at {Sys.time()}"))
-tar_project <- Sys.getenv("TAR_PROJECT", "covid_hosp_explore")
+tar_project <- Sys.getenv("TAR_PROJECT", "flu_hosp_prod")
 external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
-debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
+debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", FALSE))
 use_shiny <- as.logical(Sys.getenv("USE_SHINY", FALSE))
 aws_s3_prefix <- Sys.getenv("AWS_S3_PREFIX", "exploration")
 aws_s3_prefix <- paste0(aws_s3_prefix, "/", tar_project)
@@ -46,11 +45,6 @@ cli::cli_inform(
     "*" = "AWS_S3_PREFIX = {aws_s3_prefix}"
   )
 )
-
-suppressPackageStartupMessages({
-  library(targets)
-  library(shiny)
-})
 
 
 # targets needs the output dir to already exist.
@@ -80,15 +74,8 @@ restart_loop <- function() {
   }
 }
 
-tar_manifest()
-print(Sys.time())
-if (debug_mode) {
-  tar_make(callr_function = NULL, use_crew = FALSE)
-} else {
-  tar_make()
-  # restart_loop()
-}
-
-if (use_shiny) {
-  source("scripts/dashboard.R")
-}
+tar_make(
+  store = tar_config_get("store", project = tar_project),
+  script = tar_config_get("script", project = tar_project),
+  use_crew = TRUE
+)
