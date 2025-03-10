@@ -586,11 +586,7 @@ ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
 Fan plots showing the 90% prediction intervals for the forecasts made by the CMU forecasters and the outside forecasters. The black line is the truth data.
 
 ```{r}
-if (params$disease == "flu") {
-  plot_dates <- forecast_dates[seq(1, length(forecast_dates), by = 4)]
-} else {
-  plot_dates <- forecast_dates[seq(1, length(forecast_dates), by = 4)]
-}
+plot_dates <- forecast_dates[seq(1, length(forecast_dates), by = 4)]
 ```
 
 #### Large States

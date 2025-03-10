@@ -15,9 +15,9 @@ g_disease = "flu"
 g_aheads = 0:4 * 7
 g_hhs_signal = "confirmed_admissions_influenza_1d"
 # The date when the forecast was generated (this is effectively the AS OF date).
-g_forecast_generation_dates = seq.Date(as.Date("2023-11-08"), as.Date("2024-04-24"), by = 7L)[1:4]
+g_forecast_generation_dates = seq.Date(as.Date("2023-11-08"), as.Date("2024-04-24"), by = 7L)[1:10]
 # The reference date for the forecast.
-g_forecast_dates = seq.Date(as.Date("2023-11-08"), as.Date("2024-04-24"), by = 7L)[1:4]
+g_forecast_dates = seq.Date(as.Date("2023-11-08"), as.Date("2024-04-24"), by = 7L)[1:10]
 # This moves the week marker from Saturday to Wednesday
 g_time_value_adjust = 3
 # Directory for reports.
@@ -32,7 +32,7 @@ g_very_latent_locations = list(list(
 # Geos with insufficient data for forecasting.
 g_insufficient_data_geos = c("as", "pr", "vi", "gu", "mp")
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
-g_forecaster_parameter_combinations <- get_covid_forecaster_params()
+g_forecaster_parameter_combinations <- get_flu_forecaster_params()
 # Targets-readable object to be used for running the pipeline.
 g_forecaster_params_grid <- g_forecaster_parameter_combinations %>%
   imap(\(x, i) make_forecaster_grid(x, i)) %>%

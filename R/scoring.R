@@ -19,26 +19,20 @@ evaluate_predictions <- function(forecasts, truth_data) {
       predicted = "prediction",
       forecast_unit = c("model", "geo_value", "forecast_date", "target_end_date")
     )
-  # browser()
-  # # Find where the forecasts are not monotonically increasing as a function of quantile_level
-  # df <- forecast_obj %>%
-  #   group_by(model, geo_value, forecast_date, target_end_date) %>%
-  #   mutate(monotonic = all(diff(predicted) >= 0)) %>%
-  #   ungroup() %>%
-  #   filter(!monotonic)
-  # df %>% print(n=100)
 
   scores <- forecast_obj %>%
     scoringutils::score(metrics = get_metrics(.)) %>%
     as_tibble()
-  if (
-    length(setdiff(
-      c("model", "geo_value", "forecast_date", "target_end_date", "wis", "ae", "coverage_50", "coverage_90"),
-      names(scores)
-    )) >
-      0
-  ) {
-    stop("scoring error, quantile monotonicity likely violated")
+  missing_metrics <- setdiff(
+    c("model", "geo_value", "forecast_date", "target_end_date", "wis", "ae_median", "interval_coverage_50", "interval_coverage_90"),
+    names(scores)
+  )
+  if (length(missing_metrics) > 0) {
+    cli::cli_abort(c(
+      "scoring error",
+      "i" = "missing metrics: {missing_metrics}",
+      "i" = "if wis is missing, then likely quantile monotonicity was violated"
+    ))
   }
   scores %>%
     select(

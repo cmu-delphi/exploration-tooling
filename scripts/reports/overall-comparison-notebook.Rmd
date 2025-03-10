@@ -142,12 +142,12 @@ param_table <- params$forecaster_parameters %>%
         geomean_ae = round(GeoMean(ae), 2),
         mean_wis = round(Mean(wis), 2),
         geomean_wis = round(GeoMean(wis), 2),
-        mean_coverage_80 = round(Mean(coverage_80), 2),
+        mean_coverage_90 = round(Mean(coverage_90), 2),
       ) %>%
       rename(id = forecaster)
   ) %>%
   arrange(mean_ae) %>%
-  relocate(family = family_name, id, mean_ae, geomean_ae, mean_wis, geomean_wis, mean_coverage_80)
+  relocate(family = family_name, id, mean_ae, geomean_ae, mean_wis, geomean_wis, mean_coverage_90)
 datatable(param_table)
 ```
 
@@ -406,7 +406,7 @@ ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
 #### % Coverage by Forecast Date
 
 ```{r}
-var <- "coverage_80"
+var <- "coverage_90"
 group_cols <- c("forecaster", "forecast_date", "ahead")
 
 # Aggregate metric across groups
@@ -443,7 +443,7 @@ p <- ggplot(
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
   scale_color_discrete() +
   guides(color = guide_legend(ncol = 2)) +
-  labs(title = subtitle, x = "Forecast Dates", y = "Arithmetic Mean 80% Coverage")
+  labs(title = subtitle, x = "Forecast Dates", y = "Arithmetic Mean 90% Coverage")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
@@ -452,7 +452,7 @@ ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
 #### % Coverage by Ahead
 
 ```{r}
-var <- "coverage_80"
+var <- "coverage_90"
 id_cols <- c("forecaster", "ahead")
 
 # Aggregate metric across groups
@@ -486,7 +486,7 @@ p <- ggplot(
   geom_hline(yintercept = .8, linetype = 1, color = "black") +
   scale_color_discrete() +
   guides(color = guide_legend(ncol = 2)) +
-  labs(title = subtitle, x = "Days ahead", y = "Arithmetic Mean 80% Coverage")
+  labs(title = subtitle, x = "Days ahead", y = "Arithmetic Mean 90% Coverage")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
@@ -497,11 +497,7 @@ ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
 Fan plots showing the 80% prediction intervals for the forecasts made by the CMU forecasters and the outside forecasters. The black line is the truth data.
 
 ```{r}
-if (params$disease == "flu") {
-  plot_dates <- seq.Date(as.Date("2023-10-07"), by = "4 weeks", length.out = 8)
-} else {
-  plot_dates <- seq.Date(as.Date("2023-07-03"), by = "4 weeks", length.out = 7)
-}
+plot_dates <- forecast_dates[seq(1, length(forecast_dates), by = 4)]
 ```
 
 #### Large States
@@ -531,7 +527,7 @@ p <- ggplot(
       filter(
         geo_value %in% geo_vals,
         target_end_date >= min(plot_dates),
-        target_end_date <= max(plot_dates)
+        target_end_date <= max(plot_dates) + 5 * 7
       ),
     aes(x = target_end_date, y = true_value),
     inherit.aes = FALSE, na.rm = TRUE,
@@ -541,7 +537,6 @@ p <- ggplot(
   facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
-
 
 ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
@@ -562,7 +557,6 @@ forecast_subset <- params$forecasts %>%
   pivot_wider(names_from = "quantile", values_from = "prediction") %>%
   mutate(ahead = as.numeric(target_end_date - forecast_date))
 
-
 p <- ggplot(
   data = forecast_subset,
   aes(x = target_end_date, group = forecast_date)
@@ -575,7 +569,7 @@ p <- ggplot(
       filter(
         geo_value %in% geo_vals,
         target_end_date >= min(plot_dates),
-        target_end_date <= max(plot_dates)
+        target_end_date <= max(plot_dates) + 5 * 7
       ),
     aes(x = target_end_date, y = true_value),
     inherit.aes = FALSE, na.rm = TRUE,
@@ -585,7 +579,6 @@ p <- ggplot(
   facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
-
 
 ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
@@ -606,7 +599,6 @@ forecast_subset <- params$forecasts %>%
   pivot_wider(names_from = "quantile", values_from = "prediction") %>%
   mutate(ahead = as.numeric(target_end_date - forecast_date))
 
-
 p <- ggplot(
   data = forecast_subset,
   aes(x = target_end_date, group = forecast_date)
@@ -619,7 +611,7 @@ p <- ggplot(
       filter(
         geo_value %in% geo_vals,
         target_end_date >= min(plot_dates),
-        target_end_date <= max(plot_dates)
+        target_end_date <= max(plot_dates) + 5 * 7
       ),
     aes(x = target_end_date, y = true_value),
     inherit.aes = FALSE, na.rm = TRUE,
@@ -629,7 +621,6 @@ p <- ggplot(
   facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
-
 
 ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))

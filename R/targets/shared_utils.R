@@ -146,9 +146,9 @@ create_joined_targets <- function() {
               forecasts = filtered_forecasts,
               scores = filtered_scores,
               truth_data = hhs_evaluation_data,
-              disease = "covid"
+              disease = g_disease
             ),
-            output_file = here::here(g_reports_dir, paste0("covid-notebook-", forecaster_family, ".html"))
+            output_file = here::here(g_reports_dir, paste0(g_disease, "-notebook-", forecaster_family, ".html"))
           )
         }
       )
