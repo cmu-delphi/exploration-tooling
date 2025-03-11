@@ -341,11 +341,14 @@ get_flu_forecaster_params <- function() {
       if (g_dummy_mode) {
         x$forecaster <- "dummy_forecaster"
       }
-      x
-    }) %>%
-    map(add_id) %>%
-    # Add the outcome to each forecaster.
-    map(function(x) {
+      x <- add_id(x)
+      if ("trainer" %in% names(x) && is.list(x$trainer)) {
+        x$trainer <- x$trainer[[1]]
+      }
+      if ("seasonal_method" %in% names(x) && is.list(x$seasonal_method)) {
+        x$seasonal_method <- x$seasonal_method[[1]]
+      }
+      # Add the outcome to each forecaster.
       x$outcome <- "hhs"
       x
     })

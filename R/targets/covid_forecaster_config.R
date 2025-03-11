@@ -120,12 +120,11 @@ get_covid_forecaster_params <- function() {
         x$forecaster <- "dummy_forecaster"
       }
       x <- add_id(x)
-      if ("trainer" %in% names(x)) {
-        x$trainer <- if (is.list(x$trainer)) {
-          x$trainer[[1]]
-        } else {
-          x$trainer
-        }
+      if ("trainer" %in% names(x) && is.list(x$trainer)) {
+        x$trainer <- x$trainer[[1]]
+      }
+      if ("seasonal_method" %in% names(x) && is.list(x$seasonal_method)) {
+        x$seasonal_method <- x$seasonal_method[[1]]
       }
       # Add the outcome to each forecaster.
       x$outcome <- "hhs"
