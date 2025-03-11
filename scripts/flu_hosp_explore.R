@@ -4,7 +4,10 @@ suppressPackageStartupMessages(source("R/load_all.R"))
 # Variables prefixed with 'g_' are globals needed by the targets pipeline (they
 # need to persist during the actual targets run, since the commands are frozen
 # as expressions).
+
+# Setup targets config.
 set_targets_config()
+# These are trainer model objects needed by the targets pipeline.
 linreg <- parsnip::linear_reg()
 quantreg <- epipredict::quantile_reg()
 randforest_grf <- rand_forest(engine = "grf_quantiles", mode = "regression")
@@ -24,14 +27,13 @@ g_time_value_adjust <- 3
 g_reports_dir <- "reports"
 # Fetch arguments for epidatr.
 g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
-
+# Geos with insufficient data for forecasting.
+g_insufficient_data_geos <- c("as", "pr", "vi", "gu", "mp")
 # Locations we shouldn't take into account when deciding on latency
 g_very_latent_locations <- list(list(
   c("source"),
   c("flusurv", "ILI+")
 ))
-# Geos with insufficient data for forecasting.
-g_insufficient_data_geos <- c("as", "pr", "vi", "gu", "mp")
 # Human-readable object to be used for inspecting the forecasters in the pipeline.
 g_forecaster_parameter_combinations <- get_flu_forecaster_params()
 # Targets-readable object to be used for running the pipeline.
