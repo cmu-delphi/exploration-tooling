@@ -27,22 +27,16 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 #   # Save to disk
 #   saveRDS(scorecards, "exploration-scorecards-2023-10-04.RDS")
 tar_project <- Sys.getenv("TAR_PROJECT", "flu_hosp_prod")
-external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
-debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", FALSE))
-use_shiny <- as.logical(Sys.getenv("USE_SHINY", FALSE))
-aws_s3_prefix <- Sys.getenv("AWS_S3_PREFIX", "exploration")
-aws_s3_prefix <- paste0(aws_s3_prefix, "/", tar_project)
-if (external_scores_path == "") {
-  external_scores_path <- paste0(tar_project, "/", "legacy-exploration-scorecards.qs")
-}
+aws_s3_prefix <- Sys.getenv("AWS_S3_PREFIX", "exploration") %>% paste0("/", tar_project)
+flu_submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
+covid_submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
 cli::cli_inform(
   c(
     "i" = "Reading environment variables...",
     "*" = "TAR_PROJECT = {tar_project}",
-    "*" = "EXTERNAL_SCORES_PATH = {external_scores_path}",
-    "*" = "DEBUG_MODE = {debug_mode}",
-    "*" = "USE_SHINY = {use_shiny}",
-    "*" = "AWS_S3_PREFIX = {aws_s3_prefix}"
+    "*" = "AWS_S3_PREFIX = {aws_s3_prefix}",
+    "*" = "FLU_SUBMISSION_DIRECTORY = {flu_submission_directory}",
+    "*" = "COVID_SUBMISSION_DIRECTORY = {covid_submission_directory}"
   )
 )
 
