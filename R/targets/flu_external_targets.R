@@ -29,7 +29,7 @@ create_flu_external_targets <- function() {
           forecasts = external_forecasts %>%
             filter(forecast_date %in% (forecast_dates + g_time_value_adjust)) %>%
             rename(model = forecaster),
-          truth_data = hhs_evaluation_data
+          truth_data = hhs_evaluation_data %>% select(-population)
         ) %>%
           rename(forecaster = model)
       }

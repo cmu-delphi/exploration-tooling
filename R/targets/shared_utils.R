@@ -78,12 +78,26 @@ create_forecast_targets <- function() {
     tar_target(
       name = score,
       command = {
-        forecasts <- forecast %>%
+        # If the data has already been scaled, hhs needs to include the
+        # population and undo scaling.
+        if ("population" %in% colnames(hhs_evaluation_data)) {
+          actual_eval_data <- hhs_evaluation_data %>% select(-population)
+          forecast_scaled <- forecast %>%
+            left_join(
+              hhs_evaluation_data %>% distinct(geo_value, population),
+              by = "geo_value"
+            ) %>%
+            mutate(prediction = prediction * population / 10L**5)
+        } else {
+          forecast_scaled <- forecast
+          actual_eval_data <- hhs_evaluation_data
+        }
+        forecast_scaled <- forecast_scaled %>%
           # Push the Wednesday markers to Saturday, to match targets with truth data.
-          mutate(forecast_date = forecast_date + 3, target_end_date = target_end_date + 3) %>%
+          mutate(forecast_date = forecast_date + g_time_value_adjust, target_end_date = target_end_date + g_time_value_adjust) %>%
           rename("model" = "id")
         # browser()
-        evaluate_predictions(forecasts = forecasts, truth_data = hhs_evaluation_data) %>%
+        evaluate_predictions(forecasts = forecast_scaled, truth_data = hhs_evaluation_data) %>%
           rename("id" = "model")
       }
     )
