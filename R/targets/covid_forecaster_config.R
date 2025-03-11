@@ -119,11 +119,15 @@ get_covid_forecaster_params <- function() {
       if (g_dummy_mode) {
         x$forecaster <- "dummy_forecaster"
       }
-      x
-    }) %>%
-    map(add_id) %>%
-    # Add the outcome to each forecaster.
-    map(function(x) {
+      x <- add_id(x)
+      if ("trainer" %in% names(x)) {
+        x$trainer <- if (is.list(x$trainer)) {
+          x$trainer[[1]]
+        } else {
+          x$trainer
+        }
+      }
+      # Add the outcome to each forecaster.
       x$outcome <- "hhs"
       x
     })

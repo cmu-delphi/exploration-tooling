@@ -39,15 +39,12 @@ library(purrr)
 ```
 
 ```{r}
-# i <- 1
-# forecaster_family <- tar_read(forecaster_families)[[i]]
 # params <- list(
-#     forecaster_parameter_combinations = tar_read(forecaster_parameter_combinations)[[i]],
-#     forecaster_family = forecaster_family,
-#     forecasts = tar_read(joined_forecasts),
-#     scores = tar_read(joined_scores),
-#     truth_data = tar_read(hhs_evaluation_data),
-#     disease = "flu"
+#   forecaster_parameters = tar_read(forecaster_parameter_combinations),
+#   forecasts = tar_read(joined_forecasts),
+#   scores = tar_read(joined_scores),
+#   truth_data = tar_read(hhs_evaluation_data),
+#   disease = "covid"
 # )
 
 if (params$disease == "flu") {
@@ -55,31 +52,34 @@ if (params$disease == "flu") {
   ensemble_forecaster_name <- "FluSight-ensemble"
 } else {
   base_forecaster_name <- "COVIDhub-baseline"
-  ensemble_forecaster_name <- "COVIDhub-ensemble"
+  ensemble_forecaster_name <- "COVIDhub_CDC-ensemble"
 }
 
 # Select forecasters for this notebook
 outside_forecasters <- c(base_forecaster_name, ensemble_forecaster_name)
 id_to_forecaster <- params$forecaster_parameters %>%
   purrr::imap(\(x, idx) {
-    x %>% mutate(family_name = idx)
+    x %>%
+      mutate(family_name = idx) %>%
+      select(id, forecaster, family_name)
   }) %>%
   bind_rows() %>%
-  select(id, forecaster, family_name) %>%
   rename(forecaster_function = forecaster)
 
 Mean <- function(x) mean(x, na.rm = TRUE)
 GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
 
 overall_rating <- params$scores %>%
-  group_by(forecaster) %>%
-  summarize(mean_score = Mean(wis)) %>%
+  summarize(mean_score = Mean(wis), .by = forecaster) %>%
   filter(mean_score > 20) %>%
   arrange(mean_score) %>%
-  left_join(id_to_forecaster, by = join_by(forecaster == id))
+  left_join(id_to_forecaster, by = join_by(forecaster == id)) %>%
+  mutate(
+    family_name = if_else(is.na(family_name), "external", family_name),
+    forecaster_function = if_else(is.na(forecaster_function), "external", forecaster_function)
+  )
 best_in_class <- overall_rating %>%
-  group_by(family_name) %>%
-  filter(row_number() == 1) %>%
+  slice_max(mean_score, by = family_name) %>%
   pull(forecaster)
 forecasters_to_keep <- c(best_in_class, outside_forecasters) %>% unique()
 # Load forecasts and scores
@@ -106,7 +106,7 @@ Best examples from each family of forecasters.
 
 `r params$disease`
 
-#### Target Dates
+#### Forecast Dates
 
 `r forecast_dates`
 
@@ -127,13 +127,6 @@ param_table <- params$forecaster_parameters %>%
   bind_rows() %>%
   left_join(id_to_forecaster, by = join_by(id)) %>%
   select(-any_of(ignore_keys)) %>%
-  {
-    if ("n_training" %in% colnames(.)) {
-      (.) %>% mutate(n_training = as.character(n_training))
-    } else {
-      .
-    }
-  } %>%
   full_join(
     scores %>%
       group_by(forecaster) %>%
@@ -197,21 +190,11 @@ subtitle <- sprintf(
   format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-  normalized_df %>% filter(forecaster != ensemble_forecaster_name),
+  normalized_df,
   aes(x = forecast_date, y = !!sym(var))
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   facet_grid(rows = vars(ahead)) +
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
@@ -256,21 +239,11 @@ subtitle <- sprintf(
   format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-  normalized_df %>% filter(forecaster != ensemble_forecaster_name),
+  normalized_df,
   aes(x = ahead, y = !!sym(var))
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   scale_y_log10(n.breaks = 20) +
   scale_color_discrete() +
@@ -319,21 +292,11 @@ subtitle <- sprintf(
   format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-  normalized_df %>% filter(forecaster != ensemble_forecaster_name),
+  normalized_df,
   aes(x = forecast_date, y = !!sym(var))
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   facet_grid(rows = vars(ahead)) +
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
@@ -378,21 +341,11 @@ subtitle <- sprintf(
   format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-  normalized_df %>% filter(forecaster != ensemble_forecaster_name),
+  normalized_df,
   aes(x = ahead, y = !!sym(var))
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   scale_y_log10(n.breaks = 25) +
   scale_color_discrete() +
@@ -423,21 +376,11 @@ subtitle <- sprintf(
   format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-  df %>% filter(forecaster != ensemble_forecaster_name),
+  df,
   aes(x = forecast_date, y = !!sym(var))
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
   geom_hline(yintercept = .8, linetype = 1, color = "black") +
   facet_grid(rows = vars(ahead)) +
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
@@ -468,21 +411,11 @@ subtitle <- sprintf(
   format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-  df %>% filter(forecaster != ensemble_forecaster_name),
+  df,
   aes(x = ahead, y = !!sym(var))
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
   geom_hline(yintercept = .8, linetype = 1, color = "black") +
   scale_color_discrete() +
   guides(color = guide_legend(ncol = 2)) +

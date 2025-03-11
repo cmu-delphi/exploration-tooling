@@ -10,7 +10,7 @@ params:
   forecasts: ""
   scores: ""
   truth_data: ""
-  disease: "flu"
+  disease: ""
 editor_options:
   chunk_output_type: console
 ---
