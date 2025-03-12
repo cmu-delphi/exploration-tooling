@@ -3,6 +3,7 @@
 #' `step_YeoJohnson2()` creates a *specification* of a recipe step that will
 #' transform data using a Yeo-Johnson transformation. This fork works with panel
 #' data and is meant for epidata.
+#' TODO: Do an edit pass on this docstring.
 #'
 #' @inheritParams step_center
 #' @param lambdas A numeric vector of transformation values. This
@@ -69,11 +70,21 @@
 #' tidy(yj_transform, number = 1)
 #' tidy(yj_estimates, number = 1)
 step_YeoJohnson2 <-
-  function(recipe, ..., role = NA, trained = FALSE,
-           lambdas = NULL, na_lambda_fill = 1 / 4, limits = c(-5, 5), num_unique = 5,
-           na_rm = TRUE,
-           skip = FALSE,
-           id = rand_id("YeoJohnson2")) {
+  function(
+    recipe,
+    ...,
+    role = NA,
+    trained = FALSE,
+    lambdas = NULL,
+    na_lambda_fill = 1 / 4,
+    limits = c(-5, 5),
+    num_unique = 5,
+    na_rm = TRUE,
+    skip = FALSE,
+    id = rand_id("YeoJohnson2")
+  ) {
+    # TODO: Add arg validations.
+    # TODO: Improve arg names.
     add_step(
       recipe,
       step_YeoJohnson2_new(
@@ -115,17 +126,18 @@ prep.step_YeoJohnson2 <- function(x, training, info = NULL, ...) {
   recipes:::check_number_whole(x$num_unique, args = "num_unique")
   recipes:::check_bool(x$na_rm, arg = "na_rm")
   if (!is.numeric(x$limits) || any(is.na(x$limits)) || length(x$limits) != 2) {
-    cli::cli_abort("{.arg limits} should be a numeric vector with two values,
-                    not {.obj_type_friendly {x$limits}}")
+    cli::cli_abort(
+      "{.arg limits} should be a numeric vector with two values,
+                    not {.obj_type_friendly {x$limits}}"
+    )
   }
 
-  x$limits <- sort(x$limits)
-
   values <- training %>%
-    group_by(geo_value) %>%
-    summarise(across(all_of(col_names), ~ estimate_yj(.x, x$limits, x$num_unique, x$na_rm))) %>%
-    ungroup() %>%
-    rename_with(~ paste0("lambda_", .x), -geo_value)
+    summarise(
+      across(all_of(col_names), ~ estimate_yj(.x, x$limits, x$num_unique, x$na_rm)),
+      .by = key_colnames(training, exclude = "time_value")
+    ) %>%
+    rename_with(~ paste0("lambda_", .x), -all_of(key_colnames(training, exclude = "time_value")))
 
   # Check for NAs in any of the lambda_ columns
   for (col in col_names) {
@@ -137,16 +149,11 @@ prep.step_YeoJohnson2 <- function(x, training, info = NULL, ...) {
         ),
         call = rlang::caller_fn()
       )
-      values <- values %>%
-        mutate(
-          !!sym(paste0("lambda_", col)) := ifelse(
-            is.na(!!sym(paste0("lambda_", col))),
-            x$na_lambda_fill,
-            !!sym(paste0("lambda_", col))
-          )
-        )
     }
   }
+
+  values <- values %>%
+    mutate(across(starts_with("lambda_"), \(col) ifelse(is.na(col), x$na_lambda_fill, col)))
 
   step_YeoJohnson2_new(
     terms = x$terms,
@@ -168,11 +175,12 @@ bake.step_YeoJohnson2 <- function(object, new_data, ...) {
   col_names <- object$terms %>% purrr::map_chr(rlang::as_name)
   check_new_data(col_names, object, new_data)
 
-  new_data %<>% left_join(object$lambdas, by = "geo_value")
+  new_data %<>% left_join(object$lambdas, by = key_colnames(new_data, exclude = "time_value"))
   for (col in col_names) {
     new_data <- new_data %>%
       rowwise() %>%
       mutate(!!col := yj_transform(!!sym(col), !!sym(paste0("lambda_", col))))
+      # mutate(across(col_names, ~ yj_transform(.x, !!sym(paste0("lambda_", .x)))))
   }
   new_data %>%
     select(-starts_with("lambda_")) %>%
@@ -260,11 +268,7 @@ yj_obj <- function(lam, dat, ind_neg, const) {
 #' @keywords internal
 #' @rdname recipes-internal
 #' @export
-estimate_yj <- function(dat,
-                        limits = c(-5, 5),
-                        num_unique = 5,
-                        na_rm = TRUE,
-                        call = caller_env(2)) {
+estimate_yj <- function(dat, limits = c(-5, 5), num_unique = 5, na_rm = TRUE, call = caller_env(2)) {
   na_rows <- which(is.na(dat))
   if (length(na_rows) > 0) {
     if (na_rm) {
@@ -305,7 +309,7 @@ estimate_yj <- function(dat,
   lam
 }
 
-
-#' @rdname tidy.recipe
-#' @export
-tidy.step_YeoJohnson2 <- tidy.step_BoxCox2
+# #
+# #' @rdname tidy.recipe
+# #' @export
+# tidy.step_YeoJohnson2 <- tidy.step_BoxCox2

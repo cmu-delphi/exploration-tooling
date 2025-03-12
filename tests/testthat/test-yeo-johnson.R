@@ -1,66 +1,51 @@
-source(here::here("R", "load_all.R"))
-
-data <- tribble(
-  ~geo_value, ~time_value, ~version, ~value1,
-  "us", "2024-11-08", "2024-11-13", 1,
-  "us", "2024-11-07", "2024-11-13", 2,
-  "us", "2024-11-06", "2024-11-13", 3,
-  "us", "2024-11-05", "2024-11-13", 4,
-  "us", "2024-11-04", "2024-11-13", 5,
-  "us", "2024-11-03", "2024-11-13", 6,
-  "us", "2024-11-02", "2024-11-13", 7,
-  "us", "2024-11-01", "2024-11-13", 8,
-  "us", "2024-10-31", "2024-11-13", 9,
-  "us", "2024-10-30", "2024-11-13", 10,
-  "us", "2024-10-29", "2024-11-13", 11,
-  "us", "2024-10-28", "2024-11-13", 12,
-  "us", "2024-10-27", "2024-11-13", 13
-) %>%
-  mutate(value2 = value1 * 11) %>%
-  bind_rows((.) %>% mutate(geo_value = "ca", value1 = value1 * 3 + 1, value2 = value2 + 50)) %>%
-  mutate(time_value = as.Date(time_value), version = as.Date(version)) %>%
-  as_epi_df()
-
-r <- epi_recipe(data) %>%
-  step_YeoJohnson2(value1, value2) %>%
-  prep(data)
-r
-r$steps[[1]]$lambdas
-outcome <- r %>% bake(data)
-
-httpgd::hgd()
-data %>%
-  pivot_longer(c(value1, value2), names_to = "variable", values_to = "value") %>%
-  ggplot(aes(time_value, value, color = variable)) +
-  geom_line() +
-  geom_line(
-    data = outcome %>% pivot_longer(c(value1, value2), names_to = "variable", values_to = "value"),
-    aes(time_value, value, color = variable),
-  ) +
-  facet_wrap(~geo_value, scales = "free_y") +
-  theme_minimal() +
-  labs(title = "Yeo-Johnson transformation", x = "Time", y = "Value")
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 
+# Real data test
+Sys.setenv(TAR_PROJECT = "flu_hosp_explore")
+
+
+# Transform with Yeo-Johnson
 data <- tar_read(joined_archive_data) %>%
-  epix_as_of(as.Date("2023-11-01")) %>%
-  filter(source == "nhsn") %>%
-  rename(value = hhs)
-r <- epi_recipe(data) %>%
-  step_YeoJohnson2(value) %>%
-  prep(data)
+  epix_as_of(as.Date("2023-11-01"))
+state_geo_values <- data %>% filter(source == "nhsn") %>% pull(geo_value) %>% unique()
+filtered_data <- data %>%
+  filter(geo_value %in% state_geo_values) %>%
+  select(geo_value, source, time_value, hhs)
+r <- epi_recipe(filtered_data) %>%
+  step_YeoJohnson2(hhs) %>%
+  prep(filtered_data)
 r
+# Inspect the lambda values (a few states have default lambda = 0.25, because
+# they have issues)
 r$steps[[1]]$lambdas %>% print(n = 55)
-outcome <- r %>% bake(data)
+out1 <- r %>% bake(filtered_data)
 
-httpgd::hgd()
-data %>%
-  ggplot(aes(time_value, value)) +
-  geom_line(color = "blue") +
-  geom_line(data = outcome, aes(time_value, value), color = "green") +
+# Transform with manual whitening (quarter root scaling)
+# learned_params <- calculate_whitening_params(filtered_data, "hhs", scale_method = "none", center_method = "none", nonlin_method = "quart_root")
+out2 <- filtered_data %>%
+  mutate(hhs = (hhs + 0.01)^(1 / 4))
+
+out1 %>%
+  left_join(out2, by = c("geo_value", "source", "time_value")) %>%
+  mutate(hhs_diff = hhs.x - hhs.y) %>%
+  ggplot(aes(time_value, hhs_diff)) +
+  geom_line() +
   facet_wrap(~geo_value, scales = "free_y") +
   theme_minimal() +
-  labs(title = "Yeo-Johnson transformation", x = "Time", y = "Value")
+  labs(title = "Yeo-Johnson transformation", x = "Time", y = "HHS")
+
+# Plot the real data before and after transformation
+geo_filter <- "ca"
+filtered_data %>%
+  filter(geo_value == geo_filter, source == "nhsn") %>%
+  mutate(hhs = log(hhs)) %>%
+  ggplot(aes(time_value, hhs)) +
+  geom_line(color = "blue") +
+  geom_line(data = out1 %>% filter(geo_value == geo_filter, source == "nhsn") %>% mutate(hhs = log(hhs)), aes(time_value, hhs), color = "green") +
+  geom_line(data = out2 %>% filter(geo_value == geo_filter, source == "nhsn") %>% mutate(hhs = log(hhs)), aes(time_value, hhs), color = "red") +
+  theme_minimal() +
+  labs(title = "Yeo-Johnson transformation", x = "Time", y = "HHS")
 
 
 # TODO: Test this.
@@ -68,6 +53,6 @@ data %>%
 postproc <- frosting() %>%
   layer_YeoJohnson2()
 
-wf <- epi_workflow(r, linear_reg()) %>%
+wf <- epi_workflow(r) %>%
   fit(data) %>%
   add_frosting(postproc)
