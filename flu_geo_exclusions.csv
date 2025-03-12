@@ -6,11 +6,24 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, windowed_seasonal, all, 3
 2024-10-01, windowed_seasonal_extra_sources, all, 3
 2024-10-01, climate_linear, all, 3
-2024-10-01, linear, all, 0.5
+2024-10-01, linear, all, 2
 2024-10-01, linearlog, all, 0
 2024-10-01, climate_base, all, 0.5
 2024-10-01, climate_geo_agged, all, 0.25
 2024-10-01, climate_quantile_extrapolated, all, 0
+##################
+# March 12th
+##################
+2025-03-12, all, mp, 0
+2025-03-12, windowed_seasonal, all, 3
+2025-03-12, windowed_seasonal_extra_sources, all, 3
+2025-03-12, climate_linear, all, 3
+2025-03-12, linear, all, 2
+2025-03-12, linearlog, all, 0
+2025-03-12, climate_base, all, 0.5
+2025-03-12, climate_geo_agged, all, 0.25
+2025-03-12, climate_quantile_extrapolated, all, 0
+2025-03-12, windowed_seasonal_extra_sources, dc, 0
 ##################
 # March 5th
 ##################
