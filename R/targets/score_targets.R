@@ -1,8 +1,11 @@
-get_external_forecasts <- function(disease) {
+get_external_forecasts <- function(external_object_name) {
   locations_crosswalk <- get_population_data() %>%
     select(state_id, state_code) %>%
     filter(state_id != "usa")
-  arrow::read_parquet(glue::glue("data/forecasts/{disease}_hosp_forecasts.parquet")) %>%
+  s3read_using(
+    nanoparquet::read_parquet,
+    object = external_object_name, bucket = "forecasting-team-data"
+  ) %>%
     filter(output_type == "quantile") %>%
     select(forecaster, geo_value = location, forecast_date, target_end_date, quantile = output_type_id, value) %>%
     inner_join(locations_crosswalk, by = c("geo_value" = "state_code")) %>%

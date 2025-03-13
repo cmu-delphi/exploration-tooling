@@ -151,7 +151,7 @@ combined_data %<>% arrange(disease, geo_value, time_value, version)
 combined_data %<>% select(disease, geo_value, time_value, version, value)
 
 # Write to parquet
-combined_data %>% arrow::write_parquet(config$output_file)
+combined_data %>% nanoparquet::write_parquet(config$output_file)
 
 cli::cli_alert_success("Combined data has {nrow(combined_data)} rows and {ncol(combined_data)} columns")
 cli::cli_alert_success("Data written to {.file {config$output_file}}")

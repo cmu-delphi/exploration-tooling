@@ -16,7 +16,7 @@
 #' @return A partially applied forecaster function
 #' @export
 get_partially_applied_forecaster <- function(forecaster, ahead, params, param_names) {
-  function(epi_data) rlang::inject(forecaster(epi_data, ahead = ahead, !!!(set_names(params, param_names))))
+  function(epi_data, ...) rlang::inject(forecaster(epi_data, ..., ahead = ahead, !!!(set_names(params, param_names))))
 }
 
 
