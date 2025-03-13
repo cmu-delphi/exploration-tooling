@@ -14,7 +14,7 @@
 #' @param other_weights if non null, it should be a tibble giving a list of weights by forecaster and geo_value
 #' @importFrom rlang %||%
 #' @export
-ensemble_linear_climate <- function(forecasts,
+ensemble_climate_linear <- function(forecasts,
                                     aheads,
                                     other_weights = NULL,
                                     probs = covidhub_probs(),

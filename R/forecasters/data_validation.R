@@ -69,7 +69,7 @@ confirm_sufficient_data <- function(epi_data, ahead, args_input, outcome, extra_
   # TODO: Buffer should probably be 2 * n(lags) * n(predictors). But honestly,
   # this needs to be fixed in epipredict itself, see
   # https://github.com/cmu-delphi/epipredict/issues/106.
-  if (extra_sources == c("")) {
+  if (identical(extra_sources, "")) {
     extra_sources <- character(0L)
   }
   has_no_last_nas <- epi_data %>%

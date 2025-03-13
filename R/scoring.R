@@ -22,9 +22,24 @@ evaluate_predictions <- function(forecasts, truth_data) {
 
   scores <- forecast_obj %>%
     scoringutils::score(metrics = get_metrics(.)) %>%
-    as_tibble() %>%
+    as_tibble()
+  missing_metrics <- setdiff(
+    c("model", "geo_value", "forecast_date", "target_end_date", "wis", "ae_median", "interval_coverage_50", "interval_coverage_90"),
+    names(scores)
+  )
+  if (length(missing_metrics) > 0) {
+    cli::cli_abort(c(
+      "scoring error",
+      "i" = "missing metrics: {missing_metrics}",
+      "i" = "if wis is missing, then likely quantile monotonicity was violated"
+    ))
+  }
+  scores %>%
     select(
-      model, geo_value, forecast_date, target_end_date,
+      model,
+      geo_value,
+      forecast_date,
+      target_end_date,
       wis,
       ae = ae_median,
       coverage_50 = interval_coverage_50,

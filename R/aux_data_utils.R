@@ -176,7 +176,17 @@ gen_pop_and_density_data <-
       )
   }
 
-daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), day_of_week = 4L, day_of_week_end = 7L, keys = "geo_value", values = c("value")) {
+#' Aggregate a daily archive to a weekly archive.
+#'
+#' By default, aggregates from Sunday to Saturday and labels with the Wednesday
+#' of that week.
+#'
+#' @param epi_df the archive to aggregate.
+#' @param agg_method the method to use to aggregate the data, one of "sum" or "mean".
+#' @param keys the columns to group by.
+#' @param values the columns to aggregate.
+daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), keys = "geo_value", values = c("value")) {
+  agg_method <- arg_match(agg_method)
   epi_df %>%
     mutate(epiweek = epiweek(time_value), year = epiyear(time_value)) %>%
     group_by(across(any_of(c(keys, "epiweek", "year")))) %>%
@@ -299,6 +309,13 @@ drop_non_seasons <- function(epi_data, min_window = 12) {
     )
 }
 
+get_nwss_coarse_data <- function(disease = c("covid", "flu")) {
+  disease <- arg_match(disease)
+  aws.s3::get_bucket_df(prefix = glue::glue("exploration/aux_data/nwss_{disease}_data"), bucket = "forecasting-team-data") %>%
+    slice_max(LastModified) %>%
+    pull(Key) %>%
+    aws.s3::s3read_using(FUN = readr::read_csv, object = ., bucket = "forecasting-team-data")
+}
 
 #' add a column summing the values in the hhs region
 #' @param hhs_region_table the region table

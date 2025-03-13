@@ -1,5 +1,5 @@
 ---
-title: Evaluation of Hospitalization Forecasters 2024-2025
+title: Overall Comparison of Hospitalization Forecasters
 date: "`r format(Sys.time(), '%d %B %Y')`"
 output:
   html_document:
@@ -9,7 +9,7 @@ params:
   forecasts: ""
   scores: ""
   truth_data: ""
-  disease: "flu"
+  disease: ""
 editor_options:
   chunk_output_type: console
 ---
@@ -40,14 +40,11 @@ library(purrr)
 
 ```{r}
 # params <- list(
-#     forecaster_parameter_combinations = tar_read(forecaster_parameter_combinations),
-#     forecaster_family = "scaled_pop_season",
-#     joined_forecasts = tar_read(joined_forecasts),
-#     joined_scores = tar_read(joined_scores),
-#     truth_data = tar_read(hhs_evaluation_data) %>%
-#         select(-population) %>%
-#         mutate(target_end_date = target_end_date + 3),
-#     disease = "flu"
+#   forecaster_parameters = tar_read(forecaster_parameter_combinations),
+#   forecasts = tar_read(joined_forecasts),
+#   scores = tar_read(joined_scores),
+#   truth_data = tar_read(hhs_evaluation_data),
+#   disease = "covid"
 # )
 
 if (params$disease == "flu") {
@@ -55,31 +52,34 @@ if (params$disease == "flu") {
   ensemble_forecaster_name <- "FluSight-ensemble"
 } else {
   base_forecaster_name <- "COVIDhub-baseline"
-  ensemble_forecaster_name <- "COVIDhub-ensemble"
+  ensemble_forecaster_name <- "COVIDhub_CDC-ensemble"
 }
 
 # Select forecasters for this notebook
 outside_forecasters <- c(base_forecaster_name, ensemble_forecaster_name)
 id_to_forecaster <- params$forecaster_parameters %>%
   purrr::imap(\(x, idx) {
-    x %>% mutate(family_name = idx)
+    x %>%
+      mutate(family_name = idx) %>%
+      select(id, forecaster, family_name)
   }) %>%
   bind_rows() %>%
-  select(id, forecaster, family_name) %>%
   rename(forecaster_function = forecaster)
 
 Mean <- function(x) mean(x, na.rm = TRUE)
 GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
 
 overall_rating <- params$scores %>%
-  group_by(forecaster) %>%
-  summarize(mean_score = Mean(wis)) %>%
+  summarize(mean_score = Mean(wis), .by = forecaster) %>%
   filter(mean_score > 20) %>%
   arrange(mean_score) %>%
-  left_join(id_to_forecaster, by = join_by(forecaster == id))
+  left_join(id_to_forecaster, by = join_by(forecaster == id)) %>%
+  mutate(
+    family_name = if_else(is.na(family_name), "external", family_name),
+    forecaster_function = if_else(is.na(forecaster_function), "external", forecaster_function)
+  )
 best_in_class <- overall_rating %>%
-  group_by(family_name) %>%
-  filter(row_number() == 1) %>%
+  slice_max(mean_score, by = family_name) %>%
   pull(forecaster)
 forecasters_to_keep <- c(best_in_class, outside_forecasters) %>% unique()
 # Load forecasts and scores
@@ -106,7 +106,7 @@ Best examples from each family of forecasters.
 
 `r params$disease`
 
-#### Target Dates
+#### Forecast Dates
 
 `r forecast_dates`
 
@@ -127,13 +127,6 @@ param_table <- params$forecaster_parameters %>%
   bind_rows() %>%
   left_join(id_to_forecaster, by = join_by(id)) %>%
   select(-any_of(ignore_keys)) %>%
-  {
-    if ("n_training" %in% colnames(.)) {
-      (.) %>% mutate(n_training = as.character(n_training))
-    } else {
-      .
-    }
-  } %>%
   full_join(
     scores %>%
       group_by(forecaster) %>%
@@ -142,12 +135,12 @@ param_table <- params$forecaster_parameters %>%
         geomean_ae = round(GeoMean(ae), 2),
         mean_wis = round(Mean(wis), 2),
         geomean_wis = round(GeoMean(wis), 2),
-        mean_coverage_80 = round(Mean(coverage_80), 2),
+        mean_coverage_90 = round(Mean(coverage_90), 2),
       ) %>%
       rename(id = forecaster)
   ) %>%
   arrange(mean_ae) %>%
-  relocate(family = family_name, id, mean_ae, geomean_ae, mean_wis, geomean_wis, mean_coverage_80)
+  relocate(family = family_name, id, mean_ae, geomean_ae, mean_wis, geomean_wis, mean_coverage_90)
 datatable(param_table)
 ```
 
@@ -197,21 +190,11 @@ subtitle <- sprintf(
   format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-  normalized_df %>% filter(forecaster != ensemble_forecaster_name),
+  normalized_df,
   aes(x = forecast_date, y = !!sym(var))
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   facet_grid(rows = vars(ahead)) +
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
@@ -256,21 +239,11 @@ subtitle <- sprintf(
   format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-  normalized_df %>% filter(forecaster != ensemble_forecaster_name),
+  normalized_df,
   aes(x = ahead, y = !!sym(var))
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   scale_y_log10(n.breaks = 20) +
   scale_color_discrete() +
@@ -319,21 +292,11 @@ subtitle <- sprintf(
   format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-  normalized_df %>% filter(forecaster != ensemble_forecaster_name),
+  normalized_df,
   aes(x = forecast_date, y = !!sym(var))
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   facet_grid(rows = vars(ahead)) +
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
@@ -378,21 +341,11 @@ subtitle <- sprintf(
   format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-  normalized_df %>% filter(forecaster != ensemble_forecaster_name),
+  normalized_df,
   aes(x = ahead, y = !!sym(var))
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   scale_y_log10(n.breaks = 25) +
   scale_color_discrete() +
@@ -406,7 +359,7 @@ ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
 #### % Coverage by Forecast Date
 
 ```{r}
-var <- "coverage_80"
+var <- "coverage_90"
 group_cols <- c("forecaster", "forecast_date", "ahead")
 
 # Aggregate metric across groups
@@ -423,27 +376,17 @@ subtitle <- sprintf(
   format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-  df %>% filter(forecaster != ensemble_forecaster_name),
+  df,
   aes(x = forecast_date, y = !!sym(var))
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
   geom_hline(yintercept = .8, linetype = 1, color = "black") +
   facet_grid(rows = vars(ahead)) +
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
   scale_color_discrete() +
   guides(color = guide_legend(ncol = 2)) +
-  labs(title = subtitle, x = "Forecast Dates", y = "Arithmetic Mean 80% Coverage")
+  labs(title = subtitle, x = "Forecast Dates", y = "Arithmetic Mean 90% Coverage")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
@@ -452,7 +395,7 @@ ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
 #### % Coverage by Ahead
 
 ```{r}
-var <- "coverage_80"
+var <- "coverage_90"
 id_cols <- c("forecaster", "ahead")
 
 # Aggregate metric across groups
@@ -468,25 +411,15 @@ subtitle <- sprintf(
   format(max(forecast_dates), "%B %d, %Y")
 )
 p <- ggplot(
-  df %>% filter(forecaster != ensemble_forecaster_name),
+  df,
   aes(x = ahead, y = !!sym(var))
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
   geom_hline(yintercept = .8, linetype = 1, color = "black") +
   scale_color_discrete() +
   guides(color = guide_legend(ncol = 2)) +
-  labs(title = subtitle, x = "Days ahead", y = "Arithmetic Mean 80% Coverage")
+  labs(title = subtitle, x = "Days ahead", y = "Arithmetic Mean 90% Coverage")
 
 ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
@@ -497,11 +430,7 @@ ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
 Fan plots showing the 80% prediction intervals for the forecasts made by the CMU forecasters and the outside forecasters. The black line is the truth data.
 
 ```{r}
-if (params$disease == "flu") {
-  plot_dates <- seq.Date(as.Date("2023-10-07"), by = "4 weeks", length.out = 8)
-} else {
-  plot_dates <- seq.Date(as.Date("2023-07-03"), by = "4 weeks", length.out = 7)
-}
+plot_dates <- forecast_dates[seq(1, length(forecast_dates), by = 4)]
 ```
 
 #### Large States
@@ -531,7 +460,7 @@ p <- ggplot(
       filter(
         geo_value %in% geo_vals,
         target_end_date >= min(plot_dates),
-        target_end_date <= max(plot_dates)
+        target_end_date <= max(plot_dates) + 5 * 7
       ),
     aes(x = target_end_date, y = true_value),
     inherit.aes = FALSE, na.rm = TRUE,
@@ -541,7 +470,6 @@ p <- ggplot(
   facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
-
 
 ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
@@ -562,7 +490,6 @@ forecast_subset <- params$forecasts %>%
   pivot_wider(names_from = "quantile", values_from = "prediction") %>%
   mutate(ahead = as.numeric(target_end_date - forecast_date))
 
-
 p <- ggplot(
   data = forecast_subset,
   aes(x = target_end_date, group = forecast_date)
@@ -575,7 +502,7 @@ p <- ggplot(
       filter(
         geo_value %in% geo_vals,
         target_end_date >= min(plot_dates),
-        target_end_date <= max(plot_dates)
+        target_end_date <= max(plot_dates) + 5 * 7
       ),
     aes(x = target_end_date, y = true_value),
     inherit.aes = FALSE, na.rm = TRUE,
@@ -585,7 +512,6 @@ p <- ggplot(
   facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
-
 
 ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
@@ -606,7 +532,6 @@ forecast_subset <- params$forecasts %>%
   pivot_wider(names_from = "quantile", values_from = "prediction") %>%
   mutate(ahead = as.numeric(target_end_date - forecast_date))
 
-
 p <- ggplot(
   data = forecast_subset,
   aes(x = target_end_date, group = forecast_date)
@@ -619,7 +544,7 @@ p <- ggplot(
       filter(
         geo_value %in% geo_vals,
         target_end_date >= min(plot_dates),
-        target_end_date <= max(plot_dates)
+        target_end_date <= max(plot_dates) + 5 * 7
       ),
     aes(x = target_end_date, y = true_value),
     inherit.aes = FALSE, na.rm = TRUE,
@@ -629,7 +554,6 @@ p <- ggplot(
   facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
-
 
 ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))

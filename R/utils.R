@@ -7,25 +7,28 @@
 #' @param pattern string to search in the forecaster name.
 #'
 #' @export
-forecaster_lookup <- function(pattern, forecaster_grid = NULL, printing = TRUE) {
-  if (is.null(forecaster_grid)) {
-    cli::cli_warn("Reading `forecaster_param_combinations` target. If it's not up to date, results will be off. Update with `tar_make(forecaster_parameter_combinations)`.")
-    forecaster_grid <- tar_read_raw("forecaster_parameter_combinations") %>%
-      map(make_forecaster_grid) %>%
-      bind_rows()
+forecaster_lookup <- function(pattern) {
+  if (!exists("g_forecaster_params_grid")) {
+    cli::cli_warn("Reading `forecaster_params_grid` target. If it's not up to date, results will be off.
+    Update with `tar_make(g_forecaster_params_grid)`.")
+    forecaster_params_grid <- tar_read_raw("forecaster_params_grid")
+  } else {
+    forecaster_params_grid <- g_forecaster_params_grid
   }
-  fc_row <- forecaster_grid %>% filter(grepl(pattern, id))
-  if (printing) {
-    params <- fc_row$params[[1]]
-    if (!is.null(params$trainer)) {
-      params$trainer <- as_string(params$trainer)
-    }
-    print(glue::glue("name: {fc_row %>% pull(id)}"))
-    print(glue::glue("forecaster: {fc_row$forecaster[[1]]}"))
-    print(glue::glue("params:"))
-    print(params %>% data.table::as.data.table())
+
+  # Remove common prefix for convenience.
+  if (grepl("forecast_", pattern)) {
+    pattern <- gsub("forecast_", "", pattern)
   }
-  return(fc_row)
+  if (grepl("forecaster_", pattern)) {
+    pattern <- gsub("forecaster_", "", pattern)
+  }
+
+  out <- forecaster_params_grid %>% filter(.data$id == pattern)
+  if (nrow(out) > 0) {
+    out %>% glimpse()
+    return(invisible(out))
+  }
 }
 
 #' Add a unique id based on the column contents
@@ -70,13 +73,12 @@ get_single_id <- function(param_list) {
 #' columns, everything else is optional.
 #'
 #' @export
-make_forecaster_grid <- function(tib) {
+make_forecaster_grid <- function(tib, family) {
   if ("trainer" %in% colnames(tib)) {
     tib$trainer <- rlang::syms(tib$trainer)
   }
   # turns a tibble into a list of named lists
-  params_list <-
-    tib %>%
+  params_list <- tib %>%
     select(-forecaster, -id) %>%
     split(seq_len(nrow(.))) %>%
     unname() %>%
@@ -90,6 +92,7 @@ make_forecaster_grid <- function(tib) {
 
   if (length(params_list) == 0) {
     out <- tibble(
+      family = family,
       id = tib$id,
       forecaster = rlang::syms(tib$forecaster),
       params = list(list()),
@@ -97,6 +100,7 @@ make_forecaster_grid <- function(tib) {
     )
   } else {
     out <- tibble(
+      family = family,
       id = tib$id,
       forecaster = rlang::syms(tib$forecaster),
       params = params_list,
@@ -480,7 +484,6 @@ sort_by_quantile <- function(forecasts) {
     ungroup()
 }
 
-
 #' Print recent targets errors.
 get_targets_errors <- function(project = tar_path_store(), top_n = 10) {
   meta_df <- targets::tar_meta(store = project)
@@ -566,4 +569,9 @@ validate_epi_data <- function(epi_data) {
     attributes(epi_data)$metadata$as_of <- max(epi_data$time_value)
   }
   return(epi_data)
+}
+
+#' Convenience wrapper for working with Delphi S3 bucket.
+get_bucket_df_delphi <- function(prefix = "", bucket = "forecasting-team-data") {
+  aws.s3::get_bucket_df(prefix = prefix, bucket = bucket) %>% tibble()
 }

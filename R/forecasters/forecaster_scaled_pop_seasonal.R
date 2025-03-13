@@ -59,6 +59,7 @@ scaled_pop_seasonal <- function(epi_data,
 
   epi_data <- validate_epi_data(epi_data)
 
+  # TODO: handle this when creating param grid?
   if (typeof(seasonal_method) == "list") {
     seasonal_method <- seasonal_method[[1]]
   }
