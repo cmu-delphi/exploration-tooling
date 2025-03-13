@@ -26,9 +26,16 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 #   )
 #   # Save to disk
 #   saveRDS(scorecards, "exploration-scorecards-2023-10-04.RDS")
-tar_project <- Sys.getenv("TAR_PROJECT", "flu_hosp_prod")
+
+# This is TAR_RUN_PROJECT and not TAR_PROJECT, because the latter gets
+# overwritten by the environment variable of the same name in the shell that
+# runs this script.
+tar_project <- Sys.getenv("TAR_RUN_PROJECT", "flu_hosp_prod")
+# Where to place files in S3 (mostly unused)
 aws_s3_prefix <- Sys.getenv("AWS_S3_PREFIX", "exploration") %>% paste0("/", tar_project)
+# Where to place flu forecasts
 flu_submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
+# Where to place covid forecasts
 covid_submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
 cli::cli_inform(
   c(
@@ -41,7 +48,7 @@ cli::cli_inform(
 )
 
 
-# targets needs the output dir to already exist.
+# Targets needs the output dir to already exist.
 store_dir <- tar_path_store()
 if (!dir.exists(store_dir)) dir.create(store_dir)
 
@@ -70,6 +77,5 @@ restart_loop <- function() {
 
 tar_make(
   store = tar_config_get("store", project = tar_project),
-  script = tar_config_get("script", project = tar_project),
-  use_crew = TRUE
+  script = tar_config_get("script", project = tar_project)
 )

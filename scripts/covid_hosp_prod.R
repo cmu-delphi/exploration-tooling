@@ -365,7 +365,7 @@ ensemble_targets <- tar_map(
         mutate(source = "nhsn as_of forecast") %>%
         bind_rows(nhsn_latest_data %>% mutate(source = "nhsn")) %>%
         select(geo_value, target_end_date = time_value, value) %>%
-        filter(target_end_date > truth_data_date, geo_value %nin% insufficient_data_geos)
+        filter(target_end_date > g_truth_data_date, geo_value %nin% g_insufficient_data_geos)
       nssp_data <- nssp_latest_data %>%
         select(geo_value, target_end_date = time_value, value = nssp) %>%
         filter(target_end_date > g_truth_data_date, geo_value %nin% g_insufficient_data_geos) %>%

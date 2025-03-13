@@ -13,11 +13,11 @@ run:
 	Rscript scripts/run.R
 
 prod-covid:
-	export TAR_PROJECT=covid_hosp_prod; \
+	export TAR_RUN_PROJECT=covid_hosp_prod; \
 	Rscript scripts/run.R
 
 prod-flu:
-	export TAR_PROJECT=flu_hosp_prod; \
+	export TAR_RUN_PROJECT=flu_hosp_prod; \
 	Rscript scripts/run.R
 
 prod: prod-covid prod-flu update_site netlify

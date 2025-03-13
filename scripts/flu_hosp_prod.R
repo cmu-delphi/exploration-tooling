@@ -95,7 +95,7 @@ g_windowed_seasonal_extra_sources = function(epi_data, ahead, extra_data, ...) {
         drop_non_seasons = TRUE,
         pop_scaling = FALSE,
         lags = list(c(0, 7), c(0, 7)),
-        keys_to_ignore = very_latent_locations
+        keys_to_ignore = g_very_latent_locations
       ) %>%
       select(-source) %>%
       mutate(target_end_date = target_end_date + 3) %>%

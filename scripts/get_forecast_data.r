@@ -129,8 +129,8 @@ fetch_forecast_files <- function(sync_to_s3 = TRUE, disease) {
     for (filename in filenames) {
       pb_files$tick(tokens = list(filename = filename))
 
-      if (check_github_file(forecaster, filename)) {
-        forecast_data <- download_forecast_file(forecaster, filename)
+      if (check_github_file(forecaster, filename, disease)) {
+        forecast_data <- download_forecast_file(forecaster, filename, disease)
         if (!is.null(forecast_data)) {
           all_forecasts[[length(all_forecasts) + 1]] <- forecast_data
         }
