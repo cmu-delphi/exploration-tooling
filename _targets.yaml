@@ -18,4 +18,8 @@ covid_hosp_prod:
   store: covid_hosp_prod
   use_crew: yes
   reporter_make: timestamp
-
+# test_proj:
+#   script: scripts/test_proj.R
+#   store: test_proj
+#   use_crew: yes
+#   reporter_make: timestamp
