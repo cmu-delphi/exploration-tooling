@@ -8,10 +8,19 @@
 #' @inheritParams step_center
 #' @param lambdas A numeric vector of transformation values. This
 #'  is `NULL` until computed by [prep()].
+#' @param na_lambda_fill A numeric value to fill in for any
+#'  geos where the lambda cannot be estimated.
 #' @param limits A length 2 numeric vector defining the range to
 #'  compute the transformation parameter lambda.
 #' @param num_unique An integer where data that have less possible
 #'  values will not be evaluated for a transformation.
+#' @param na_rm A logical indicating whether missing values should be
+#'  removed.
+#' @param epi_keys_checked Internal. A character vector of key columns
+#'  that are expected in the data.
+#' @param skip A logical. Should the step be skipped when the recipe is
+#'  baked by [bake()]. On the `training` data, the step will always be
+#'  conducted (even if `skip = TRUE`).
 #' @template step-return
 #' @family individual transformation steps
 #' @export
@@ -69,77 +78,98 @@
 #'
 #' tidy(yj_transform, number = 1)
 #' tidy(yj_estimates, number = 1)
-step_YeoJohnson2 <-
-  function(
-    recipe,
-    ...,
-    role = NA,
-    trained = FALSE,
-    lambdas = NULL,
-    na_lambda_fill = 1 / 4,
-    limits = c(-5, 5),
-    num_unique = 5,
-    na_rm = TRUE,
-    skip = FALSE,
-    id = rand_id("YeoJohnson2")
-  ) {
-    # TODO: Add arg validations.
-    # TODO: Improve arg names.
-    add_step(
-      recipe,
-      step_YeoJohnson2_new(
-        terms = enquos(...),
-        role = role,
-        trained = trained,
-        lambdas = lambdas,
-        na_lambda_fill = na_lambda_fill,
-        limits = sort(limits)[1:2],
-        num_unique = num_unique,
-        na_rm = na_rm,
-        skip = skip,
-        id = id
-      )
-    )
+step_YeoJohnson2 <- function(
+  recipe,
+  ...,
+  role = NA,
+  trained = FALSE,
+  lambdas = NULL,
+  na_lambda_fill = 1 / 4,
+  limits = c(-5, 5),
+  num_unique = 5,
+  na_rm = TRUE,
+  epi_keys_checked = NULL,
+  skip = FALSE,
+  id = rand_id("YeoJohnson2")
+) {
+  checkmate::assert_numeric(limits, len = 2)
+  checkmate::assert_numeric(na_lambda_fill, lower = min(limits), upper = max(limits), len = 1)
+  checkmate::assert_numeric(num_unique, lower = 2, upper = Inf, len = 1)
+  checkmate::assert_logical(na_rm, len = 1)
+  checkmate::assert_logical(skip, len = 1)
+  if (is.null(epi_keys_checked)) {
+    epi_keys_checked <- key_colnames(recipe$template, exclude = "time_value")
   }
-
-step_YeoJohnson2_new <-
-  function(terms, role, trained, lambdas, na_lambda_fill, limits, num_unique, na_rm, skip, id) {
-    step(
-      subclass = "YeoJohnson2",
-      terms = terms,
+  add_step(
+    recipe,
+    step_YeoJohnson2_new(
+      terms = enquos(...),
       role = role,
       trained = trained,
       lambdas = lambdas,
       na_lambda_fill = na_lambda_fill,
-      limits = limits,
+      limits = sort(limits)[1:2],
       num_unique = num_unique,
       na_rm = na_rm,
+      epi_keys_checked = epi_keys_checked,
+      forecast_date = NULL,
+      metadata = NULL,
       skip = skip,
       id = id
     )
-  }
+  )
+}
+
+step_YeoJohnson2_new <- function(
+  terms,
+  role,
+  trained,
+  lambdas,
+  na_lambda_fill,
+  limits,
+  num_unique,
+  na_rm,
+  epi_keys_checked,
+  forecast_date,
+  metadata,
+  skip,
+  id
+) {
+  step(
+    subclass = "YeoJohnson2",
+    terms = terms,
+    role = role,
+    trained = trained,
+    lambdas = lambdas,
+    na_lambda_fill = na_lambda_fill,
+    limits = limits,
+    num_unique = num_unique,
+    na_rm = na_rm,
+    epi_keys_checked = epi_keys_checked,
+    forecast_date = forecast_date,
+    metadata = metadata,
+    skip = skip,
+    id = id
+  )
+}
 
 #' @export
 prep.step_YeoJohnson2 <- function(x, training, info = NULL, ...) {
+  # Check that the columns selected for transformation are numeric.
   col_names <- recipes_eval_select(x$terms, training, info)
   check_type(training[, col_names], types = c("double", "integer"))
-  recipes:::check_number_whole(x$num_unique, args = "num_unique")
-  recipes:::check_bool(x$na_rm, arg = "na_rm")
-  if (!is.numeric(x$limits) || any(is.na(x$limits)) || length(x$limits) != 2) {
-    cli::cli_abort(
-      "{.arg limits} should be a numeric vector with two values,
-                    not {.obj_type_friendly {x$limits}}"
-    )
-  }
 
+  # Estimate the lambda for each column, creating a lambda_ column for each.
+  # Note that estimate_yj() is vectorized.
   values <- training %>%
     summarise(
       across(all_of(col_names), ~ estimate_yj(.x, x$limits, x$num_unique, x$na_rm)),
-      .by = key_colnames(training, exclude = "time_value")
+      .by = x$epi_keys_checked
     ) %>%
-    rename_with(~ paste0("lambda_", .x), -all_of(key_colnames(training, exclude = "time_value")))
+    rename_with(~ paste0("lambda_", .x), -all_of(x$epi_keys_checked))
 
   # Check for NAs in any of the lambda_ columns
+  # TODO: This warning feels a bit too noisy.
   for (col in col_names) {
     if (any(is.na(values[[paste0("lambda_", col)]]))) {
       cli::cli_warn(
@@ -152,6 +182,7 @@ prep.step_YeoJohnson2 <- function(x, training, info = NULL, ...) {
     }
   }
 
+  # Fill in NAs with the default lambda.
   values <- values %>%
     mutate(across(starts_with("lambda_"), \(col) ifelse(is.na(col), x$na_lambda_fill, col)))
 
@@ -164,6 +195,10 @@ prep.step_YeoJohnson2 <- function(x, training, info = NULL, ...) {
     limits = x$limits,
     num_unique = x$num_unique,
     na_rm = x$na_rm,
+    epi_keys_checked = x$epi_keys_checked,
+    # TODO: Might need get_forecast_date() here.
+    forecast_date = attributes(training)$metadata$as_of,
+    metadata = attributes(training)$metadata,
     skip = x$skip,
     id = x$id
   )
@@ -171,29 +206,51 @@ prep.step_YeoJohnson2 <- function(x, training, info = NULL, ...) {
 
 #' @export
 bake.step_YeoJohnson2 <- function(object, new_data, ...) {
-  # Not sure if this is the right way to do it.
+  # If not an epi_df, make it one assuming the template of training data.
+  # If it is an epi_df, check that the keys match.
+  # TODO: Is this right
+  if (!inherits(new_data, "epi_df") || is.null(attributes(new_data)$metadata$as_of)) {
+    new_data <- as_epi_df(
+      new_data,
+      as_of = object$forecast_date,
+      other_keys = object$metadata$other_keys %||% character()
+    )
+    new_data %@% metadata <- object$metadata
+    keys <- object$epi_keys_checked
+  }
+  # Check that the keys match.
+  keys <- key_colnames(new_data, exclude = "time_value")
+  if (!identical(keys, object$epi_keys_checked)) {
+    cli::cli_abort(
+      "The keys of the new data do not match the keys of the training data.",
+      call = rlang::caller_fn()
+    )
+  }
+  # Check that the columns for transformation are present in new_data.
+  # TODO: Is this right?
   col_names <- object$terms %>% purrr::map_chr(rlang::as_name)
   check_new_data(col_names, object, new_data)
 
-  new_data %<>% left_join(object$lambdas, by = key_colnames(new_data, exclude = "time_value"))
+  # Transform each column, using the appropriate lambda column per row.
+  # Note that yj_transform() is vectorized.
+  new_data %<>% left_join(object$lambdas, by = keys)
   for (col in col_names) {
     new_data <- new_data %>%
       rowwise() %>%
       mutate(!!col := yj_transform(!!sym(col), !!sym(paste0("lambda_", col))))
-      # mutate(across(col_names, ~ yj_transform(.x, !!sym(paste0("lambda_", .x)))))
   }
+  # Remove the lambda columns.
   new_data %>%
     select(-starts_with("lambda_")) %>%
     ungroup()
 }
 
 #' @export
-print.step_YeoJohnson2 <-
-  function(x, width = max(20, options()$width - 39), ...) {
-    title <- "Yeo-Johnson transformation (see `lambdas` object for values) on "
-    print_step(x$terms %>% purrr::map_chr(rlang::as_name), x$terms, x$trained, title, width)
-    invisible(x)
-  }
+print.step_YeoJohnson2 <- function(x, width = max(20, options()$width - 39), ...) {
+  title <- "Yeo-Johnson transformation (see `lambdas` object for values) on "
+  epipredict:::print_epi_step(x$terms, x$terms, title = title, width = width)
+  invisible(x)
+}
 
 ## computes the new data given a lambda
 #' Internal Functions
@@ -309,6 +366,7 @@ estimate_yj <- function(dat, limits = c(-5, 5), num_unique = 5, na_rm = TRUE, ca
   lam
 }
 
+# TODO: We don't have BoxCox and not clear if we will, so we don't have a tidy method yet.
 # #
 # #' @rdname tidy.recipe
 # #' @export

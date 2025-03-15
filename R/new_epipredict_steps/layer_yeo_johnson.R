@@ -47,111 +47,127 @@
 #'   add_frosting(f)
 #'
 #' forecast(wf)
-layer_YeoJohnson2 <- function(frosting,
-                              ...,
-                              df,
-                              by = NULL,
-                              id = rand_id("YeoJohnson2")) {
-  arg_is_scalar(df_pop_col, rate_rescaling, create_new, suffix, id)
-  arg_is_lgl(create_new)
-  arg_is_chr(df_pop_col, suffix, id)
-  arg_is_chr(by, allow_null = TRUE)
-  if (rate_rescaling <= 0) {
-    cli_abort("`rate_rescaling` must be a positive number.")
-  }
+layer_YeoJohnson2 <- function(frosting, ..., lambdas = NULL, by = NULL, id = rand_id("YeoJohnson2")) {
+  checkmate::assert_tibble(lambdas, min.rows = 1, null.ok = TRUE)
 
   add_layer(
     frosting,
     layer_YeoJohnson2_new(
-      df = df,
+      lambdas = lambdas,
       by = by,
-      df_pop_col = df_pop_col,
-      rate_rescaling = rate_rescaling,
       terms = dplyr::enquos(...),
-      create_new = create_new,
-      suffix = suffix,
       id = id
     )
   )
 }
 
-layer_YeoJohnson2_new <-
-  function(df, by, df_pop_col, rate_rescaling, terms, create_new, suffix, id) {
-    layer("YeoJohnson2",
-      df = df,
-      by = by,
-      df_pop_col = df_pop_col,
-      rate_rescaling = rate_rescaling,
-      terms = terms,
-      create_new = create_new,
-      suffix = suffix,
-      id = id
-    )
-  }
+layer_YeoJohnson2_new <- function(lambdas, by, terms, id) {
+  layer("YeoJohnson2", lambdas = lambdas, by = by, terms = terms, id = id)
+}
 
 #' @export
-slather.layer_YeoJohnson2 <-
-  function(object, components, workflow, new_data, ...) {
-    rlang::check_dots_empty()
+#' @importFrom workflows extract_preprocessor
+slather.layer_YeoJohnson2 <- function(object, components, workflow, new_data, ...) {
+  rlang::check_dots_empty()
 
-    browser()
-    if (is.null(object$by)) {
-      # Assume `layer_predict` has calculated the prediction keys and other
-      # layers don't change the prediction key colnames:
-      prediction_key_colnames <- names(components$keys)
-      lhs_potential_keys <- prediction_key_colnames
-      rhs_potential_keys <- colnames(select(object$df, !object$df_pop_col))
-      object$by <- intersect(lhs_potential_keys, rhs_potential_keys)
-      suggested_min_keys <- kill_time_value(lhs_potential_keys)
-      if (!all(suggested_min_keys %in% object$by)) {
-        cli_warn(c(
-          "{setdiff(suggested_min_keys, object$by)} {?was an/were} epikey column{?s} in the predictions,
-           but {?wasn't/weren't} found in the population `df`.",
-          "i" = "Defaulting to join by {object$by}",
-          ">" = "Double-check whether column names on the population `df` match those expected in your predictions",
-          ">" = "Consider using population data with breakdowns by {suggested_min_keys}",
-          ">" = "Manually specify `by =` to silence"
-        ), class = "epipredict__layer_YeoJohnson2__default_by_missing_suggested_keys")
-      }
+  # Get the lambdas from the layer or from the workflow.
+  lambdas <- object$lambdas %||% get_lambdas_in_layer(workflow)
+
+  # If the by is not specified, try to infer it from the lambdas.
+  if (is.null(object$by)) {
+    # Assume `layer_predict` has calculated the prediction keys and other
+    # layers don't change the prediction key colnames:
+    prediction_key_colnames <- names(components$keys)
+    lhs_potential_keys <- prediction_key_colnames
+    rhs_potential_keys <- colnames(select(lambdas, -starts_with("lambda_")))
+    object$by <- intersect(lhs_potential_keys, rhs_potential_keys)
+    suggested_min_keys <- setdiff(lhs_potential_keys, "time_value")
+    if (!all(suggested_min_keys %in% object$by)) {
+      cli_warn(c(
+        "{setdiff(suggested_min_keys, object$by)} {?was an/were} epikey column{?s} in the predictions,
+          but {?wasn't/weren't} found in the population `df`.",
+        "i" = "Defaulting to join by {object$by}",
+        ">" = "Double-check whether column names on the population `df` match those expected in your predictions",
+        ">" = "Consider using population data with breakdowns by {suggested_min_keys}",
+        ">" = "Manually specify `by =` to silence"
+      ), class = "epipredict__layer_population_scaling__default_by_missing_suggested_keys")
     }
-
-    object$by <- object$by %||% intersect(
-      epi_keys_only(components$predictions),
-      colnames(select(object$df, !object$df_pop_col))
-    )
-    joinby <- list(x = names(object$by) %||% object$by, y = object$by)
-    hardhat::validate_column_names(components$predictions, joinby$x)
-    hardhat::validate_column_names(object$df, joinby$y)
-
-    # object$df <- object$df %>%
-    #  dplyr::mutate(dplyr::across(tidyselect::where(is.character), tolower))
-    pop_col <- rlang::sym(object$df_pop_col)
-    exprs <- rlang::expr(c(!!!object$terms))
-    pos <- tidyselect::eval_select(exprs, components$predictions)
-    col_names <- names(pos)
-    suffix <- ifelse(object$create_new, object$suffix, "")
-    col_to_remove <- setdiff(colnames(object$df), colnames(components$predictions))
-
-    components$predictions <- inner_join(
-      components$predictions,
-      object$df,
-      by = object$by,
-      relationship = "many-to-one",
-      unmatched = c("error", "drop"),
-      suffix = c("", ".df")
-    ) %>%
-      mutate(across(
-        all_of(col_names),
-        ~ .x * !!pop_col / object$rate_rescaling,
-        .names = "{.col}{suffix}"
-      )) %>%
-      select(-any_of(col_to_remove))
-    components
   }
 
+  # Establish the join columns.
+  object$by <- object$by %||%
+    intersect(
+      epipredict:::epi_keys_only(components$predictions),
+      colnames(select(lambdas, -starts_with("lambda_")))
+    )
+  joinby <- list(x = names(object$by) %||% object$by, y = object$by)
+  hardhat::validate_column_names(components$predictions, joinby$x)
+  hardhat::validate_column_names(lambdas, joinby$y)
+
+  # Get the columns to transform. In components$predictions, the output is .pred, but then
+  # this corresponds to the lambda_<outcome> column in lambdas. So we have to:
+  # - identify the outcome column from the recipe
+  # - select it from lambdas and make the transformation
+  # TODO: We don't do multiple outcomes, do we? Assume not for now.
+  exprs <- rlang::expr(c(!!!object$terms))
+  pos <- tidyselect::eval_select(exprs, components$predictions)
+  col_names <- names(pos)
+
+  # Assuming that the above is basically just .pred.
+
+  # Get the outcome from the outcomes. Assuming this is a vector of objects like
+  # ahead_1_cases, ahead_7_cases, etc. We want to extract the cases part.
+  outcome_col <- names(components$mold$outcomes) %>%
+    stringr::str_extract("(?<=_)[^_]+$") %>%
+    unique() %>%
+    extract(1)
+
+  # Join the lambdas.
+  components$predictions <- inner_join(
+    components$predictions,
+    lambdas,
+    by = object$by,
+    relationship = "many-to-one",
+    unmatched = c("error", "drop")
+  )
+  # For every column, we need to use the appropriate lambda column, which differs per row.
+  # Note that yj_inverse() is vectorized.
+  for (col in col_names) {
+    components$predictions <- components$predictions %>%
+      mutate(!!col := yj_inverse(!!sym(col), !!sym(paste0("lambda_", outcome_col))))
+  }
+  # Remove the lambda columns.
+  components$predictions <- components$predictions %>%
+    select(-any_of(starts_with("lambda_")))
+  components
+}
+
+# TODO: Print the layer info.
 #' @export
-print.layer_YeoJohnson2 <- function(
-    x, width = max(20, options()$width - 30), ...) {
-  title <- "Scaling predictions by population"
-  print_layer(x$terms, title = title, width = width)
+print.layer_YeoJohnson2 <- function(x, width = max(20, options()$width - 30), ...) {
+  title <- "Yeo-Johnson transformation (see `lambdas` object for values) on "
+  epipredict:::print_layer(x$terms, title = title, width = width)
+}
+
+#' Inverse Yeo-Johnson transformation
+#'
+#' @keywords internal
+yj_inverse <- function(x, lambda) {
+  # TODO: Fix this.
+  return((x^lambda - 1) / lambda)
+}
+
+# TODO: Error checks?
+get_lambdas_in_layer <- function(workflow) {
+  this_recipe <- hardhat::extract_recipe(workflow)
+  if (!(this_recipe %>% recipes::detect_step("YeoJohnson2"))) {
+    cli_abort("`layer_YeoJohnson2` requires `step_YeoJohnson2` in the recipe.", call = rlang::caller_env())
+  }
+  for (step in this_recipe$steps) {
+    if (inherits(step, "step_YeoJohnson2")) {
+      lambdas <- step$lambdas
+      break
+    }
+  }
+  lambdas
 }

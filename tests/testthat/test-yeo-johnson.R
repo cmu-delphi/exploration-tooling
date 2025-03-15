@@ -7,7 +7,7 @@ Sys.setenv(TAR_PROJECT = "flu_hosp_explore")
 
 # Transform with Yeo-Johnson
 data <- tar_read(joined_archive_data) %>%
-  epix_as_of(as.Date("2023-11-01"))
+  epix_as_of(as.Date("2023-11-08"))
 state_geo_values <- data %>% filter(source == "nhsn") %>% pull(geo_value) %>% unique()
 filtered_data <- data %>%
   filter(geo_value %in% state_geo_values) %>%
