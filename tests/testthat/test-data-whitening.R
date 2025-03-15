@@ -1,4 +1,4 @@
-source(here::here("R", "load_all.R"))
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 real_ex <- epidatasets::covid_case_death_rates %>%
   as_tibble() %>%
   mutate(source = "same") %>%

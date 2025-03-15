@@ -1,4 +1,4 @@
-source(here::here("R", "load_all.R"))
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 n_days <- 20
 removed_date <- 10

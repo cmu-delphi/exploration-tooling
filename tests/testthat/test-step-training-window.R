@@ -1,4 +1,4 @@
-source(here::here("R", "load_all.R"))
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 data <- tribble(
   ~geo_value, ~time_value, ~version, ~value,

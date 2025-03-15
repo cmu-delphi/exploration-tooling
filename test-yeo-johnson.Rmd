@@ -1,0 +1,131 @@
+---
+title: "Yeo-Johnson Transformation Testing"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+```
+
+## Setup and Data Loading
+
+First, we'll set up the environment and load the necessary data:
+
+```{r setup-env}
+# Simple case with keys = geo_value.
+jhu <- cases_deaths_subset %>%
+  filter(time_value > "2021-01-01", geo_value %in% c("ca", "ny")) %>%
+  select(geo_value, time_value, cases)
+
+# Load and prepare the data
+data <- jhu
+filtered_data <- data %>% select(geo_value, time_value, cases)
+```
+
+## Yeo-Johnson Transformation
+
+Let's apply the Yeo-Johnson transformation to our data:
+
+```{r yeo-johnson-transform}
+r <- epi_recipe(filtered_data) %>%
+  step_YeoJohnson2(cases) %>%
+  prep(filtered_data)
+
+# Display the recipe
+r
+
+# Inspect the lambda values for each state
+r$steps[[1]]$lambdas
+```
+
+## Manual Whitening Comparison
+
+Now, let's compare the Yeo-Johnson transformation with a manual whitening approach using quarter root scaling:
+
+```{r manual-whitening}
+# Apply the transformation
+out1 <- r %>% bake(filtered_data)
+out2 <- filtered_data %>%
+  mutate(cases = (cases + 0.01)^(1 / 4))
+filtered_data %>%
+  mutate(cases = log(cases)) %>%
+  ggplot(aes(time_value, cases)) +
+  geom_line(color = "blue") +
+  geom_line(data = out1 %>% mutate(cases = log(cases)),
+            aes(time_value, cases), color = "green") +
+  geom_line(data = out2 %>% mutate(cases = log(cases)),
+            aes(time_value, cases), color = "red") +
+  facet_wrap(~geo_value, scales = "free_y") +
+  theme_minimal() +
+  labs(title = "Yeo-Johnson transformation", x = "Time", y = "Log Cases")
+
+# Test filtered_data not an epi_df still works.
+filtered_data_not_epi_df <- filtered_data %>%
+  as_tibble()
+r %>% bake(filtered_data_not_epi_df)
+```
+
+## Workflow Testing
+
+Finally, let's test the workflow with the Yeo-Johnson transformation:
+
+```{r workflow-test}
+debugonce(slather.layer_YeoJohnson2)
+data <- filtered_data
+# Create and fit the workflow
+r <- epi_recipe(data) %>%
+  step_YeoJohnson2(cases) %>%
+  step_epi_lag(cases, lag = 1) %>%
+  step_epi_ahead(cases, ahead = 1, role = "outcome") %>%
+  step_epi_naomit()
+f <- frosting() %>%
+  layer_predict() %>%
+  layer_threshold(.pred) %>%
+  layer_naomit(.pred) %>%
+  layer_YeoJohnson2(.pred)
+
+# TODO: This needs to be fixed.
+wf <- epi_workflow(r, linear_reg()) %>%
+  fit(data) %>%
+  add_frosting(f)
+
+forecast(wf)
+```
+
+```{r}
+library(epipredict)
+debugonce(epipredict:::slather.layer_population_scaling)
+jhu <- cases_deaths_subset %>%
+  filter(time_value > "2021-11-01", geo_value %in% c("ca", "ny")) %>%
+  select(geo_value, time_value, cases)
+
+pop_data <- data.frame(states = c("ca", "ny"), value = c(20000, 30000))
+
+r <- epi_recipe(jhu) %>%
+  step_population_scaling(
+    df = pop_data,
+    df_pop_col = "value",
+    by = c("geo_value" = "states"),
+    cases, suffix = "_scaled"
+  ) %>%
+  step_epi_lag(cases_scaled, lag = c(0, 7, 14)) %>%
+  step_epi_ahead(cases_scaled, ahead = 7, role = "outcome") %>%
+  step_epi_naomit()
+
+f <- frosting() %>%
+  layer_predict() %>%
+  layer_threshold(.pred) %>%
+  layer_naomit(.pred) %>%
+  layer_population_scaling(.pred,
+    df = pop_data,
+    by = c("geo_value" = "states"),
+    df_pop_col = "value"
+  )
+
+wf <- epi_workflow(r, linear_reg()) %>%
+  fit(jhu) %>%
+  add_frosting(f)
+
+forecast(wf)
+```

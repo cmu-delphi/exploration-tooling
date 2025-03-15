@@ -1,4 +1,4 @@
-source(here::here("R", "load_all.R"))
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 test_that("extend_ahead", {
   # testing that POSIXct converts correctly (as well as basic types)
