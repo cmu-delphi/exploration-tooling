@@ -96,7 +96,6 @@ create_forecast_targets <- function() {
           # Push the Wednesday markers to Saturday, to match targets with truth data.
           mutate(forecast_date = forecast_date + g_time_value_adjust, target_end_date = target_end_date + g_time_value_adjust) %>%
           rename("model" = "id")
-        # browser()
         evaluate_predictions(forecasts = forecast_scaled, truth_data = hhs_evaluation_data) %>%
           rename("id" = "model")
       }

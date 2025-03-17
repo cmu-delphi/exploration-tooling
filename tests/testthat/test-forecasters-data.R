@@ -1,4 +1,4 @@
-source(here::here("R", "load_all.R"))
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 testthat::skip("Optional, long-running tests skipped.")
 

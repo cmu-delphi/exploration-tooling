@@ -107,7 +107,6 @@ scaled_pop_seasonal <- function(epi_data,
   # end of the copypasta
 
   # whiten to get the sources on the same scale
-  # TODO Jank way to avoid having hhs_region get centered
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
   if (drop_non_seasons) {
@@ -115,6 +114,7 @@ scaled_pop_seasonal <- function(epi_data,
   } else {
     season_data <- epi_data
   }
+  # TODO: Jank way to avoid having hhs_region get centered; this isn't very general
   learned_params <- calculate_whitening_params(season_data, setdiff(predictors, "hhs_region"), scale_method, center_method, nonlin_method)
   epi_data %<>% data_whitening(setdiff(predictors, "hhs_region"), learned_params, nonlin_method)
 

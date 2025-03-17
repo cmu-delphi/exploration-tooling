@@ -1,4 +1,4 @@
-source(here::here("R", "load_all.R"))
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 # Works correctly if you have exactly one version where the previous Friday data
 # is the latest so it is ignored and the week before THAT is summed (10-27 to

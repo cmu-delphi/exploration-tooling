@@ -1,4 +1,4 @@
-source(here::here("R", "load_all.R"))
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 testthat::local_edition(3)
 # TODO better way to do this than copypasta
 forecasters <- list(
