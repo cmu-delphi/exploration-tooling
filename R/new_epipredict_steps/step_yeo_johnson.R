@@ -81,7 +81,7 @@
 step_epi_YeoJohnson <- function(
   recipe,
   ...,
-  role = NA,
+  role = "predictor",
   trained = FALSE,
   lambdas = NULL,
   na_lambda_fill = 1 / 4,
