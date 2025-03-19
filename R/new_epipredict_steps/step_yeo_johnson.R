@@ -218,7 +218,7 @@ bake.step_epi_YeoJohnson <- function(object, new_data, ...) {
 
   # Transform each column, using the appropriate lambda column per row.
   # Note that yj_transform() is vectorized.
-  new_data %<>% left_join(object$lambdas, by = keys)
+  new_data <- left_join(new_data, object$lambdas, by = keys)
   for (col in col_names) {
     new_data <- new_data %>%
       rowwise() %>%
