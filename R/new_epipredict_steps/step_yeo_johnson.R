@@ -16,8 +16,6 @@
 #'  values will not be evaluated for a transformation.
 #' @param na_rm A logical indicating whether missing values should be
 #'  removed.
-#' @param epi_keys_checked Internal. A character vector of key columns
-#'  that are expected in the data.
 #' @param skip A logical. Should the step be skipped when the recipe is
 #'  baked by [bake()]. On the `training` data, the step will always be
 #'  conducted (even if `skip = TRUE`).
@@ -88,7 +86,6 @@ step_epi_YeoJohnson <- function(
   limits = c(-5, 5),
   num_unique = 5,
   na_rm = TRUE,
-  epi_keys_checked = NULL,
   skip = FALSE,
   id = rand_id("epi_YeoJohnson")
 ) {
@@ -97,9 +94,6 @@ step_epi_YeoJohnson <- function(
   checkmate::assert_numeric(num_unique, lower = 2, upper = Inf, len = 1)
   checkmate::assert_logical(na_rm, len = 1)
   checkmate::assert_logical(skip, len = 1)
-  if (is.null(epi_keys_checked)) {
-    epi_keys_checked <- key_colnames(recipe$template, exclude = "time_value")
-  }
   add_step(
     recipe,
     step_epi_YeoJohnson_new(
@@ -111,7 +105,6 @@ step_epi_YeoJohnson <- function(
       limits = sort(limits)[1:2],
       num_unique = num_unique,
       na_rm = na_rm,
-      epi_keys_checked = epi_keys_checked,
       forecast_date = NULL,
       metadata = NULL,
       columns = NULL,
@@ -130,7 +123,6 @@ step_epi_YeoJohnson_new <- function(
   limits,
   num_unique,
   na_rm,
-  epi_keys_checked,
   forecast_date,
   metadata,
   columns,
@@ -147,7 +139,6 @@ step_epi_YeoJohnson_new <- function(
     limits = limits,
     num_unique = num_unique,
     na_rm = na_rm,
-    epi_keys_checked = epi_keys_checked,
     forecast_date = forecast_date,
     metadata = metadata,
     columns = columns,
@@ -169,7 +160,7 @@ prep.step_epi_YeoJohnson <- function(x, training, info = NULL, ...) {
     x$num_unique,
     x$na_lambda_fill,
     x$na_rm,
-    x$epi_keys_checked
+    key_colnames(training, exclude = "time_value")
   )
 
   step_epi_YeoJohnson_new(
@@ -181,7 +172,6 @@ prep.step_epi_YeoJohnson <- function(x, training, info = NULL, ...) {
     limits = x$limits,
     num_unique = x$num_unique,
     na_rm = x$na_rm,
-    epi_keys_checked = x$epi_keys_checked,
     forecast_date = attributes(training)$metadata$as_of,
     metadata = attributes(training)$metadata,
     columns = col_names,
@@ -202,11 +192,11 @@ bake.step_epi_YeoJohnson <- function(object, new_data, ...) {
       other_keys = object$metadata$other_keys %||% character()
     )
     new_data %@% metadata <- object$metadata
-    keys <- object$epi_keys_checked
   }
   # Check that the keys match.
   keys <- key_colnames(new_data, exclude = "time_value")
-  if (!identical(keys, object$epi_keys_checked)) {
+  old_keys <- object$lambdas %>% select(-starts_with(".lambda_")) %>% colnames()
+  if (!identical(keys, old_keys)) {
     cli::cli_abort(
       "The keys of the new data do not match the keys of the training data.",
       call = rlang::caller_fn()
