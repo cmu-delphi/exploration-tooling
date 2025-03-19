@@ -101,7 +101,7 @@ slather.layer_epi_YeoJohnson <- function(object, components, workflow, new_data,
   object$by <- object$by %||%
     intersect(
       epipredict:::epi_keys_only(components$predictions),
-      colnames(select(lambdas, -starts_with("lambda_")))
+      colnames(select(lambdas, -starts_with(".lambda_")))
     )
   joinby <- list(x = names(object$by) %||% object$by, y = object$by)
   hardhat::validate_column_names(components$predictions, joinby$x)
@@ -133,7 +133,7 @@ slather.layer_epi_YeoJohnson <- function(object, components, workflow, new_data,
   col_names <- names(pos)
 
   # For every column, we need to use the appropriate lambda column, which differs per row.
-  # Note that yj_inverse() is vectorized.
+  # Note that yj_inverse() is vectorized in x, but not in lambda.
   if (identical(col_names, ".pred")) {
     # In this case, we don't get a hint for the outcome column name, so we need to
     # infer it from the mold. `outcomes` is a vector of objects like
@@ -144,7 +144,7 @@ slather.layer_epi_YeoJohnson <- function(object, components, workflow, new_data,
 
     components$predictions <- components$predictions %>%
       rowwise() %>%
-      mutate(.pred := yj_inverse(.pred, !!sym(paste0("lambda_", outcome_cols))))
+      mutate(.pred := yj_inverse(.pred, !!sym(paste0(".lambda_", outcome_cols))))
   } else if (identical(col_names, character(0))) {
     # In this case, we should assume the user wants to transform all outcomes.
     cli::cli_abort("Not specifying columns to layer Yeo-Johnson is not implemented yet.", call = rlang::caller_env())
@@ -161,7 +161,7 @@ slather.layer_epi_YeoJohnson <- function(object, components, workflow, new_data,
 
     for (i in seq_along(col_names)) {
       col <- col_names[i]
-      lambda_col <- paste0("lambda_", original_outcome_cols[i])
+      lambda_col <- paste0(".lambda_", original_outcome_cols[i])
       components$predictions <- components$predictions %>%
         rowwise() %>%
         mutate(!!sym(col) := yj_inverse(!!sym(col), !!sym(lambda_col)))
@@ -170,7 +170,7 @@ slather.layer_epi_YeoJohnson <- function(object, components, workflow, new_data,
 
   # Remove the lambda columns.
   components$predictions <- components$predictions %>%
-    select(-any_of(starts_with("lambda_"))) %>%
+    select(-any_of(starts_with(".lambda_"))) %>%
     ungroup()
   components
 }
