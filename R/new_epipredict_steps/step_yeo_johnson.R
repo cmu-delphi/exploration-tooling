@@ -217,16 +217,16 @@ bake.step_epi_YeoJohnson <- function(object, new_data, ...) {
   check_new_data(col_names, object, new_data)
 
   # Transform each column, using the appropriate lambda column per row.
-  # Note that yj_transform() is vectorized.
+  # Note that yj_transform() is vectorized in x, but not in lambda.
   new_data <- left_join(new_data, object$lambdas, by = keys)
   for (col in col_names) {
     new_data <- new_data %>%
       rowwise() %>%
-      mutate(!!col := yj_transform(!!sym(col), !!sym(paste0("lambda_", col))))
+      mutate(!!col := yj_transform(!!sym(col), !!sym(paste0(".lambda_", col))))
   }
   # Remove the lambda columns.
   new_data %>%
-    select(-starts_with("lambda_")) %>%
+    select(-starts_with(".lambda_")) %>%
     ungroup()
 }
 
@@ -249,7 +249,7 @@ get_lambdas_yj_table <- function(training, col_names, limits, num_unique, na_lam
       across(all_of(col_names), ~ estimate_yj(.x, limits, num_unique, na_rm)),
       .by = epi_keys_checked
     ) %>%
-    rename_with(~ paste0("lambda_", .x), -all_of(epi_keys_checked))
+    rename_with(~ paste0(".lambda_", .x), -all_of(epi_keys_checked))
 
   # Check for NAs in any of the lambda_ columns.
   # EDIT: This warning was too noisy. Keeping code around, in case we want it.
@@ -267,7 +267,7 @@ get_lambdas_yj_table <- function(training, col_names, limits, num_unique, na_lam
 
   # Fill in NAs with the default lambda.
   lambdas %>%
-    mutate(across(starts_with("lambda_"), \(col) ifelse(is.na(col), na_lambda_fill, col)))
+    mutate(across(starts_with(".lambda_"), \(col) ifelse(is.na(col), na_lambda_fill, col)))
 }
 
 
