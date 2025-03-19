@@ -160,7 +160,7 @@ step_epi_YeoJohnson_new <- function(
 prep.step_epi_YeoJohnson <- function(x, training, info = NULL, ...) {
   # Check that the columns selected for transformation are numeric.
   col_names <- recipes_eval_select(x$terms, training, info)
-  check_type(training[, col_names], types = c("double", "integer"))
+  recipes::check_type(training[, col_names], types = c("double", "integer"))
 
   lambdas <- get_lambdas_yj_table(
     training,
