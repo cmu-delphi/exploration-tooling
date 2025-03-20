@@ -108,8 +108,10 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
   quantile_forecast <-
     point_forecast %>%
     rowwise() %>%
-    mutate(quantile = get_quantile(value, ahead) %>% nested_quantiles()) %>%
-    unnest(quantile) %>%
+    mutate(dist = get_quantile(value, ahead)) %>%
+    pivot_quantiles_longer(dist) %>%
+    rename(quantile_levels = dist_quantile_level, values = dist_value) %>%
+    select(-value) %>%
     left_join(population_data, by = "geo_value") %>%
     rename(quantile = quantile_levels) %>%
     {

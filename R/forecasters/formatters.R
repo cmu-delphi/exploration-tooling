@@ -14,10 +14,9 @@
 #' @export
 format_storage <- function(pred, true_forecast_date, target_end_date) {
   pred %>%
-    mutate(.dstn = nested_quantiles(.pred_distn)) %>%
-    unnest(.dstn) %>%
-    select(-any_of(c(".pred_distn", ".pred", "time_value"))) %>%
-    rename(quantile = quantile_levels, value = values) %>%
+    epipredict::pivot_quantiles_longer(.pred_distn) %>%
+    mutate(value = .pred_distn_value, quantile = .pred_distn_quantile_level) %>%
+    select(-starts_with(".pred"), -any_of(c("time_value"))) %>%
     relocate(where(is.character), where(is.factor), forecast_date, target_end_date = target_date, quantile, value)
 }
 
