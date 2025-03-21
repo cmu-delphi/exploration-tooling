@@ -196,7 +196,7 @@ bake.step_epi_YeoJohnson <- function(object, new_data, ...) {
   # Check that the keys match.
   keys <- key_colnames(new_data, exclude = "time_value")
   old_keys <- object$lambdas %>% select(-starts_with(".lambda_")) %>% colnames()
-  if (!identical(keys, old_keys)) {
+  if (!all(keys %in% old_keys)) {
     cli::cli_abort(
       "The keys of the new data do not match the keys of the training data.",
       call = rlang::caller_fn()
