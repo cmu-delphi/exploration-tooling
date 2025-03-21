@@ -1,4 +1,4 @@
-source(here::here("R", "load_all.R"))
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 test_that("sanitize_args_predictors_trainer", {
   epi_data <- epidatasets::covid_case_death_rates

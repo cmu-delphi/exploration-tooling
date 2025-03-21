@@ -32,6 +32,8 @@ create_covid_external_targets <- function() {
           # Filter to only forecasts we care about.
           filter(forecast_date %in% (forecast_dates + g_time_value_adjust)) %>%
           mutate(target_end_date = as.Date(forecast_date) + 7 * as.numeric(ahead)) %>%
+          # TODO: A very rough adjustment to get daily counts on the same scale
+          # as weekly counts.
           mutate(prediction = prediction * 7)
       }
     ),
