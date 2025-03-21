@@ -33,26 +33,6 @@ test_that("rolling_mean generates correct mean", {
   expect_true("epi_df" %in% class(rolled))
 })
 
-test_that("rolling_mean generates correct mean for several widths", {
-  skip("TODO: fix broken test, rolling_mean can't take a vector of widths")
-  rolled <- rolling_mean(epi_data, width = c(3, 7))
-  expect_equal(names(rolled), c("geo_value", "time_value", "a", "slide_a_m3", "slide_a_m7"))
-
-  # hand specified rolling mean with a rear window of 7
-  expected_mean_7 <- c(
-    rep(NA, 6), 4:6, rep(NA, 6), 13:16,
-    rep(NA, 6), 16:14, rep(NA, 6), 7:4
-  )
-  expect_equal(rolled %>% pull(slide_a_m7), expected_mean_7)
-  expected_mean_3 <- c(
-    rep(NA, 2), 2:8, rep(NA, 2), 11:18,
-    rep(NA, 2), 18:12, rep(NA, 2), 9:2
-  )
-  expect_equal(rolled %>% pull(slide_a_m3), expected_mean_3)
-
-  expect_true("epi_df" %in% class(rolled))
-})
-
 test_that("rolling_sd generates correct standard deviation", {
   rolled <- rolling_sd(epi_data, sd_width = 4)
   rolled

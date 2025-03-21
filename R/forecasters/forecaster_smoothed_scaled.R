@@ -157,6 +157,7 @@ smoothed_scaled <- function(epi_data,
     smooth_width <- as.difftime(smooth_width, units = paste0(time_type, "s"))
   }
 
+  # TODO: Remove? We don't use these anymore.
   if (!is.null(smooth_width) && !is.na(smooth_width) && !keep_mean) {
     epi_data %<>% rolling_mean(
       width = smooth_width,
