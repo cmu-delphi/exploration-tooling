@@ -237,7 +237,7 @@ get_lambdas_yj_table <- function(training, col_names, limits, num_unique, na_lam
   lambdas <- training %>%
     summarise(
       across(all_of(col_names), ~ estimate_yj(.x, limits, num_unique, na_rm)),
-      .by = epi_keys_checked
+      .by = all_of(epi_keys_checked)
     ) %>%
     rename_with(~ paste0(".lambda_", .x), -all_of(epi_keys_checked))
 

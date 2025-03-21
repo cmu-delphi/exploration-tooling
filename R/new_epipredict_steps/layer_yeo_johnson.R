@@ -156,7 +156,7 @@ slather.layer_epi_YeoJohnson <- function(object, components, workflow, new_data,
     # c("lambda_ahead_1_case_rate", "lambda_ahead_7_case_rate").
     original_outcome_cols <- str_match(col_names, ".pred_ahead_\\d+_(.*)")[, 2]
     outcomes_wout_ahead <- str_match(names(components$mold$outcomes), "ahead_\\d+_(.*)")[,2]
-    if (all(original_outcome_cols %nin% outcomes_wout_ahead)) {
+    if (any(original_outcome_cols %nin% outcomes_wout_ahead)) {
       cli_abort("All columns specified in `...` must be outcome columns.", call = rlang::caller_env())
     }
 
