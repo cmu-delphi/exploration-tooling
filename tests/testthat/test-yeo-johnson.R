@@ -3,7 +3,7 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 test_that("Yeo-Johnson transformation inverts correctly", {
   expect_true(
     map_lgl(seq(-5, 5, 0.1), function(lambda) {
-      map_lgl(seq(0, 10, 0.1), \(x) abs(yj_inverse(yj_transform(x, lambda), lambda) - x) < 0.00001) %>% all()
+      map_lgl(seq(-10, 10, 0.1), \(x) abs(yj_inverse(yj_transform(x, lambda), lambda) - x) < 0.00001) %>% all()
     }) %>%
       all()
   )
