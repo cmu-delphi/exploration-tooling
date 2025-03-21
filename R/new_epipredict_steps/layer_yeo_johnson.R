@@ -243,16 +243,3 @@ get_lambdas_in_layer <- function(workflow) {
   }
   lambdas
 }
-
-get_transformed_cols_in_layer <- function(workflow) {
-  this_recipe <- hardhat::extract_recipe(workflow)
-  if (!(this_recipe %>% recipes::detect_step("epi_YeoJohnson"))) {
-    cli_abort("`layer_epi_YeoJohnson` requires `step_epi_YeoJohnson` in the recipe.", call = rlang::caller_env())
-  }
-  for (step in this_recipe$steps) {
-    if (inherits(step, "step_epi_YeoJohnson")) {
-      lambdas <- step$lambdas
-      break
-    }
-  }
-}
