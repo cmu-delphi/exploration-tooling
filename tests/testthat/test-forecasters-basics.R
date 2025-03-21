@@ -4,7 +4,7 @@ testthat::local_edition(3)
 forecasters <- list(
   list("scaled_pop", scaled_pop),
   list("flatline_fc", flatline_fc),
-  list("smoothed_scaled", smoothed_scaled, lags = list(c(0, 2, 5), c(0))),
+  list("smoothed_scaled", smoothed_scaled, lags = list(c(0, 2, 5), c(0)))
   # TODO: flusion is broken?
   # list("flusion", flusion),
   # TODOO: no_recent_outcome cannot be run without aux_data/apportionment.csv present
