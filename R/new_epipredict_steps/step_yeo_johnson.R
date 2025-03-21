@@ -55,7 +55,7 @@
 #'
 #' @references Yeo, I. K., and Johnson, R. A. (2000). A new family of power
 #'   transformations to improve normality or symmetry. *Biometrika*.
-#' @examplesIf
+#' @examples
 #' jhu <- cases_deaths_subset %>%
 #'   filter(time_value > "2021-01-01", geo_value %in% c("ca", "ny")) %>%
 #'   select(geo_value, time_value, cases)
