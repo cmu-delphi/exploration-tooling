@@ -39,8 +39,8 @@
 #' # Forecast the workflow, which should reverse the Yeo-Johnson transformation.
 #' forecast(wf)
 #' # Compare to the original data.
-#' plot(density(jhu$cases))
-#' plot(density(forecast(wf)$cases))
+#' jhu %>% filter(time_value == "2021-12-31")
+#' forecast(wf)
 layer_epi_YeoJohnson <- function(frosting, ..., lambdas = NULL, by = NULL, id = rand_id("epi_YeoJohnson")) {
   checkmate::assert_tibble(lambdas, min.rows = 1, null.ok = TRUE)
 
