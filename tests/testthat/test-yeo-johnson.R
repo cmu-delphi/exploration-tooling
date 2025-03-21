@@ -63,8 +63,7 @@ test_that("Yeo-Johnson steps and layers invert each other", {
   expect_true(is.numeric(tr$steps[[1]]$lambdas$.lambda_case_rate))
   expect_true(is.numeric(tr$steps[[1]]$lambdas$.lambda_death_rate))
 
-  # TODO: Make sure that the inverse transformation works
-  skip("TODO")
+  # Make sure that the inverse transformation works
   f <- frosting() %>%
     layer_predict() %>%
     layer_epi_YeoJohnson(.pred_ahead_0_case_rate, .pred_ahead_0_death_rate)
