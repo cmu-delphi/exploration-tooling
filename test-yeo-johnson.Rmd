@@ -71,15 +71,18 @@ out1 <- r %>% bake(filtered_data)
 out2 <- filtered_data %>%
   mutate(cases = (cases + 0.01)^(1 / 4))
 
-filtered_data %>%
-  mutate(cases = log(cases)) %>%
-  ggplot(aes(time_value, cases)) +
-  geom_line(color = "blue") +
-  geom_line(data = out1 %>% mutate(cases = log(cases)),
-            aes(time_value, cases), color = "green") +
-  geom_line(data = out2 %>% mutate(cases = log(cases)),
-            aes(time_value, cases), color = "red") +
-  facet_wrap(~geo_value, scales = "free_y") +
+all_together <- rbind(
+  filtered_data %>%
+  mutate(name = "raw"),
+  out1 %>% mutate(name = "yeo-johnson"),
+  out2 %>% mutate(name = "quarter-root")
+)
+
+all_together %>%
+  ggplot(aes(time_value, cases, color = name)) +
+  geom_line() +
+  facet_grid(~geo_value, scales = "free_y") +
   theme_minimal() +
-  labs(title = "Yeo-Johnson transformation", x = "Time", y = "Log Cases")
+  labs(title = "Yeo-Johnson transformation", x = "Time", y = "Log Cases") +
+  scale_y_log10()
 ```
