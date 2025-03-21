@@ -7,13 +7,17 @@
 #' @param pattern string to search in the forecaster name.
 #'
 #' @export
-forecaster_lookup <- function(pattern) {
-  if (!exists("g_forecaster_params_grid")) {
-    cli::cli_warn("Reading `forecaster_params_grid` target. If it's not up to date, results will be off.
-    Update with `tar_make(g_forecaster_params_grid)`.")
-    forecaster_params_grid <- tar_read_raw("forecaster_params_grid")
-  } else {
-    forecaster_params_grid <- g_forecaster_params_grid
+forecaster_lookup <- function(pattern, forecaster_params_grid = NULL) {
+  if (is.null(forecaster_params_grid)) {
+    if (!exists("g_forecaster_params_grid")) {
+      cli::cli_warn(
+        "Reading `forecaster_params_grid` target. If it's not up to date, results will be off.
+    Update with `tar_make(g_forecaster_params_grid)`."
+      )
+      forecaster_params_grid <- tar_read_raw("forecaster_params_grid")
+    } else {
+      forecaster_params_grid <- forecaster_params_grid %||% g_forecaster_params_grid
+    }
   }
 
   # Remove common prefix for convenience.
@@ -24,10 +28,10 @@ forecaster_lookup <- function(pattern) {
     pattern <- gsub("forecaster_", "", pattern)
   }
 
-  out <- forecaster_params_grid %>% filter(.data$id == pattern)
+  out <- forecaster_params_grid %>% filter(grepl(pattern, .data$id))
   if (nrow(out) > 0) {
     out %>% glimpse()
-    return(invisible(out))
+    return(out)
   }
 }
 
@@ -84,11 +88,12 @@ make_forecaster_grid <- function(tib, family) {
     unname() %>%
     lapply(as.list)
   # for whatever reason, trainer ends up being a list of lists, which we do not want
-  params_list %<>% lapply(function(x) {
-    x$trainer <- x$trainer[[1]]
-    x$lags <- x$lags[[1]]
-    x
-  })
+  params_list %<>%
+    lapply(function(x) {
+      x$trainer <- x$trainer[[1]]
+      x$lags <- x$lags[[1]]
+      x
+    })
 
   if (length(params_list) == 0) {
     out <- tibble(
@@ -144,9 +149,10 @@ make_ensemble_grid <- function(tib) {
 #'
 #' @export
 get_exclusions <- function(
-    date,
-    forecaster,
-    exclusions_json = here::here("scripts", "geo_exclusions.json")) {
+  date,
+  forecaster,
+  exclusions_json = here::here("scripts", "geo_exclusions.json")
+) {
   if (!file.exists(exclusions_json)) {
     return("")
   }
@@ -182,8 +188,14 @@ data_substitutions <- function(dataset, substitutions_path, forecast_generation_
 parse_prod_weights <- function(filename, forecast_date_int, forecaster_fn_names) {
   forecast_date_val <- as.Date(forecast_date_int)
   all_states <- c(
-    unique(readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE)$state_id),
-    "usa", "us"
+    unique(
+      readr::read_csv(
+        "https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv",
+        show_col_types = FALSE
+      )$state_id
+    ),
+    "usa",
+    "us"
   )
   all_prod_weights <- readr::read_csv(filename, comment = "#", show_col_types = FALSE)
   # if we haven't set specific weights, use the overall defaults
@@ -227,7 +239,10 @@ exclude_geos <- function(geo_forecasters_weights) {
 `%nin%` <- function(x, y) !(x %in% y)
 
 get_population_data <- function() {
-  readr::read_csv("https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv", show_col_types = FALSE) %>%
+  readr::read_csv(
+    "https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_pop.csv",
+    show_col_types = FALSE
+  ) %>%
     rename(population = pop) %>%
     # Add a row for the United States
     bind_rows(
@@ -244,7 +259,11 @@ filter_forecast_geos <- function(forecasts, truth_data) {
     # 1. Filter out forecasts that trend down
     tibble(
       geo_value = subset_geos,
-      trend_down = map(subset_geos, ~ lm(value ~ target_end_date, data = forecasts %>% filter(geo_value == .x))$coefficients[2] < 0) %>% unlist()
+      trend_down = map(
+        subset_geos,
+        ~ lm(value ~ target_end_date, data = forecasts %>% filter(geo_value == .x))$coefficients[2] < 0
+      ) %>%
+        unlist()
     ) %>%
       filter(trend_down) %>%
       pull(geo_value),
@@ -267,7 +286,11 @@ filter_forecast_geos <- function(forecasts, truth_data) {
       geo_value = subset_geos
     ) %>%
       left_join(
-        forecasts %>% filter(near(quantile, 0.75), target_end_date == MMWRweek2Date(epiyear(forecast_date), epiweek(forecast_date)) + 6),
+        forecasts %>%
+          filter(
+            near(quantile, 0.75),
+            target_end_date == MMWRweek2Date(epiyear(forecast_date), epiweek(forecast_date)) + 6
+          ),
         by = "geo_value"
       ) %>%
       left_join(
@@ -276,7 +299,8 @@ filter_forecast_geos <- function(forecasts, truth_data) {
       ) %>%
       filter(value >= pp) %>%
       pull(geo_value)
-  ) %>% unique()
+  ) %>%
+    unique()
 }
 
 #' Write a submission file. pred is assumed to be in the correct submission format.
@@ -359,7 +383,13 @@ update_site <- function(sync_to_s3 = TRUE) {
     disease <- file_parts[2]
     generation_date <- file_parts[5]
 
-    report_link <- sprintf("- [%s Forecasts %s, Rendered %s](%s)", str_to_title(disease), date, generation_date, file_name)
+    report_link <- sprintf(
+      "- [%s Forecasts %s, Rendered %s](%s)",
+      str_to_title(disease),
+      date,
+      generation_date,
+      file_name
+    )
 
     # Insert into Production Reports section, skipping a line
     prod_reports_index <- which(grepl("## Production Reports", report_md_content)) + 1
@@ -401,7 +431,9 @@ update_site <- function(sync_to_s3 = TRUE) {
   writeLines(report_md_content, report_md_path)
 
   # Convert the markdown file to HTML
-  system("pandoc reports/report.md -s -o reports/index.html --css=reports/style.css --mathjax='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js' --metadata pagetitle='Delphi Reports'")
+  system(
+    "pandoc reports/report.md -s -o reports/index.html --css=reports/style.css --mathjax='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js' --metadata pagetitle='Delphi Reports'"
+  )
 }
 
 #' Delete unused reports from the S3 bucket.

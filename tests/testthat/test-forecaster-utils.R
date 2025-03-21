@@ -41,18 +41,17 @@ test_that("id generation works", {
 })
 
 test_that("forecaster lookup selects the right rows", {
-  skip("TODO: fix broken test")
   param_grid_ex <- tibble(
     id = c("simian.irishsetter", "monarchist.thrip"),
     forecaster = rep("scaled_pop", 2),
     lags = list(NULL, c(0, 7, 14)),
     pop_scale = c(FALSE, TRUE),
   )
-  expect_equal(param_grid_ex %>% forecaster_lookup("monarchist", ., printing = FALSE), tribble(
+  expect_equal(forecaster_lookup("monarchist", param_grid_ex), tribble(
     ~id, ~forecaster, ~lags, ~pop_scale,
     "monarchist.thrip", "scaled_pop", c(0, 7, 14), TRUE,
   ))
-  expect_equal(param_grid_ex %>% forecaster_lookup("irish", ., printing = FALSE), tribble(
+  expect_equal(forecaster_lookup("irish", param_grid_ex), tribble(
     ~id, ~forecaster, ~lags, ~pop_scale,
     "simian.irishsetter", "scaled_pop", NULL, FALSE,
   ))
