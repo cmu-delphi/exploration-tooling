@@ -65,7 +65,7 @@ test_that("Yeo-Johnson steps and layers invert each other", {
   skip("TODO")
   f <- frosting() %>%
     layer_predict() %>%
-    layer_epi_YeoJohnson(.pred_ahead_0_case_rate)
+    layer_epi_YeoJohnson(.pred_ahead_0_case_rate, .pred_ahead_0_death_rate)
   wf <- epi_workflow(r, linear_reg()) %>%
     fit(filtered_data) %>%
     add_frosting(f)
