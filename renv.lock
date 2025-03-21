@@ -1525,43 +1525,6 @@
       "Repository": "RSPM",
       "Encoding": "UTF-8"
     },
-    "classInt": {
-      "Package": "classInt",
-      "Version": "0.4-11",
-      "Source": "Repository",
-      "Date": "2025-01-06",
-      "Title": "Choose Univariate Class Intervals",
-      "Authors@R": "c( person(\"Roger\", \"Bivand\", role=c(\"aut\", \"cre\"), email=\"Roger.Bivand@nhh.no\", comment=c(ORCID=\"0000-0003-2392-6140\")), person(\"Bill\", \"Denney\", role=\"ctb\", comment=c(ORCID=\"0000-0002-5759-428X\")), person(\"Richard\", \"Dunlap\", role=\"ctb\"), person(\"Diego\", \"Hernangómez\", role=\"ctb\", comment=c(ORCID=\"0000-0001-8457-4658\")), person(\"Hisaji\", \"Ono\", role=\"ctb\"), person(\"Josiah\", \"Parry\", role = \"ctb\", comment = c(ORCID = \"0000-0001-9910-865X\")), person(\"Matthieu\", \"Stigler\", role=\"ctb\", comment =c(ORCID=\"0000-0002-6802-4290\")))",
-      "Depends": [
-        "R (>= 2.2)"
-      ],
-      "Imports": [
-        "grDevices",
-        "stats",
-        "graphics",
-        "e1071",
-        "class",
-        "KernSmooth"
-      ],
-      "Suggests": [
-        "spData (>= 0.2.6.2)",
-        "units",
-        "knitr",
-        "rmarkdown",
-        "tinytest"
-      ],
-      "NeedsCompilation": "yes",
-      "Description": "Selected commonly used methods for choosing univariate class intervals for mapping or other graphics purposes.",
-      "License": "GPL (>= 2)",
-      "URL": "https://r-spatial.github.io/classInt/, https://github.com/r-spatial/classInt/",
-      "BugReports": "https://github.com/r-spatial/classInt/issues/",
-      "RoxygenNote": "6.1.1",
-      "Encoding": "UTF-8",
-      "VignetteBuilder": "knitr",
-      "Author": "Roger Bivand [aut, cre] (<https://orcid.org/0000-0003-2392-6140>), Bill Denney [ctb] (<https://orcid.org/0000-0002-5759-428X>), Richard Dunlap [ctb], Diego Hernangómez [ctb] (<https://orcid.org/0000-0001-8457-4658>), Hisaji Ono [ctb], Josiah Parry [ctb] (<https://orcid.org/0000-0001-9910-865X>), Matthieu Stigler [ctb] (<https://orcid.org/0000-0002-6802-4290>)",
-      "Maintainer": "Roger Bivand <Roger.Bivand@nhh.no>",
-      "Repository": "RSPM"
-    },
     "cli": {
       "Package": "cli",
       "Version": "3.6.3",
@@ -1702,7 +1665,8 @@
       "URL": "https://gitlab.com/luke-tierney/codetools",
       "License": "GPL",
       "NeedsCompilation": "no",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "collections": {
       "Package": "collections",
@@ -1871,53 +1835,6 @@
       "NeedsCompilation": "no",
       "Author": "Hadley Wickham [aut, cre], RStudio [cph, fnd]",
       "Maintainer": "Hadley Wickham <hadley@rstudio.com>",
-      "Repository": "RSPM"
-    },
-    "covidcast": {
-      "Package": "covidcast",
-      "Version": "0.5.2",
-      "Source": "Repository",
-      "Type": "Package",
-      "Title": "Client for Delphi's 'COVIDcast Epidata' API",
-      "Date": "2023-07-11",
-      "Authors@R": "c( person(given = \"Taylor\", family = \"Arnold\", role = \"aut\"), person(given = \"Jacob\", family = \"Bien\", role = \"aut\"), person(given = \"Logan\", family = \"Brooks\", role = \"aut\"), person(given = \"Sarah\", family = \"Colquhoun\", role = \"aut\"), person(given = \"David\", family = \"Farrow\", role = \"aut\"), person(given = \"Jed\", family = \"Grabman\", role = \"ctb\"), person(given = \"Pedrito\", family = \"Maynard-Zhang\", role = \"ctb\"), person(given = \"Kathryn\", family = \"Mazaitis\", role = \"aut\"), person(given = \"Alex\", family = \"Reinhart\", role = c(\"aut\", \"cre\"), email = \"areinhar@stat.cmu.edu\", comment = c(ORCID = \"0000-0002-6658-514X\")), person(given = \"Ryan\", family = \"Tibshirani\", role = \"aut\"))",
-      "URL": "https://cmu-delphi.github.io/covidcast/covidcastR/, https://github.com/cmu-delphi/covidcast",
-      "BugReports": "https://github.com/cmu-delphi/covidcast/issues",
-      "Description": "Tools for Delphi's 'COVIDcast Epidata' API: data access, maps and time series plotting, and basic signal processing. The API includes a collection of numerous indicators relevant to the COVID-19 pandemic in the United States, including official reports, de-identified aggregated medical claims data, large-scale surveys of symptoms and public behavior, and mobility data, typically updated daily and at the county level. All data sources are documented at <https://cmu-delphi.github.io/delphi-epidata/api/covidcast.html>.",
-      "Depends": [
-        "R (>= 3.5.0)"
-      ],
-      "License": "MIT + file LICENSE",
-      "Encoding": "UTF-8",
-      "LazyData": "true",
-      "Imports": [
-        "dplyr",
-        "ggplot2",
-        "grDevices",
-        "httr",
-        "MMWRweek",
-        "purrr",
-        "rlang",
-        "sf",
-        "tidyr",
-        "xml2"
-      ],
-      "RoxygenNote": "7.2.3",
-      "Suggests": [
-        "gridExtra",
-        "httptest",
-        "knitr",
-        "mockery",
-        "rmarkdown",
-        "testthat",
-        "tibble",
-        "vdiffr"
-      ],
-      "VignetteBuilder": "knitr",
-      "Config/testthat/edition": "3",
-      "NeedsCompilation": "no",
-      "Author": "Taylor Arnold [aut], Jacob Bien [aut], Logan Brooks [aut], Sarah Colquhoun [aut], David Farrow [aut], Jed Grabman [ctb], Pedrito Maynard-Zhang [ctb], Kathryn Mazaitis [aut], Alex Reinhart [aut, cre] (<https://orcid.org/0000-0002-6658-514X>), Ryan Tibshirani [aut]",
-      "Maintainer": "Alex Reinhart <areinhar@stat.cmu.edu>",
       "Repository": "RSPM"
     },
     "cpp11": {
@@ -2647,42 +2564,6 @@
       "Maintainer": "Hadley Wickham <hadley@posit.co>",
       "Repository": "RSPM"
     },
-    "e1071": {
-      "Package": "e1071",
-      "Version": "1.7-16",
-      "Source": "Repository",
-      "Title": "Misc Functions of the Department of Statistics, Probability Theory Group (Formerly: E1071), TU Wien",
-      "Imports": [
-        "graphics",
-        "grDevices",
-        "class",
-        "stats",
-        "methods",
-        "utils",
-        "proxy"
-      ],
-      "Suggests": [
-        "cluster",
-        "mlbench",
-        "nnet",
-        "randomForest",
-        "rpart",
-        "SparseM",
-        "xtable",
-        "Matrix",
-        "MASS",
-        "slam"
-      ],
-      "Authors@R": "c(person(given = \"David\", family = \"Meyer\", role = c(\"aut\", \"cre\"), email = \"David.Meyer@R-project.org\", comment = c(ORCID = \"0000-0002-5196-3048\")),     person(given = \"Evgenia\", family = \"Dimitriadou\", role = c(\"aut\",\"cph\")), person(given = \"Kurt\", family = \"Hornik\", role = \"aut\", email = \"Kurt.Hornik@R-project.org\", comment = c(ORCID = \"0000-0003-4198-9911\")), person(given = \"Andreas\", family = \"Weingessel\", role = \"aut\"), person(given = \"Friedrich\", family = \"Leisch\", role = \"aut\"), person(given = \"Chih-Chung\", family = \"Chang\", role = c(\"ctb\",\"cph\"), comment = \"libsvm C++-code\"), person(given = \"Chih-Chen\", family = \"Lin\", role = c(\"ctb\",\"cph\"), comment = \"libsvm C++-code\"))",
-      "Description": "Functions for latent class analysis, short time Fourier transform, fuzzy clustering, support vector machines, shortest path computation, bagged clustering, naive Bayes classifier, generalized k-nearest neighbour ...",
-      "License": "GPL-2 | GPL-3",
-      "LazyLoad": "yes",
-      "NeedsCompilation": "yes",
-      "Author": "David Meyer [aut, cre] (<https://orcid.org/0000-0002-5196-3048>), Evgenia Dimitriadou [aut, cph], Kurt Hornik [aut] (<https://orcid.org/0000-0003-4198-9911>), Andreas Weingessel [aut], Friedrich Leisch [aut], Chih-Chung Chang [ctb, cph] (libsvm C++-code), Chih-Chen Lin [ctb, cph] (libsvm C++-code)",
-      "Maintainer": "David Meyer <David.Meyer@R-project.org>",
-      "Repository": "RSPM",
-      "Encoding": "UTF-8"
-    },
     "ellipsis": {
       "Package": "ellipsis",
       "Version": "0.3.2",
@@ -2712,7 +2593,7 @@
     },
     "epidatasets": {
       "Package": "epidatasets",
-      "Version": "0.0.2",
+      "Version": "0.0.3",
       "Source": "GitHub",
       "Type": "Package",
       "Title": "Epidemiological Data for Delphi Tooling Examples",
@@ -2724,7 +2605,6 @@
         "R (>= 2.10)"
       ],
       "Suggests": [
-        "covidcast",
         "data.table",
         "dplyr",
         "epidatr",
@@ -2748,11 +2628,11 @@
       "Author": "Daniel J. McDonald [aut], Nat DeFries [cre, aut], Johns Hopkins University Center for Systems Science and Engineering [dtc] (Owner of COVID-19 cases and deaths data from the COVID-19 Data Repository), Johns Hopkins University [cph] (Copyright holder of COVID-19 cases and deaths data from the COVID-19 Data Repository), Carnegie Mellon University Delphi Group [dtc] (Owner of masking, social-distancing, and CLI data from the COVID-19 Trends and Impacts Survey. Owner of claims-based CLI data from the Delphi Epidata API), The COVID-19 Canada Open Data Working Group [dtc] (Owner of Canadian COVID-19 cases rates from the Covid19Canada data repository), Statistics Canada [dtc] (Owner of Canadian graduate employment income data from the Statistics Canada website), Google [dtc] (Collaborator on CLI data from the Google symptom surveys)",
       "Maintainer": "Nat DeFries <ndefries@andrew.cmu.edu>",
       "RemoteType": "github",
+      "RemoteHost": "api.github.com",
       "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epidatasets",
       "RemoteRef": "main",
-      "RemoteSha": "2c45cc1b11235c2fd323bb27d445e8631b1a985c",
-      "RemoteHost": "api.github.com",
+      "RemoteSha": "0c3070b3202b50a094caf30511f1f8caf5b1b830",
       "Remotes": "cmu-delphi/delphidocs, cmu-delphi/epidatr, cmu-delphi/epiprocess"
     },
     "epidatr": {
@@ -2818,7 +2698,7 @@
     },
     "epipredict": {
       "Package": "epipredict",
-      "Version": "0.1.8",
+      "Version": "0.1.13",
       "Source": "GitHub",
       "Title": "Basic epidemiology forecasting methods",
       "Authors@R": "c( person(\"Daniel J.\", \"McDonald\", , \"daniel@stat.ubc.ca\", role = c(\"aut\", \"cre\")), person(\"Ryan\", \"Tibshirani\", , \"ryantibs@cmu.edu\", role = \"aut\"), person(\"Dmitry\", \"Shemetov\", , \"dshemeto@andrew.cmu.edu\", role = \"aut\"), person(\"David\", \"Weber\", , \"davidweb@andrew.cmu.edu\", role = \"aut\"), person(\"Delphi Research Group\", role = c(\"cph\", \"fnd\")), person(\"Logan\", \"Brooks\", role = \"aut\"), person(\"Rachel\", \"Lobay\", role = \"aut\"), person(\"Maggie\", \"Liu\", role = \"ctb\"), person(\"Ken\", \"Mawer\", role = \"ctb\"), person(\"Chloe\", \"You\", role = \"ctb\"), person(\"Jacob\", \"Bien\", role = \"ctb\") )",
@@ -2828,20 +2708,20 @@
       "BugReports": "https://github.com/cmu-delphi/epipredict/issues/",
       "Depends": [
         "epidatasets",
-        "epiprocess (>= 0.9.0)",
         "parsnip (>= 1.0.0)",
         "R (>= 3.5.0)"
       ],
       "Imports": [
         "checkmate",
         "cli",
-        "distributional",
         "dplyr",
+        "epiprocess (>= 0.10.4)",
         "generics",
         "ggplot2",
         "glue",
-        "hardhat (>= 1.3.0)",
+        "hardhat (>= 1.4.1)",
         "lifecycle",
+        "lubridate",
         "magrittr",
         "recipes (>= 1.0.4)",
         "rlang (>= 1.1.0)",
@@ -2859,7 +2739,6 @@
         "fs",
         "grf",
         "knitr",
-        "lubridate",
         "poissonreg",
         "purrr",
         "quantreg",
@@ -2876,22 +2755,21 @@
       "Config/Needs/website": "cmu-delphi/delphidocs",
       "Config/testthat/edition": "3",
       "Encoding": "UTF-8",
-      "LazyData": "true",
       "Roxygen": "list(markdown = TRUE)",
       "RoxygenNote": "7.3.2",
       "Author": "Daniel J. McDonald [aut, cre], Ryan Tibshirani [aut], Dmitry Shemetov [aut], David Weber [aut], Delphi Research Group [cph, fnd], Logan Brooks [aut], Rachel Lobay [aut], Maggie Liu [ctb], Ken Mawer [ctb], Chloe You [ctb], Jacob Bien [ctb]",
       "Maintainer": "Daniel J. McDonald <daniel@stat.ubc.ca>",
       "RemoteType": "github",
+      "RemoteHost": "api.github.com",
       "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epipredict",
       "RemoteRef": "dev",
-      "RemoteSha": "7a103faa251d50524d75c34a6acb2e7a0a4d73f3",
-      "RemoteHost": "api.github.com",
-      "Remotes": "cmu-delphi/delphidocs, cmu-delphi/epidatasets, cmu-delphi/epidatr, cmu-delphi/epiprocess, cmu-delphi/epidatasets, dajmcdon/smoothqr"
+      "RemoteSha": "7f08d409d60677d4007cdbaa6bf272b46e035e6e",
+      "Remotes": "cmu-delphi/delphidocs, cmu-delphi/epidatasets, cmu-delphi/epidatr, cmu-delphi/epiprocess, dajmcdon/smoothqr"
     },
     "epiprocess": {
       "Package": "epiprocess",
-      "Version": "0.10.5",
+      "Version": "0.11.0",
       "Source": "GitHub",
       "Type": "Package",
       "Title": "Tools for basic signal processing in epidemiology",
@@ -2913,6 +2791,7 @@
         "lifecycle (>= 1.0.1)",
         "lubridate",
         "magrittr",
+        "pkgconfig",
         "purrr",
         "rlang",
         "slider",
@@ -2952,11 +2831,11 @@
       "Author": "Jacob Bien [ctb], Logan Brooks [aut, cre], Rafael Catoia [ctb], Nat DeFries [aut], Daniel McDonald [aut], Rachel Lobay [ctb], Ken Mawer [ctb], Chloe You [ctb], Quang Nguyen [ctb], Evan Ray [aut], Dmitry Shemetov [aut], Ryan Tibshirani [aut], David Weber [ctb], Lionel Henry [ctb] (Author of included rlang fragments), Hadley Wickham [ctb] (Author of included rlang fragments), Posit [cph] (Copyright holder of included rlang fragments), Johns Hopkins University Center for Systems Science and Engineering [dtc] (Owner of COVID-19 cases and deaths data from the COVID-19 Data Repository), Johns Hopkins University [cph] (Copyright holder of COVID-19 cases and deaths data from the COVID-19 Data Repository), Carnegie Mellon University Delphi Group [dtc] (Owner of claims-based CLI data from the Delphi Epidata API)",
       "Maintainer": "Logan Brooks <lcbrooks+github@andrew.cmu.edu>",
       "RemoteType": "github",
+      "RemoteHost": "api.github.com",
       "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epiprocess",
       "RemoteRef": "dev",
-      "RemoteSha": "a699ae8f7c77aabd6a72cdb0209dd34960402047",
-      "RemoteHost": "api.github.com",
+      "RemoteSha": "ca989243fa4ab002d1127bda8b8b14c5bc5f5185",
       "Remotes": "cmu-delphi/delphidocs, cmu-delphi/epidatasets, cmu-delphi/epidatr, cmu-delphi/epipredict, glmgen/trendfilter, reconverse/outbreaks"
     },
     "evaluate": {
@@ -4657,12 +4536,12 @@
       "RemoteUsername": "hubverse-org",
       "RemoteRepo": "hubEvals",
       "RemoteRef": "main",
-      "RemoteSha": "513bf667c5821d4350b7f1e08a6d8a6cc43d70bd",
+      "RemoteSha": "57d07d729f3a8f31bd4dd72b0bf7249b1739a5db",
       "Remotes": "epiforecasts/scoringutils, hubverse-org/hubExamples, hubverse-org/hubUtils"
     },
     "hubUtils": {
       "Package": "hubUtils",
-      "Version": "0.4.0.9000",
+      "Version": "0.5.0.9000",
       "Source": "GitHub",
       "Title": "Core 'hubverse' Utilities",
       "Authors@R": "c( person(\"Anna\", \"Krystalli\", , \"annakrystalli@googlemail.com\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-2378-4915\")), person(\"Li\", \"Shandross\", , \"lshandross@umass.edu\", role = \"ctb\"), person(\"Nicholas G.\", \"Reich\", , \"nick@umass.edu\", role = \"ctb\", comment = c(ORCID = \"0000-0003-3503-9899\")), person(\"Evan L.\", \"Ray\", , \"elray@umass.edu\", role = \"ctb\"), person(\"Zhian N.\", \"Kamvar\", , \"zkamvar@gmail.com\", role = c(\"ctb\"),  comment = c(ORCID = \"0000-0003-1458-7108\")), person(\"Consortium of Infectious Disease Modeling Hubs\", role = \"cph\") )",
@@ -4706,11 +4585,11 @@
       "Author": "Anna Krystalli [aut, cre] (<https://orcid.org/0000-0002-2378-4915>), Li Shandross [ctb], Nicholas G. Reich [ctb] (<https://orcid.org/0000-0003-3503-9899>), Evan L. Ray [ctb], Zhian N. Kamvar [ctb] (<https://orcid.org/0000-0003-1458-7108>), Consortium of Infectious Disease Modeling Hubs [cph]",
       "Maintainer": "Anna Krystalli <annakrystalli@googlemail.com>",
       "RemoteType": "github",
+      "RemoteHost": "api.github.com",
       "RemoteUsername": "hubverse-org",
       "RemoteRepo": "hubUtils",
       "RemoteRef": "main",
-      "RemoteSha": "e96c0b5318bd436b38b4a583bc62e535a7328b35",
-      "RemoteHost": "api.github.com"
+      "RemoteSha": "00e685628f74ba512e8b060510bd3c0ea661bcd0"
     },
     "hubValidations": {
       "Package": "hubValidations",
@@ -5268,7 +5147,8 @@
       "NeedsCompilation": "yes",
       "Author": "Deepayan Sarkar [aut, cre] (<https://orcid.org/0000-0003-4107-1553>), Felix Andrews [ctb], Kevin Wright [ctb] (documentation), Neil Klepeis [ctb], Johan Larsson [ctb] (miscellaneous improvements), Zhijian (Jason) Wen [cph] (filled contour code), Paul Murrell [ctb], Stefan Eng [ctb] (violin plot improvements), Achim Zeileis [ctb] (modern colors), Alexandre Courtiol [ctb] (generics for larrows, lpolygon, lrect and lsegments)",
       "Maintainer": "Deepayan Sarkar <deepayan.sarkar@r-project.org>",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "lava": {
       "Package": "lava",
@@ -6879,32 +6759,6 @@
       "Maintainer": "Joe Cheng <joe@posit.co>",
       "Repository": "RSPM"
     },
-    "proxy": {
-      "Package": "proxy",
-      "Version": "0.4-27",
-      "Source": "Repository",
-      "Type": "Package",
-      "Title": "Distance and Similarity Measures",
-      "Authors@R": "c(person(given = \"David\", family = \"Meyer\", role = c(\"aut\", \"cre\"), email = \"David.Meyer@R-project.org\"), person(given = \"Christian\", family = \"Buchta\", role = \"aut\"))",
-      "Description": "Provides an extensible framework for the efficient calculation of auto- and cross-proximities, along with implementations of the most popular ones.",
-      "Depends": [
-        "R (>= 3.4.0)"
-      ],
-      "Imports": [
-        "stats",
-        "utils"
-      ],
-      "Suggests": [
-        "cba"
-      ],
-      "Collate": "registry.R database.R dist.R similarities.R dissimilarities.R util.R seal.R",
-      "License": "GPL-2",
-      "NeedsCompilation": "yes",
-      "Author": "David Meyer [aut, cre], Christian Buchta [aut]",
-      "Maintainer": "David Meyer <David.Meyer@R-project.org>",
-      "Repository": "RSPM",
-      "Encoding": "UTF-8"
-    },
     "ps": {
       "Package": "ps",
       "Version": "1.8.1",
@@ -8061,42 +7915,6 @@
       "Maintainer": "Hadley Wickham <hadley@posit.co>",
       "Repository": "RSPM"
     },
-    "s2": {
-      "Package": "s2",
-      "Version": "1.1.7",
-      "Source": "Repository",
-      "Title": "Spherical Geometry Operators Using the S2 Geometry Library",
-      "Authors@R": "c( person(given = \"Dewey\", family = \"Dunnington\", role = c(\"aut\"), email = \"dewey@fishandwhistle.net\", comment = c(ORCID = \"0000-0002-9415-4582\")), person(given = \"Edzer\", family = \"Pebesma\", role = c(\"aut\", \"cre\"), email = \"edzer.pebesma@uni-muenster.de\", comment = c(ORCID = \"0000-0001-8049-7069\")), person(\"Ege\", \"Rubak\", email=\"rubak@math.aau.dk\", role = c(\"aut\")), person(\"Jeroen\", \"Ooms\", , \"jeroen.ooms@stat.ucla.edu\", role = \"ctb\", comment = \"configure script\"), person(family = \"Google, Inc.\", role = \"cph\", comment = \"Original s2geometry.io source code\") )",
-      "Description": "Provides R bindings for Google's s2 library for geometric calculations on the sphere. High-performance constructors and exporters provide high compatibility with existing spatial packages, transformers construct new geometries from existing geometries, predicates provide a means to select geometries based on spatial  relationships, and accessors extract information about geometries.",
-      "License": "Apache License (== 2.0)",
-      "Encoding": "UTF-8",
-      "LazyData": "true",
-      "RoxygenNote": "7.2.3",
-      "SystemRequirements": "OpenSSL >= 1.0.1",
-      "LinkingTo": [
-        "Rcpp",
-        "wk"
-      ],
-      "Imports": [
-        "Rcpp",
-        "wk (>= 0.6.0)"
-      ],
-      "Suggests": [
-        "bit64",
-        "testthat (>= 3.0.0)",
-        "vctrs"
-      ],
-      "URL": "https://r-spatial.github.io/s2/, https://github.com/r-spatial/s2, http://s2geometry.io/",
-      "BugReports": "https://github.com/r-spatial/s2/issues",
-      "Depends": [
-        "R (>= 3.0.0)"
-      ],
-      "Config/testthat/edition": "3",
-      "NeedsCompilation": "yes",
-      "Author": "Dewey Dunnington [aut] (<https://orcid.org/0000-0002-9415-4582>), Edzer Pebesma [aut, cre] (<https://orcid.org/0000-0001-8049-7069>), Ege Rubak [aut], Jeroen Ooms [ctb] (configure script), Google, Inc. [cph] (Original s2geometry.io source code)",
-      "Maintainer": "Edzer Pebesma <edzer.pebesma@uni-muenster.de>",
-      "Repository": "RSPM"
-    },
     "sandwich": {
       "Package": "sandwich",
       "Version": "3.1-1",
@@ -8262,7 +8080,7 @@
     },
     "scoringutils": {
       "Package": "scoringutils",
-      "Version": "2.0.0.9000",
+      "Version": "2.1.0.9000",
       "Source": "GitHub",
       "Title": "Utilities for Scoring and Assessing Predictions",
       "Language": "en-GB",
@@ -8274,9 +8092,8 @@
       "Imports": [
         "checkmate",
         "cli",
-        "data.table",
+        "data.table (>= 1.16.0)",
         "ggplot2 (>= 3.4.0)",
-        "lifecycle",
         "methods",
         "Metrics",
         "purrr",
@@ -8309,7 +8126,7 @@
       "RemoteUsername": "epiforecasts",
       "RemoteRepo": "scoringutils",
       "RemoteRef": "main",
-      "RemoteSha": "dbe5da6691ea3cb7265df4b6bc5815e933d89c32"
+      "RemoteSha": "e85f7e00fd866404d7fde5a6f361e6d7603cc5d8"
     },
     "secretbase": {
       "Package": "secretbase",
@@ -8399,86 +8216,6 @@
       "RoxygenNote": "7.3.2",
       "NeedsCompilation": "no",
       "Author": "Gábor Csárdi [cre], Hadley Wickham [aut], Winston Chang [aut], Robert Flight [aut], Kirill Müller [aut], Jim Hester [aut], R Core team [ctb], Posit Software, PBC [cph, fnd]",
-      "Repository": "RSPM"
-    },
-    "sf": {
-      "Package": "sf",
-      "Version": "1.0-19",
-      "Source": "Repository",
-      "Title": "Simple Features for R",
-      "Authors@R": "c(person(given = \"Edzer\", family = \"Pebesma\", role = c(\"aut\", \"cre\"), email = \"edzer.pebesma@uni-muenster.de\", comment = c(ORCID = \"0000-0001-8049-7069\")), person(given = \"Roger\", family = \"Bivand\", role = \"ctb\", comment = c(ORCID = \"0000-0003-2392-6140\")), person(given = \"Etienne\", family = \"Racine\", role = \"ctb\"), person(given = \"Michael\", family = \"Sumner\", role = \"ctb\"), person(given = \"Ian\", family = \"Cook\", role = \"ctb\"), person(given = \"Tim\", family = \"Keitt\", role = \"ctb\"), person(given = \"Robin\", family = \"Lovelace\", role = \"ctb\"), person(given = \"Hadley\", family = \"Wickham\", role = \"ctb\"), person(given = \"Jeroen\", family = \"Ooms\", role = \"ctb\", comment = c(ORCID = \"0000-0002-4035-0289\")), person(given = \"Kirill\", family = \"M\\u00fcller\", role = \"ctb\"), person(given = \"Thomas Lin\", family = \"Pedersen\", role = \"ctb\"), person(given = \"Dan\", family = \"Baston\", role = \"ctb\"), person(given = \"Dewey\", family = \"Dunnington\", role = \"ctb\", comment = c(ORCID = \"0000-0002-9415-4582\")) )",
-      "Description": "Support for simple features, a standardized way to encode spatial vector data. Binds to 'GDAL' for reading and writing data, to 'GEOS' for geometrical operations, and to 'PROJ' for projection conversions and datum transformations. Uses by default the 's2' package for spherical geometry operations on ellipsoidal (long/lat) coordinates.",
-      "License": "GPL-2 | MIT + file LICENSE",
-      "URL": "https://r-spatial.github.io/sf/, https://github.com/r-spatial/sf",
-      "BugReports": "https://github.com/r-spatial/sf/issues",
-      "Depends": [
-        "methods",
-        "R (>= 3.3.0)"
-      ],
-      "Imports": [
-        "classInt (>= 0.4-1)",
-        "DBI (>= 0.8)",
-        "graphics",
-        "grDevices",
-        "grid",
-        "magrittr",
-        "s2 (>= 1.1.0)",
-        "stats",
-        "tools",
-        "units (>= 0.7-0)",
-        "utils"
-      ],
-      "Suggests": [
-        "blob",
-        "nanoarrow",
-        "covr",
-        "dplyr (>= 1.0.0)",
-        "ggplot2",
-        "knitr",
-        "lwgeom (>= 0.2-14)",
-        "maps",
-        "mapview",
-        "Matrix",
-        "microbenchmark",
-        "odbc",
-        "pbapply",
-        "pillar",
-        "pool",
-        "raster",
-        "rlang",
-        "rmarkdown",
-        "RPostgres (>= 1.1.0)",
-        "RPostgreSQL",
-        "RSQLite",
-        "sp (>= 1.2-4)",
-        "spatstat (>= 2.0-1)",
-        "spatstat.geom",
-        "spatstat.random",
-        "spatstat.linnet",
-        "spatstat.utils",
-        "stars (>= 0.2-0)",
-        "terra",
-        "testthat (>= 3.0.0)",
-        "tibble (>= 1.4.1)",
-        "tidyr (>= 1.2.0)",
-        "tidyselect (>= 1.0.0)",
-        "tmap (>= 2.0)",
-        "vctrs",
-        "wk (>= 0.9.0)"
-      ],
-      "LinkingTo": [
-        "Rcpp"
-      ],
-      "VignetteBuilder": "knitr",
-      "Encoding": "UTF-8",
-      "RoxygenNote": "7.3.2",
-      "Config/testthat/edition": "2",
-      "Config/needs/coverage": "XML",
-      "SystemRequirements": "GDAL (>= 2.0.1), GEOS (>= 3.4.0), PROJ (>= 4.8.0), sqlite3",
-      "Collate": "'RcppExports.R' 'init.R' 'import-standalone-s3-register.R' 'crs.R' 'bbox.R' 'read.R' 'db.R' 'sfc.R' 'sfg.R' 'sf.R' 'bind.R' 'wkb.R' 'wkt.R' 'plot.R' 'geom-measures.R' 'geom-predicates.R' 'geom-transformers.R' 'transform.R' 'proj.R' 'sp.R' 'grid.R' 'arith.R' 'tidyverse.R' 'tidyverse-vctrs.R' 'cast_sfg.R' 'cast_sfc.R' 'graticule.R' 'datasets.R' 'aggregate.R' 'agr.R' 'maps.R' 'join.R' 'sample.R' 'valid.R' 'collection_extract.R' 'jitter.R' 'sgbp.R' 'spatstat.R' 'stars.R' 'crop.R' 'gdal_utils.R' 'nearest.R' 'normalize.R' 'sf-package.R' 'defunct.R' 'z_range.R' 'm_range.R' 'shift_longitude.R' 'make_grid.R' 's2.R' 'terra.R' 'geos-overlayng.R' 'break_antimeridian.R'",
-      "NeedsCompilation": "yes",
-      "Author": "Edzer Pebesma [aut, cre] (<https://orcid.org/0000-0001-8049-7069>), Roger Bivand [ctb] (<https://orcid.org/0000-0003-2392-6140>), Etienne Racine [ctb], Michael Sumner [ctb], Ian Cook [ctb], Tim Keitt [ctb], Robin Lovelace [ctb], Hadley Wickham [ctb], Jeroen Ooms [ctb] (<https://orcid.org/0000-0002-4035-0289>), Kirill Müller [ctb], Thomas Lin Pedersen [ctb], Dan Baston [ctb], Dewey Dunnington [ctb] (<https://orcid.org/0000-0002-9415-4582>)",
-      "Maintainer": "Edzer Pebesma <edzer.pebesma@uni-muenster.de>",
       "Repository": "RSPM"
     },
     "shape": {
@@ -9550,49 +9287,6 @@
       "Maintainer": "Davis Vaughan <davis@posit.co>",
       "Repository": "RSPM"
     },
-    "units": {
-      "Package": "units",
-      "Version": "0.8-5",
-      "Source": "Repository",
-      "Title": "Measurement Units for R Vectors",
-      "Authors@R": "c(person(\"Edzer\", \"Pebesma\", role = c(\"aut\", \"cre\"), email = \"edzer.pebesma@uni-muenster.de\", comment = c(ORCID = \"0000-0001-8049-7069\")), person(\"Thomas\", \"Mailund\", role = \"aut\", email = \"mailund@birc.au.dk\"), person(\"Tomasz\", \"Kalinowski\", role = \"aut\"), person(\"James\", \"Hiebert\", role = \"ctb\"), person(\"Iñaki\", \"Ucar\", role = \"aut\", email = \"iucar@fedoraproject.org\", comment = c(ORCID = \"0000-0001-6403-5550\")), person(\"Thomas Lin\", \"Pedersen\", role = \"ctb\") )",
-      "Depends": [
-        "R (>= 3.0.2)"
-      ],
-      "Imports": [
-        "Rcpp"
-      ],
-      "LinkingTo": [
-        "Rcpp (>= 0.12.10)"
-      ],
-      "Suggests": [
-        "NISTunits",
-        "measurements",
-        "xml2",
-        "magrittr",
-        "pillar (>= 1.3.0)",
-        "dplyr (>= 1.0.0)",
-        "vctrs (>= 0.3.1)",
-        "ggplot2 (> 3.2.1)",
-        "testthat (>= 3.0.0)",
-        "vdiffr",
-        "knitr",
-        "rmarkdown"
-      ],
-      "VignetteBuilder": "knitr",
-      "Description": "Support for measurement units in R vectors, matrices and arrays: automatic propagation, conversion, derivation and simplification of units; raising errors in case of unit incompatibility. Compatible with the POSIXct, Date and difftime  classes. Uses the UNIDATA udunits library and unit database for  unit compatibility checking and conversion. Documentation about 'units' is provided in the paper by Pebesma, Mailund & Hiebert (2016, <doi:10.32614/RJ-2016-061>), included in this package as a vignette; see 'citation(\"units\")' for details.",
-      "SystemRequirements": "udunits-2",
-      "License": "GPL-2",
-      "URL": "https://r-quantities.github.io/units/, https://github.com/r-quantities/units",
-      "BugReports": "https://github.com/r-quantities/units/issues",
-      "RoxygenNote": "7.2.3",
-      "Encoding": "UTF-8",
-      "Config/testthat/edition": "3",
-      "NeedsCompilation": "yes",
-      "Author": "Edzer Pebesma [aut, cre] (<https://orcid.org/0000-0001-8049-7069>), Thomas Mailund [aut], Tomasz Kalinowski [aut], James Hiebert [ctb], Iñaki Ucar [aut] (<https://orcid.org/0000-0001-6403-5550>), Thomas Lin Pedersen [ctb]",
-      "Maintainer": "Edzer Pebesma <edzer.pebesma@uni-muenster.de>",
-      "Repository": "RSPM"
-    },
     "urlchecker": {
       "Package": "urlchecker",
       "Version": "1.0.1",
@@ -9998,35 +9692,6 @@
       "NeedsCompilation": "no",
       "Author": "Jim Hester [aut], Lionel Henry [aut, cre], Kirill Müller [aut], Kevin Ushey [aut], Hadley Wickham [aut], Winston Chang [aut], Jennifer Bryan [ctb], Richard Cotton [ctb], Posit Software, PBC [cph, fnd]",
       "Maintainer": "Lionel Henry <lionel@posit.co>",
-      "Repository": "RSPM"
-    },
-    "wk": {
-      "Package": "wk",
-      "Version": "0.9.4",
-      "Source": "Repository",
-      "Title": "Lightweight Well-Known Geometry Parsing",
-      "Authors@R": "c( person(given = \"Dewey\", family = \"Dunnington\", role = c(\"aut\", \"cre\"), email = \"dewey@fishandwhistle.net\", comment = c(ORCID = \"0000-0002-9415-4582\")), person(given = \"Edzer\", family = \"Pebesma\", role = c(\"aut\"), email = \"edzer.pebesma@uni-muenster.de\", comment = c(ORCID = \"0000-0001-8049-7069\")), person(given = \"Anthony\", family = \"North\", email = \"anthony.jl.north@gmail.com\", role = c(\"ctb\")) )",
-      "Maintainer": "Dewey Dunnington <dewey@fishandwhistle.net>",
-      "Description": "Provides a minimal R and C++ API for parsing well-known binary and well-known text representation of geometries to and from R-native formats. Well-known binary is compact and fast to parse; well-known text is human-readable and is useful for writing tests. These formats are useful in R only if the information they contain can be accessed in R, for which high-performance functions are provided here.",
-      "License": "MIT + file LICENSE",
-      "Encoding": "UTF-8",
-      "RoxygenNote": "7.2.3",
-      "Suggests": [
-        "testthat (>= 3.0.0)",
-        "vctrs (>= 0.3.0)",
-        "sf",
-        "tibble",
-        "readr"
-      ],
-      "URL": "https://paleolimbot.github.io/wk/, https://github.com/paleolimbot/wk",
-      "BugReports": "https://github.com/paleolimbot/wk/issues",
-      "Config/testthat/edition": "3",
-      "Depends": [
-        "R (>= 2.10)"
-      ],
-      "LazyData": "true",
-      "NeedsCompilation": "yes",
-      "Author": "Dewey Dunnington [aut, cre] (<https://orcid.org/0000-0002-9415-4582>), Edzer Pebesma [aut] (<https://orcid.org/0000-0001-8049-7069>), Anthony North [ctb]",
       "Repository": "RSPM"
     },
     "workflows": {
