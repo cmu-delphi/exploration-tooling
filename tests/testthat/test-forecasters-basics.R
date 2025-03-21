@@ -7,7 +7,8 @@ forecasters <- list(
   list("smoothed_scaled", smoothed_scaled, lags = list(c(0, 2, 5), c(0))),
   # TODO: flusion is broken?
   # list("flusion", flusion),
-  list("no_recent_outcome", no_recent_outcome)
+  # TODOO: no_recent_outcome cannot be run without aux_data/apportionment.csv present
+  # list("no_recent_outcome", no_recent_outcome)
 )
 for (forecaster in forecasters) {
   test_that(paste(forecaster[[1]], "gets the date and columns right"), {
