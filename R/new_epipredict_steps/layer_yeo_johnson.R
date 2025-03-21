@@ -62,7 +62,7 @@ layer_epi_YeoJohnson <- function(frosting, ..., lambdas = NULL, by = NULL, id = 
 }
 
 layer_epi_YeoJohnson_new <- function(lambdas, by, terms, id) {
-  layer("epi_YeoJohnson", lambdas = lambdas, by = by, terms = terms, id = id)
+  epipredict:::layer("epi_YeoJohnson", lambdas = lambdas, by = by, terms = terms, id = id)
 }
 
 #' @export
@@ -140,7 +140,7 @@ slather.layer_epi_YeoJohnson <- function(object, components, workflow, new_data,
     # ahead_1_cases, ahead_7_cases, etc. We want to extract the cases part.
     outcome_cols <- names(components$mold$outcomes) %>%
       stringr::str_match("ahead_\\d+_(.*)") %>%
-      extract(, 2)
+      magrittr::extract(, 2)
 
     components$predictions <- components$predictions %>%
       rowwise() %>%
