@@ -19,6 +19,9 @@ jobs:
       fail-fast: false
       matrix:
         config:
+          # The one we use in production.
+          - { os: ubuntu-latest, r: "renv" }
+          # See if the latest release works.
           - { os: ubuntu-latest, r: "release" }
 
     env:
