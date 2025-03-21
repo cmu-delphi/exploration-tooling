@@ -71,7 +71,7 @@ test_that("Yeo-Johnson steps and layers invert each other", {
     add_frosting(f)
   out1 <- filtered_data %>% as_tibble() %>% slice_max(time_value, by = geo_value)
   # debugonce(slather.layer_epi_YeoJohnson)
-  out2 <- forecast(wf) %>% rename(case_rate = .pred)
+  out2 <- forecast(wf) %>% rename(case_rate = .pred_ahead_0_case_rate, death_rate = .pred_ahead_0_death_rate)
   expect_equal(out1, out2)
 })
 
