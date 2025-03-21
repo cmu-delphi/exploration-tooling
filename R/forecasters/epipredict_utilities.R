@@ -31,7 +31,7 @@ arx_preprocess <- function(preproc, outcome, predictors, args_list) {
   preproc %<>%
     step_epi_ahead(!!outcome, ahead = args_list$ahead) %>%
     step_epi_naomit() %>%
-    step_training_window2(
+    step_epi_training_window(
       n_recent = args_list$n_training,
       seasonal = args_list$seasonal_window,
       seasonal_backward_window = args_list$seasonal_backward_window,

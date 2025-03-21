@@ -12,9 +12,9 @@ data <- tribble(
   bind_rows((.) %>% filter(geo_value == "ca") %>% mutate(time_value = time_value - 365)) %>%
   as_epi_df()
 
-# debugonce(bake.step_training_window2)
+# debugonce(bake.step_epi_training_window)
 epi_recipe(data) %>%
-  step_training_window2(seasonal_backward_window = 5, seasonal_forward_window = 3, seasonal = TRUE) %>%
+  step_epi_training_window(seasonal_backward_window = 5, seasonal_forward_window = 3, seasonal = TRUE) %>%
   prep(data) %>%
   bake(new_data = NULL)
 

@@ -1,6 +1,6 @@
 #' Limits the size of the training window to the most recent observations
 #'
-#' `step_training_window2` creates a *specification* of a recipe step that
+#' `step_epi_training_window` creates a *specification* of a recipe step that
 #'   limits the size of the training window to the `n_recent` most recent
 #'   observations in `time_value` per group, where the groups are formed
 #'   based on the remaining `epi_keys`.
@@ -40,16 +40,16 @@
 #'   as_epi_df()
 #'
 #' epi_recipe(y ~ x, data = tib) %>%
-#'   step_training_window2(n_recent = 3) %>%
+#'   step_epi_training_window(n_recent = 3) %>%
 #'   prep(tib) %>%
 #'   bake(new_data = NULL)
 #'
 #' epi_recipe(y ~ x, data = tib) %>%
 #'   step_epi_naomit() %>%
-#'   step_training_window2(n_recent = 3) %>%
+#'   step_epi_training_window(n_recent = 3) %>%
 #'   prep(tib) %>%
 #'   bake(new_data = NULL)
-step_training_window2 <-
+step_epi_training_window <-
   function(recipe,
            role = NA,
            n_recent = 50,
@@ -57,7 +57,7 @@ step_training_window2 <-
            seasonal_forward_window = 14,
            seasonal_backward_window = 35,
            epi_keys = NULL,
-           id = rand_id("training_window2")) {
+           id = rand_id("epi_training_window")) {
     epipredict:::arg_is_scalar(n_recent, id, seasonal, seasonal_forward_window, seasonal_backward_window)
     epipredict:::arg_is_pos(n_recent, seasonal_forward_window, seasonal_backward_window)
     if (is.finite(n_recent)) epipredict:::arg_is_pos_int(n_recent)
@@ -65,7 +65,7 @@ step_training_window2 <-
     epipredict:::arg_is_chr(epi_keys, allow_null = TRUE)
     add_step(
       recipe,
-      step_training_window2_new(
+      step_epi_training_window_new(
         role = role,
         trained = FALSE,
         n_recent = n_recent,
@@ -79,10 +79,10 @@ step_training_window2 <-
     )
   }
 
-step_training_window2_new <-
+step_epi_training_window_new <-
   function(role, trained, n_recent, seasonal, seasonal_forward_window, seasonal_backward_window, epi_keys, skip, id) {
     step(
-      subclass = "training_window2",
+      subclass = "epi_training_window",
       role = role,
       trained = trained,
       n_recent = n_recent,
@@ -96,13 +96,13 @@ step_training_window2_new <-
   }
 
 #' @export
-prep.step_training_window2 <- function(x, training, info = NULL, ...) {
+prep.step_epi_training_window <- function(x, training, info = NULL, ...) {
   ekt <- epipredict:::epi_keys_only(training)
   ek <- x$epi_keys %||% ekt %||% character(0L)
 
   hardhat::validate_column_names(training, ek)
 
-  step_training_window2_new(
+  step_epi_training_window_new(
     role = x$role,
     trained = TRUE,
     n_recent = x$n_recent,
@@ -116,7 +116,7 @@ prep.step_training_window2 <- function(x, training, info = NULL, ...) {
 }
 
 #' @export
-bake.step_training_window2 <- function(object, new_data, ...) {
+bake.step_epi_training_window <- function(object, new_data, ...) {
   hardhat::validate_column_names(new_data, object$epi_keys)
 
   if (object$n_recent < Inf) {
@@ -155,7 +155,7 @@ bake.step_training_window2 <- function(object, new_data, ...) {
 }
 
 #' @export
-print.step_training_window2 <-
+print.step_epi_training_window <-
   function(x, width = max(20, options()$width - 30), ...) {
     if (x$seasonal) {
       title <- "# of seasonal observations per key limited to:"
