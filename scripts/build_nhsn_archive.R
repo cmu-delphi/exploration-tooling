@@ -24,7 +24,6 @@ suppressPackageStartupMessages({
   library(here)
   library(httr)
   library(nanoparquet)
-  library(qs)
   library(tidyverse)
   # Needed for: get_s3_object_last_modified, get_socrata_updated_at, MIN_TIMESTAMP
   source("R/aux_data_utils.R")

@@ -8,8 +8,7 @@ suppressPackageStartupMessages({
   library(purrr)
 })
 
-POPULATION_DF <-
-  covidcast::state_census %>>%
+POPULATION_DF <- read_csv("https://github.com/cmu-delphi/covidcast/raw/c89e4d295550ba1540d64d2cc991badf63ad04e5/Python-packages/covidcast-py/covidcast/geo_mappings/state_census.csv") %>%
   transmute(geo_value = tolower(ABBR), population = POPESTIMATE2019)
 
 # Dates used for slider.
