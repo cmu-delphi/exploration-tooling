@@ -3,17 +3,16 @@
 #' `step_epi_YeoJohnson()` creates a *specification* of a recipe step that will
 #' transform data using a Yeo-Johnson transformation. This fork works with panel
 #' data and is meant for epidata.
-#' TODO: Do an edit pass on this docstring.
 #'
 #' @inheritParams step_center
-#' @param lambdas A numeric vector of transformation values. This
+#' @param lambdas Internal. A numeric vector of transformation values. This
 #'  is `NULL` until computed by [prep()].
 #' @param na_lambda_fill A numeric value to fill in for any
 #'  geos where the lambda cannot be estimated.
 #' @param limits A length 2 numeric vector defining the range to
 #'  compute the transformation parameter lambda.
-#' @param num_unique An integer where data that have less possible
-#'  values will not be evaluated for a transformation.
+#' @param num_unique An integer where data that have fewer than this
+#'  many unique values will not be evaluated for a transformation.
 #' @param na_rm A logical indicating whether missing values should be
 #'  removed.
 #' @param skip A logical. Should the step be skipped when the recipe is
@@ -22,11 +21,13 @@
 #' @template step-return
 #' @family individual transformation steps
 #' @export
-#' @details The Yeo-Johnson transformation is very similar to the
-#'  Box-Cox but does not require the input variables to be strictly
-#'  positive. In the package, the partial log-likelihood function is
-#'  directly optimized within a reasonable set of transformation
-#'  values (which can be changed by the user).
+#' @details The Yeo-Johnson transformation is variance-stabilizing
+#'  transformation, similar to the Box-Cox but does not require the input
+#'  variables to be strictly positive. In the package, the partial
+#'  log-likelihood function is directly optimized within a reasonable set of
+#'  transformation values (which can be changed by the user). The optimization
+#'  finds a lambda parameter for each group in the data that minimizes the
+#'  variance of the transformed data.
 #'
 #' This transformation is typically done on the outcome variable
 #'  using the residuals for a statistical model (such as ordinary
@@ -36,7 +37,7 @@
 #'  variable distributions more symmetric.
 #'
 #' If the transformation parameters are estimated to be very
-#'  closed to the bounds, or if the optimization fails, a value of
+#'  close to the bounds, or if the optimization fails, a value of
 #'  `NA` is used and no transformation is applied.
 #'
 #' # Tidying
@@ -54,28 +55,24 @@
 #'
 #' @references Yeo, I. K., and Johnson, R. A. (2000). A new family of power
 #'   transformations to improve normality or symmetry. *Biometrika*.
-#' @examplesIf rlang::is_installed("modeldata")
-#' data(biomass, package = "modeldata")
+#' @examplesIf
+#' jhu <- cases_deaths_subset %>%
+#'   filter(time_value > "2021-01-01", geo_value %in% c("ca", "ny")) %>%
+#'   select(geo_value, time_value, cases)
+#' filtered_data <- jhu
 #'
-#' biomass_tr <- biomass[biomass$dataset == "Training", ]
-#' biomass_te <- biomass[biomass$dataset == "Testing", ]
-#'
-#' rec <- recipe(
-#'   HHV ~ carbon + hydrogen + oxygen + nitrogen + sulfur,
-#'   data = biomass_tr
-#' )
-#'
-#' yj_transform <- step_epi_YeoJohnson(rec, all_numeric())
-#'
-#' yj_estimates <- prep(yj_transform, training = biomass_tr)
-#'
-#' yj_te <- bake(yj_estimates, biomass_te)
-#'
-#' plot(density(biomass_te$sulfur), main = "before")
-#' plot(density(yj_te$sulfur), main = "after")
-#'
-#' tidy(yj_transform, number = 1)
-#' tidy(yj_estimates, number = 1)
+#' r <- epi_recipe(filtered_data) %>%
+#'   step_epi_YeoJohnson(cases)
+#' # View the recipe
+#' r
+#' # Fit the recipe
+#' tr <- r %>% prep(filtered_data)
+#' # View the lambda values
+#' tr$steps[[1]]$lambdas
+#' # View the transformed data
+#' df <- tr %>% bake(filtered_data)
+#' plot(density(df$cases))
+#' plot(density(filtered_data$cases))
 step_epi_YeoJohnson <- function(
   recipe,
   ...,
@@ -266,6 +263,8 @@ get_lambdas_yj_table <- function(training, col_names, limits, num_unique, na_lam
 
 #' Internal Functions
 #'
+#' Note that this function is vectorized in x, but not in lambda.
+#'
 #' @keywords internal
 #' @rdname recipes-internal
 #' @export
@@ -314,14 +313,14 @@ yj_transform <- function(x, lambda, ind_neg = NULL, eps = 0.001) {
   x
 }
 
-
 ## Helper for the log-likelihood calc for eq 3.1 of Yeo, I. K.,
 ## & Johnson, R. A. (2000). A new family of power transformations
 ## to improve normality or symmetry. Biometrika. page 957
 ll_yj <- function(lambda, y, ind_neg, const, eps = 0.001) {
   n <- length(y)
   y_t <- yj_transform(y, lambda, ind_neg)
-  mu_t <- mean(y_t)
+  # EDIT: Unused in the original recipes code.
+  # mu_t <- mean(y_t)
   var_t <- var(y_t) * (n - 1) / n
   res <- -.5 * n * log(var_t) + (lambda - 1) * const
   res
@@ -361,6 +360,7 @@ estimate_yj <- function(dat, limits = c(-5, 5), num_unique = 5, na_rm = TRUE, ca
 
   const <- sum(sign(dat) * log(abs(dat) + 1))
 
+  suppressWarnings(
   res <- optimize(
     yj_obj,
     interval = limits,
@@ -369,6 +369,7 @@ estimate_yj <- function(dat, limits = c(-5, 5), num_unique = 5, na_rm = TRUE, ca
     ind_neg = ind_neg,
     const = const,
     tol = .0001
+  )
   )
   lam <- res$maximum
   if (abs(limits[1] - lam) <= eps | abs(limits[2] - lam) <= eps) {

@@ -19,34 +19,28 @@
 #'   filter(time_value > "2021-11-01", geo_value %in% c("ca", "ny")) %>%
 #'   select(geo_value, time_value, cases)
 #'
-#' pop_data <- data.frame(states = c("ca", "ny"), value = c(20000, 30000))
-#'
+#' # Create a recipe with a Yeo-Johnson transformation.
 #' r <- epi_recipe(jhu) %>%
-#'   step_epi_YeoJohnson(
-#'     df = pop_data,
-#'     df_pop_col = "value",
-#'     by = c("geo_value" = "states"),
-#'     cases, suffix = "_scaled"
-#'   ) %>%
-#'   step_epi_lag(cases_scaled, lag = c(0, 7, 14)) %>%
-#'   step_epi_ahead(cases_scaled, ahead = 7, role = "outcome") %>%
+#'   step_epi_YeoJohnson(cases) %>%
+#'   step_epi_lag(cases, lag = 0) %>%
+#'   step_epi_ahead(cases, ahead = 0, role = "outcome") %>%
 #'   step_epi_naomit()
 #'
+#' # Create a frosting layer that will undo the Yeo-Johnson transformation.
 #' f <- frosting() %>%
 #'   layer_predict() %>%
-#'   layer_threshold(.pred) %>%
-#'   layer_naomit(.pred) %>%
-#'   layer_epi_YeoJohnson(.pred,
-#'     df = pop_data,
-#'     by = c("geo_value" = "states"),
-#'     df_pop_col = "value"
-#'   )
+#'   layer_epi_YeoJohnson(.pred)
 #'
+#' # Create a workflow and fit it.
 #' wf <- epi_workflow(r, linear_reg()) %>%
 #'   fit(jhu) %>%
 #'   add_frosting(f)
 #'
+#' # Forecast the workflow, which should reverse the Yeo-Johnson transformation.
 #' forecast(wf)
+#' # Compare to the original data.
+#' plot(density(jhu$cases))
+#' plot(density(forecast(wf)$cases))
 layer_epi_YeoJohnson <- function(frosting, ..., lambdas = NULL, by = NULL, id = rand_id("epi_YeoJohnson")) {
   checkmate::assert_tibble(lambdas, min.rows = 1, null.ok = TRUE)
 
@@ -116,28 +110,21 @@ slather.layer_epi_YeoJohnson <- function(object, components, workflow, new_data,
     unmatched = c("error", "drop")
   )
 
-  # TODO: There are many possibilities here:
-  # - (a) the terms can be empty, where we should probably default to
-  #   all_outcomes().
-  # - (b) explicitly giving all_outcomes(), we end here with terms being empty,
-  #   which doesn't seem right; need to make sure we pull in all the outcome
-  #   columns here. The question is what form should they have?
-  # - (c) if the user just specifies .pred, then we have to infer the outcome
-  #   from the mold, which is simple enough and the main case I have working.
-  # - (d) the user might specify outcomes of the form .pred_ahead_1_cases,
-  #   .pred_ahead_7_cases, etc. Is that the right format? Trying those out now
-  #   and getting errors downstream from forecast().
-  # Get the columns to transform.
   exprs <- rlang::expr(c(!!!object$terms))
   pos <- tidyselect::eval_select(exprs, components$predictions)
   col_names <- names(pos)
 
-  # For every column, we need to use the appropriate lambda column, which differs per row.
-  # Note that yj_inverse() is vectorized in x, but not in lambda.
+  # The `object$terms` is where the user specifies the columns they want to
+  # untransform. We need to match the outcomes with their lambda columns in our
+  # parameter table and then apply the inverse transformation.
   if (identical(col_names, ".pred")) {
-    # In this case, we don't get a hint for the outcome column name, so we need to
-    # infer it from the mold. `outcomes` is a vector of objects like
-    # ahead_1_cases, ahead_7_cases, etc. We want to extract the cases part.
+    # In this case, we don't get a hint for the outcome column name, so we need
+    # to infer it from the mold.
+    if (length(components$mold$outcomes) > 1) {
+      cli_abort("Only one outcome is allowed when specifying `.pred`.", call = rlang::caller_env())
+    }
+    # `outcomes` is a vector of objects like ahead_1_cases, ahead_7_cases, etc.
+    # We want to extract the cases part.
     outcome_cols <- names(components$mold$outcomes) %>%
       stringr::str_match("ahead_\\d+_(.*)") %>%
       magrittr::extract(, 2)
@@ -146,8 +133,14 @@ slather.layer_epi_YeoJohnson <- function(object, components, workflow, new_data,
       rowwise() %>%
       mutate(.pred := yj_inverse(.pred, !!sym(paste0(".lambda_", outcome_cols))))
   } else if (identical(col_names, character(0))) {
-    # In this case, we should assume the user wants to transform all outcomes.
-    cli::cli_abort("Not specifying columns to layer Yeo-Johnson is not implemented yet.", call = rlang::caller_env())
+    # Wish I could suggest `all_outcomes()` here, but currently it's the same as
+    # not specifying any terms. I don't want to spend time with dealing with
+    # this case until someone asks for it.
+    cli::cli_abort("Not specifying columns to layer Yeo-Johnson is not implemented.
+    If you had a single outcome, you can use `.pred` as a column name.
+    If you had multiple outcomes, you'll need to specify them like
+    `.pred_ahead_1_<outcome_col>`, `.pred_ahead_7_<outcome_col>`, etc.
+    ", call = rlang::caller_env())
   } else {
     # In this case, we assume that the user has specified the columns they want
     # transformed here. We then need to determine the lambda columns for each of
@@ -157,7 +150,9 @@ slather.layer_epi_YeoJohnson <- function(object, components, workflow, new_data,
     original_outcome_cols <- str_match(col_names, ".pred_ahead_\\d+_(.*)")[, 2]
     outcomes_wout_ahead <- str_match(names(components$mold$outcomes), "ahead_\\d+_(.*)")[,2]
     if (any(original_outcome_cols %nin% outcomes_wout_ahead)) {
-      cli_abort("All columns specified in `...` must be outcome columns.", call = rlang::caller_env())
+      cli_abort("All columns specified in `...` must be outcome columns.
+      They must be of the form `.pred_ahead_1_<outcome_col>`, `.pred_ahead_7_<outcome_col>`, etc.
+      ", call = rlang::caller_env())
     }
 
     for (i in seq_along(col_names)) {
@@ -184,7 +179,8 @@ print.layer_epi_YeoJohnson <- function(x, width = max(20, options()$width - 30),
 
 #' Inverse Yeo-Johnson transformation
 #'
-#' Inverse of `yj_transform` in step_yeo_johnson.R.
+#' Inverse of `yj_transform` in step_yeo_johnson.R. Note that this function is
+#' vectorized in x, but not in lambda.
 #'
 #' @keywords internal
 yj_inverse <- function(x, lambda, eps = 0.001) {
@@ -246,4 +242,17 @@ get_lambdas_in_layer <- function(workflow) {
     }
   }
   lambdas
+}
+
+get_transformed_cols_in_layer <- function(workflow) {
+  this_recipe <- hardhat::extract_recipe(workflow)
+  if (!(this_recipe %>% recipes::detect_step("epi_YeoJohnson"))) {
+    cli_abort("`layer_epi_YeoJohnson` requires `step_epi_YeoJohnson` in the recipe.", call = rlang::caller_env())
+  }
+  for (step in this_recipe$steps) {
+    if (inherits(step, "step_epi_YeoJohnson")) {
+      lambdas <- step$lambdas
+      break
+    }
+  }
 }
