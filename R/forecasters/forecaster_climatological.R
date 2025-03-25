@@ -55,9 +55,11 @@ climate_linear_ensembled <- function(epi_data,
   epi_data <- epi_data %>%
     select(geo_value, source, time_value, season, value = !!outcome) %>%
     mutate(epiweek = epiweek(time_value))
-  pred_climate <- climatological_model(epi_data, ahead) %>% mutate(forecaster = "climate")
-  pred_geo_climate <- climatological_model(epi_data, ahead, geo_agg = FALSE) %>% mutate(forecaster = "climate_geo")
-  pred_linear <- forecaster_baseline_linear(epi_data, ahead, residual_tail = residual_tail, residual_center = residual_center) %>% mutate(forecaster = "linear")
+  pred_climate <- climatological_model(epi_data, ahead, floor_value = min(epi_data$value, na.rm = TRUE)) %>% mutate(forecaster = "climate")
+
+  pred_geo_climate <- climatological_model(epi_data, ahead, geo_agg = FALSE, floor_value = min(epi_data$value, na.rm = TRUE)) %>% mutate(forecaster = "climate_geo")
+  pred_linear <- forecaster_baseline_linear(epi_data, ahead, residual_tail = residual_tail, residual_center = residual_center, no_intercept = TRUE, floor_value = min(epi_data$value, na.rm = TRUE, population_scale = FALSE)) %>%
+    mutate(forecaster = "linear")
   pred <- bind_rows(pred_climate, pred_linear, pred_geo_climate) %>%
     ensemble_climate_linear((args_list$aheads[[1]]) / 7) %>%
     ungroup()

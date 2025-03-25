@@ -326,15 +326,31 @@ get_flu_forecaster_params <- function() {
       seasonal_forward_window = c(3, 5, 7),
       keys_to_ignore = g_very_latent_locations
     ),
-    climate_linear = expand_grid(
-      forecaster = "climate_linear_ensembled",
-      scale_method = c("quantile", "none"),
-      center_method = "median",
-      nonlin_method = "quart_root",
-      filter_source = c("", "nhsn"),
-      filter_agg_level = "state",
-      drop_non_seasons = c(FALSE),
-      aheads = list(c(0, 7, 14, 21))
+    climate_linear = bind_rows(
+      expand_grid(
+        forecaster = "climate_linear_ensembled",
+        scale_method = "quantile",
+        center_method = "median",
+        nonlin_method = c("quart_root", "none"),
+        filter_source = c("", "nhsn"),
+        filter_agg_level = "state",
+        drop_non_seasons = c(FALSE),
+        aheads = list(c(0, 7, 14, 21)),
+        residual_tail = 0.67,
+        residual_center = 0.097
+      ),
+      expand_grid(
+        forecaster = "climate_linear_ensembled",
+        scale_method = "none",
+        center_method = "none",
+        nonlin_method = c("quart_root", "none"),
+        filter_source = c("", "nhsn"),
+        filter_agg_level = "state",
+        drop_non_seasons = FALSE,
+        aheads = list(c(0, 7, 14, 21)),
+        residual_tail = 0.99,
+        residual_center = 0.35,
+      ),
     )
   ) %>%
     map(function(x) {
