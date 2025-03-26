@@ -72,6 +72,8 @@ climate_linear_ensembled <- function(epi_data,
     mutate(value = pmax(0, value)) %>%
     select(-source)
   # move dates to appropriate markers
-  pred_final <- pred_final %>% mutate(target_end_date = target_end_date - 3)
+  pred_final <- pred_final %>%
+    mutate(target_end_date = target_end_date - 3) %>%
+    sort_by_quantile()
   return(pred_final)
 }
