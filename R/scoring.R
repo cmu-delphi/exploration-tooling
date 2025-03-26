@@ -2,7 +2,7 @@
 
 evaluate_predictions <- function(forecasts, truth_data) {
   # make sure the quantiles are in ascending order
-  forecasts %>%
+  forecasts <- forecasts %>%
     arrange(model, geo_value, target_end_date, forecast_date, quantile) %>%
     group_by(model, geo_value, target_end_date, forecast_date) %>%
     mutate(prediction = sort(prediction)) %>%
