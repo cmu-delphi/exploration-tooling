@@ -26,6 +26,8 @@ forecast_date,forecaster,geo_value,weight
 2025-03-26, climate_quantile_extrapolated, all, 0
 2025-03-26, climate_linear, al, 10
 2025-03-26, windowed_seasonal, al, 3
+# make climate_linear 5x as important as windowed_seasonal for us
+2025-03-26, climate_linear, us, 0.0005
 ##################
 # March 19
 ##################
