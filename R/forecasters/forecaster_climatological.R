@@ -66,7 +66,7 @@ climate_linear_ensembled <- function(epi_data,
   # undo whitening
   pred_final <- pred %>%
     rename({{ outcome }} := value) %>%
-    mutate(source = "nhsn") %>%
+    mutate(source = "none") %>%
     data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
     rename(value = {{ outcome }}) %>%
     mutate(value = pmax(0, value)) %>%
