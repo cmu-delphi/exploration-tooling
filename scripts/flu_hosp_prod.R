@@ -216,9 +216,6 @@ forecast_targets <- tar_map(
           as.Date(forecast_generation_date_int)
         ) %>%
         filter(geo_value %nin% g_insufficient_data_geos)
-      train_data %>%
-        filter(geo_value == "nj") %>%
-        arrange(desc(time_value))
       attributes(train_data)$metadata$as_of <- as.Date(forecast_date_int)
 
       full_data <- train_data %>%
