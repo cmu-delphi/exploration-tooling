@@ -328,6 +328,20 @@ create_flu_data_targets <- function() {
           mutate(target_end_date = target_end_date + g_time_value_adjust)
       }
     ),
+    # TODO: Integrate this with joined_archive_data? Or maybe not and use it the way we use nssp in covid?
+    tar_target(
+      name = veteran_state_df,
+      command = {
+        s3read_using(read_csv, bucket = "forecasting-team-data", object = "va_explore/veteran_state_df.csv") %>%
+          left_join(
+            s3read_using(read_csv, bucket = "forecasting-team-data", object = "va_explore/veteran_pop.csv"),
+            by = "state"
+          ) %>%
+          mutate(across(starts_with("unique_patients"), ~ . * 1e5 / veteran_population)) %>%
+          rename_with(~ paste0(., "_per_100k"), starts_with("unique_patients")) %>%
+          select(-veteran_population)
+      }
+    ),
     tar_target(
       name = state_geo_values,
       command = {
