@@ -64,6 +64,8 @@ scaled_pop <- function(epi_data,
   nonlin_method <- arg_match(nonlin_method)
 
   epi_data <- validate_epi_data(epi_data)
+  extra_sources <- unwrap_argument(extra_sources)
+  trainer <- unwrap_argument(trainer)
 
   # perform any preprocessing not supported by epipredict
   #
@@ -94,7 +96,7 @@ scaled_pop <- function(epi_data,
   args_input[["nonneg"]] <- scale_method == "none"
   args_list <- inject(default_args_list(!!!args_input))
   # if you want to hardcode particular predictors in a particular forecaster
-  predictors <- c(outcome, extra_sources[[1]])
+  predictors <- c(outcome, extra_sources)
   c(args_list, predictors, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by

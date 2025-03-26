@@ -79,7 +79,7 @@ get_flu_forecaster_params <- function() {
         forecaster = "scaled_pop",
         trainer = "quantreg",
         # since it's a list, this gets expanded out to a single one in each row
-        extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region"),
+        extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region", "va_flu_per_100k"),
         lags = list2(
           list2(
             c(0, 7, 14, 21), # hhs
@@ -103,9 +103,12 @@ get_flu_forecaster_params <- function() {
           c("nssp", "google_symptoms"),
           c("nssp", "nwss"),
           c("nssp", "nwss_region"),
+          c("nssp", "va_flu_per_100k"),
           c("google_symptoms", "nwss"),
           c("google_symptoms", "nwss_region"),
-          c("nwss", "nwss_region")
+          c("google_symptoms", "va_flu_per_100k"),
+          c("nwss", "nwss_region"),
+          c("nwss", "va_flu_per_100k"),
         ),
         lags = list2(
           list2(
@@ -128,7 +131,7 @@ get_flu_forecaster_params <- function() {
         forecaster = "scaled_pop",
         trainer = "quantreg",
         extra_sources = list2(
-          c("nssp", "google_symptoms", "nwss", "nwss_region"),
+          c("nssp", "google_symptoms", "nwss", "nwss_region", "va_flu_per_100k"),
         ),
         lags = list2(
           list2(
@@ -137,6 +140,7 @@ get_flu_forecaster_params <- function() {
             c(0, 7), # google symptoms
             c(0, 7), # nwss
             c(0, 7), # nwss_region
+            c(0, 7), # va_flu_per_100k
           )
         ),
         pop_scaling = FALSE,
@@ -167,7 +171,7 @@ get_flu_forecaster_params <- function() {
         forecaster = "no_recent_outcome",
         trainer = "quantreg",
         # since it's a list, this gets expanded out to a single one in each row
-        extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region"),
+        extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region", "va_flu_per_100k"),
         lags = list2(
           list2(
             # no hhs
@@ -214,7 +218,7 @@ get_flu_forecaster_params <- function() {
         forecaster = "no_recent_outcome",
         trainer = "quantreg",
         extra_sources = list2(
-          c("nssp", "google_symptoms", "nwss", "nwss_region"),
+          c("nssp", "google_symptoms", "nwss", "nwss_region", "va_flu_per_100k"),
         ),
         lags = list2(
           list2(
@@ -222,7 +226,8 @@ get_flu_forecaster_params <- function() {
             c(0, 7), # nssp
             c(0, 7), # google symptoms
             c(0, 7), # nwss
-            c(0, 7) # nwss_region
+            c(0, 7), # nwss_region
+            c(0, 7), # va_flu_per_100k
           )
         ),
         scale_method = "quantile",
@@ -286,21 +291,20 @@ get_flu_forecaster_params <- function() {
         seasonal_backward_window = 8,
         keys_to_ignore = g_very_latent_locations
       )
-      # trying various window sizes
     ),
     scaled_pop_season_exogenous = bind_rows(
       expand_grid(
         forecaster = "scaled_pop_seasonal",
         trainer = "quantreg",
         # since it's a list, this gets expanded out to a single one in each row
-        extra_sources = list2("nssp", "nwss", "nwss_region"), # removing google_symptoms for lack of data for now
+        extra_sources = list2("nssp", "nwss", "nwss_region", "va_flu_per_100k"), # removing google_symptoms for lack of data for now
         lags = list2(
           list2(
             c(0, 7), # hhs
             c(0, 7) # exogenous feature
           )
         ),
-        seasonal_method = list("window"),
+        seasonal_method = "window",
         pop_scaling = FALSE,
         filter_source = "",
         filter_agg_level = "state",

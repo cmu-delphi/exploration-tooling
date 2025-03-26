@@ -22,6 +22,8 @@ climate_linear_ensembled <- function(epi_data,
   nonlin_method <- arg_match(nonlin_method)
 
   epi_data <- validate_epi_data(epi_data)
+  extra_sources <- unwrap_argument(extra_sources)
+  trainer <- unwrap_argument(trainer)
 
   args_list <- list(...)
   ahead <- as.integer(ahead / 7)

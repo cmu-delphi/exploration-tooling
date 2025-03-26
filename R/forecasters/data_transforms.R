@@ -104,17 +104,14 @@ rolling_sd <- function(epi_data, sd_width = 29L, mean_width = NULL, cols_to_sd =
 #' @importFrom tidyr drop_na
 #' @importFrom epiprocess as_epi_df
 #' @export
-clear_lastminute_nas <- function(epi_data, outcome, extra_sources) {
+clear_lastminute_nas <- function(epi_data, cols) {
   meta_data <- attr(epi_data, "metadata")
-  if (extra_sources == c("")) {
-    extra_sources <- character(0L)
-  }
   as_of <- attributes(epi_data)$metadata$as_of
   other_keys <- attributes(epi_data)$metadata$other_keys %||% character()
   epi_data %>% na.omit()
   # make sure at least one column is not NA
   epi_data %<>%
-    filter(if_any(c(!!outcome, !!extra_sources), ~ !is.na(.x))) %>%
+    filter(if_any(c(!!cols), ~ !is.na(.x))) %>%
     as_epi_df(as_of = as_of, other_keys = other_keys)
   attr(epi_data, "metadata") <- meta_data
   return(epi_data)

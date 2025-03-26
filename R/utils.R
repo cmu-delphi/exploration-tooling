@@ -569,7 +569,7 @@ get_targets_errors <- function(project = tar_path_store(), top_n = 10) {
 #'   wait_seconds = 1,
 #'   fn = pub_covidcast,
 #'   source = "nssp",
-#'   signal = "pct_ed_visits_covid",
+#'   signals= "pct_ed_visits_covid",
 #'   geo_type = "state",
 #'   geo_values = "*",
 #'   time_type = "week"
