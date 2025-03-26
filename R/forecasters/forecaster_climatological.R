@@ -64,9 +64,16 @@ climate_linear_ensembled <- function(epi_data,
     ensemble_climate_linear((args_list$aheads[[1]]) / 7) %>%
     ungroup()
   # undo whitening
-  pred_final <- pred %>%
+  if (adding_source) {
+    pred %<>%
     rename({{ outcome }} := value) %>%
-    mutate(source = "none") %>%
+    mutate(source = "none")
+  } else {
+    pred %<>%
+    rename({{ outcome }} := value) %>%
+    mutate(source = "nhsn")
+  }
+  pred_final <- pred %>%
     data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
     rename(value = {{ outcome }}) %>%
     mutate(value = pmax(0, value)) %>%
