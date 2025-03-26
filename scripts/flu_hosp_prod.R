@@ -47,7 +47,7 @@ if (!g_backtest_mode) {
 }
 
 # Forecaster definitions
-g_linear = function(epi_data, ahead, extra_data, ...) {
+g_linear <- function(epi_data, ahead, extra_data, ...) {
   epi_data %>%
     filter(source == "nhsn") %>%
     forecaster_baseline_linear(
@@ -57,17 +57,17 @@ g_linear = function(epi_data, ahead, extra_data, ...) {
       no_intercept = TRUE
     )
 }
-g_climate_base = function(epi_data, ahead, extra_data, ...) {
+g_climate_base <- function(epi_data, ahead, extra_data, ...) {
   epi_data %>%
     filter(source == "nhsn") %>%
     climatological_model(ahead, ...)
 }
-g_climate_geo_agged = function(epi_data, ahead, extra_data, ...) {
+g_climate_geo_agged <- function(epi_data, ahead, extra_data, ...) {
   epi_data %>%
     filter(source == "nhsn") %>%
     climatological_model(ahead, ..., geo_agg = TRUE)
 }
-g_windowed_seasonal = function(epi_data, ahead, extra_data, ...) {
+g_windowed_seasonal <- function(epi_data, ahead, extra_data, ...) {
   scaled_pop_seasonal(
     epi_data,
     outcome = "value",
@@ -81,26 +81,26 @@ g_windowed_seasonal = function(epi_data, ahead, extra_data, ...) {
   ) %>%
     mutate(target_end_date = target_end_date + 3)
 }
-g_windowed_seasonal_extra_sources = function(epi_data, ahead, extra_data, ...) {
-    fcst <-
-      epi_data %>%
-      left_join(extra_data, by = join_by(geo_value, time_value)) %>%
-      scaled_pop_seasonal(
-        outcome = "value",
-        ahead = ahead * 7,
-        extra_sources = "nssp",
-        ...,
-        seasonal_method = "window",
-        trainer = epipredict::quantile_reg(),
-        drop_non_seasons = TRUE,
-        pop_scaling = FALSE,
-        lags = list(c(0, 7), c(0, 7)),
-        keys_to_ignore = g_very_latent_locations
-      ) %>%
-      select(-source) %>%
-      mutate(target_end_date = target_end_date + 3) %>%
-      filter(geo_value %nin% c("mo", "us", "wy"))
-    fcst
+g_windowed_seasonal_extra_sources <- function(epi_data, ahead, extra_data, ...) {
+  fcst <-
+    epi_data %>%
+    left_join(extra_data, by = join_by(geo_value, time_value)) %>%
+    scaled_pop_seasonal(
+      outcome = "value",
+      ahead = ahead * 7,
+      extra_sources = "nssp",
+      ...,
+      seasonal_method = "window",
+      trainer = epipredict::quantile_reg(),
+      drop_non_seasons = TRUE,
+      pop_scaling = FALSE,
+      lags = list(c(0, 7), c(0, 7)),
+      keys_to_ignore = g_very_latent_locations
+    ) %>%
+    select(-source) %>%
+    mutate(target_end_date = target_end_date + 3) %>%
+    filter(geo_value %nin% c("mo", "us", "wy"))
+  fcst
 }
 g_forecaster_params_grid <- tibble(
   id = c("linear", "windowed_seasonal", "windowed_seasonal_extra_sources", "climate_base", "climate_geo_agged"),

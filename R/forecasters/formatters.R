@@ -84,7 +84,8 @@ format_scoring_utils <- function(forecasts_and_ensembles, disease = c("flu", "co
     ) %>%
     left_join(
       get_population_data() %>%
-      select(state_id, state_code), by = c("geo_value" = "state_id")
+        select(state_id, state_code),
+      by = c("geo_value" = "state_id")
     ) %>%
     rename(location = state_code, model_id = forecaster) %>%
     select(reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value, model_id) %>%

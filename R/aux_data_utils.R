@@ -284,10 +284,10 @@ daily_to_weekly_archive <- function(epi_arch,
         as_tibble()
     }
   ) %>%
-  # Always convert to data.frame after dplyr operations on data.table.
-  # https://github.com/cmu-delphi/epiprocess/issues/618
-  as.data.frame() %>%
-  as_epi_archive(compactify = TRUE)
+    # Always convert to data.frame after dplyr operations on data.table.
+    # https://github.com/cmu-delphi/epiprocess/issues/618
+    as.data.frame() %>%
+    as_epi_archive(compactify = TRUE)
 }
 
 
@@ -692,7 +692,7 @@ delete_duplicates_from_s3_by_etag <- function(bucket, prefix, dry_run = TRUE, .p
 #' @param .progress Whether to show a progress bar.
 delete_files_from_s3 <- function(keys, bucket, batch_size = 500, .progress = TRUE) {
   split(keys, ceiling(seq_along(keys) / batch_size)) %>%
-    purrr::walk(~aws.s3::delete_object(bucket = bucket, object = .x), .progress = .progress)
+    purrr::walk(~ aws.s3::delete_object(bucket = bucket, object = .x), .progress = .progress)
 }
 
 #' Get the NHSN data archive from S3
@@ -733,8 +733,8 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     as_epi_archive(compactify = TRUE)
 }
 
-MIN_TIMESTAMP = as.POSIXct("2000-01-01 00:00:00S", tz = "UTC")
-MAX_TIMESTAMP = as.POSIXct("2040-01-01 00:00:00S", tz = "UTC")
+MIN_TIMESTAMP <- as.POSIXct("2000-01-01 00:00:00S", tz = "UTC")
+MAX_TIMESTAMP <- as.POSIXct("2040-01-01 00:00:00S", tz = "UTC")
 
 #' Get the last time a covidcast signal was updated.
 #'

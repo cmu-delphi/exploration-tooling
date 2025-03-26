@@ -149,10 +149,9 @@ make_ensemble_grid <- function(tib) {
 #'
 #' @export
 get_exclusions <- function(
-  date,
-  forecaster,
-  exclusions_json = here::here("scripts", "geo_exclusions.json")
-) {
+    date,
+    forecaster,
+    exclusions_json = here::here("scripts", "geo_exclusions.json")) {
   if (!file.exists(exclusions_json)) {
     return("")
   }

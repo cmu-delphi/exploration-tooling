@@ -40,21 +40,21 @@ if (!g_backtest_mode) {
 }
 
 # Forecaster definitions
-g_linear = function(epi_data, ahead, extra_data, ...) {
+g_linear <- function(epi_data, ahead, extra_data, ...) {
   forecaster_baseline_linear(epi_data, ahead, ..., residual_tail = 0.97, residual_center = 0.097, no_intercept = TRUE)
 }
-g_climate_base = function(epi_data, ahead, extra_data, ...) {
+g_climate_base <- function(epi_data, ahead, extra_data, ...) {
   climatological_model(
     epi_data, ahead, ...,
   )
 }
-g_climate_geo_agged = function(epi_data, ahead, extra_data, ...) {
+g_climate_geo_agged <- function(epi_data, ahead, extra_data, ...) {
   climatological_model(
     epi_data, ahead, ...,
     geo_agg = TRUE
   )
 }
-g_windowed_seasonal = function(epi_data, ahead, extra_data, ...) {
+g_windowed_seasonal <- function(epi_data, ahead, extra_data, ...) {
   fcst <-
     epi_data %>%
     scaled_pop_seasonal(
@@ -70,7 +70,7 @@ g_windowed_seasonal = function(epi_data, ahead, extra_data, ...) {
     mutate(target_end_date = target_end_date + 3)
   fcst
 }
-g_windowed_seasonal_extra_sources = function(epi_data, ahead, extra_data, ...) {
+g_windowed_seasonal_extra_sources <- function(epi_data, ahead, extra_data, ...) {
   fcst <-
     epi_data %>%
     left_join(extra_data, by = join_by(geo_value, time_value)) %>%

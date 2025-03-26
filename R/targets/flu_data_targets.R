@@ -284,7 +284,7 @@ create_flu_data_targets <- function() {
       }
     ),
     tar_target(
-    name = hhs_region,
+      name = hhs_region,
       command = {
         hhs_region <- readr::read_csv(
           "https://raw.githubusercontent.com/cmu-delphi/covidcast-indicators/refs/heads/main/_delphi_utils_python/delphi_utils/data/2020/state_code_hhs_table.csv"

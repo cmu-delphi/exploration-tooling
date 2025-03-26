@@ -132,8 +132,8 @@ make_ahead_weights <- function(aheads,
 ensemble_weighted <- function(forecasts, other_weights) {
   forecasters <- unique(forecasts$forecaster)
   filtered_weights <- other_weights %>%
-   filter(forecaster %in% forecasters) %>%
-   inner_join(
+    filter(forecaster %in% forecasters) %>%
+    inner_join(
       forecasts %>% distinct(forecaster, geo_value),
       by = c("forecaster", "geo_value"),
     )
