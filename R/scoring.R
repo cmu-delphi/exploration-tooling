@@ -1,6 +1,13 @@
 # Scoring and Evaluation Functions
 
 evaluate_predictions <- function(forecasts, truth_data) {
+  # make sure the quantiles are in ascending order
+  forecasts %>%
+    arrange(model, geo_value, target_end_date, forecast_date, quantile) %>%
+    group_by(model, geo_value, target_end_date, forecast_date) %>%
+    mutate(value = sort(value)) %>%
+    ungroup()
+
   checkmate::assert_data_frame(forecasts)
   checkmate::assert_data_frame(truth_data)
   checkmate::assert_names(
