@@ -11,6 +11,12 @@
 
 """Process VA data.
 This script processes the VA data into a unified format for forecasting.
+
+I don't know how VA_Sta3nName.csv was generated, but I'm guessing it was made
+from va_data/RosenfeldJhon_Past2500DaysAdmit_Start121724_Code1_6.xlsx (where
+`va_data` is a Google Drive folder shared by Roni Rosenfeld containing their
+dumps from data queries). Can always ask Ruiqi Lyu for answers.
+
 Author: Dmitry Shemetov
 Date: 2025-03-25
 """
@@ -23,9 +29,6 @@ current_dir = Path.cwd()
 df_ref = pd.read_csv(current_dir / "State_City_Sta3nName.csv")
 
 # %% This part of the code is taken directly from VA_process.ipynb
-# I don't know how VA_Sta3nName.csv is generated, but I'm guessing it was made from
-# va_data/RosenfeldJhon_Past2500DaysAdmit_Start121724_Code1_6.xlsx.
-# Can always ask Ruiqi Lyu for answers.
 state_dir = current_dir / 'Sta3nName'
 if not state_dir.exists():
     state_dir.mkdir()
