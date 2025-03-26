@@ -5,7 +5,7 @@ evaluate_predictions <- function(forecasts, truth_data) {
   forecasts %>%
     arrange(model, geo_value, target_end_date, forecast_date, quantile) %>%
     group_by(model, geo_value, target_end_date, forecast_date) %>%
-    mutate(value = sort(value)) %>%
+    mutate(prediction = sort(prediction)) %>%
     ungroup()
 
   checkmate::assert_data_frame(forecasts)
