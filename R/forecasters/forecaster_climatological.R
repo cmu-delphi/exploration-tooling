@@ -55,12 +55,12 @@ climate_linear_ensembled <- function(epi_data,
   epi_data <- epi_data %>%
     select(geo_value, source, time_value, season, value = !!outcome) %>%
     mutate(epiweek = epiweek(time_value))
-  pred_climate <- climatological_model(epi_data, ahead, floor_value = min(epi_data$value, na.rm = TRUE)) %>% mutate(forecaster = "climate")
+  pred_climate <- climatological_model(epi_data, ahead, geo_agg = FALSE, floor_value = min(epi_data$value, na.rm = TRUE)) %>% mutate(forecaster = "climate")
 
-  pred_geo_climate <- climatological_model(epi_data, ahead, geo_agg = FALSE, floor_value = min(epi_data$value, na.rm = TRUE)) %>% mutate(forecaster = "climate_geo")
-  pred_linear <- forecaster_baseline_linear(epi_data, ahead, residual_tail = residual_tail, residual_center = residual_center, no_intercept = TRUE, floor_value = min(epi_data$value, na.rm = TRUE, population_scale = FALSE)) %>%
+  # the linear prediction should always use nhsn/none
+  pred_linear <- forecaster_baseline_linear(epi_data %>% filter(source %in% c("nhsn", "none")), ahead, residual_tail = residual_tail, residual_center = residual_center, no_intercept = TRUE, floor_value = min(epi_data$value, na.rm = TRUE, population_scale = FALSE)) %>%
     mutate(forecaster = "linear")
-  pred <- bind_rows(pred_climate, pred_linear, pred_geo_climate) %>%
+  pred <- bind_rows(pred_climate, pred_linear) %>%
     ensemble_climate_linear((args_list$aheads[[1]]) / 7) %>%
     ungroup()
   # undo whitening

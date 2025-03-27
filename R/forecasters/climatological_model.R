@@ -29,7 +29,7 @@ climatological_model <- function(epi_data, ahead, window_size = 3,
     filtered %<>%
       add_pop_and_density() %>%
       mutate(value = value / population * 1e5) %>%
-      select(geo_value, epiweek, epiyear, season, season_week, value, population)
+      select(any_of(c("geo_value", "epiweek", "epiyear", "season", "season_week", "value", "population")))
   } else {
     filtered %<>%
       group_by(geo_value)
