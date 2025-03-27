@@ -123,7 +123,7 @@ get_covid_forecaster_params <- function() {
         filter_source = c("", "nhsn"),
         filter_agg_level = "state",
         drop_non_seasons = c(FALSE),
-        aheads = list(c(0, 7, 14, 21)),
+        aheads = list(g_aheads),
         residual_tail = 0.70,
         residual_center = 0.127
       ),
@@ -135,7 +135,7 @@ get_covid_forecaster_params <- function() {
         filter_source = c("", "nhsn"),
         filter_agg_level = "state",
         drop_non_seasons = FALSE,
-        aheads = list(c(0, 7, 14, 21)),
+        aheads = list(g_aheads),
         residual_tail = 0.97,
         residual_center = 0.097
       ),
