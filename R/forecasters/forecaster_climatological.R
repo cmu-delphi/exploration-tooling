@@ -89,7 +89,7 @@ climate_linear_ensembled <- function(epi_data,
           forecast_horizon = (args_list$aheads[[1]] / 7)
         ))
       pred <- clim_res$predictions %>%
-        filter(source == "nhsn") %>%
+        filter(source %in% c("nhsn", "none")) %>%
         pivot_quantiles_longer(.pred_distn) %>%
         select(geo_value, forecast_date, target_end_date = target_date, value = .pred_distn_value, quantile = .pred_distn_quantile_level) %>%
         mutate(target_end_date = ceiling_date(target_end_date, unit = "weeks", week_start = 6))
