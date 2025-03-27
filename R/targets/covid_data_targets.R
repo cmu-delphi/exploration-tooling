@@ -70,7 +70,7 @@ create_covid_data_targets <- function() {
           wait_seconds = 1,
           fn = pub_covidcast,
           source = "nssp",
-          signal = "pct_ed_visits_covid",
+          signals = "pct_ed_visits_covid",
           time_type = "week",
           geo_type = "state",
           geo_values = "*",
@@ -81,7 +81,7 @@ create_covid_data_targets <- function() {
           wait_seconds = 1,
           fn = pub_covidcast,
           source = "nssp",
-          signal = "pct_ed_visits_covid",
+          signals = "pct_ed_visits_covid",
           time_type = "week",
           geo_type = "hhs",
           geo_values = "*",
@@ -91,7 +91,7 @@ create_covid_data_targets <- function() {
           bind_rows(nssp_hhs) %>%
           select(geo_value, time_value, issue, nssp = value) %>%
           as_epi_archive(compactify = TRUE) %>%
-          `$`("DT") %>%
+          extract2("DT") %>%
           # weekly data is indexed from the start of the week
           mutate(time_value = time_value + 6 - g_time_value_adjust) %>%
           # Artifically add in a one-week latency.

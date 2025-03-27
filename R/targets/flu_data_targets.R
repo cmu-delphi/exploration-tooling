@@ -12,6 +12,12 @@ create_flu_data_targets <- function() {
   # TODO: Share code with covid?
   rlang::list2(
     tar_target(
+      name = state_geo_values,
+      command = get_population_data() %>%
+        filter(state_id %nin% c("usa", g_insufficient_data_geos)) %>%
+        pull(state_id)
+    ),
+    tar_target(
       name = hhs_archive_data_asof,
       command = {
         get_health_data(as.Date(forecast_dates), disease = "flu") %>%
@@ -37,7 +43,7 @@ create_flu_data_targets <- function() {
           mutate(source = "nhsn") %>%
           mutate(agg_level = ifelse(geo_value == "us", "nation", "state")) %>%
           as_epi_archive(other_keys = "source", compactify = TRUE) %>%
-          `$`("DT") %>%
+          extract2("DT") %>%
           select(geo_value, time_value, version, hhs, source, agg_level, season, season_week)
       }
     ),
@@ -61,6 +67,7 @@ create_flu_data_targets <- function() {
         ili_plus <- ili_plus$DT %>%
           drop_na() %>%
           filter(hhs > 0.0001) %>%
+          filter(geo_value %in% state_geo_values) %>%
           mutate(
             time_value = time_value + g_time_value_adjust,
             version = time_value
@@ -79,23 +86,17 @@ create_flu_data_targets <- function() {
             relationship = "many-to-many"
           ) %>%
           as_epi_archive(other_keys = "source", compactify = TRUE) %>%
-          `$`("DT")
+          extract2("DT")
       }
     ),
     tar_target(
       name = flusion_data_archive,
       command = {
-        flusion_data_archive <-
-          bind_rows(ili_plus, flusurv, hhs_archive) %>%
+        flusion_data_archive <- bind_rows(ili_plus, flusurv, hhs_archive) %>%
           add_pop_and_density() %>%
           as_epi_archive(compactify = TRUE, other_keys = "source")
         flusion_data_archive <- flusion_data_archive$DT %>%
-          filter(
-            # TODO: Shared exclusions list?
-            !geo_value %in% c("as", "pr", "vi", "gu", "mp"),
-            !is.na(hhs),
-            time_value <= max(forecast_dates)
-          ) %>%
+          filter(!is.na(hhs), time_value <= max(forecast_dates)) %>%
           relocate(
             source,
             geo_value,
@@ -122,28 +123,29 @@ create_flu_data_targets <- function() {
           wait_seconds = 1,
           fn = pub_covidcast,
           source = "nssp",
-          signal = "pct_ed_visits_influenza",
+          signals = "pct_ed_visits_influenza",
           time_type = "week",
           geo_type = "state",
           geo_values = "*",
           fetch_args = g_fetch_args
         )
-        nssp_hhs <- retry_fn(
-          max_attempts = 10,
-          wait_seconds = 1,
-          fn = pub_covidcast,
-          source = "nssp",
-          signal = "pct_ed_visits_influenza",
-          time_type = "week",
-          geo_type = "hhs",
-          geo_values = "*",
-          fetch_args = g_fetch_args
-        )
+        # nssp_hhs <- retry_fn(
+        #   max_attempts = 10,
+        #   wait_seconds = 1,
+        #   fn = pub_covidcast,
+        #   source = "nssp",
+        #   signals = "pct_ed_visits_influenza",
+        #   time_type = "week",
+        #   geo_type = "hhs",
+        #   geo_values = "*",
+        #   fetch_args = g_fetch_args
+        # )
         nssp_state %>%
-          bind_rows(nssp_hhs) %>%
           select(geo_value, time_value, issue, nssp = value) %>%
+          # bind_rows(nssp_hhs) %>%
+          append_us_aggregate("nssp", group_keys = c("time_value", "issue")) %>%
           as_epi_archive(compactify = TRUE) %>%
-          `$`("DT") %>%
+          extract2("DT") %>%
           # weekly data is indexed from the start of the week
           mutate(time_value = time_value + 6 - g_time_value_adjust) %>%
           # Artifically add in a one-week latency.
@@ -176,19 +178,20 @@ create_flu_data_targets <- function() {
             geo_values = "*",
             fetch_args = g_fetch_args
           )
-          google_symptoms_hhs_archive <- retry_fn(
-            max_attempts = 10,
-            wait_seconds = 1,
-            fn = pub_covidcast,
-            source = "google-symptoms",
-            signals = glue::glue("s0{search_name}_smoothed_search"),
-            time_type = "day",
-            geo_type = "hhs",
-            geo_values = "*",
-            fetch_args = g_fetch_args
-          )
+          # google_symptoms_hhs_archive <- retry_fn(
+          #   max_attempts = 10,
+          #   wait_seconds = 1,
+          #   fn = pub_covidcast,
+          #   source = "google-symptoms",
+          #   signals = glue::glue("s0{search_name}_smoothed_search"),
+          #   time_type = "day",
+          #   geo_type = "hhs",
+          #   geo_values = "*",
+          #   fetch_args = g_fetch_args
+          # )
           google_symptoms_archive_min <- google_symptoms_state_archive %>%
-            bind_rows(google_symptoms_hhs_archive) %>%
+            # bind_rows(google_symptoms_hhs_archive) %>%
+            append_us_aggregate("value") %>%
             select(geo_value, time_value, value) %>%
             daily_to_weekly() %>%
             mutate(version = time_value) %>%
@@ -205,8 +208,7 @@ create_flu_data_targets <- function() {
         all_of_them[[2]]$DT %<>% rename(google_symptoms_3_fever = value)
         all_of_them[[3]]$DT %<>% rename(google_symptoms_4_bronchitis = value)
         google_symptoms_archive <- epix_merge(all_of_them[[1]], all_of_them[[2]]) %>% epix_merge(all_of_them[[3]])
-        pre_pipeline <- google_symptoms_archive %>%
-          epix_as_of(as.Date("2023-10-04"))
+        pre_pipeline <- google_symptoms_archive %>% epix_as_of(as.Date("2023-10-04"))
         colnames <- c("google_symptoms_1_cough", "google_symptoms_3_fever", "google_symptoms_4_bronchitis")
         for (colname in colnames) {
           learned_params <- calculate_whitening_params(pre_pipeline, colname = colname)
@@ -251,24 +253,25 @@ create_flu_data_targets <- function() {
           ) %>%
           mutate(hhs = as.character(hhs)) %>%
           select(geo_value = state_id, hhs_region = hhs)
-        nwss_hhs_region <- nwss %>%
-          left_join(cw, by = "geo_value") %>%
-          mutate(year = year(time_value)) %>%
-          left_join(pop_data, by = join_by(geo_value, year)) %>%
-          select(-year, density) %>%
-          group_by(time_value, hhs_region) %>%
-          summarize(
-            value = sum(value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
-            activity_level = sum(activity_level * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
-            region_value = mean(region_value * population) / sum(population, na.rm = TRUE),
-            national_value = sum(national_value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
-            .groups = "drop"
-          ) %>%
-          mutate(agg_level = "hhs_region", hhs_region = as.character(hhs_region)) %>%
-          rename(geo_value = hhs_region)
+        # nwss_hhs_region <- nwss %>%
+        #   left_join(cw, by = "geo_value") %>%
+        #   mutate(year = year(time_value)) %>%
+        #   left_join(pop_data, by = join_by(geo_value, year)) %>%
+        #   select(-year, density) %>%
+        #   group_by(time_value, hhs_region) %>%
+        #   summarize(
+        #     value = sum(value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
+        #     activity_level = sum(activity_level * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
+        #     region_value = mean(region_value * population) / sum(population, na.rm = TRUE),
+        #     national_value = sum(national_value * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
+        #     .groups = "drop"
+        #   ) %>%
+        #   mutate(agg_level = "hhs_region", hhs_region = as.character(hhs_region)) %>%
+        #   rename(geo_value = hhs_region)
         nwss %>%
           mutate(agg_level = "state") %>%
-          bind_rows(nwss_hhs_region) %>%
+          # bind_rows(nwss_hhs_region) %>%
+          append_us_aggregate("value") %>%
           select(
             geo_value,
             time_value,
@@ -328,26 +331,25 @@ create_flu_data_targets <- function() {
           mutate(target_end_date = target_end_date + g_time_value_adjust)
       }
     ),
-    # TODO: Integrate this with joined_archive_data? Or maybe not and use it the way we use nssp in covid?
     tar_target(
-      name = veteran_state_df,
+      name = veteran_state_archive,
       command = {
-        s3read_using(read_csv, bucket = "forecasting-team-data", object = "va_explore/veteran_state_df.csv") %>%
+        vdf <- s3read_using(read_csv, bucket = "forecasting-team-data", object = "va_explore/veteran_state_df.csv") %>%
           left_join(
             s3read_using(read_csv, bucket = "forecasting-team-data", object = "va_explore/veteran_pop.csv"),
             by = "state"
           ) %>%
+          rename(geo_value = state, time_value = date) %>%
+          append_us_aggregate() %>%
           mutate(across(starts_with("unique_patients"), ~ . * 1e5 / veteran_population)) %>%
           rename_with(~ paste0(., "_per_100k"), starts_with("unique_patients")) %>%
-          select(-veteran_population)
-      }
-    ),
-    tar_target(
-      name = state_geo_values,
-      command = {
-        hhs_evaluation_data %>%
-          pull(geo_value) %>%
-          unique()
+          select(geo_value, time_value, va_flu_per_100k = unique_patients_flu_per_100k) %>%
+          daily_to_weekly(values = "va_flu_per_100k") %>%
+          mutate(time_value = time_value, version = time_value) %>%
+          mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
+          unnest(cols = "source") %>%
+          as_epi_archive(other_keys = "source", compactify = TRUE)
+        vdf
       }
     ),
     tar_target(
@@ -357,8 +359,10 @@ create_flu_data_targets <- function() {
           epix_merge(google_symptoms_archive, sync = "locf") %>%
           epix_merge(nwss_coarse, sync = "locf") %>%
           epix_merge(nssp_archive, sync = "locf") %>%
-          `$`("DT") %>%
+          epix_merge(veteran_state_archive, sync = "locf") %>%
+          extract2("DT") %>%
           drop_na(agg_level) %>%
+          filter(geo_value %in% state_geo_values) %>%
           as_epi_archive(other_keys = "source", compactify = TRUE)
 
         # Jank adding of hhs_region column to the data

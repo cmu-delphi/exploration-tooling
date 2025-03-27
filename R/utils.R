@@ -569,7 +569,7 @@ get_targets_errors <- function(project = tar_path_store(), top_n = 10) {
 #'   wait_seconds = 1,
 #'   fn = pub_covidcast,
 #'   source = "nssp",
-#'   signal = "pct_ed_visits_covid",
+#'   signals= "pct_ed_visits_covid",
 #'   geo_type = "state",
 #'   geo_values = "*",
 #'   time_type = "week"
@@ -605,4 +605,8 @@ validate_epi_data <- function(epi_data) {
 #' Convenience wrapper for working with Delphi S3 bucket.
 get_bucket_df_delphi <- function(prefix = "", bucket = "forecasting-team-data") {
   aws.s3::get_bucket_df(prefix = prefix, bucket = bucket) %>% tibble()
+}
+
+epix_as_of_ <- function(epi_archive) {
+  epi_archive %>% epix_as_of(min(max(.$DT$time_value), .$versions_end))
 }
