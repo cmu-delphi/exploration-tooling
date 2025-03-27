@@ -334,7 +334,7 @@ get_flu_forecaster_params <- function() {
         nonlin_method = c("quart_root", "none"),
         filter_source = c("", "nhsn"),
         filter_agg_level = "state",
-        drop_non_seasons = c(FALSE),
+        drop_non_seasons = c(TRUE, FALSE),
         aheads = list(c(0, 7, 14, 21)),
         residual_tail = 0.67,
         residual_center = 0.097
@@ -346,7 +346,7 @@ get_flu_forecaster_params <- function() {
         nonlin_method = c("quart_root", "none"),
         filter_source = c("", "nhsn"),
         filter_agg_level = "state",
-        drop_non_seasons = FALSE,
+        drop_non_seasons = c(TRUE, FALSE),
         aheads = list(c(0, 7, 14, 21)),
         residual_tail = 0.99,
         residual_center = 0.35,
