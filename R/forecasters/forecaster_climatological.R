@@ -91,7 +91,8 @@ climate_linear_ensembled <- function(epi_data,
       pred <- clim_res$predictions %>%
         filter(source == "nhsn") %>%
         pivot_quantiles_longer(.pred_distn) %>%
-        select(geo_value, forecast_date, target_end_date = target_date, value = .pred_distn_value, quantile = .pred_distn_quantile_level)
+        select(geo_value, forecast_date, target_end_date = target_date, value = .pred_distn_value, quantile = .pred_distn_quantile_level) %>%
+        mutate(target_end_date = ceiling_date(target_end_date, unit = "weeks", week_start = 6))
     } else {
       # we're fitting everything all at once in the first ahead for the
       # climatological_forecaster, so just return a null result for the other
