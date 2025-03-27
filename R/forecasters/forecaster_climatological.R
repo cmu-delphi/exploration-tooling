@@ -1,9 +1,12 @@
+#' @params model_used the model used. "climate" means just climatological_model, "climate_linear" means the weighted ensemble with a linear model, "climatological_forecaster" means using the model from epipredict
+#'
 climate_linear_ensembled <- function(epi_data,
                                      outcome,
                                      extra_sources = "",
                                      ahead = 7,
                                      trainer = parsnip::linear_reg(),
                                      quantile_levels = covidhub_probs(),
+                                     model_used = "climate_linear",
                                      filter_source = "",
                                      filter_agg_level = "",
                                      scale_method = c("quantile", "std", "none"),
@@ -55,14 +58,54 @@ climate_linear_ensembled <- function(epi_data,
   epi_data <- epi_data %>%
     select(geo_value, source, time_value, season, value = !!outcome) %>%
     mutate(epiweek = epiweek(time_value))
-  pred_climate <- climatological_model(epi_data, ahead, geo_agg = FALSE, floor_value = min(epi_data$value, na.rm = TRUE)) %>% mutate(forecaster = "climate")
+  if (model_used == "climate" || model_used == "climate_linear") {
+    pred_climate <- climatological_model(epi_data, ahead, geo_agg = FALSE, floor_value = min(epi_data$value, na.rm = TRUE)) %>% mutate(forecaster = "climate")
+    pred <- pred_climate %>% select(-forecaster)
+  }
 
   # the linear prediction should always use nhsn/none
-  pred_linear <- forecaster_baseline_linear(epi_data %>% filter(source %in% c("nhsn", "none")), ahead, residual_tail = residual_tail, residual_center = residual_center, no_intercept = TRUE, floor_value = min(epi_data$value, na.rm = TRUE, population_scale = FALSE)) %>%
-    mutate(forecaster = "linear")
-  pred <- bind_rows(pred_climate, pred_linear) %>%
-    ensemble_climate_linear((args_list$aheads[[1]]) / 7) %>%
-    ungroup()
+  if (model_used == "climate_linear") {
+    pred_linear <- forecaster_baseline_linear(
+      epi_data %>% filter(source %in% c("nhsn", "none")),
+      ahead,
+      residual_tail = residual_tail,
+      residual_center = residual_center,
+      no_intercept = TRUE,
+      floor_value = min(epi_data$value, na.rm = TRUE, population_scale = FALSE)
+    ) %>%
+      mutate(forecaster = "linear")
+    pred <- bind_rows(pred_climate, pred_linear) %>%
+      ensemble_climate_linear((args_list$aheads[[1]]) / 7) %>%
+      ungroup()
+  } else if (model_used == "climatological_forecaster") {
+    if (ahead == args_list$aheads[[1]][[1]] / 7) {
+      clim_res <- climatological_forecaster(
+        epi_data,
+        "value",
+        args_list = climate_args_list(
+          nonneg = FALSE,
+          time_type = "epiweek",
+          quantile_levels = quantile_levels,
+          forecast_horizon = (args_list$aheads[[1]] / 7)
+        ))
+      pred <- clim_res$predictions %>%
+        filter(source == "nhsn") %>%
+        pivot_quantiles_longer(.pred_distn) %>%
+        select(geo_value, forecast_date, target_end_date = target_date, value = .pred_distn_value, quantile = .pred_distn_quantile_level)
+    } else {
+      # we're fitting everything all at once in the first ahead for the
+      # climatological_forecaster, so just return a null result for the other
+      # aheads
+      null_result <- tibble(
+        geo_value = character(),
+        forecast_date = lubridate::Date(),
+        target_end_date = lubridate::Date(),
+        quantile = numeric(),
+        value = numeric()
+      )
+      return(null_result)
+    }
+  }
   # undo whitening
   if (adding_source) {
     pred %<>%

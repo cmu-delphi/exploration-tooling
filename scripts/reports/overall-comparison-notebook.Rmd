@@ -79,7 +79,7 @@ overall_rating <- params$scores %>%
     forecaster_function = if_else(is.na(forecaster_function), "external", forecaster_function)
   )
 best_in_class <- overall_rating %>%
-  slice_max(mean_score, by = family_name) %>%
+  slice_min(mean_score, by = family_name) %>%
   pull(forecaster)
 forecasters_to_keep <- c(best_in_class, outside_forecasters) %>% unique()
 # Load forecasts and scores
