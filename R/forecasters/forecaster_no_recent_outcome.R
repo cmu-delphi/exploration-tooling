@@ -64,10 +64,10 @@ no_recent_outcome <- function(epi_data,
   args_input[["quantile_levels"]] <- quantile_levels
   args_list <- do.call(default_args_list, args_input)
   # if you want to hardcode particular predictors in a particular forecaster
-  if (identical(extra_sources[[1]], "")) {
+  if (identical(extra_sources, character(0L))) {
     predictors <- character()
   } else {
-    predictors <- extra_sources[[1]]
+    predictors <- extra_sources
   }
   c(args_list, tmp_pred, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
 

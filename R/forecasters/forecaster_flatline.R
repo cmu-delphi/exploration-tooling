@@ -24,7 +24,7 @@ flatline_fc <- function(epi_data,
   # perform any preprocessing not supported by epipredict
   epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   # this is a temp fix until a real fix gets put into epipredict
-  epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
+  epi_data <- clear_lastminute_nas(epi_data, cols = c(outcome, extra_sources))
   # one that every forecaster will need to handle: how to manage max(time_value)
   # that's older than the `as_of` date
   epidataAhead <- extend_ahead(epi_data, ahead)

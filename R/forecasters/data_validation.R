@@ -101,9 +101,12 @@ filter_extraneous <- function(epi_data, filter_source, filter_agg_level) {
 #'
 #' Many of our arguments to the forecasters come as lists not because we expect
 #' them that way, but as a byproduct of tibble and expand_grid.
-unwrap_argument <- function(arg) {
+unwrap_argument <- function(arg, default_trigger = "", default = character(0L)) {
   if (is.list(arg) && length(arg) == 1) {
     arg <- arg[[1]]
+  }
+  if (identical(arg, default_trigger)) {
+    return(default)
   }
   return(arg)
 }
