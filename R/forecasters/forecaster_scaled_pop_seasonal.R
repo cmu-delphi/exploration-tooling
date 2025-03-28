@@ -61,10 +61,6 @@ scaled_pop_seasonal <- function(epi_data,
   extra_sources <- unwrap_argument(extra_sources)
   trainer <- unwrap_argument(trainer)
 
-  # TODO: handle this when creating param grid?
-  if (typeof(seasonal_method) == "list") {
-    seasonal_method <- seasonal_method[[1]]
-  }
   if (all(seasonal_method == c("none", "flu", "covid", "indicator", "window", "climatological"))) {
     seasonal_method <- "none"
   }
