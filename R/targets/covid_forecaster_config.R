@@ -123,7 +123,7 @@ get_covid_forecaster_params <- function() {
         model_used = c("climate_linear", "climate", "climatological_forecaster"),
         filter_source = c("", "nhsn"),
         filter_agg_level = "state",
-        drop_non_seasons = c(FALSE),
+        drop_non_seasons = c(TRUE, FALSE),
         aheads = list(g_aheads),
         residual_tail = 0.70,
         residual_center = 0.127
@@ -136,7 +136,7 @@ get_covid_forecaster_params <- function() {
         model_used = c("climate_linear", "climate", "climatological_forecaster"),
         filter_source = c("", "nhsn"),
         filter_agg_level = "state",
-        drop_non_seasons = FALSE,
+        drop_non_seasons = c(TRUE, FALSE),
         aheads = list(g_aheads),
         residual_tail = 0.97,
         residual_center = 0.097

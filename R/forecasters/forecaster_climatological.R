@@ -54,24 +54,25 @@ climate_linear_ensembled <- function(epi_data,
     season_data <- epi_data
   }
   learned_params <- calculate_whitening_params(season_data, outcome, scale_method, center_method, nonlin_method)
-  epi_data %<>% data_whitening(outcome, learned_params, nonlin_method)
-  epi_data <- epi_data %>%
+  season_data %<>% data_whitening(outcome, learned_params, nonlin_method)
+  # epi_data %>% drop_non_seasons() %>% ggplot(aes(x = time_value, y = hhs, color = source)) + geom_line() + facet_wrap(~geo_value)
+  season_data <- season_data %>%
     select(geo_value, source, time_value, season, value = !!outcome) %>%
     mutate(epiweek = epiweek(time_value))
   if (model_used == "climate" || model_used == "climate_linear") {
-    pred_climate <- climatological_model(epi_data, ahead, geo_agg = FALSE, floor_value = min(epi_data$value, na.rm = TRUE)) %>% mutate(forecaster = "climate")
+    pred_climate <- climatological_model(season_data, ahead, geo_agg = FALSE, floor_value = min(season_data$value, na.rm = TRUE)) %>% mutate(forecaster = "climate")
     pred <- pred_climate %>% select(-forecaster)
   }
 
   # the linear prediction should always use nhsn/none
   if (model_used == "climate_linear") {
     pred_linear <- forecaster_baseline_linear(
-      epi_data %>% filter(source %in% c("nhsn", "none")),
+      season_data %>% filter(source %in% c("nhsn", "none")),
       ahead,
       residual_tail = residual_tail,
       residual_center = residual_center,
       no_intercept = TRUE,
-      floor_value = min(epi_data$value, na.rm = TRUE, population_scale = FALSE)
+      floor_value = min(season_data$value, na.rm = TRUE, population_scale = FALSE)
     ) %>%
       mutate(forecaster = "linear")
     pred <- bind_rows(pred_climate, pred_linear) %>%
@@ -80,14 +81,15 @@ climate_linear_ensembled <- function(epi_data,
   } else if (model_used == "climatological_forecaster") {
     if (ahead == args_list$aheads[[1]][[1]] / 7) {
       clim_res <- climatological_forecaster(
-        epi_data,
+        season_data,
         "value",
         args_list = climate_args_list(
-          nonneg = FALSE,
+          nonneg = (scale_method == "none"),
           time_type = "epiweek",
           quantile_levels = quantile_levels,
-          forecast_horizon = (args_list$aheads[[1]] / 7)
-        ))
+          forecast_horizon = args_list$aheads[[1]] / 7
+        )
+      )
       pred <- clim_res$predictions %>%
         filter(source %in% c("nhsn", "none")) %>%
         pivot_quantiles_longer(.pred_distn) %>%
@@ -110,15 +112,15 @@ climate_linear_ensembled <- function(epi_data,
   # undo whitening
   if (adding_source) {
     pred %<>%
-    rename({{ outcome }} := value) %>%
-    mutate(source = "none")
+      rename({{ outcome }} := value) %>%
+      mutate(source = "none")
   } else {
     pred %<>%
-    rename({{ outcome }} := value) %>%
-    mutate(source = "nhsn")
+      rename({{ outcome }} := value) %>%
+      mutate(source = "nhsn")
   }
   pred_final <- pred %>%
-    data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
+    data_coloring(outcome, learned_params, join_cols = key_colnames(season_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
     rename(value = {{ outcome }}) %>%
     mutate(value = pmax(0, value)) %>%
     select(-source)
