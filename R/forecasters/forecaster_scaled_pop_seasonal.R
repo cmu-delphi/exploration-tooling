@@ -58,11 +58,9 @@ scaled_pop_seasonal <- function(epi_data,
   nonlin_method <- arg_match(nonlin_method)
 
   epi_data <- validate_epi_data(epi_data)
+  extra_sources <- unwrap_argument(extra_sources)
+  trainer <- unwrap_argument(trainer)
 
-  # TODO: handle this when creating param grid?
-  if (typeof(seasonal_method) == "list") {
-    seasonal_method <- seasonal_method[[1]]
-  }
   if (all(seasonal_method == c("none", "flu", "covid", "indicator", "window", "climatological"))) {
     seasonal_method <- "none"
   }
@@ -71,7 +69,7 @@ scaled_pop_seasonal <- function(epi_data,
   # this is for the case where there are multiple sources in the same column
   epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   # this is a temp fix until a real fix gets put into epipredict
-  epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
+  epi_data <- clear_lastminute_nas(epi_data, cols = c(outcome, extra_sources))
   # this next part is basically unavoidable boilerplate you'll want to copy
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
@@ -100,7 +98,7 @@ scaled_pop_seasonal <- function(epi_data,
   args_input[["seasonal_forward_window"]] <- seasonal_forward_window + ahead
   args_list <- inject(default_args_list(!!!args_input))
   # if you want to hardcode particular predictors in a particular forecaster
-  predictors <- c(outcome, extra_sources[[1]])
+  predictors <- c(outcome, extra_sources)
   c(args_list, predictors, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
 
   if ("season_week" %nin% names(epi_data)) {

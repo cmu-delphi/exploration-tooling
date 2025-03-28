@@ -188,6 +188,7 @@ gen_pop_and_density_data <-
 daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), keys = "geo_value", values = c("value")) {
   agg_method <- arg_match(agg_method)
   epi_df %>%
+    arrange(across(all_of(c(keys, "time_value")))) %>%
     mutate(epiweek = epiweek(time_value), year = epiyear(time_value)) %>%
     group_by(across(any_of(c(keys, "epiweek", "year")))) %>%
     summarize(
@@ -195,6 +196,7 @@ daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), keys = "geo_v
       time_value = floor_date(max(time_value), "weeks", week_start = 7) + 3,
       .groups = "drop"
     ) %>%
+    arrange(across(all_of(c(keys, "time_value")))) %>%
     select(-epiweek, -year)
 }
 
@@ -401,11 +403,29 @@ get_health_data <- function(as_of, disease = c("covid", "flu")) {
     # Get something sort of compatible with that by summing to national with
     # na.omit = TRUE. As otherwise we have some NAs from probably territories
     # propagated to US level.
-    bind_rows(
-      (.) %>%
-        group_by(time_value) %>%
-        summarize(geo_value = "us", hhs = sum(hhs, na.rm = TRUE))
-    )
+    append_us_aggregate("hhs")
+}
+
+#' Append a national aggregate to a dataframe
+#'
+#' Removes any possible previous national values and recomputes them by
+#' aggregating all the values per time_value.
+#'
+#' @param df A dataframe with a `geo_value` column.
+#' @param cols A character vector of column names to aggregate.
+#' @return A dataframe with a `geo_value` column.
+append_us_aggregate <- function(df, cols = NULL, group_keys = c("time_value")) {
+  if (!(is.data.frame(df))) {
+    cli::cli_abort("df must be a data.frame", call = rlang::caller_env())
+  }
+  national_col_names <- c("us", "usa", "national", "nation", "US", "USA")
+  df1 <- df %>% filter(geo_value %nin% national_col_names)
+  if (is.null(cols)) {
+    df2 <- df1 %>% summarize(geo_value = "us", across(where(is.numeric), ~ sum(.x, na.rm = TRUE)), .by = all_of(group_keys))
+  } else {
+    df2 <- df1 %>% summarize(geo_value = "us", across(all_of(cols), ~ sum(.x, na.rm = TRUE)), .by = all_of(group_keys))
+  }
+  bind_rows(df1, df2)
 }
 
 calculate_burden_adjustment <- function(flusurv_latest) {
@@ -718,7 +738,7 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     wait_seconds = 1,
     fn = pub_covidcast,
     source = "nssp",
-    signal = glue::glue("pct_ed_visits_{disease}"),
+    signals = glue::glue("pct_ed_visits_{disease}"),
     time_type = "week",
     geo_type = "state",
     geo_values = "*",
@@ -727,7 +747,7 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
   nssp_state %>%
     select(geo_value, time_value, issue, nssp = value) %>%
     as_epi_archive(compactify = TRUE) %>%
-    `$`("DT") %>%
+    extract2("DT") %>%
     # End of week to midweek correction.
     mutate(time_value = time_value + 3) %>%
     as_epi_archive(compactify = TRUE)

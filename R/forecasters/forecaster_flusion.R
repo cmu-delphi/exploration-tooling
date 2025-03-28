@@ -24,6 +24,8 @@ flusion <- function(epi_data,
   derivative_estimator <- arg_match(derivative_estimator)
 
   epi_data <- validate_epi_data(epi_data)
+  extra_sources <- unwrap_argument(extra_sources)
+  trainer <- unwrap_argument(trainer)
 
   # perform any preprocessing not supported by epipredict
   args_input <- list(...)
