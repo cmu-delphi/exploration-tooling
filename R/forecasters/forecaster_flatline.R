@@ -18,6 +18,9 @@ flatline_fc <- function(epi_data,
                         filter_agg_level = "",
                         ...) {
   epi_data <- validate_epi_data(epi_data)
+  extra_sources <- unwrap_argument(extra_sources)
+  trainer <- unwrap_argument(trainer)
+
   # perform any preprocessing not supported by epipredict
   epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   # this is a temp fix until a real fix gets put into epipredict

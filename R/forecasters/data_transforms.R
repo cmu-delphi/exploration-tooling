@@ -106,7 +106,7 @@ rolling_sd <- function(epi_data, sd_width = 29L, mean_width = NULL, cols_to_sd =
 #' @export
 clear_lastminute_nas <- function(epi_data, outcome, extra_sources) {
   meta_data <- attr(epi_data, "metadata")
-  if (extra_sources == c("")) {
+  if (identical(extra_sources, "")) {
     extra_sources <- character(0L)
   }
   as_of <- attributes(epi_data)$metadata$as_of

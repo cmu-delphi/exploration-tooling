@@ -304,7 +304,7 @@ get_flu_forecaster_params <- function() {
             c(0, 7) # exogenous feature
           )
         ),
-        seasonal_method = list("window"),
+        seasonal_method = "window",
         pop_scaling = FALSE,
         filter_source = "",
         filter_agg_level = "state",

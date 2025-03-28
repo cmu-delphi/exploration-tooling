@@ -58,6 +58,8 @@ scaled_pop_seasonal <- function(epi_data,
   nonlin_method <- arg_match(nonlin_method)
 
   epi_data <- validate_epi_data(epi_data)
+  extra_sources <- unwrap_argument(extra_sources)
+  trainer <- unwrap_argument(trainer)
 
   # TODO: handle this when creating param grid?
   if (typeof(seasonal_method) == "list") {
@@ -92,6 +94,7 @@ scaled_pop_seasonal <- function(epi_data,
     epi_data$source <- c("nhsn")
     attributes(epi_data)$metadata$other_keys <- "source"
   }
+  args_input[["lags"]] <- unwrap_argument(args_input[["lags"]])
   args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
   args_input[["nonneg"]] <- scale_method == "none"
