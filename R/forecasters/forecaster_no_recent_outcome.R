@@ -59,7 +59,6 @@ no_recent_outcome <- function(epi_data,
   }
 
   # only force to be non-negative if we're not scaling
-  args_input[["lags"]] <- unwrap_argument(args_input[["lags"]])
   args_input[["nonneg"]] <- scale_method == "none"
   args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
