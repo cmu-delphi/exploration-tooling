@@ -2,7 +2,7 @@
 #' @param epi_data expected to have columns time_value, geo_value, season, value,
 climatological_model <- function(epi_data, ahead, window_size = 3,
                                  recent_window = 3, quantile_method = c("baseR", "epipredict"),
-                                 quant_type = 8, geo_agg = FALSE) {
+                                 quant_type = 8, geo_agg = FALSE, floor_value = 0) {
   quantile_method <- arg_match(quantile_method)
   forecast_date <- attributes(epi_data)$metadata$as_of
   forecast_week <- epiweek(forecast_date)
@@ -29,7 +29,7 @@ climatological_model <- function(epi_data, ahead, window_size = 3,
     filtered %<>%
       add_pop_and_density() %>%
       mutate(value = value / population * 1e5) %>%
-      select(geo_value, epiweek, epiyear, season, season_week, value, population)
+      select(any_of(c("geo_value", "epiweek", "epiyear", "season", "season_week", "value", "population")))
   } else {
     filtered %<>%
       group_by(geo_value)
@@ -56,7 +56,7 @@ climatological_model <- function(epi_data, ahead, window_size = 3,
       summarize(.dist_quantile = dist_quantiles(value, quantile), .groups = "keep") %>%
       reframe(tibble(quantile = covidhub_probs(), value = quantile(.dist_quantile, p = covidhub_probs())[[1]]))
   }
-  naive_preds %<>% mutate(value = pmax(0, value))
+  naive_preds %<>% mutate(value = pmax(floor_value, value))
   if (geo_agg) {
     naive_preds %<>%
       expand_grid(
@@ -68,6 +68,6 @@ climatological_model <- function(epi_data, ahead, window_size = 3,
       arrange(geo_value, forecast_date, target_end_date)
   }
   naive_preds %>%
-    mutate(value = pmax(0, value)) %>%
+    mutate(value = pmax(floor_value, value)) %>%
     ungroup()
 }

@@ -4,8 +4,6 @@
 #' forecasts and averages them on a per-quantile basis. By default the average
 #' used is the median, but it can accept any vectorized function.
 #'
-#' @param epi_data The data for fitting. Currently unused, but matches interface
-#' of other forecasters.
 #' @param forecasts A tibble of quantile forecasts to aggregate. They should
 #'   be tibbles with columns `(geo_value, forecast_date, target_end_date,
 #'   quantile, value)`, preferably in that order.
