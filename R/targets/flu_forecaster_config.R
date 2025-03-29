@@ -346,7 +346,7 @@ get_flu_forecaster_params <- function() {
         center_method = "none",
         nonlin_method = c("quart_root", "none"),
         model_used = c("climate_linear", "climate", "climatological_forecaster"),
-        filter_source = c("", "nhsn"),
+        filter_source = "nhsn",
         filter_agg_level = "state",
         drop_non_seasons = c(TRUE, FALSE),
         aheads = list(g_aheads),
