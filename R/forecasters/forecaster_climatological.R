@@ -12,6 +12,7 @@ climate_linear_ensembled <- function(epi_data,
                                      scale_method = c("quantile", "std", "none"),
                                      center_method = c("median", "mean", "none"),
                                      nonlin_method = c("quart_root", "none"),
+                                     quantiles_by_geo = TRUE,
                                      drop_non_seasons = FALSE,
                                      residual_tail = 0.99,
                                      residual_center = 0.35,
@@ -59,8 +60,10 @@ climate_linear_ensembled <- function(epi_data,
   season_data <- season_data %>%
     select(geo_value, source, time_value, season, value = !!outcome) %>%
     mutate(epiweek = epiweek(time_value))
+
+  # either climate or climate linear needs the climate prediction
   if (model_used == "climate" || model_used == "climate_linear") {
-    pred_climate <- climatological_model(season_data, ahead, geo_agg = FALSE, floor_value = min(season_data$value, na.rm = TRUE)) %>% mutate(forecaster = "climate")
+    pred_climate <- climatological_model(season_data, ahead, geo_agg = quantiles_by_geo, floor_value = min(season_data$value, na.rm = TRUE)) %>% mutate(forecaster = "climate")
     pred <- pred_climate %>% select(-forecaster)
   }
 
@@ -80,6 +83,11 @@ climate_linear_ensembled <- function(epi_data,
       ungroup()
   } else if (model_used == "climatological_forecaster") {
     if (ahead == args_list$aheads[[1]][[1]] / 7) {
+      if (quantiles_by_geo) {
+        quantile_key <- "geo_value"
+      } else {
+        quantile_key <- character(0)
+      }
       clim_res <- climatological_forecaster(
         season_data,
         "value",
@@ -87,9 +95,11 @@ climate_linear_ensembled <- function(epi_data,
           nonneg = (scale_method == "none"),
           time_type = "epiweek",
           quantile_levels = quantile_levels,
-          forecast_horizon = args_list$aheads[[1]] / 7
+          forecast_horizon = args_list$aheads[[1]] / 7,
+          quantile_by_key = quantile_key
         )
       )
+      ## clim_res$predictions
       pred <- clim_res$predictions %>%
         filter(source %in% c("nhsn", "none")) %>%
         pivot_quantiles_longer(.pred_distn) %>%

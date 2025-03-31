@@ -336,6 +336,7 @@ get_flu_forecaster_params <- function() {
         filter_source = c("", "nhsn"),
         filter_agg_level = "state",
         drop_non_seasons = c(TRUE, FALSE),
+        quantiles_by_geo = c(TRUE, FALSE),
         aheads = list(g_aheads),
         residual_tail = 0.67,
         residual_center = 0.097
@@ -349,6 +350,7 @@ get_flu_forecaster_params <- function() {
         filter_source = "nhsn",
         filter_agg_level = "state",
         drop_non_seasons = c(TRUE, FALSE),
+        quantiles_by_geo = c(TRUE, FALSE),
         aheads = list(g_aheads),
         residual_tail = 0.99,
         residual_center = 0.35
