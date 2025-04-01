@@ -141,6 +141,17 @@ get_covid_forecaster_params <- function() {
         residual_tail = 0.97,
         residual_center = 0.097
       ),
+      expand_grid(
+        forecaster = "climate_linear_ensembled",
+        scale_method = "none",
+        center_method = "none",
+        nonlin_method = "none",
+        model_used = "linear",
+        filter_agg_level = "state",
+        aheads = list(g_aheads),
+        residual_tail = 0.97,
+        residual_center = 0.097
+      ),
     )
   ) %>%
     map(function(x) {

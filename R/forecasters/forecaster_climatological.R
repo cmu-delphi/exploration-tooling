@@ -69,8 +69,8 @@ climate_linear_ensembled <- function(epi_data,
     pred <- pred_climate %>% select(-forecaster)
   }
 
-  # the linear prediction should always use nhsn/none
-  if (model_used == "climate_linear") {
+  # either linear or climate linear needs the linear prediction
+  if (model_used == "linear" || model_used == "climate_linear") {
     pred_linear <- forecaster_baseline_linear(
       season_data %>% filter(source %in% c("nhsn", "none")),
       ahead,
@@ -80,10 +80,15 @@ climate_linear_ensembled <- function(epi_data,
       floor_value = min(season_data$value, na.rm = TRUE, population_scale = FALSE)
     ) %>%
       mutate(forecaster = "linear")
+    pred <- pred_linear %>% select(-forecaster)
+  }
+
+  if (model_used == "climate_linear") {
     pred <- bind_rows(pred_climate, pred_linear) %>%
       ensemble_climate_linear((args_list$aheads[[1]]) / 7) %>%
       ungroup()
   } else if (model_used == "climatological_forecaster") {
+    # forecast all aheads at the same time
     if (ahead == args_list$aheads[[1]][[1]] / 7) {
       if (quantiles_by_geo) {
         quantile_key <- "geo_value"

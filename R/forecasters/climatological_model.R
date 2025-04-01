@@ -3,7 +3,7 @@
 climatological_model <- function(epi_data, ahead, window_size = 3,
                                  recent_window = 3, quantile_method = c("baseR", "epipredict"),
                                  quant_type = 8, geo_agg = FALSE,
-                                 floor_value = 0, pop_scale = FALSE) {
+                                 floor_value = 0, pop_scale = FALSE, include_forecast_date = TRUE) {
   quantile_method <- arg_match(quantile_method)
   forecast_date <- attributes(epi_data)$metadata$as_of
   forecast_week <- epiweek(forecast_date)
@@ -21,11 +21,17 @@ climatological_model <- function(epi_data, ahead, window_size = 3,
   # drop weird years
   filtered %<>% filter((season != "2020/21") & (season != "2021/22"))
   # keep data either within the window, or within the past window weeks
-  filtered %<>% filter(
-    (abs(forecast_week + ahead - epiweek) <= window_size) |
-      (last_date_data - time_value <= recent_window * 7)
-  )
-
+  if (include_forecast_date) {
+    filtered %<>% filter(
+      (abs(forecast_week + ahead - epiweek) <= window_size) |
+        (last_date_data - time_value <= recent_window * 7)
+    )
+  } else {
+    filtered %<>% filter(
+      (abs(forecast_week + ahead - epiweek) <= window_size)
+    )
+  }
+  # filtered %>% ggplot(aes(x = epiweek, y = value, color = source)) + geom_point() + facet_wrap(~geo_value); epi_data %>% autoplot(value, .facet_by = "geo_value", color = "source")
   if (geo_agg && pop_scale) {
     filtered %<>%
       add_pop_and_density() %>%
