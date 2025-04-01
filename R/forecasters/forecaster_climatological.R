@@ -50,7 +50,9 @@ climate_linear_ensembled <- function(epi_data,
       )
   }
   if (drop_non_seasons) {
-    season_data <- epi_data %>% drop_non_seasons()
+    season_data <- epi_data %>%
+      drop_non_seasons() %>%
+      filter(season != "2021/22")
   } else {
     season_data <- epi_data
   }
