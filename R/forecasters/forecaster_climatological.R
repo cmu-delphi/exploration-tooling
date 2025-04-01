@@ -63,7 +63,7 @@ climate_linear_ensembled <- function(epi_data,
 
   # either climate or climate linear needs the climate prediction
   if (model_used == "climate" || model_used == "climate_linear") {
-    pred_climate <- climatological_model(season_data, ahead, geo_agg = quantiles_by_geo, floor_value = min(season_data$value, na.rm = TRUE)) %>% mutate(forecaster = "climate")
+    pred_climate <- climatological_model(season_data, ahead, geo_agg = quantiles_by_geo, floor_value = min(season_data$value, na.rm = TRUE), pop_scale = FALSE) %>% mutate(forecaster = "climate")
     pred <- pred_climate %>% select(-forecaster)
   }
 
