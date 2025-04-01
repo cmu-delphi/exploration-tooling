@@ -13,7 +13,7 @@ climate_linear_ensembled <- function(epi_data,
                                      center_method = c("median", "mean", "none"),
                                      nonlin_method = c("quart_root", "none"),
                                      quantiles_by_geo = TRUE,
-                                     drop_non_seasons = FALSE,
+                                     drop_non_season = FALSE,
                                      residual_tail = 0.99,
                                      residual_center = 0.35,
                                      ...) {
@@ -49,7 +49,7 @@ climate_linear_ensembled <- function(epi_data,
         by = c("epiweek", "epiyear")
       )
   }
-  if (drop_non_seasons) {
+  if (drop_non_season) {
     season_data <- epi_data %>%
       drop_non_seasons() %>%
       filter(season != "2021/22")
