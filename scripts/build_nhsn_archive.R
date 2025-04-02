@@ -33,6 +33,7 @@ suppressPackageStartupMessages({
 # Suppresses read_csv progress and column type messages
 options(readr.show_progress = FALSE)
 options(readr.show_col_types = FALSE)
+options(cli.width = 120)
 
 # Script run time
 run_time <- with_tz(Sys.time(), tzone = "UTC")
@@ -154,7 +155,7 @@ process_nhsn_data_file <- function(key) {
 #' day. The archive has the columns geo_value, time_value, disease, endpoint
 #' (either basic or prelim), version, version_timestamp (to enable keeping the
 #' most recent value), and value.
-update_nhsn_data_archive <- function(verbose = FALSE) {
+update_nhsn_data_archive <- function() {
   # Get the last timestamp of the archive
   last_timestamp <- get_s3_object_last_modified(config$archive_s3_key, config$s3_bucket)
 
@@ -181,12 +182,11 @@ update_nhsn_data_archive <- function(verbose = FALSE) {
     return(invisible(NULL))
   }
 
-  cli_inform("New datasets available at {run_time_local} (UTC: {run_time}).")
-  cli_inform("Adding {nrow(new_data_files_latest_per_day)} new NHSN datasets to the archive.")
+  cli_inform("New datasets available at, adding {nrow(new_data_files_latest_per_day)} new NHSN datasets to the archive.")
 
   # Process each new dataset snapshot
   new_data <- new_data_files_latest_per_day$Key %>%
-    map(process_nhsn_data_file, .progress = verbose) %>%
+    map(process_nhsn_data_file, .progress = interactive()) %>%
     bind_rows()
 
   # Look through the existing archive to see if there were updates today. If so, replace them with the new data.
@@ -204,12 +204,11 @@ update_nhsn_data_archive <- function(verbose = FALSE) {
 }
 
 update_nhsn_data <- function(verbose = FALSE) {
-  options(cli.width = 120)
   if (verbose) {
     cli_inform(glue("Checking for updates to NHSN data at {run_time_local} (UTC: {run_time})..."))
   }
   update_nhsn_data_raw()
-  update_nhsn_data_archive(verbose = verbose)
+  update_nhsn_data_archive()
 }
 
 update_nhsn_data(verbose = TRUE)

@@ -60,7 +60,7 @@ submit-flu-dry:
 
 submit: submit-covid submit-flu
 
-get_nwss:
+get-nwss:
 	mkdir -p aux_data/nwss_covid_data; \
 	mkdir -p aux_data/nwss_flu_data; \
 	. .venv/bin/activate; \
@@ -90,14 +90,14 @@ upload: push
 dashboard:
 	Rscript scripts/dashboard.R
 
-update_site:
+update-site:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()" > cache/update_site_log.txt
 
 netlify:
 	netlify deploy --dir=reports --prod
 
-get_flu_prod_errors:
+get-flu-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'flu_hosp_prod')"
 
-get_covid_prod_errors:
+get-covid-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'covid_hosp_prod')"
