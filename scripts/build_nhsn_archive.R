@@ -94,18 +94,18 @@ update_nhsn_data_raw <- function() {
   if (raw_update_at > last_raw_file_update_at) {
     raw_update_at_local <- with_tz(raw_update_at)
     cli_inform("The raw data has been updated at {raw_update_at_local} (UTC: {raw_update_at}).")
-    cli_inform("Downloading the raw data...")
-    download_time <- format(with_tz(Sys.time(), tzone = "UTC"), "%Y-%m-%d_%H-%M-%OS5")
-    raw_file <- glue("{config$raw_file_name_prefix}_{download_time}.parquet")
+    raw_update_at_formatted <- format(raw_update_at, "%Y-%m-%d_%H-%M-%OS5")
+    raw_file <- glue("{config$raw_file_name_prefix}_{raw_update_at_formatted}.parquet")
+    cli_inform("Downloading the raw data... {raw_file}")
     read_csv(config$raw_query_url) %>% s3write_using(write_parquet, object = raw_file, bucket = config$s3_bucket)
   }
 
   if (prelim_update_at > last_prelim_file_update_at) {
     prelim_update_at_local <- with_tz(prelim_update_at)
     cli_inform("The prelim data has been updated at {prelim_update_at_local} (UTC: {prelim_update_at}).")
-    cli_inform("Downloading the prelim data...")
-    download_time <- format(with_tz(Sys.time(), tzone = "UTC"), "%Y-%m-%d_%H-%M-%OS5")
-    prelim_file <- glue("{config$raw_file_name_prefix}_{download_time}_prelim.parquet")
+    prelim_update_at_formatted <- format(prelim_update_at, "%Y-%m-%d_%H-%M-%OS5")
+    prelim_file <- glue("{config$raw_file_name_prefix}_{prelim_update_at_formatted}_prelim.parquet")
+    cli_inform("Downloading the prelim data... {prelim_file}")
     read_csv(config$prelim_query_url) %>% s3write_using(write_parquet, object = prelim_file, bucket = config$s3_bucket)
   }
 }
