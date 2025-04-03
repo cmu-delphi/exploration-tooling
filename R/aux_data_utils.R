@@ -785,7 +785,7 @@ get_s3_object_last_modified <- function(key, bucket, missing_value = MIN_TIMESTA
 get_socrata_updated_at <- function(dataset_url, missing_value = MAX_TIMESTAMP) {
   tryCatch(
     {
-      httr::with_config(httr::config(timeout = 30), httr::RETRY("GET", dataset_url, times = 10, pause_min = 5)) %>%
+      httr::with_config(httr::config(timeout = 5), httr::RETRY("GET", dataset_url, times = 5, pause_min = 5, pause_cap = 5)) %>%
         httr::content() %>%
         # This field comes in as integer seconds since epoch, so we need to convert it.
         pluck("rowsUpdatedAt") %>%
