@@ -1,13 +1,17 @@
 #' epi_data is expected to have: geo_value, time_value, and value columns.
-forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALSE, residual_tail = 0.85, residual_center = 0.085, no_intercept = FALSE) {
+forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALSE, residual_tail = 0.85, residual_center = 0.085, no_intercept = TRUE, floor_value = 0, population_scale = TRUE) {
   epi_data <- validate_epi_data(epi_data)
   forecast_date <- attributes(epi_data)$metadata$as_of
   population_data <- get_population_data() %>%
     rename(geo_value = state_id) %>%
     distinct(geo_value, population)
+  if (population_scale) {
   df_processed <- epi_data %>%
     left_join(population_data, by = "geo_value") %>%
     mutate(value = value / population * 10**5)
+  } else {
+    df_processed <- epi_data
+  }
 
   if (log) {
     df_processed <- df_processed %>% mutate(value = log(value))
@@ -112,7 +116,6 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
     pivot_quantiles_longer(dist) %>%
     rename(quantile_levels = dist_quantile_level, values = dist_value) %>%
     select(-value) %>%
-    left_join(population_data, by = "geo_value") %>%
     rename(quantile = quantile_levels) %>%
     {
       if (log) {
@@ -120,13 +123,20 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
       } else {
         .
       }
-    } %>%
-    mutate(
-      value = values * population / 10**5,
+    }
+  if (population_scale) {
+    quantile_forecast %<>%
+      left_join(population_data, by = "geo_value") %>%
+      mutate(
+        value = values * population / 10**5
+      ) %>%
+      select(-population)
+  }
+  quantile_forecast %<>% mutate(
       target_end_date = reference_date + ahead * 7,
       forecast_date = forecast_date,
     ) %>%
-    select(-model, -values, -population, -season_week) %>%
-    mutate(value = pmax(0, value))
+    select(-model, -values, -season_week) %>%
+    mutate(value = pmax(floor_value, value))
   quantile_forecast
 }

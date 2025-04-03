@@ -1,15 +1,19 @@
+#' @params model_used the model used. "climate" means just climatological_model, "climate_linear" means the weighted ensemble with a linear model, "climatological_forecaster" means using the model from epipredict
+#'
 climate_linear_ensembled <- function(epi_data,
                                      outcome,
                                      extra_sources = "",
                                      ahead = 7,
                                      trainer = parsnip::linear_reg(),
                                      quantile_levels = covidhub_probs(),
+                                     model_used = "climate_linear",
                                      filter_source = "",
                                      filter_agg_level = "",
                                      scale_method = c("quantile", "std", "none"),
                                      center_method = c("median", "mean", "none"),
                                      nonlin_method = c("quart_root", "none"),
-                                     drop_non_seasons = FALSE,
+                                     quantiles_by_geo = TRUE,
+                                     drop_non_season = FALSE,
                                      residual_tail = 0.99,
                                      residual_center = 0.35,
                                      ...) {
@@ -45,31 +49,101 @@ climate_linear_ensembled <- function(epi_data,
         by = c("epiweek", "epiyear")
       )
   }
-  if (drop_non_seasons) {
-    season_data <- epi_data %>% drop_non_seasons()
+  if (drop_non_season) {
+    season_data <- epi_data %>%
+      drop_non_seasons() %>%
+      filter(season != "2021/22")
   } else {
     season_data <- epi_data
   }
   learned_params <- calculate_whitening_params(season_data, outcome, scale_method, center_method, nonlin_method)
-  epi_data %<>% data_whitening(outcome, learned_params, nonlin_method)
-  epi_data <- epi_data %>%
+  season_data %<>% data_whitening(outcome, learned_params, nonlin_method)
+  # epi_data %>% drop_non_seasons() %>% ggplot(aes(x = time_value, y = hhs, color = source)) + geom_line() + facet_wrap(~geo_value)
+  season_data <- season_data %>%
     select(geo_value, source, time_value, season, value = !!outcome) %>%
     mutate(epiweek = epiweek(time_value))
-  pred_climate <- climatological_model(epi_data, ahead) %>% mutate(forecaster = "climate")
-  pred_geo_climate <- climatological_model(epi_data, ahead, geo_agg = FALSE) %>% mutate(forecaster = "climate_geo")
-  pred_linear <- forecaster_baseline_linear(epi_data, ahead, residual_tail = residual_tail, residual_center = residual_center) %>% mutate(forecaster = "linear")
-  pred <- bind_rows(pred_climate, pred_linear, pred_geo_climate) %>%
-    ensemble_climate_linear((args_list$aheads[[1]]) / 7) %>%
-    ungroup()
+
+  # either climate or climate linear needs the climate prediction
+  if (model_used == "climate" || model_used == "climate_linear") {
+    pred_climate <- climatological_model(season_data, ahead, geo_agg = quantiles_by_geo, floor_value = min(season_data$value, na.rm = TRUE), pop_scale = FALSE) %>% mutate(forecaster = "climate")
+    pred <- pred_climate %>% select(-forecaster)
+  }
+
+  # either linear or climate linear needs the linear prediction
+  if (model_used == "linear" || model_used == "climate_linear") {
+    pred_linear <- forecaster_baseline_linear(
+      season_data %>% filter(source %in% c("nhsn", "none")),
+      ahead,
+      residual_tail = residual_tail,
+      residual_center = residual_center,
+      no_intercept = TRUE,
+      floor_value = min(season_data$value, na.rm = TRUE, population_scale = FALSE)
+    ) %>%
+      mutate(forecaster = "linear")
+    pred <- pred_linear %>% select(-forecaster)
+  }
+
+  if (model_used == "climate_linear") {
+    pred <- bind_rows(pred_climate, pred_linear) %>%
+      ensemble_climate_linear((args_list$aheads[[1]]) / 7) %>%
+      ungroup()
+  } else if (model_used == "climatological_forecaster") {
+    # forecast all aheads at the same time
+    if (ahead == args_list$aheads[[1]][[1]] / 7) {
+      if (quantiles_by_geo) {
+        quantile_key <- "geo_value"
+      } else {
+        quantile_key <- character(0)
+      }
+      clim_res <- climatological_forecaster(
+        season_data,
+        "value",
+        args_list = climate_args_list(
+          nonneg = (scale_method == "none"),
+          time_type = "epiweek",
+          quantile_levels = quantile_levels,
+          forecast_horizon = args_list$aheads[[1]] / 7,
+          quantile_by_key = quantile_key
+        )
+      )
+      ## clim_res$predictions
+      pred <- clim_res$predictions %>%
+        filter(source %in% c("nhsn", "none")) %>%
+        pivot_quantiles_longer(.pred_distn) %>%
+        select(geo_value, forecast_date, target_end_date = target_date, value = .pred_distn_value, quantile = .pred_distn_quantile_level) %>%
+        mutate(target_end_date = ceiling_date(target_end_date, unit = "weeks", week_start = 6))
+    } else {
+      # we're fitting everything all at once in the first ahead for the
+      # climatological_forecaster, so just return a null result for the other
+      # aheads
+      null_result <- tibble(
+        geo_value = character(),
+        forecast_date = lubridate::Date(),
+        target_end_date = lubridate::Date(),
+        quantile = numeric(),
+        value = numeric()
+      )
+      return(null_result)
+    }
+  }
   # undo whitening
+  if (adding_source) {
+    pred %<>%
+      rename({{ outcome }} := value) %>%
+      mutate(source = "none")
+  } else {
+    pred %<>%
+      rename({{ outcome }} := value) %>%
+      mutate(source = "nhsn")
+  }
   pred_final <- pred %>%
-    rename({{ outcome }} := value) %>%
-    mutate(source = "nhsn") %>%
-    data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
+    data_coloring(outcome, learned_params, join_cols = key_colnames(season_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
     rename(value = {{ outcome }}) %>%
     mutate(value = pmax(0, value)) %>%
     select(-source)
   # move dates to appropriate markers
-  pred_final <- pred_final %>% mutate(target_end_date = target_end_date - 3)
+  pred_final <- pred_final %>%
+    mutate(target_end_date = target_end_date - 3) %>%
+    sort_by_quantile()
   return(pred_final)
 }

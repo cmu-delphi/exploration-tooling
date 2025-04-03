@@ -113,6 +113,45 @@ get_covid_forecaster_params <- function() {
         c("climatological"),
         c("climatological", "window")
       )
+    ),
+    climate_linear = bind_rows(
+      expand_grid(
+        forecaster = "climate_linear_ensembled",
+        scale_method = "quantile",
+        center_method = "median",
+        nonlin_method = c("quart_root", "none"),
+        model_used = c("climate_linear", "climate", "climatological_forecaster"),
+        filter_agg_level = "state",
+        drop_non_seasons = c(TRUE, FALSE),
+        quantiles_by_geo = c(TRUE, FALSE),
+        aheads = list(g_aheads),
+        residual_tail = 0.70,
+        residual_center = 0.127
+      ),
+      expand_grid(
+        forecaster = "climate_linear_ensembled",
+        scale_method = "none",
+        center_method = "none",
+        nonlin_method = c("quart_root", "none"),
+        model_used = c("climate_linear", "climate", "climatological_forecaster"),
+        filter_agg_level = "state",
+        drop_non_seasons = c(TRUE, FALSE),
+        quantiles_by_geo = c(TRUE, FALSE),
+        aheads = list(g_aheads),
+        residual_tail = 0.97,
+        residual_center = 0.097
+      ),
+      expand_grid(
+        forecaster = "climate_linear_ensembled",
+        scale_method = "none",
+        center_method = "none",
+        nonlin_method = "none",
+        model_used = "linear",
+        filter_agg_level = "state",
+        aheads = list(g_aheads),
+        residual_tail = 0.97,
+        residual_center = 0.097
+      ),
     )
   ) %>%
     map(function(x) {

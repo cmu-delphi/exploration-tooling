@@ -304,7 +304,7 @@ drop_non_seasons <- function(epi_data, min_window = 12) {
         (forecast_date - time_value < as.difftime(min_window, units = "weeks")),
       season != "2020/21",
       # season != "2021/22", # keeping this because whitening otherwise gets really bad with the single season of data
-      (season != "2019/20") | (time_value < "2020-03-01"),
+      (season != "2019/20"),
       season != "2008/09"
     )
 }
