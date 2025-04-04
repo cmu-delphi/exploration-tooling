@@ -87,6 +87,7 @@ get_covid_forecaster_params <- function() {
             c(0, 7), # nwss
             c(0, 7), # nwss_region
             c(0, 7), # va_covid_per_100k
+          ),
           list2(
             c(0, 7, 14, 21), # hhs
             c(0, 7), # nssp
@@ -94,7 +95,6 @@ get_covid_forecaster_params <- function() {
             c(0, 7, 14), # nwss
             c(0, 7, 14), # nwss_region
             c(0, 7, 14), # va_covid_per_100k
-          )
           )
         ),
         pop_scaling = FALSE,
