@@ -282,7 +282,7 @@ create_covid_data_targets <- function() {
           mutate(across(starts_with("unique_patients"), ~ . * 1e5 / veteran_population)) %>%
           # Rename columns
           rename_with(~ paste0(., "_per_100k"), starts_with("unique_patients")) %>%
-          # Filter to just flu
+          # Filter to just covid
           select(geo_value, time_value, va_covid_per_100k = unique_patients_covid_per_100k) %>%
           # Convert to weekly
           daily_to_weekly(values = "va_covid_per_100k") %>%
