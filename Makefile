@@ -20,7 +20,17 @@ prod-flu:
 	export TAR_RUN_PROJECT=flu_hosp_prod; \
 	Rscript scripts/run.R
 
-prod: prod-covid prod-flu update_site netlify
+prod: prod-covid prod-flu update-site netlify
+
+explore-covid:
+	export TAR_RUN_PROJECT=covid_hosp_explore; \
+	Rscript scripts/run.R
+
+explore-flu:
+	export TAR_RUN_PROJECT=flu_hosp_explore; \
+	Rscript scripts/run.R
+
+explore: explore-covid explore-flu update-site netlify
 
 submit-covid:
 	cd ../covid19-forecast-hub; \

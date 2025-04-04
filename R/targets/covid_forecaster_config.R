@@ -33,7 +33,7 @@ get_covid_forecaster_params <- function() {
         forecaster = "scaled_pop",
         trainer = "quantreg",
         # since it's a list, this gets expanded out to a single one in each row
-        extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region"),
+        extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region", "va_covid_per_100k"),
         lags = list2(
           list2(
             c(0, 7, 14, 21), # hhs
@@ -55,9 +55,12 @@ get_covid_forecaster_params <- function() {
           c("nssp", "google_symptoms"),
           c("nssp", "nwss"),
           c("nssp", "nwss_region"),
+          c("nssp", "va_covid_per_100k"),
           c("google_symptoms", "nwss"),
           c("google_symptoms", "nwss_region"),
-          c("nwss", "nwss_region")
+          c("google_symptoms", "va_covid_per_100k"),
+          c("nwss", "nwss_region"),
+          c("nwss", "va_covid_per_100k"),
         ),
         lags = list2(
           list2(
@@ -74,7 +77,7 @@ get_covid_forecaster_params <- function() {
         forecaster = "scaled_pop",
         trainer = "quantreg",
         extra_sources = list2(
-          c("nssp", "google_symptoms", "nwss", "nwss_region"),
+          c("nssp", "google_symptoms", "nwss", "nwss_region", "va_covid_per_100k"),
         ),
         lags = list2(
           list2(
@@ -83,6 +86,7 @@ get_covid_forecaster_params <- function() {
             c(0, 7), # google symptoms
             c(0, 7), # nwss
             c(0, 7), # nwss_region
+            c(0, 7), # va_covid_per_100k
           ),
           list2(
             c(0, 7, 14, 21), # hhs
@@ -90,6 +94,7 @@ get_covid_forecaster_params <- function() {
             c(0, 7, 14), # google symptoms
             c(0, 7, 14), # nwss
             c(0, 7, 14), # nwss_region
+            c(0, 7, 14), # va_covid_per_100k
           )
         ),
         pop_scaling = FALSE,

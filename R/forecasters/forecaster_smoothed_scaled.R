@@ -73,13 +73,15 @@ smoothed_scaled <- function(epi_data,
   nonlin_method <- arg_match(nonlin_method)
 
   epi_data <- validate_epi_data(epi_data)
+  extra_sources <- unwrap_argument(extra_sources)
+  trainer <- unwrap_argument(trainer)
 
   # perform any preprocessing not supported by epipredict
   #
   # this is for the case where there are multiple sources in the same column
   epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   # this is a temp fix until a real fix gets put into epipredict
-  epi_data <- clear_lastminute_nas(epi_data, outcome, extra_sources)
+  epi_data <- clear_lastminute_nas(epi_data, cols = c(outcome, extra_sources))
   # see latency_adjusting for other examples
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
@@ -106,12 +108,10 @@ smoothed_scaled <- function(epi_data,
   args_list <- inject(default_args_list(!!!args_input))
   # `extra_sources` sets which variables beyond the outcome are lagged and used as predictors
   # any which are modified by `rolling_mean` or `rolling_sd` have their original values dropped later
-  predictors <- c(outcome, extra_sources[[1]])
-  predictors <- predictors[predictors != ""]
+  predictors <- c(outcome, extra_sources)
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
-
 
 
   #######################

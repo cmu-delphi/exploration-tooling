@@ -30,8 +30,7 @@ sanitize_args_predictors_trainer <- function(epi_data,
   if (!is.null(trainer) && !epipredict:::is_regression(trainer)) {
     cli::cli_abort("{trainer} must be a `{parsnip}` model of mode 'regression'.")
   } else if (inherits(trainer, "rand_forest") && trainer$engine == "grf_quantiles") {
-    trainer %<>%
-      set_engine("grf_quantiles", quantiles = args_list$quantile_levels)
+    trainer %<>% set_engine("grf_quantiles", quantiles = args_list$quantile_levels)
   } else if (inherits(trainer, "quantile_reg")) {
     # add all quantile_levels to the trainer and update args list
     quantile_levels <- sort(epipredict:::compare_quantile_args(
@@ -96,4 +95,18 @@ filter_extraneous <- function(epi_data, filter_source, filter_agg_level) {
     }
   }
   return(epi_data)
+}
+
+#' Unwrap an argument if it's a list of length 1
+#'
+#' Many of our arguments to the forecasters come as lists not because we expect
+#' them that way, but as a byproduct of tibble and expand_grid.
+unwrap_argument <- function(arg, default_trigger = "", default = character(0L)) {
+  if (is.list(arg) && length(arg) == 1) {
+    arg <- arg[[1]]
+  }
+  if (identical(arg, default_trigger)) {
+    return(default)
+  }
+  return(arg)
 }
