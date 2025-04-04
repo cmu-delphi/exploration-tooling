@@ -286,6 +286,8 @@ create_covid_data_targets <- function() {
           daily_to_weekly(values = "va_covid_per_100k") %>%
           # Add version and source columns to make it a faux-archive
           mutate(time_value = time_value, version = time_value) %>%
+          # Filter to when data is decent quality
+          filter(time_value >= "2020-01-01") %>%
           # Make it an archive
           as_epi_archive(compactify = TRUE)
         varch$geo_type <- "custom"
