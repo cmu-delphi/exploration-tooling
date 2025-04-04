@@ -326,8 +326,8 @@ create_covid_data_targets <- function() {
         joined_archive_data %<>% epix_merge(nssp_archive, sync = "locf")
         joined_archive_data$geo_type <- "custom"
         joined_archive_data %<>% epix_merge(google_symptoms_archive, sync = "locf")
-        # joined_archive_data$geo_type <- "custom"
-        # joined_archive_data %<>% epix_merge(veteran_state_archive, sync = "locf")
+        joined_archive_data$geo_type <- "custom"
+        joined_archive_data %<>% epix_merge(veteran_state_archive, sync = "locf")
         joined_archive_data <- joined_archive_data$DT %>%
           filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% g_insufficient_data_geos)) %>%
           # Always convert to data.frame after dplyr operations on data.table
