@@ -389,6 +389,14 @@ create_flu_data_targets <- function() {
       }
     ),
     tar_target(
+      name = state_geo_values,
+      command = {
+        hhs_evaluation_data %>%
+          pull(geo_value) %>%
+          unique()
+      }
+    ),
+    tar_target(
       name = joined_archive_data,
       command = {
         joined_archive_data <- flusion_data_archive %>%
