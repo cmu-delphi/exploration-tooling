@@ -167,9 +167,6 @@ get_covid_forecaster_params <- function() {
       if ("trainer" %in% names(x) && is.list(x$trainer)) {
         x$trainer <- x$trainer[[1]]
       }
-      if ("seasonal_method" %in% names(x) && is.list(x$seasonal_method)) {
-        x$seasonal_method <- x$seasonal_method[[1]]
-      }
       # Add the outcome to each forecaster.
       x$outcome <- "hhs"
       x

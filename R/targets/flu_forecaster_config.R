@@ -215,7 +215,7 @@ get_flu_forecaster_params <- function() {
         seasonal_method = list("flu", "indicator", "climatological"),
         pop_scaling = FALSE,
         train_residual = c(TRUE, FALSE),
-        filter_source = "",
+        filter_source = c("", "nhsn"),
         filter_agg_level = "state",
         drop_non_seasons = c(TRUE, FALSE),
         n_training = Inf,
@@ -231,7 +231,7 @@ get_flu_forecaster_params <- function() {
         seasonal_method = list("window", c("window", "flu"), c("window", "climatological")),
         pop_scaling = FALSE,
         train_residual = c(FALSE, TRUE),
-        filter_source = "",
+        filter_source = c("", "nhsn"),
         filter_agg_level = "state",
         drop_non_seasons = FALSE,
         n_training = Inf,
@@ -252,7 +252,7 @@ get_flu_forecaster_params <- function() {
         ),
         seasonal_method = "window",
         pop_scaling = FALSE,
-        filter_source = "",
+        filter_source = c("", "nhsn"),
         filter_agg_level = "state",
         n_training = Inf,
         drop_non_seasons = FALSE,
@@ -265,7 +265,7 @@ get_flu_forecaster_params <- function() {
       lags = list(
         c(0, 7)
       ),
-      seasonal_method = list("window"),
+      seasonal_method = "window",
       pop_scaling = FALSE,
       train_residual = FALSE,
       filter_source = c("", "nhsn"),
@@ -327,9 +327,6 @@ get_flu_forecaster_params <- function() {
       x <- add_id(x)
       if ("trainer" %in% names(x) && is.list(x$trainer)) {
         x$trainer <- x$trainer[[1]]
-      }
-      if ("seasonal_method" %in% names(x) && is.list(x$seasonal_method)) {
-        x$seasonal_method <- x$seasonal_method[[1]]
       }
       # Add the outcome to each forecaster.
       x$outcome <- "hhs"
