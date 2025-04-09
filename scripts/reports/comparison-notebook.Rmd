@@ -41,10 +41,10 @@ library(purrr)
 
 ```{r}
 # outside_forecaster_subset <- c("COVIDhub-baseline", "COVIDhub-trained_ensemble", "COVIDhub_CDC-ensemble")
-# i <- 1
-# forecaster_families <- tar_read(forecaster_params_grid)$family %>% unique()
+# i <- 5
+# forecaster_families <- names(tar_read(forecaster_parameter_combinations))
 # forecaster_family <- forecaster_families[[i]]
-# params_subset <- tar_read(forecaster_params_grid) %>% filter(family == forecaster_family)
+# params_subset <- tar_read(forecaster_parameter_combinations)[[forecaster_family]]
 # forecasts_subset <- tar_read(joined_forecasts) %>% filter(forecaster %in% c(params_subset$id, outside_forecaster_subset))
 # scores_subset <- tar_read(joined_scores) %>% filter(forecaster %in% c(params_subset$id, outside_forecaster_subset))
 
@@ -109,7 +109,8 @@ param_table <- params$forecaster_parameters %>%
   select(-any_of(ignore_keys)) %>%
   mutate(
     across(matches("^n_training$"), ~ as.character(.x)),
-    across(matches("^trainer$"), ~ unlist(.x))
+    across(matches("^trainer$"), ~ unlist(.x)),
+    across(matches("^seasonal_method$"), ~ Vectorize(function(x) paste0(x, collapse = ", "))(.x))
   ) %>%
   full_join(
     scores %>%

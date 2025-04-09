@@ -14,7 +14,7 @@ get_covid_forecaster_params <- function() {
   out <- rlang::list2(
     scaled_pop_main = tidyr::expand_grid(
       forecaster = "scaled_pop",
-      trainer = list("linreg", "quantreg"),
+      trainer = "quantreg",
       lags = list(
         c(0, 7),
         c(0, 7, 14),
@@ -166,9 +166,6 @@ get_covid_forecaster_params <- function() {
       x <- add_id(x)
       if ("trainer" %in% names(x) && is.list(x$trainer)) {
         x$trainer <- x$trainer[[1]]
-      }
-      if ("seasonal_method" %in% names(x) && is.list(x$seasonal_method)) {
-        x$seasonal_method <- x$seasonal_method[[1]]
       }
       # Add the outcome to each forecaster.
       x$outcome <- "hhs"
