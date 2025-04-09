@@ -14,7 +14,7 @@ get_covid_forecaster_params <- function() {
   out <- rlang::list2(
     scaled_pop_main = tidyr::expand_grid(
       forecaster = "scaled_pop",
-      trainer = list("linreg", "quantreg"),
+      trainer = "quantreg",
       lags = list(
         c(0, 7),
         c(0, 7, 14),
