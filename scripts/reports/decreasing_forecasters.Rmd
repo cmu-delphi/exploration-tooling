@@ -141,7 +141,7 @@ More quantitatively, across all geos:
 basic_gr <- get_growth_rates(all_forecasts, quantiles = 0.5, method = "smooth_spline")
 basic_gr %>% arrange(desc(growth))
 ```
-The only places where the growth rate is positive are american samoa and the US overall, both of which have unusual data trends (as because it is ~0, and the US because it is unusually large).
+The only places where the growth rate is positive are American samoa and the US overall, both of which have unusual data trends (as because it is ~0, and the US because it is unusually large).
 As a histogram (each state is included 5 times, once per ahead):
 ```{r}
 basic_gr %>%  ggplot(aes(x = growth)) + geom_histogram(bins = 300)
@@ -161,7 +161,7 @@ And the corresponding growth rates:
 short_gr <- get_growth_rates(all_short_forecasts, quantiles = 0.5, method = "smooth_spline")
 short_gr %>% arrange(growth) %>% ggplot(aes(x = growth)) + geom_histogram(bins = 300)
 ```
-So on a day-over-day basis the growth rate is mostly increasing, with some strong positive outliers and some amount of decrease.
+So on a day-over-day basis the growth rate is mostly increasing, with some strong positive outliers and some amount decreasing.
 
 # Is it geo pooling?
 Let's see what happens if we restrict ourselves to training each geo separately.
@@ -169,8 +169,36 @@ Let's see what happens if we restrict ourselves to training each geo separately.
 hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
 all_geos <- hhs_forecast %>% distinct(geo_value) %>% pull(geo_value)
 hhs_forecast %>% filter(!is.na(hhs)) %>% group_by(geo_value) %>% summarize(n_points = n()) %>% arrange(n_points)
-all_geos_forecasts <- map(all_geos, \(geo) forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead), epi_data = hhs_forecast %>% filter(geo_value == geo)))
-all_geos_forecasts %>% list_rbind() %>% plot_forecasts(default_geos)
+all_geos_forecasts <- map(all_geos, \(geo) forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead), epi_data = hhs_forecast %>% filter(geo_value == geo))) %>% list_rbind()
+all_geos_forecasts %>% plot_forecasts(default_geos)
 ```
 
-And the phenomina is still happening
+And the phenomena is still happening, at least for the default geos.
+Are most negative?
+
+```{r}
+geos_gr <- get_growth_rates(all_geos_forecasts, quantiles = 0.5, method = "smooth_spline")
+geos_gr %>% arrange(desc(growth))
+```
+This is at least more of a mixed bag, with plenty of states with positive growth.
+
+```{r}
+geos_gr %>% ggplot(aes(x = growth)) + geom_histogram(bins = 300)
+```
+But most have a negative growth.
+
+## How different is not geo pooling anyways?
+Well it is at least different; how exactly is hard to parse:
+```{r}
+all_geos_forecasts %>%
+  left_join(all_forecasts, by = join_by(geo_value, forecast_date, target_end_date, quantile), suffix = c("_geo", "_joint")) %>%
+  mutate(value =  value_geo - value_joint) %>%
+  select(-value_geo, -value_joint) %>%
+  filter(geo_value %in% default_geos) %>%
+  ggplot(aes(x = target_end_date, group = geo_value)) +
+  geom_point(aes(y = value, color = quantile)) +
+  facet_wrap(~geo_value, scale = "free")
+```
+
+
+# Direct vs iterative forecasting
