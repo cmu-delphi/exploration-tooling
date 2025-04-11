@@ -311,23 +311,15 @@ hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date) %>% filter(time_value 
 ```
 
 ```{r}
-linear_get_preproc <- function(ahead, lag = c(0,7,14)) {
-  preproc <- epi_recipe(hhs_forecast) %>%
-    step_population_scaling(
-      hhs,
-      df = epidatasets::state_census,
-      df_pop_col = "pop",
-      create_new = FALSE,
-      rate_rescaling = 1e5,
-      by = c("geo_value" = "abbr")
-    ) %>%
+linear_get_preproc <- function(ahead, lag = c(0,7,14), in_data = hhs_forecast) {
+  preproc <- epi_recipe(in_data) %>%
     step_adjust_latency(hhs, method = "extend_lags") %>%
     step_epi_lag(hhs, lag = lag) %>%
     step_epi_ahead(hhs, ahead = ahead) %>%
     step_epi_naomit()
 }
-linear_get_workflow <- function(ahead, lag = c(0,7,14)) {
-  preproc <- linear_get_preproc(ahead, lag)
+linear_get_workflow <- function(ahead, lag = c(0,7,14), in_data = hhs_forecast) {
+  preproc <- linear_get_preproc(ahead, lag, in_data)
   postproc <- frosting() %>%
     layer_predict() %>%
     layer_residual_quantiles(quantile_levels = covidhub_probs()) %>%
@@ -336,7 +328,7 @@ linear_get_workflow <- function(ahead, lag = c(0,7,14)) {
     layer_add_target_date() %>%
     layer_add_forecast_date()
   workflow <- epi_workflow(preproc, linear_reg()) %>%
-    fit(hhs_forecast) %>%
+    fit(in_data) %>%
     add_frosting(postproc)
   workflow
 }
@@ -438,6 +430,62 @@ fit_data %>%
 Then suddenly the slopes can be quite large!
 This is of course not a particularly principled way of selecting training data.
 
+# Reproducing in the context of covid
+Constantly decreasing forecasters has been less of an issue in covid, so we should do a comparison.
+Since we're assuming the project is `flu_hosp_explore`, we have to directly access the covid archive.
+Covid is in counts, so first we convert to rates.
+
+```{r}
+hhs_covid_archive <-
+  qs2::qs_read(here::here("covid_hosp_explore/objects/hhs_archive"))$DT %>%
+    filter(time_value > "2022-06-01") %>% 
+    left_join(state_census, by = join_by(geo_value == abbr)) %>%
+    mutate(value = value / pop * 1e5) %>%
+    select(-fips, -name, -pop) %>%
+    rename(hhs = value) %>%
+    as_epi_archive()
+hhs_covid_forecast <- hhs_covid_archive %>% epix_as_of(forecast_date)
+hhs_covid_forecast %>% autoplot(hhs)
+hhs_covid_forecast %>% pull(hhs) %>% max
+```
+
+Forecasting using the same methods as the original problem
+```{r}
+all_covid_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, pop_scaling = FALSE), epi_dat = hhs_covid_forecast)
+plot_dec_forecasts(all_covid_forecasts, default_geos, hhs_covid_archive)
+```
+
+Still sort of present!
+Let's take a look at what the forecast is actually seeing
+
+```{r}
+preproc <- linear_get_preproc(0:4 * 7, in_data = hhs_covid_forecast)
+fit_covid_data <- preproc %>%
+  prep(hhs_covid_forecast) %>%
+  bake(hhs_covid_forecast) %>%
+  select(geo_value, time_value, starts_with("lag"), starts_with("ahead"))
+fit_covid_data %>%
+  mutate(epi_week = epiweek(time_value)) %>%
+  pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
+  plot_linear_data()
+```
+
+Which, other than some massive outliers, has similar trends (the slope decreases as we increase the ahead, along with the spread).
+
+And if we cut out the early `epi_weeks`?
+
+```{r}
+fit_covid_data %>%
+  mutate(epi_week = epiweek(time_value)) %>%
+  filter(epi_week > 10) %>%
+  pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
+  plot_linear_data()
+```
+
+Which is marginally better.
+The problematic data is less clear here date-wise than in the case of flu; partly this is because the data covers a much larger range of values.
+Partly I suspect that this is also it's less seasonal.
+
 ## Aside: what if we fit on a log scale?
 
 I originally added this plot in an attempt to make the blob near zero clearer, but it actually just did a linear fit on the log graph.
@@ -458,6 +506,8 @@ fit_data %>%
   facet_wrap(~ahead_value, scales = "free")
 ```
 
+# What if we restrict to `10<epi_week<48`
+This turned
 # Direct vs iterative forecasting
 > Iterative will be monotonic in the horizon. Direct isn’t guaranteed.
 
