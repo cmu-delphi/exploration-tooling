@@ -254,22 +254,70 @@ basic_gr %>%  ggplot(aes(x = growth)) + geom_histogram(bins = 300)
 Mostly positive, so I think we can count this as not having the problem. Something about a linear model is the issue.
 
 
+# Inspecting the linear coefficients
+
+First lets examine the coefficients that are actually fit; to do that from within scaled_pop would involve a `browser()`. For the sake of reproducibility, we will make the steps by hand
+
+```{r}
+hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
+linear_get_workflow <- function(ahead) {
+  preproc <- epi_recipe(hhs_forecast) %>%
+    step_population_scaling(
+      hhs,
+      df = epidatasets::state_census,
+      df_pop_col = "pop",
+      create_new = FALSE,
+      rate_rescaling = 1e5,
+      by = c("geo_value" = "abbr")
+    ) %>%
+    step_adjust_latency(hhs, method = "extend_lags") %>%
+    step_epi_lag(hhs, lag = c(0,7,14)) %>%
+    step_epi_ahead(hhs, ahead = ahead) %>%
+    step_epi_naomit()
+  postproc <- frosting() %>%
+    layer_predict() %>%
+    layer_residual_quantiles(quantile_levels = covidhub_probs()) %>%
+    layer_threshold() %>%
+    layer_naomit() %>%
+    layer_add_target_date() %>%
+    layer_add_forecast_date()
+  workflow <- epi_workflow(preproc, linear_reg()) %>%
+    fit(hhs_forecast) %>%
+    add_frosting(postproc)
+  workflow
+}
+all_workflows <- map(0:4 * 7, linear_get_workflow)
+```
+
+Starting with the largest ahead, the coefficients are
+```{r}
+workflows::extract_fit_parsnip(all_workflows[[5]])
+```
+
+So the intercept is actually positive (so it's not biased towards decreasing inherently), but the coefficients for the two lags are negative.
+Even including that, the `lag_7_hhs` coefficient is less than one, so regardless of the fact that two coefficients are negative it will de-facto always be below the original value.
+
+How about the zero ahead?
+Thanks to latency this is actually a one week forward projection, so we can't expect exactly just `lag_7_hhs` to be one and everything else zero.
+
+```{r}
+workflows::extract_fit_parsnip(all_workflows[[1]])
+```
+
+And that is surprisingly close to exactly the `lag_7_hhs` value. 
+If the signal were constant so far, it would still be predicting a decrease thanks to the `lag_21_hhs` coefficient.
+
+## Presence/absence of an intercept
+> Wonder if this could be due to using an intercept combined with broad geo and time pooling.
+
+This is a bit more annoying to try to implement, since it seems that parsnip doesn't support disabling the intercept outside the formula (so we'd have to do it in the recipe somehow).
+
 # Direct vs iterative forecasting
 > Iterative will be monotonic in the horizon. Direct isn’t guaranteed.
 
 Somewhat hard to express, there's also something about the increasing staleness of data that's relevant.
+Actually implementing an experiment just means including the median from the previous forecast as a data point and forecasting one day further into the future.
 
-
-# Presence/absence of an intercept
-> Wonder if this could be due to using an intercept combined with broad geo and time pooling.
-
-first lets examine
-```{r}
-hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
-all_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, trainer = linear_reg(), pop_scaling = FALSE))
-default_geos <- c("ca", "fl", "ny", "pa", "tx")
-plot_dec_forecasts(all_forecasts, default_geos)
-```
 
 # Does filtering by growth rate change it?
 
