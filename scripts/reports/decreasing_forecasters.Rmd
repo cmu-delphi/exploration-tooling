@@ -35,6 +35,7 @@ This effect is most prominent in flu, but occurs somewhat in covid.
 We need to resolve the source of this.
 It is some combination of the data and the models used.
 
+# Data setup
 This notebook depends on having successfully run the `flu_hosp_explore` targets pipeline to handle the creation of the basic dataset.
 Accordingly, you need `.Renviron` to include `TAR_PROJECT=flu_hosp_prod`.
 ```{r}
@@ -202,3 +203,45 @@ all_geos_forecasts %>%
 
 
 # Direct vs iterative forecasting
+> Iterative will be monotonic in the horizon. Direct isn’t guaranteed.
+
+Somewhat hard to express, there's also something about the increasing staleness of data that's relevant.
+
+
+# Presence/absence of an intercept
+> Wonder if this could be due to using an intercept combined with broad geo and time pooling.
+
+```{r}
+hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
+all_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, trainer = linear_reg()))
+default_geos <- c("ca", "fl", "ny", "pa", "tx")
+plot_forecasts(all_forecasts, default_geos)
+```
+
+# Does filtering by growth rate change it?
+
+# Does switching to a nonlinear engine change it?
+First, confirming that it happens for simple linear regression and not just quantile regression.
+
+```{r}
+hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
+all_linear_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, trainer = linear_reg()))
+default_geos <- c("ca", "fl", "ny", "pa", "tx")
+plot_forecasts(all_linear_forecasts, default_geos)
+```
+
+And just like that the problem is gone?
+
+```{r}
+basic_gr <- get_growth_rates(all_linear_forecasts, quantiles = 0.5, method = "smooth_spline")
+basic_gr %>% arrange(growth) %>% print(n=30)
+```
+
+Not particularly clear, so there's a mix of growth and decay.
+
+```{r}
+basic_gr %>%  ggplot(aes(x = growth)) + geom_histogram(bins = 300)
+```
+The majority of growth rates are positive; there's some amount of negative predictions, but that is to be expected.
+
+There appears to be something about fitting quantiles specifically that is causing this problem.
