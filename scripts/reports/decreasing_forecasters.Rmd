@@ -78,6 +78,7 @@ hhs_gr %>% autoplot(gr_hhs) +
 
 And most locations are still increasing 2 weeks later on the 29th, so we'll use that
 
+Note that this is RATE DATA, and not count data, so `pop_scaling = FALSE` should be the default
 # Some utility functions
 
 Since we don't really need to run the full pipeline to get forecasts from a single day and forecaster, we build a couple of functions for inspecting forecasts.
@@ -207,24 +208,6 @@ all_geos_forecasts %>%
 ```
 
 
-# Direct vs iterative forecasting
-> Iterative will be monotonic in the horizon. Direct isn’t guaranteed.
-
-Somewhat hard to express, there's also something about the increasing staleness of data that's relevant.
-
-
-# Presence/absence of an intercept
-> Wonder if this could be due to using an intercept combined with broad geo and time pooling.
-
-```{r}
-hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
-all_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, trainer = linear_reg(), pop_scaling = FALSE))
-default_geos <- c("ca", "fl", "ny", "pa", "tx")
-plot_dec_forecasts(all_forecasts, default_geos)
-```
-
-# Does filtering by growth rate change it?
-
 # Does switching to a nonlinear engine change it?
 First, confirming that it happens for simple linear regression and not just quantile regression.
 
@@ -235,14 +218,79 @@ default_geos <- c("ca", "fl", "ny", "pa", "tx")
 plot_dec_forecasts(all_linear_forecasts, default_geos)
 ```
 
-And just like that the problem is gone?
+Which appears to also have this problem (and very narrow quantiles in some locations).
 
 ```{r}
 basic_gr <- get_growth_rates(all_linear_forecasts, quantiles = 0.5, method = "smooth_spline")
+basic_gr %>% arrange(desc(growth)) %>% print(n=30)
+```
+
+There's a least a good number of locations/aheads that are positive
+
+```{r}
+basic_gr %>%  ggplot(aes(x = growth)) + geom_histogram(bins = 300)
+```
+But the majority is negative.
+
+## Boosted trees
+
+```{r}
+hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
+
+all_boost_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, trainer = boost_tree(mode = "regression"), pop_scaling = FALSE))
+default_geos <- c("ca", "fl", "ny", "pa", "tx")
+plot_dec_forecasts(all_boost_forecasts, default_geos)
+```
+
+Boosted trees don't have the problem? Mostly?
+The forecasts aren't great, but at least they're not plummeting.
+The quantiles are garbage, but that's kind of to be expected.
+
+```{r}
+basic_gr <- get_growth_rates(all_boost_forecasts, quantiles = 0.5, method = "smooth_spline")
+basic_gr %>%  ggplot(aes(x = growth)) + geom_histogram(bins = 300)
+```
+
+Mostly positive, so I think we can count this as not having the problem. Something about a linear model is the issue.
+
+
+# Direct vs iterative forecasting
+> Iterative will be monotonic in the horizon. Direct isn’t guaranteed.
+
+Somewhat hard to express, there's also something about the increasing staleness of data that's relevant.
+
+
+# Presence/absence of an intercept
+> Wonder if this could be due to using an intercept combined with broad geo and time pooling.
+
+first lets examine
+```{r}
+hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
+all_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, trainer = linear_reg(), pop_scaling = FALSE))
+default_geos <- c("ca", "fl", "ny", "pa", "tx")
+plot_dec_forecasts(all_forecasts, default_geos)
+```
+
+# Does filtering by growth rate change it?
+
+# Dividing by population squared
+This was an accidental find, but if we *do* population scale, the problem goes away.
+
+```{r}
+hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
+all_linear_scaled_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, trainer = linear_reg()))
+default_geos <- c("ca", "fl", "ny", "pa", "tx")
+plot_dec_forecasts(all_linear_scaled_forecasts, default_geos)
+```
+
+And just like that the problem is gone?
+
+```{r}
+basic_gr <- get_growth_rates(all_linear_scaled_forecasts, quantiles = 0.5, method = "smooth_spline")
 basic_gr %>% arrange(growth) %>% print(n=30)
 ```
 
-Not particularly clear, so there's a mix of growth and decay.
+There's a mix of growth and decay.
 
 ```{r}
 basic_gr %>%  ggplot(aes(x = growth)) + geom_histogram(bins = 300)
@@ -250,6 +298,7 @@ basic_gr %>%  ggplot(aes(x = growth)) + geom_histogram(bins = 300)
 The majority of growth rates are positive; there's some amount of negative predictions, but that is to be expected.
 
 There appears to be something about fitting quantiles specifically that is causing this problem.
+
 ## Fitting one quantile
 What if we just fit the median? This shouldn't change anything
 
