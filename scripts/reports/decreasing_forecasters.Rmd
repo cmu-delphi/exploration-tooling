@@ -279,13 +279,39 @@ basic_gr %>% ggplot(aes(x = growth)) +
 Mostly positive, so I think we can count this as not having the problem. Something about a linear model is the issue.
 
 
-# Inspecting the linear coefficients
-
-First lets examine the coefficients that are actually fit; to do that from within scaled_pop would involve a `browser()`. For the sake of reproducibility, we will make the steps by hand
+# Does fitting only 1 lag change things?
 
 ```{r}
-hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
-linear_get_workflow <- function(ahead) {
+hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date) %>% filter(time_value > "2022-06-01")
+all_one_lag_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, pop_scaling = FALSE, lag = 0))
+all_one_lag_forecasts
+plot_dec_forecasts(all_one_lag_forecasts, default_geos)
+```
+
+Still constantly falling, unfortunately, and a surprisingly similar forecast.
+Sanity check that this is actually a different forecast:
+
+```{r}
+all_forecasts %>%
+  left_join(all_one_lag_forecasts, by = c("geo_value", "forecast_date", "target_end_date", "quantile")) %>%
+  mutate(value = value.x - value.y) %>%
+  summarize(net_diff = sum(abs(value)))
+```
+
+Which is indeed larger than zero
+
+# Inspecting the linear coefficients
+
+First lets examine the coefficients that are actually fit; to do that from within scaled_pop would involve a `browser()`. 
+For the sake of reproducibility, we will make the steps by hand.
+Note that I've tried this section with both filtering pre 2022 values and not, and the results are approximately the same.
+
+```{r}
+hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date) %>% filter(time_value > "2022-06-01")
+```
+
+```{r}
+linear_get_preproc <- function(ahead, lag = c(0,7,14)) {
   preproc <- epi_recipe(hhs_forecast) %>%
     step_population_scaling(
       hhs,
@@ -296,9 +322,12 @@ linear_get_workflow <- function(ahead) {
       by = c("geo_value" = "abbr")
     ) %>%
     step_adjust_latency(hhs, method = "extend_lags") %>%
-    step_epi_lag(hhs, lag = c(0, 7, 14)) %>%
+    step_epi_lag(hhs, lag = lag) %>%
     step_epi_ahead(hhs, ahead = ahead) %>%
     step_epi_naomit()
+}
+linear_get_workflow <- function(ahead, lag = c(0,7,14)) {
+  preproc <- linear_get_preproc(ahead, lag)
   postproc <- frosting() %>%
     layer_predict() %>%
     layer_residual_quantiles(quantile_levels = covidhub_probs()) %>%
@@ -329,13 +358,105 @@ Thanks to latency this is actually a one week forward projection, so we can't ex
 workflows::extract_fit_parsnip(all_workflows[[1]])
 ```
 
-And that is surprisingly close to exactly the `lag_7_hhs` value.
-If the signal were constant so far, it would still be predicting a decrease thanks to the `lag_21_hhs` coefficient.
+And that is surprisingly close to exactly the `lag_7_hhs` value. 
+If the signal were constant so far though, it would still be predicting a decrease thanks to the `lag_21_hhs` coefficient.
 
 ## Presence/absence of an intercept
 > Wonder if this could be due to using an intercept combined with broad geo and time pooling.
 
 This is a bit more annoying to try to implement, since it seems that parsnip doesn't support disabling the intercept outside the formula (so we'd have to do it in the recipe somehow).
+
+## Inspecting the actual data that is fit
+
+Given that something strange is going on with the data that we're fitting, it is worth plotting the data that we're fitting.
+Since visualizing a 4D vector is a pain, let's start with the `lag = 0` case, which still has similar behavior (and in fact is the dominant coefficient above anyways).
+The way to get the data is using prep and bake:
+
+```{r}
+preproc <- linear_get_preproc(0:4 * 7)
+fit_data <- preproc %>%
+  prep(hhs_forecast) %>% bake(hhs_forecast) %>%
+  select(geo_value, time_value, starts_with("lag"), starts_with("ahead"))
+lm_fit <- lm(ahead_28_hhs ~ lag_7_hhs, fit_data)
+fit_data %>% drop_na(lag_7_hhs, ahead_28_hhs) %>% ggplot(aes(x = lag_7_hhs, y = ahead_28_hhs)) + geom_point() + geom_smooth(method = 'lm', formula = y~x) + annotate(label = sprintf("y = %.3f + %.3f x\nR² = %.2f", coef(lm_fit)[[1]], coef(lm_fit)[[2]], summary(lm_fit)$r.squared), geom = "text", x = 1.75, y = 1.75, size = 7) + geom_abline(intercept = 0, slope = 1)
+```
+
+which is... positive at least.
+More importantly though, the coefficient on x is less than one, so this still decays.
+
+Comparing with the coefficient for this ahead and only this lag:
+
+```{r}
+all_single_workflows <- map(0:4 * 7, \(ahead) linear_get_workflow(ahead, lag = 0))
+workflows::extract_fit_parsnip(all_single_workflows[[5]])
+```
+
+which is the same value, so it's the same fit (as we should expect).
+Making a similar plot across the values of head:
+
+```{r}
+plot_linear_data <- function(fit_data_long) {
+  fit_data_long %>%
+    drop_na(value) %>%
+    ggplot(aes(x = lag_7_hhs, y = value, color = epi_week)) +
+    geom_point() +
+    ggplot2::scale_color_viridis_c() +
+    geom_smooth(method = 'lm', formula = y~x) +
+    geom_abline(intercept = 0, slope = 1) +
+    facet_wrap(~ahead_value, scales = "free")
+}
+fit_data %>%
+  mutate(epi_week = epiweek(time_value)) %>%
+  pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
+  plot_linear_data()
+```
+
+All of which have slope less than 1.
+There is a stronger correlation between the smaller aheads and the value, and the slope is much closer to one.
+Adding the color corresponding to the season week potentially gives us some idea of the problem; there is a large mass of values with a low slope and a low `epi_week`.
+If we crudely just cut out everything with an `epi_week` below 10:
+
+```{r}
+fit_data %>%
+  mutate(epi_week = epiweek(time_value)) %>%
+  filter(epi_week > 10) %>%
+  pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
+  plot_linear_data()
+```
+
+which is better but still below one.
+For some reason most of the remaining points egregiously below the diagonal are in `epi_weeks` very near 50. If we filter out the last 4 weeks:
+
+```{r}
+fit_data %>%
+  mutate(epi_week = epiweek(time_value)) %>%
+  filter(epi_week > 10, epi_week < 48) %>%
+  pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
+  plot_linear_data()
+```
+
+Then suddenly the slopes can be quite large!
+This is of course not a particularly principled way of selecting training data.
+
+## Aside: what if we fit on a log scale?
+
+I originally added this plot in an attempt to make the blob near zero clearer, but it actually just did a linear fit on the log graph.
+This is significantly closer to a positive linear slope, though it is still negative.
+
+```{r}
+fit_data %>%
+  mutate(epi_week = epiweek(time_value)) %>%
+  pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
+  drop_na(value) %>%
+  ggplot(aes(x = lag_7_hhs, y = value, color = epi_week)) +
+  geom_point() +
+  ggplot2::scale_color_viridis_c() +
+  geom_smooth(method = 'lm', formula = y~x) +
+  geom_abline(intercept = 0, slope = 1) +
+  scale_y_log10() +
+  scale_x_log10() +
+  facet_wrap(~ahead_value, scales = "free")
+```
 
 # Direct vs iterative forecasting
 > Iterative will be monotonic in the horizon. Direct isn’t guaranteed.
