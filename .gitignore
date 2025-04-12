@@ -22,3 +22,5 @@ data/
 .nhsn_covid_cache.parquet
 .nhsn_flu_cache.parquet
 meta/
+**/unnamed-chunk*
+decreasing_forecasters_cache/

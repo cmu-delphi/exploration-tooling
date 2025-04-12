@@ -1,18 +1,14 @@
 ---
 title: "Decreasing Forecasters"
 author: Delphi Forecast Team
-date: "`Sys.date()`"
+date: "compiled on `r format(Sys.time(), '%d %B %Y')`"
 output:
   html_document:
-    code_folding: show
-    toc: True
-    # self_contained: False
+    code_folding: hide
+    toc: true
     # lib_dir: libs
-params:
-  disease: "covid"
-  forecast_res: !r ""
-  forecast_date: !r ""
-  truth_data: !r ""
+editor_options:
+  chunk_output_type: console
 ---
 
 $$\\[.4in]$$
@@ -35,13 +31,18 @@ This effect is most prominent in flu, but occurs somewhat in covid.
 We need to resolve the source of this.
 It is some combination of the data and the models used.
 
-# Data setup
+# Setup
+
+## Data
+
 This notebook depends on having successfully run the `flu_hosp_explore` targets pipeline to handle the creation of the basic dataset.
-Accordingly, you need `.Renviron` to include `TAR_PROJECT=flu_hosp_explore`.
-```{r}
+
+```{r echo=FALSE}
+Sys.setenv(TAR_PROJECT = "flu_hosp_explore")
 tar_make(joined_archive_data)
 joined_archive <- tar_read(joined_archive_data)
 hhs_archive <- tar_read(hhs_archive) %>% as_epi_archive()
+train_value_min <- "2022-06-01"
 ```
 
 The data in question
@@ -82,9 +83,11 @@ hhs_gr %>% autoplot(gr_hhs) +
 And most locations are still increasing 2 weeks later on the 29th, so we'll use that
 
 Note that this is RATE DATA, and not count data, so `pop_scaling = FALSE` should be the default
-# Some utility functions
+
+## Some utility functions
 
 Since we don't really need to run the full pipeline to get forecasts from a single day and forecaster, we build a couple of functions for inspecting forecasts.
+
 ```{r}
 forecast_aheads <- function(forecaster, epi_data = hhs_forecast, aheads = 0:4 * 7) {
   all_forecasts <- map(aheads, \(ahead) forecaster(epi_data, ahead)) %>% list_rbind()
@@ -93,6 +96,7 @@ forecast_aheads <- function(forecaster, epi_data = hhs_forecast, aheads = 0:4 * 
 ```
 
 Here's a way to easily plot a subset of the forecasts, with bands at the 80% and 50% intervals (.1-.9 and .25-.75) against the finalized data.
+
 ```{r}
 plot_dec_forecasts <- function(all_forecasts,
                                geo_values,
@@ -130,6 +134,7 @@ plot_dec_forecasts <- function(all_forecasts,
 
 And a method to inspect whether things are increasing that isn't just the eyeball norm on a few of them.
 This calculates growth rates for each quantile and each location.
+
 ```{r}
 get_growth_rates <- function(forecasts, quantiles = NULL, outlier_bound = 1e2, ...) {
   if (is.null(quantiles)) {
@@ -143,10 +148,12 @@ get_growth_rates <- function(forecasts, quantiles = NULL, outlier_bound = 1e2, .
 }
 ```
 
-# Establishing the problem
+## Establishing the problem
 
 ```{r}
-hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
+hhs_forecast <- hhs_archive %>%
+  epix_as_of(forecast_date) %>%
+  filter(time_value > train_value_min)
 all_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, pop_scaling = FALSE))
 default_geos <- c("ca", "fl", "ny", "pa", "tx")
 plot_dec_forecasts(all_forecasts, default_geos)
@@ -158,16 +165,24 @@ More quantitatively, across all geos:
 basic_gr <- get_growth_rates(all_forecasts, quantiles = 0.5, method = "smooth_spline")
 basic_gr %>% arrange(desc(growth))
 ```
+
 The only places where the growth rate is positive are American samoa and the US overall, both of which have unusual data trends (as because it is ~0, and the US because it is unusually large).
 As a histogram (each state is included 5 times, once per ahead):
+
 ```{r}
 basic_gr %>% ggplot(aes(x = growth)) +
   geom_histogram(bins = 300)
 ```
-## It goes away if we use very short windows
+
+# Model tweaks
+
+## Very short training windows remove the decreasing problem
+
 If we limit to the last 3 weeks of data (so effectively just a linear extrapolation shared across geos), it goes away:
 ```{r}
-hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
+hhs_forecast <- hhs_archive %>%
+  epix_as_of(forecast_date) %>%
+  filter(time_value > train_value_min)
 all_short_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, n_training = 3, pop_scaling = FALSE))
 plot_dec_forecasts(all_short_forecasts, default_geos)
 ```
@@ -184,56 +199,14 @@ short_gr %>%
 ```
 So on a day-over-day basis the growth rate is mostly increasing, with some strong positive outliers and some amount decreasing.
 
-# Is it geo pooling?
-Let's see what happens if we restrict ourselves to training each geo separately.
-```{r}
-hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
-all_geos <- hhs_forecast %>%
-  distinct(geo_value) %>%
-  pull(geo_value)
-hhs_forecast %>%
-  filter(!is.na(hhs)) %>%
-  group_by(geo_value) %>%
-  summarize(n_points = n()) %>%
-  arrange(n_points)
-all_geos_forecasts <- map(all_geos, \(geo) forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, pop_scaling = FALSE), epi_data = hhs_forecast %>% filter(geo_value == geo))) %>% list_rbind()
-all_geos_forecasts %>% plot_dec_forecasts(default_geos)
-```
+## Switching to linear regression slightly mitigates, but doesn't remove the problem
 
-And the phenomena is still happening, at least for the default geos.
-Are most negative?
-
-```{r}
-geos_gr <- get_growth_rates(all_geos_forecasts, quantiles = 0.5, method = "smooth_spline")
-geos_gr %>% arrange(desc(growth))
-```
-This is at least more of a mixed bag, with plenty of states with positive growth.
-
-```{r}
-geos_gr %>% ggplot(aes(x = growth)) +
-  geom_histogram(bins = 300)
-```
-But most have a negative growth.
-
-## How different is not geo pooling anyways?
-Well it is at least different; how exactly is hard to parse:
-```{r}
-all_geos_forecasts %>%
-  left_join(all_forecasts, by = join_by(geo_value, forecast_date, target_end_date, quantile), suffix = c("_geo", "_joint")) %>%
-  mutate(value = value_geo - value_joint) %>%
-  select(-value_geo, -value_joint) %>%
-  filter(geo_value %in% default_geos) %>%
-  ggplot(aes(x = target_end_date, group = geo_value)) +
-  geom_point(aes(y = value, color = quantile)) +
-  facet_wrap(~geo_value, scale = "free")
-```
-
-
-# Does switching to a nonlinear engine change it?
 First, confirming that it happens for simple linear regression and not just quantile regression.
 
 ```{r}
-hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
+hhs_forecast <- hhs_archive %>%
+  epix_as_of(forecast_date) %>%
+  filter(time_value > train_value_min)
 all_linear_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, trainer = linear_reg(), pop_scaling = FALSE))
 default_geos <- c("ca", "fl", "ny", "pa", "tx")
 plot_dec_forecasts(all_linear_forecasts, default_geos)
@@ -254,12 +227,17 @@ There's a least a good number of locations/aheads that are positive
 basic_gr %>% ggplot(aes(x = growth)) +
   geom_histogram(bins = 300)
 ```
+
 But the majority is negative.
 
-## Boosted trees
+## Switching to a nonlinear engine removes the decreasing problem
+
+### Boosted trees
 
 ```{r}
-hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
+hhs_forecast <- hhs_archive %>%
+  epix_as_of(forecast_date) %>%
+  filter(time_value > train_value_min)
 
 all_boost_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, trainer = boost_tree(mode = "regression"), pop_scaling = FALSE))
 default_geos <- c("ca", "fl", "ny", "pa", "tx")
@@ -278,47 +256,48 @@ basic_gr %>% ggplot(aes(x = growth)) +
 
 Mostly positive, so I think we can count this as not having the problem. Something about a linear model is the issue.
 
-
-# Does fitting only 1 lag change things?
+## Fitting only 1 lag does not change the problem
 
 ```{r}
-hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date) %>% filter(time_value > "2022-06-01")
+hhs_forecast <- hhs_archive %>%
+  epix_as_of(forecast_date) %>%
+  filter(time_value > train_value_min)
 all_one_lag_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, pop_scaling = FALSE, lag = 0))
 all_one_lag_forecasts
 plot_dec_forecasts(all_one_lag_forecasts, default_geos)
 ```
 
 Still constantly falling, unfortunately, and a surprisingly similar forecast.
-Sanity check that this is actually a different forecast:
 
-```{r}
-all_forecasts %>%
-  left_join(all_one_lag_forecasts, by = c("geo_value", "forecast_date", "target_end_date", "quantile")) %>%
-  mutate(value = value.x - value.y) %>%
-  summarize(net_diff = sum(abs(value)))
-```
+# Inspecting the linear model coefficients
 
-Which is indeed larger than zero
-
-# Inspecting the linear coefficients
-
-First lets examine the coefficients that are actually fit; to do that from within scaled_pop would involve a `browser()`. 
+First lets examine the coefficients that are actually fit; to do that from within scaled_pop would involve a `browser()`.
 For the sake of reproducibility, we will make the steps by hand.
 Note that I've tried this section with both filtering pre 2022 values and not, and the results are approximately the same.
 
 ```{r}
-hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date) %>% filter(time_value > "2022-06-01")
+hhs_forecast <- hhs_archive %>%
+  epix_as_of(forecast_date) %>%
+  filter(time_value > train_value_min)
 ```
 
 ```{r}
-linear_get_preproc <- function(ahead, lag = c(0,7,14), in_data = hhs_forecast) {
+linear_get_preproc <- function(ahead, lag = c(0, 7, 14), in_data = hhs_forecast) {
   preproc <- epi_recipe(in_data) %>%
+    step_population_scaling(
+      hhs,
+      df = epidatasets::state_census,
+      df_pop_col = "pop",
+      create_new = FALSE,
+      rate_rescaling = 1e5,
+      by = c("geo_value" = "abbr")
+    ) %>%
     step_adjust_latency(hhs, method = "extend_lags") %>%
     step_epi_lag(hhs, lag = lag) %>%
     step_epi_ahead(hhs, ahead = ahead) %>%
     step_epi_naomit()
 }
-linear_get_workflow <- function(ahead, lag = c(0,7,14), in_data = hhs_forecast) {
+linear_get_workflow <- function(ahead, lag = c(0, 7, 14), in_data = hhs_forecast) {
   preproc <- linear_get_preproc(ahead, lag, in_data)
   postproc <- frosting() %>%
     layer_predict() %>%
@@ -336,6 +315,7 @@ all_workflows <- map(0:4 * 7, linear_get_workflow)
 ```
 
 Starting with the largest ahead, the coefficients are
+
 ```{r}
 workflows::extract_fit_parsnip(all_workflows[[5]])
 ```
@@ -350,15 +330,10 @@ Thanks to latency this is actually a one week forward projection, so we can't ex
 workflows::extract_fit_parsnip(all_workflows[[1]])
 ```
 
-And that is surprisingly close to exactly the `lag_7_hhs` value. 
+And that is surprisingly close to exactly the `lag_7_hhs` value.
 If the signal were constant so far though, it would still be predicting a decrease thanks to the `lag_21_hhs` coefficient.
 
-## Presence/absence of an intercept
-> Wonder if this could be due to using an intercept combined with broad geo and time pooling.
-
-This is a bit more annoying to try to implement, since it seems that parsnip doesn't support disabling the intercept outside the formula (so we'd have to do it in the recipe somehow).
-
-## Inspecting the actual data that is fit
+## Fitting simple linear models to the data yields coefficients less than one
 
 Given that something strange is going on with the data that we're fitting, it is worth plotting the data that we're fitting.
 Since visualizing a 4D vector is a pain, let's start with the `lag = 0` case, which still has similar behavior (and in fact is the dominant coefficient above anyways).
@@ -367,10 +342,23 @@ The way to get the data is using prep and bake:
 ```{r}
 preproc <- linear_get_preproc(0:4 * 7)
 fit_data <- preproc %>%
-  prep(hhs_forecast) %>% bake(hhs_forecast) %>%
-  select(geo_value, time_value, starts_with("lag"), starts_with("ahead"))
-lm_fit <- lm(ahead_28_hhs ~ lag_7_hhs, fit_data)
-fit_data %>% drop_na(lag_7_hhs, ahead_28_hhs) %>% ggplot(aes(x = lag_7_hhs, y = ahead_28_hhs)) + geom_point() + geom_smooth(method = 'lm', formula = y~x) + annotate(label = sprintf("y = %.3f + %.3f x\nR² = %.2f", coef(lm_fit)[[1]], coef(lm_fit)[[2]], summary(lm_fit)$r.squared), geom = "text", x = 1.75, y = 1.75, size = 7) + geom_abline(intercept = 0, slope = 1)
+  prep(hhs_forecast) %>%
+  bake(hhs_forecast) %>%
+  select(geo_value, time_value, starts_with("lag"), starts_with("ahead")) %>%
+  pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
+  drop_na(lag_7_hhs, value) %>%
+  arrange(geo_value, time_value, ahead_value) %>%
+  mutate(epi_week = epiweek(time_value))
+
+fit_data %>%
+  ggplot(aes(x = lag_7_hhs, y = value)) +
+  geom_hex(alpha = 0.5, bins = 30) +
+  geom_point(aes(color = epi_week), alpha = 0.3, size = 0.5) +
+  geom_smooth(method = "lm", formula = y ~ x) +
+  geom_abline(intercept = 0, slope = 1) +
+  facet_wrap(~ahead_value, scales = "free") +
+  scale_color_viridis_c() +
+  scale_fill_viridis_c(option = "magma", trans = "log10")
 ```
 
 which is... positive at least.
@@ -393,13 +381,11 @@ plot_linear_data <- function(fit_data_long) {
     ggplot(aes(x = lag_7_hhs, y = value, color = epi_week)) +
     geom_point() +
     ggplot2::scale_color_viridis_c() +
-    geom_smooth(method = 'lm', formula = y~x) +
+    geom_smooth(method = "lm", formula = y ~ x) +
     geom_abline(intercept = 0, slope = 1) +
     facet_wrap(~ahead_value, scales = "free")
 }
 fit_data %>%
-  mutate(epi_week = epiweek(time_value)) %>%
-  pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
   plot_linear_data()
 ```
 
@@ -410,9 +396,7 @@ If we crudely just cut out everything with an `epi_week` below 10:
 
 ```{r}
 fit_data %>%
-  mutate(epi_week = epiweek(time_value)) %>%
   filter(epi_week > 10) %>%
-  pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
   plot_linear_data()
 ```
 
@@ -421,9 +405,7 @@ For some reason most of the remaining points egregiously below the diagonal are 
 
 ```{r}
 fit_data %>%
-  mutate(epi_week = epiweek(time_value)) %>%
   filter(epi_week > 10, epi_week < 48) %>%
-  pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
   plot_linear_data()
 ```
 
@@ -431,6 +413,7 @@ Then suddenly the slopes can be quite large!
 This is of course not a particularly principled way of selecting training data.
 
 # Reproducing in the context of covid
+
 Constantly decreasing forecasters has been less of an issue in covid, so we should do a comparison.
 Since we're assuming the project is `flu_hosp_explore`, we have to directly access the covid archive.
 Covid is in counts, so first we convert to rates.
@@ -438,15 +421,17 @@ Covid is in counts, so first we convert to rates.
 ```{r}
 hhs_covid_archive <-
   qs2::qs_read(here::here("covid_hosp_explore/objects/hhs_archive"))$DT %>%
-    filter(time_value > "2022-06-01") %>% 
-    left_join(state_census, by = join_by(geo_value == abbr)) %>%
-    mutate(value = value / pop * 1e5) %>%
-    select(-fips, -name, -pop) %>%
-    rename(hhs = value) %>%
-    as_epi_archive()
+  filter(time_value > train_value_min) %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(value = value / pop * 1e5) %>%
+  select(-fips, -name, -pop) %>%
+  rename(hhs = value) %>%
+  as_epi_archive()
 hhs_covid_forecast <- hhs_covid_archive %>% epix_as_of(forecast_date)
 hhs_covid_forecast %>% autoplot(hhs)
-hhs_covid_forecast %>% pull(hhs) %>% max
+hhs_covid_forecast %>%
+  pull(hhs) %>%
+  max()
 ```
 
 Forecasting using the same methods as the original problem
@@ -493,13 +478,11 @@ This is significantly closer to a positive linear slope, though it is still nega
 
 ```{r}
 fit_data %>%
-  mutate(epi_week = epiweek(time_value)) %>%
-  pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
   drop_na(value) %>%
   ggplot(aes(x = lag_7_hhs, y = value, color = epi_week)) +
   geom_point() +
   ggplot2::scale_color_viridis_c() +
-  geom_smooth(method = 'lm', formula = y~x) +
+  geom_smooth(method = "lm", formula = y ~ x) +
   geom_abline(intercept = 0, slope = 1) +
   scale_y_log10() +
   scale_x_log10() +
@@ -507,17 +490,26 @@ fit_data %>%
 ```
 
 # What if we restrict to `10<epi_week<48`
-This turned
+
+TODO.
+
 # Direct vs iterative forecasting
-> Iterative will be monotonic in the horizon. Direct isn’t guaranteed.
+
+Iterative will be monotonic in the horizon. Direct isn’t guaranteed.
 
 Somewhat hard to express, there's also something about the increasing staleness of data that's relevant.
 Actually implementing an experiment just means including the median from the previous forecast as a data point and forecasting one day further into the future.
 
-
 # Does filtering by growth rate change it?
 
-# Dividing by population squared
+TODO.
+
+# Appendix
+
+Some other investigations.
+
+## Dividing by population squared
+
 This was an accidental find, but if we *do* population scale, the problem goes away.
 
 ```{r}
@@ -547,6 +539,7 @@ The majority of growth rates are positive; there's some amount of negative predi
 There appears to be something about fitting quantiles specifically that is causing this problem.
 
 ## Fitting one quantile
+
 What if we just fit the median? This shouldn't change anything
 
 ```{r}
@@ -602,4 +595,53 @@ tibble(geo_value = pred_data$geo_value, value = predictions) %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
   mutate(value = value * pop / 1e5) %>%
   select(-fips, -name, -pop)
+```
+
+## Presence/absence of an intercept
+
+This is a bit more annoying to try to implement, since it seems that parsnip doesn't support disabling the intercept outside the formula (so we'd have to do it in the recipe somehow).
+
+## Is it geo pooling?
+
+TL;DR: No. The phenomena is still happening, at least for the default geos. Too
+slow to run regularly. Let's see what happens if we restrict ourselves to
+training each geo separately.
+
+```{r, eval = FALSE}
+hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
+all_geos <- hhs_forecast %>%
+  distinct(geo_value) %>%
+  pull(geo_value)
+hhs_forecast %>%
+  filter(!is.na(hhs)) %>%
+  group_by(geo_value) %>%
+  summarize(n_points = n()) %>%
+  arrange(n_points)
+all_geos_forecasts <- map(all_geos, \(geo) forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, pop_scaling = FALSE), epi_data = hhs_forecast %>% filter(geo_value == geo))) %>% list_rbind()
+all_geos_forecasts %>% plot_dec_forecasts(default_geos)
+```
+
+```{r, eval = FALSE}
+geos_gr <- get_growth_rates(all_geos_forecasts, quantiles = 0.5, method = "smooth_spline")
+geos_gr %>% arrange(desc(growth))
+```
+This is at least more of a mixed bag, with plenty of states with positive growth.
+
+```{r, eval = FALSE}
+geos_gr %>% ggplot(aes(x = growth)) +
+  geom_histogram(bins = 300)
+```
+But most have a negative growth.
+
+## How different is not geo pooling anyways?
+Well it is at least different; how exactly is hard to parse:
+```{r, eval = FALSE}
+all_geos_forecasts %>%
+  left_join(all_forecasts, by = join_by(geo_value, forecast_date, target_end_date, quantile), suffix = c("_geo", "_joint")) %>%
+  mutate(value = value_geo - value_joint) %>%
+  select(-value_geo, -value_joint) %>%
+  filter(geo_value %in% default_geos) %>%
+  ggplot(aes(x = target_end_date, group = geo_value)) +
+  geom_point(aes(y = value, color = quantile)) +
+  facet_wrap(~geo_value, scale = "free")
 ```

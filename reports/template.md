@@ -10,6 +10,7 @@
 
 ## Exploration Reports
 
+- [An Analysis of Decreasing Behavior in Forecasters](decreasing_forecasters.html)
 - [NHSN 2024-2025 Data Analysis](new_data.html)
 
 ### Flu
