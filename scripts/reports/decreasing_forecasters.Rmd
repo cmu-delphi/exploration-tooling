@@ -341,7 +341,7 @@ The way to get the data is using prep and bake:
 
 ```{r}
 preproc <- linear_get_preproc(0:4 * 7)
-fit_data <- preproc %>%
+fit_data_long <- preproc %>%
   prep(hhs_forecast) %>%
   bake(hhs_forecast) %>%
   select(geo_value, time_value, starts_with("lag"), starts_with("ahead")) %>%
@@ -349,16 +349,6 @@ fit_data <- preproc %>%
   drop_na(lag_7_hhs, value) %>%
   arrange(geo_value, time_value, ahead_value) %>%
   mutate(epi_week = epiweek(time_value))
-
-fit_data %>%
-  ggplot(aes(x = lag_7_hhs, y = value)) +
-  geom_hex(alpha = 0.5, bins = 30) +
-  geom_point(aes(color = epi_week), alpha = 0.3, size = 0.5) +
-  geom_smooth(method = "lm", formula = y ~ x) +
-  geom_abline(intercept = 0, slope = 1) +
-  facet_wrap(~ahead_value, scales = "free") +
-  scale_color_viridis_c() +
-  scale_fill_viridis_c(option = "magma", trans = "log10")
 ```
 
 which is... positive at least.
@@ -377,15 +367,16 @@ Making a similar plot across the values of head:
 ```{r}
 plot_linear_data <- function(fit_data_long) {
   fit_data_long %>%
-    drop_na(value) %>%
-    ggplot(aes(x = lag_7_hhs, y = value, color = epi_week)) +
-    geom_point() +
-    ggplot2::scale_color_viridis_c() +
+    ggplot(aes(x = lag_7_hhs, y = value)) +
+    geom_hex(alpha = 0.5, bins = 30) +
+    geom_point(aes(color = epi_week), alpha = 0.3, size = 0.5) +
     geom_smooth(method = "lm", formula = y ~ x) +
     geom_abline(intercept = 0, slope = 1) +
-    facet_wrap(~ahead_value, scales = "free")
+    facet_wrap(~ahead_value, scales = "free") +
+    scale_color_viridis_c() +
+    scale_fill_viridis_c(option = "magma", trans = "log10")
 }
-fit_data %>%
+fit_data_long %>%
   plot_linear_data()
 ```
 
@@ -395,7 +386,7 @@ Adding the color corresponding to the season week potentially gives us some idea
 If we crudely just cut out everything with an `epi_week` below 10:
 
 ```{r}
-fit_data %>%
+fit_data_long %>%
   filter(epi_week > 10) %>%
   plot_linear_data()
 ```
@@ -404,13 +395,32 @@ which is better but still below one.
 For some reason most of the remaining points egregiously below the diagonal are in `epi_weeks` very near 50. If we filter out the last 4 weeks:
 
 ```{r}
-fit_data %>%
+fit_data_long %>%
   filter(epi_week > 10, epi_week < 48) %>%
   plot_linear_data()
 ```
 
 Then suddenly the slopes can be quite large!
 This is of course not a particularly principled way of selecting training data.
+
+## Aside: what if we fit on a log scale?
+
+I originally added this plot in an attempt to make the blob near zero clearer, but it actually just did a linear fit on the log graph.
+This is significantly closer to a positive linear slope, though it is still negative.
+
+```{r}
+fit_data_long %>%
+  ggplot(aes(x = lag_7_hhs, y = value)) +
+  geom_hex(alpha = 0.5, bins = 30) +
+  geom_point(aes(color = epi_week), alpha = 0.3, size = 0.5) +
+  geom_smooth(method = "lm", formula = y ~ x) +
+  geom_abline(intercept = 0, slope = 1) +
+  scale_y_log10() +
+  scale_x_log10() +
+  facet_wrap(~ahead_value, scales = "free") +
+  scale_color_viridis_c() +
+  scale_fill_viridis_c(option = "magma", trans = "log10")
+```
 
 # Reproducing in the context of covid
 
@@ -470,39 +480,6 @@ fit_covid_data %>%
 Which is marginally better.
 The problematic data is less clear here date-wise than in the case of flu; partly this is because the data covers a much larger range of values.
 Partly I suspect that this is also it's less seasonal.
-
-## Aside: what if we fit on a log scale?
-
-I originally added this plot in an attempt to make the blob near zero clearer, but it actually just did a linear fit on the log graph.
-This is significantly closer to a positive linear slope, though it is still negative.
-
-```{r}
-fit_data %>%
-  drop_na(value) %>%
-  ggplot(aes(x = lag_7_hhs, y = value, color = epi_week)) +
-  geom_point() +
-  ggplot2::scale_color_viridis_c() +
-  geom_smooth(method = "lm", formula = y ~ x) +
-  geom_abline(intercept = 0, slope = 1) +
-  scale_y_log10() +
-  scale_x_log10() +
-  facet_wrap(~ahead_value, scales = "free")
-```
-
-# What if we restrict to `10<epi_week<48`
-
-TODO.
-
-# Direct vs iterative forecasting
-
-Iterative will be monotonic in the horizon. Direct isn’t guaranteed.
-
-Somewhat hard to express, there's also something about the increasing staleness of data that's relevant.
-Actually implementing an experiment just means including the median from the previous forecast as a data point and forecasting one day further into the future.
-
-# Does filtering by growth rate change it?
-
-TODO.
 
 # Appendix
 
@@ -633,7 +610,8 @@ geos_gr %>% ggplot(aes(x = growth)) +
 ```
 But most have a negative growth.
 
-## How different is not geo pooling anyways?
+### How different is not geo pooling anyways?
+
 Well it is at least different; how exactly is hard to parse:
 ```{r, eval = FALSE}
 all_geos_forecasts %>%
@@ -645,3 +623,14 @@ all_geos_forecasts %>%
   geom_point(aes(y = value, color = quantile)) +
   facet_wrap(~geo_value, scale = "free")
 ```
+
+## Direct vs iterative forecasting
+
+Iterative will be monotonic in the horizon. Direct isn’t guaranteed.
+
+Somewhat hard to express, there's also something about the increasing staleness of data that's relevant.
+Actually implementing an experiment just means including the median from the previous forecast as a data point and forecasting one day further into the future.
+
+## Does filtering by growth rate change it?
+
+TODO.
