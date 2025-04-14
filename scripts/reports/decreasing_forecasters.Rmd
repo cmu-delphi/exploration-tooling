@@ -281,6 +281,51 @@ plot_dec_forecasts(all_one_lag_forecasts, default_geos)
 
 Still constantly falling, unfortunately, and a surprisingly similar forecast.
 
+## Removing 2020/21 and 2021/22 improves but doesn't fix the situation
+The first 2 years are bad for flu, as there was ~no spread.
+In practice we know this behavior happens when we remove those years, and even the summers.
+I'm including this primarily to compare the change in growth rates.
+
+```{r}
+hhs_forecast_recent <- hhs_archive %>%
+  epix_as_of(forecast_date) %>%
+  filter(time_value > "2022-06-01")
+all_recent_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, pop_scaling = FALSE), epi_data = hhs_forecast_recent)
+plot_dec_forecasts(all_recent_forecasts, default_geos)
+```
+
+Which is still decreasing.
+
+```{r}
+basic_gr <- get_growth_rates(all_recent_forecasts, quantiles = 0.5, method = "smooth_spline")
+basic_gr %>% arrange(desc(growth)) %>% print(n=30)
+basic_gr %>% ggplot(aes(x = growth)) +
+  geom_histogram(bins = 300)
+```
+
+which are more or less the same level of bad.
+### Linear only 
+However if we filter to 2022 onwards and use a linear engine:
+
+```{r}
+hhs_forecast_recent <- hhs_archive %>%
+  epix_as_of(forecast_date) %>%
+  filter(time_value > "2022-06-01")
+all_recent_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = ahead, pop_scaling = FALSE, trainer = linear_reg()), epi_data = hhs_forecast_recent)
+plot_dec_forecasts(all_recent_forecasts, default_geos)
+```
+
+Some are actually increasing, while some are decreasing.
+
+```{r}
+basic_gr <- get_growth_rates(all_recent_forecasts, quantiles = 0.5, method = "smooth_spline")
+basic_gr %>% arrange(desc(growth)) %>% print(n=30)
+basic_gr %>% ggplot(aes(x = growth)) +
+  geom_histogram(bins = 300)
+```
+
+Overall, more are now positive than they were in the totally unfiltered case, but there's still a number of unreasonably negative values.
+
 # Inspecting the linear model coefficients
 
 First lets examine the coefficients that are actually fit; to do that from within scaled_pop would involve a `browser()`.
@@ -653,4 +698,7 @@ Actually implementing an experiment just means including the median from the pre
 
 ## Does filtering by growth rate change it?
 
-TODO.
+Roughly, the idea is to filter the data to that within a range of the growth rate of the most recent data point.
+```{r}
+
+```
