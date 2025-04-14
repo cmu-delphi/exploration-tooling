@@ -450,9 +450,6 @@ hhs_covid_archive <-
   as_epi_archive()
 hhs_covid_forecast <- hhs_covid_archive %>% epix_as_of(forecast_date)
 hhs_covid_forecast %>% autoplot(hhs)
-hhs_covid_forecast %>%
-  pull(hhs) %>%
-  max()
 ```
 
 Forecasting using the same methods as the original problem
@@ -461,7 +458,17 @@ all_covid_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = 
 plot_dec_forecasts(all_covid_forecasts, default_geos, hhs_covid_archive)
 ```
 
-Still sort of present!
+Still sort of present! 
+And does it show up in a histogram of growth rates?
+
+```{r}
+basic_gr <- get_growth_rates(all_covid_forecasts, quantiles = 0.5, method = "smooth_spline")
+basic_gr %>% arrange(desc(growth)) %>% print(n=30)
+basic_gr %>% ggplot(aes(x = growth)) +
+  geom_histogram(bins = 300)
+```
+
+On average the growth rate is positive, but really at this point ~none of the forecasts should have a negative slope of the median.
 Let's take a look at what the forecast is actually seeing
 
 ```{r}
@@ -469,8 +476,7 @@ preproc <- linear_get_preproc(0:4 * 7, in_data = hhs_covid_forecast)
 fit_covid_data <- preproc %>%
   prep(hhs_covid_forecast) %>%
   bake(hhs_covid_forecast) %>%
-  select(geo_value, time_value, starts_with("lag"), starts_with("ahead")) %>%
-  mutate(ahead_value = factor(ahead_value, c("ahead_0_hhs", "ahead_7_hhs", "ahead_14_hhs", "ahead_21_hhs", "ahead_28_hhs"))) %>%
+  select(geo_value, time_value, starts_with("lag"), starts_with("ahead")) 
 fit_covid_data %>%
   mutate(epi_week = epiweek(time_value)) %>%
   pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
@@ -487,6 +493,7 @@ fit_covid_data %>%
   mutate(epi_week = epiweek(time_value)) %>%
   filter(epi_week > 10) %>%
   pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
+  mutate(ahead_value = factor(ahead_value, c("ahead_0_hhs", "ahead_7_hhs", "ahead_14_hhs", "ahead_21_hhs", "ahead_28_hhs"))) %>%
   plot_linear_data()
 ```
 
@@ -500,7 +507,7 @@ Some other investigations.
 
 ## Dividing by population squared
 
-This was an accidental find, but if we *do* population scale, the problem goes away.
+This was an accidental find, but if we *do* population scale the already population scaled data, the problem mostly goes away.
 
 ```{r}
 hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
