@@ -737,6 +737,76 @@ forecast %>% plot_dec_forecasts(default_geos)
 This is much better than the original forecasts (we're forecasting on the same
 data as in the "problem setup" section).
 
+Let's combine this with seasonal training data.
+
+```{r}
+hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
+# Get the latest values so we know where to sum from later
+latest_values <- hhs_forecast %>%
+  filter(geo_value %in% default_geos) %>%
+  slice_max(time_value, by=geo_value) %>%
+  select(geo_value, time_value, value = hhs)
+# Take data diffs
+diffed_data <- hhs_forecast %>%
+  group_by(geo_value) %>%
+  mutate(value_diff = hhs - lag(hhs)) %>%
+  ungroup() %>%
+  select(geo_value, time_value, value_diff)
+# Forecast the diffs and appean the starting values from the original data
+diffed_forecast <- forecast_aheads(\(x, ahead) scaled_pop_seasonal(x, "value_diff", ahead = ahead, pop_scaling = FALSE, seasonal_method = "window"), epi_data = diffed_data) %>%
+  select(geo_value, time_value = target_end_date, value, quantile) %>%
+  bind_rows(tidyr::expand_grid(quantile = diffed_forecast$quantile %>% unique, latest_values))
+# Sum the diffs to get the final forecast
+forecast <- diffed_forecast %>%
+  group_by(geo_value, quantile) %>%
+  arrange(time_value) %>%
+  mutate(value = cumsum(value), forecast_date = .env$forecast_date) %>%
+  ungroup() %>%
+  arrange(geo_value, quantile, time_value) %>%
+  select(geo_value, forecast_date, target_end_date = time_value, quantile, value)
+forecast %>% plot_dec_forecasts(default_geos)
+```
+
+Turns out, we get better coverage this way.
+
+Now let's try training on the augmented data (fluview and ILI). TODO.
+
+```{r, eval = FALSE}
+joined_archive_data_as_of <- tar_read(joined_archive_data) %>% epix_as_of(forecast_date)
+
+# Get the latest values so we know where to sum from later
+latest_values <- joined_archive_data_as_of %>%
+  filter(geo_value %in% default_geos, source == "nhsn") %>%
+  slice_max(time_value, by=geo_value) %>%
+  select(geo_value, time_value, value = hhs)
+# Take data diffs
+diffed_data <- joined_archive_data_as_of %>%
+  filter(geo_value %in% default_geos) %>%
+  filter(time_value <= forecast_date - 7) %>%
+  arrange(source, geo_value, time_value) %>%
+  group_by(geo_value, source) %>%
+  mutate(value_diff = hhs - lag(hhs)) %>%
+  filter(!near(0, value_diff)) %>%
+  ungroup() %>%
+  select(source, geo_value, time_value, value_diff) %>%
+  drop_na(value_diff) %>%
+  as_epi_df(other_keys = "source", as_of = forecast_date)
+
+# Forecast the diffs and appean the starting values from the original data
+diffed_forecast <- forecast_aheads(\(x, ahead) scaled_pop_seasonal(x, "value_diff", ahead = ahead, pop_scaling = FALSE, seasonal_method = "window"), epi_data = diffed_data) %>%
+  select(geo_value, time_value = target_end_date, value, quantile) %>%
+  bind_rows(tidyr::expand_grid(quantile = diffed_forecast$quantile %>% unique, latest_values))
+# Sum the diffs to get the final forecast
+forecast <- diffed_forecast %>%
+  group_by(geo_value, quantile) %>%
+  arrange(time_value) %>%
+  mutate(value = cumsum(value), forecast_date = .env$forecast_date) %>%
+  ungroup() %>%
+  arrange(geo_value, quantile, time_value) %>%
+  select(geo_value, forecast_date, target_end_date = time_value, quantile, value)
+forecast %>% plot_dec_forecasts(default_geos)
+```
+
 ## Does filtering by growth rate change it?
 Roughly, the idea is to filter the data to that within a range of the growth rate of the most recent data point.
 To actually execute on this, we'll use a `step_filter` at the end with a condition based on the growth rate at the first lag.
