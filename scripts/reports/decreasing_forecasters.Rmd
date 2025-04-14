@@ -48,6 +48,8 @@ Some possible fixes include:
 2. Improve our ability to use non-linear classifiers.
    These would likely be able to handle forecasting both increasing and decreasing signals, but would require a better method of generating quantiles.
    For example, by comparing a given forecast to the climate model, or a comparison with the trajectories that occur on comparable forecast dates (this brings us back to 1).
+3. Making a growth rate extrapolation model, and incorporating its predictions as a covariate.
+   And maybe something better than just simple last-growth-rate-carried-forward.  Ideally we'd have the growth rate taper based on growing population immunity.
 
 # Setup
 
@@ -340,16 +342,20 @@ hhs_forecast <- hhs_archive %>%
 ```
 
 ```{r}
-linear_get_preproc <- function(ahead, lag = c(0, 7, 14), in_data = hhs_forecast) {
-  preproc <- epi_recipe(in_data) %>%
-    step_population_scaling(
-      hhs,
-      df = epidatasets::state_census,
-      df_pop_col = "pop",
-      create_new = FALSE,
-      rate_rescaling = 1e5,
-      by = c("geo_value" = "abbr")
-    ) %>%
+linear_get_preproc <- function(ahead, lag = c(0, 7, 14), in_data = hhs_forecast, to_scale = FALSE) {
+  preproc <- epi_recipe(in_data)
+  if (to_scale) {
+    preproc <- preproc %>%
+      step_population_scaling(
+        hhs,
+        df = epidatasets::state_census,
+        df_pop_col = "pop",
+        create_new = FALSE,
+        rate_rescaling = 1e5,
+        by = c("geo_value" = "abbr")
+      )
+  }
+  preproc <- preproc %>%
     step_adjust_latency(hhs, method = "extend_lags") %>%
     step_epi_lag(hhs, lag = lag) %>%
     step_epi_ahead(hhs, ahead = ahead) %>%
@@ -732,8 +738,90 @@ This is much better than the original forecasts (we're forecasting on the same
 data as in the "problem setup" section).
 
 ## Does filtering by growth rate change it?
-
 Roughly, the idea is to filter the data to that within a range of the growth rate of the most recent data point.
-```{r}
+To actually execute on this, we'll use a `step_filter` at the end with a condition based on the growth rate at the first lag.
+This should only apply during training; during testing, we just want the latest data, regardless of the growth rate.
+First we'll define the function that will filter based on the growth rate.
+### Growth rate geo based quantile
 
+```{r}
+filter_hhs <- function(geo_value, time_value, lagged, quantile_lower = 0.25, quantile_upper = 0.75, ...) {
+  growth_rates <- tibble(geo_value, time_value, lagged) %>%
+    group_by(geo_value) %>%
+    mutate(gr = growth_rate(lagged, ...))
+  gr_res <- growth_rates %>% pull(gr)
+  quantile_bounds <- gr_res %>% quantile(c(quantile_lower, quantile_upper), na.rm = TRUE)
+  (quantile_bounds[[1]] < gr_res) & (gr_res < quantile_bounds[[2]])
+}
+```
+
+This computes the growth rate for `lagged` with whatever extra parameters are handed in, and returns a boolean vector saying if it's within the quantile range (say 25% to 75%)[^1].
+
+Since we want this to be after everything else we compute, we can just add it after all the other steps in the recipe.
+
+```{r}
+get_filtered_workflow <- function(ahead, in_data = hhs_forecast, trainer = quantile_reg(quantile_levels = covidhub_probs()), ...) {
+  preproc <- linear_get_preproc(ahead, in_data = in_data) %>%
+  step_filter(filter_hhs(geo_value, time_value, lag_7_hhs, ...), skip = TRUE)
+  postproc <- frosting() %>%
+    layer_predict() %>%
+    layer_quantile_distn(quantile_levels = covidhub_probs()) %>%
+    layer_point_from_distn() %>%
+    layer_threshold() %>%
+    layer_naomit() %>%
+    layer_add_target_date() %>%
+    layer_add_forecast_date()
+  workflow <- epi_workflow(preproc, trainer) %>%
+    fit(hhs_forecast) %>%
+    add_frosting(postproc)
+  workflow
+}
+
+hhs_forecast <- hhs_archive %>%
+  epix_as_of(forecast_date) %>%
+  filter(time_value > train_value_min)
+```
+
+And fitting:
+
+```{r}
+fit_given_growth_rate_params <- function(...) {
+  fit_workflows <- map(0:4 * 7, \(ahead) get_filtered_workflow(ahead, ...))
+  predictions <- map(
+    fit_workflows,
+    \(wf) predict(wf, hhs_forecast %>% filter(time_value >as.Date("2023-11-29")- 7*28)) %>% pivot_quantiles_longer(.pred_distn) %>% rename(value = .pred_distn_value, quantile = .pred_distn_quantile_level) %>% filter(time_value == forecast_date)
+  )
+  predictions %>% bind_rows() %>% rename(target_end_date = target_date) %>% select(-.pred, -time_value) %>% arrange(geo_value, target_end_date, quantile)
+  plot_dec_forecasts(predictions %>% bind_rows() %>% rename(target_end_date = target_date), default_geos)
+}
+fit_given_growth_rate_params(method = "smooth_spline")
+```
+
+using the `"smooth_spline"` method didn't seem to help.
+let's try `"rel_change"`, with a window size of 5 weeks:
+
+```{r}
+fit_given_growth_rate_params(h = 7 * 5)
+```
+
+if anything that is worse.
+And linear regression, also using 5 weeks:
+
+```{r}
+fit_given_growth_rate_params(method = "linear_reg", h = 7 * 5)
+```
+
+So this doesn't seem to be helping.
+Let's take a closer look at the growth rates that we're using to do this filtering.
+
+```{r}
+growth_rates <- hhs_forecast %>%
+  group_by(geo_value) %>%
+  mutate(gr = growth_rate(hhs, method = "smooth_spline"))
+quantile_bounds <-
+  growth_rates %>%
+  pull(gr) %>%
+  quantile(c(0.25, 0.75), na.rm = TRUE)
+growth_rates %>% ggplot(aes( x = gr)) + geom_histogram(bins = 300) + geom_vline(aes(xintercept = quantile_bounds[[1]])) + scale_x_log10()
+(quantile_bounds[[1]] < gr_res) & (gr_res < quantile_bounds[[2]])
 ```
