@@ -45,8 +45,8 @@ Some possible fixes include:
 1. Some method of data filtering or weighting based on the current growth rate.
    The seasonal forecaster probably benefits from this effect.
    An alternative would be to bring back some sort of classifier-type system (either using an actual classifier, or filtering to comparable growth rates).
-2. Improve our ability to use non-linear classifiers. 
-   These would likely be able to handle forecasting both increasing and decreasing signals, but would require a better method of generating quantiles. 
+2. Improve our ability to use non-linear classifiers.
+   These would likely be able to handle forecasting both increasing and decreasing signals, but would require a better method of generating quantiles.
    For example, by comparing a given forecast to the climate model, or a comparison with the trajectories that occur on comparable forecast dates (this brings us back to 1).
 
 # Setup
@@ -304,7 +304,7 @@ basic_gr %>% ggplot(aes(x = growth)) +
 ```
 
 which are more or less the same level of bad.
-### Linear only 
+### Linear only
 However if we filter to 2022 onwards and use a linear engine:
 
 ```{r}
@@ -503,7 +503,7 @@ all_covid_forecasts <- forecast_aheads(\(x, ahead) scaled_pop(x, "hhs", ahead = 
 plot_dec_forecasts(all_covid_forecasts, default_geos, hhs_covid_archive)
 ```
 
-Still sort of present! 
+Still sort of present!
 And does it show up in a histogram of growth rates?
 
 ```{r}
@@ -521,7 +521,7 @@ preproc <- linear_get_preproc(0:4 * 7, in_data = hhs_covid_forecast)
 fit_covid_data <- preproc %>%
   prep(hhs_covid_forecast) %>%
   bake(hhs_covid_forecast) %>%
-  select(geo_value, time_value, starts_with("lag"), starts_with("ahead")) 
+  select(geo_value, time_value, starts_with("lag"), starts_with("ahead"))
 fit_covid_data %>%
   mutate(epi_week = epiweek(time_value)) %>%
   pivot_longer(cols = starts_with("ahead"), names_to = "ahead_value") %>%
@@ -702,21 +702,22 @@ Does adding an I (integrated) component to our model improve things?
 
 ```{r}
 hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
-# First we take differences
-diffed_data <- hhs_forecast %>%
-  group_by(geo_value) %>%
-  mutate(value_diff = hhs - lag(hhs)) %>%
-  ungroup() %>%
-  select(geo_value, time_value, value_diff) %>%
-  filter(geo_value %in% default_geos)
+# Get the latest values so we know where to sum from later
 latest_values <- hhs_forecast %>%
   filter(geo_value %in% default_geos) %>%
   slice_max(time_value, by=geo_value) %>%
   select(geo_value, time_value, value = hhs)
+# Take data diffs
+diffed_data <- hhs_forecast %>%
+  group_by(geo_value) %>%
+  mutate(value_diff = hhs - lag(hhs)) %>%
+  ungroup() %>%
+  select(geo_value, time_value, value_diff)
+# Forecast the diffs and appean the starting values from the original data
 diffed_forecast <- forecast_aheads(\(x, ahead) scaled_pop(x, "value_diff", ahead = ahead, pop_scaling = FALSE), epi_data = diffed_data) %>%
   select(geo_value, time_value = target_end_date, value, quantile) %>%
   bind_rows(tidyr::expand_grid(quantile = diffed_forecast$quantile %>% unique, latest_values))
-
+# Sum the diffs to get the final forecast
 forecast <- diffed_forecast %>%
   group_by(geo_value, quantile) %>%
   arrange(time_value) %>%
@@ -724,7 +725,6 @@ forecast <- diffed_forecast %>%
   ungroup() %>%
   arrange(geo_value, quantile, time_value) %>%
   select(geo_value, forecast_date, target_end_date = time_value, quantile, value)
-
 forecast %>% plot_dec_forecasts(default_geos)
 ```
 
