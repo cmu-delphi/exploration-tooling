@@ -40,7 +40,7 @@ covid_submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
 cli::cli_inform(
   c(
     "i" = "Reading environment variables...",
-    "*" = "TAR_PROJECT = {tar_project}",
+    "*" = "TAR_RUN_PROJECT = {tar_project}",
     "*" = "AWS_S3_PREFIX = {aws_s3_prefix}",
     "*" = "FLU_SUBMISSION_DIRECTORY = {flu_submission_directory}",
     "*" = "COVID_SUBMISSION_DIRECTORY = {covid_submission_directory}"
