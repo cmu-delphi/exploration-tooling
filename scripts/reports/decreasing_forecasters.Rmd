@@ -769,7 +769,7 @@ forecast %>% plot_dec_forecasts(default_geos)
 
 Turns out, we get better coverage this way.
 
-Now let's try training on the augmented data (fluview and ILI). TODO.
+Now let's try training on the augmented data (fluview and ILI).
 
 ```{r, eval = FALSE}
 joined_archive_data_as_of <- tar_read(joined_archive_data) %>% epix_as_of(forecast_date)
@@ -793,7 +793,7 @@ diffed_data <- joined_archive_data_as_of %>%
   as_epi_df(other_keys = "source", as_of = forecast_date)
 
 # Forecast the diffs and appean the starting values from the original data
-diffed_forecast <- forecast_aheads(\(x, ahead) scaled_pop_seasonal(x, "value_diff", ahead = ahead, pop_scaling = FALSE, seasonal_method = "window"), epi_data = diffed_data) %>%
+diffed_forecast <- forecast_aheads(\(x, ahead) scaled_pop_seasonal(x, "value_diff", ahead = ahead, pop_scaling = FALSE,  scale_method = "none", center_method = "none",nonlin_method = "none", clip_lower = FALSE, nonneg = FALSE, seasonal_method = "window"), epi_data = diffed_data) %>%
   select(geo_value, time_value = target_end_date, value, quantile) %>%
   bind_rows(tidyr::expand_grid(quantile = diffed_forecast$quantile %>% unique, latest_values))
 # Sum the diffs to get the final forecast
@@ -807,7 +807,11 @@ forecast <- diffed_forecast %>%
 forecast %>% plot_dec_forecasts(default_geos)
 ```
 
+It doesn't look great. The median is weirdly flat. Likely need to do something
+about whitening and then undo the whitening.
+
 ## Does filtering by growth rate change it?
+
 Roughly, the idea is to filter the data to that within a range of the growth rate of the most recent data point.
 To actually execute on this, we'll use a `step_filter` at the end with a condition based on the growth rate at the first lag.
 This should only apply during training; during testing, we just want the latest data, regardless of the growth rate.

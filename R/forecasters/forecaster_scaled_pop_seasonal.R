@@ -52,6 +52,7 @@ scaled_pop_seasonal <- function(epi_data,
                                 quantile_levels = covidhub_probs(),
                                 filter_source = "",
                                 filter_agg_level = "",
+                                clip_lower = TRUE,
                                 ...) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
@@ -92,7 +93,7 @@ scaled_pop_seasonal <- function(epi_data,
   }
   args_input[["ahead"]] <- ahead
   args_input[["quantile_levels"]] <- quantile_levels
-  args_input[["nonneg"]] <- scale_method == "none"
+  args_input[["nonneg"]] <- if (!is.null(args_input[["nonneg"]])) args_input[["nonneg"]] else scale_method == "none"
   args_input[["seasonal_window"]] <- "window" %in% seasonal_method
   args_input[["seasonal_backward_window"]] <- seasonal_backward_window
   args_input[["seasonal_forward_window"]] <- seasonal_forward_window + ahead
@@ -228,8 +229,10 @@ scaled_pop_seasonal <- function(epi_data,
   pred_final <- pred %>%
     rename({{ outcome }} := value) %>%
     data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
-    rename(value = {{ outcome }}) %>%
-    mutate(value = pmax(0, value))
+    rename(value = {{ outcome }})
+  if (clip_lower) {
+    pred_final %<>% mutate(value = pmax(0, value))
+  }
   if (adding_source) {
     pred_final %<>% select(-source)
   }
