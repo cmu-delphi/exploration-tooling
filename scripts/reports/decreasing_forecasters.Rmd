@@ -720,11 +720,13 @@ diffed_data <- hhs_forecast %>%
   ungroup() %>%
   select(geo_value, time_value, value_diff)
 # Forecast the diffs and appean the starting values from the original data
-diffed_forecast <- forecast_aheads(\(x, ahead) scaled_pop(x, "value_diff", ahead = ahead, pop_scaling = FALSE), epi_data = diffed_data) %>%
+diffed_forecast <- forecast_aheads(\(x, ahead) scaled_pop(x, "value_diff", ahead = ahead, pop_scaling = FALSE), epi_data = diffed_data)
+diffed_forecast %<>%
   select(geo_value, time_value = target_end_date, value, quantile) %>%
-  bind_rows(tidyr::expand_grid(quantile = diffed_forecast$quantile %>% unique, latest_values))
+  bind_rows(tidyr::expand_grid(quantile = covidhub_probs(), latest_values))
 # Sum the diffs to get the final forecast
-forecast <- diffed_forecast %>%
+forecast <-
+  diffed_forecast %>%
   group_by(geo_value, quantile) %>%
   arrange(time_value) %>%
   mutate(value = cumsum(value), forecast_date = .env$forecast_date) %>%
@@ -772,8 +774,7 @@ Turns out, we get better coverage this way.
 Now let's try training on the augmented data (fluview and ILI).
 
 ```{r, eval = FALSE}
-joined_archive_data_as_of <- tar_read(joined_archive_data) %>% epix_as_of(forecast_date)
-
+joined_archive_data_as_of <- tar_read(joined_archive_data) %>% epix_as_of(forecast_date) %>% filter(agg_level == "state")
 # Get the latest values so we know where to sum from later
 latest_values <- joined_archive_data_as_of %>%
   filter(geo_value %in% default_geos, source == "nhsn") %>%
@@ -781,19 +782,16 @@ latest_values <- joined_archive_data_as_of %>%
   select(geo_value, time_value, value = hhs)
 # Take data diffs
 diffed_data <- joined_archive_data_as_of %>%
-  filter(geo_value %in% default_geos) %>%
-  filter(time_value <= forecast_date - 7) %>%
   arrange(source, geo_value, time_value) %>%
   group_by(geo_value, source) %>%
   mutate(value_diff = hhs - lag(hhs)) %>%
-  filter(!near(0, value_diff)) %>%
   ungroup() %>%
   select(source, geo_value, time_value, value_diff) %>%
   drop_na(value_diff) %>%
   as_epi_df(other_keys = "source", as_of = forecast_date)
 
 # Forecast the diffs and appean the starting values from the original data
-diffed_forecast <- forecast_aheads(\(x, ahead) scaled_pop_seasonal(x, "value_diff", ahead = ahead, pop_scaling = FALSE,  scale_method = "none", center_method = "none",nonlin_method = "none", clip_lower = FALSE, nonneg = FALSE, seasonal_method = "window"), epi_data = diffed_data) %>%
+diffed_forecast <- forecast_aheads(\(x, ahead) scaled_pop_seasonal(x, "value_diff", ahead = ahead, pop_scaling = FALSE, nonlin_method = "none", filter_agg_level = "state", clip_lower = FALSE, nonneg = FALSE, seasonal_method = "window"), epi_data = diffed_data) %>%
   select(geo_value, time_value = target_end_date, value, quantile) %>%
   bind_rows(tidyr::expand_grid(quantile = diffed_forecast$quantile %>% unique, latest_values))
 # Sum the diffs to get the final forecast
