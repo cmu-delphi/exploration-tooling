@@ -13,7 +13,7 @@ get_external_forecasts <- function(external_object_name) {
     select(forecaster, geo_value, forecast_date, target_end_date, quantile, value)
 }
 
-score_forecasts <- function(nhsn_latest_data, joined_forecasts_and_ensembles) {
+score_forecasts <- function(nhsn_latest_data, joined_forecasts_and_ensembles, disease) {
   truth_data <-
     nhsn_latest_data %>%
     select(geo_value, target_end_date = time_value, oracle_value = value) %>%
@@ -33,10 +33,12 @@ score_forecasts <- function(nhsn_latest_data, joined_forecasts_and_ensembles) {
     pull(max_forecast) %>%
     min()
   forecasts_formatted <-
-    joined_forecasts_and_ensembles %>%
-    filter(forecast_date <= max_forecast_date) %>%
-    format_scoring_utils(disease = "covid")
+    joined_forecasts_and_ensembles[joined_forecasts_and_ensembles$forecast_date <= max_forecast_date,] %>%
+    format_scoring_utils(disease = disease)
   scores <- forecasts_formatted %>%
+    arrange(location, target_end_date, reference_date, output_type_id) %>%
+    group_by(location, target_end_date, reference_date) %>%
+    mutate(value = sort(value)) %>%
     filter(location %nin% c("US", "60", "66", "78")) %>%
     hubEvals::score_model_out(
       truth_data,

@@ -435,7 +435,7 @@ if (g_backtest_mode) {
     tar_target(
       name = scores,
       command = {
-        score_forecasts(nhsn_latest_data, joined_forecasts_and_ensembles)
+        score_forecasts(nhsn_latest_data, joined_forecasts_and_ensembles, "covid")
       }
     ),
     tar_target(

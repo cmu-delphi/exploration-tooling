@@ -481,7 +481,7 @@ if (g_backtest_mode) {
           mutate(
             time_value = ceiling_date(time_value, unit = "week", week_start = 6)
           )
-        score_forecasts(nhsn_latest_end_of_week, joined_forecasts_and_ensembles)
+        score_forecasts(nhsn_latest_end_of_week, joined_forecasts_and_ensembles, "flu")
       }
     ),
     tar_target(
