@@ -87,7 +87,10 @@ get_last_raw_update_at <- function(type = c("raw", "prelim"), missing_value = MI
 #'
 #' @param verbose Whether to print verbose output.
 update_nhsn_data_raw <- function() {
+  # If this request fails (which occurs surprisingly often, eyeroll), we
+  # will just return a future date (2040-01-01) and download anyway.
   raw_update_at <- get_socrata_updated_at(config$raw_metadata_url)
+  # Same here.
   prelim_update_at <- get_socrata_updated_at(config$prelim_metadata_url)
   last_raw_file_update_at <- get_last_raw_update_at("raw")
   last_prelim_file_update_at <- get_last_raw_update_at("prelim")
@@ -109,6 +112,11 @@ update_nhsn_data_raw <- function() {
     cli_inform("Downloading the prelim data... {prelim_file}")
     read_csv(config$prelim_query_url) %>% s3write_using(write_parquet, object = prelim_file, bucket = config$s3_bucket)
   }
+
+  # Since we may have downloaded a duplicate file above, filter out the ones
+  # that have the same ETag. (I don't feel like rederiving AWS S3's ETag field
+  # and computing ahead of time.)
+  delete_duplicates_from_s3_by_etag(config$s3_bucket, config$raw_file_name_prefix, dry_run = FALSE)
 }
 
 #' Process Raw NHSN Data File
@@ -182,7 +190,9 @@ update_nhsn_data_archive <- function() {
     return(invisible(NULL))
   }
 
-  cli_inform("New datasets available at, adding {nrow(new_data_files_latest_per_day)} new NHSN datasets to the archive.")
+  cli_inform(
+    "New datasets available at, adding {nrow(new_data_files_latest_per_day)} new NHSN datasets to the archive."
+  )
 
   # Process each new dataset snapshot
   new_data <- new_data_files_latest_per_day$Key %>%
