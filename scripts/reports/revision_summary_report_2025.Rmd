@@ -1,0 +1,339 @@
+---
+title: "Revision summary 2025"
+author: Delphi Forecast Team
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: True
+    # self_contained: False
+    # lib_dir: libs
+params:
+  disease: "covid"
+  scores: ""
+  forecast_dates: ""
+---
+
+```{css, echo=FALSE}
+body {
+  display: block;
+  max-width: 1280px !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+body .main-container {
+  max-width: 1280px !important;
+  width: 1280px !important;
+}
+```
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{r setup, include=FALSE}
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+```
+
+# Overall takeaways
+
+There is substantial underreporting behavior that is fairly consistent for a single geo.
+It is likely usable for forecasting.
+Further, flu and covid revision behavior is fairly strongly correlated; it is reported through the same channels by the same people, so this makes sense.
+We should look into the extra columns to see if it provides useful information for handling revision behavior.
+# Flu revision
+## NHSN
+### Revision behavior
+First we get the archive and remove the data older than the first version so as not to clog up the revision behavior, and display the overall revision summary[^1].
+
+```{r}
+nhsn_archive_flu <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
+
+nhsn_archive_flu <- nhsn_archive_flu$DT %>% filter(time_value >= "2024-11-19") %>% as_epi_archive()
+nhsn_archive_flu$time_type <- "day"
+revision_summary <- nhsn_archive_flu %>% epiprocess::revision_analysis(value, min_waiting_period = NULL,)
+revision_summary %>% print(quick_revision = 7)
+```
+
+So around a fifth have no revisions, around a quarter resolve within a week, and around 2/3rds have a small number of revisions.
+Around half of those with revisions have little relative change (10% of the max value).
+The "actual value" change isn't really worth thinking about because this is counts data (so there being only 6 doesn't tell us much).
+
+Here's a plot of the version changes for all locations.
+
+```{r}
+nhsn_archive_flu %>% autoplot() + theme(strip.text.x = element_text(size = 2))
+```
+
+Since this is probably too small to actually be legible, let's figure out the states with the worst revision behavior and plot those.
+Worst in this case meaning worst average relative spread
+
+```{r}
+av_re_spread <- revision_summary$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+av_re_spread %>%
+  print(n=20)
+```
+
+The worst 9 excluding the geo's we don't actually forecast (so no `as` or `vi`, `gu`).
+
+```{r}
+nhsn_archive_flu %>% autoplot(.facet_filter = geo_value %in% av_re_spread$geo_value[1:9]) + theme(strip.text.x = element_text(size = 8))
+```
+
+And the next 9 worse
+
+```{r}
+nhsn_archive_flu %>% autoplot(.facet_filter = geo_value %in% av_re_spread$geo_value[10:18]) + theme(strip.text.x = element_text(size = 8))
+```
+
+
+These cover a range of revision behaviors; some are off on a single `time_value` in a terrible way, such as `mn` or `nh`, while most have fairly constant revisioning.
+`az` is unusual in having two bad `version`s when they revised the entire history down by a factor of 2, and then reverted to what it had been previously.
+Most are systematically reporting lower than the actual values, with some such as `nm`, `nh`, `ok`, and `ak` particularly bad about this.
+It is probably worth adding a measure at the key level of how systematic the bias is to `revision_analysis`, or perhaps a separate function.
+These seem likely to be estimable beforehand.
+Exceptions that include at least one case of over-reporting: `mn`, `id`, `nh`
+These are not later backfilled; they seem more like bad estimates or entry error.
+### Data substitions
+And we actually need to compare this with the data revision estimates:
+```{r}
+data_substitutions <- readr::read_csv(
+    here::here(glue::glue("flu_data_substitutions.csv")),
+    comment = "#",
+    show_col_types = FALSE
+  ) %>%
+  mutate(time_value = round_date(time_value, unit = "week", week_start = 6))
+nhsn_archive_flu %>%
+  autoplot(value, .facet_filter = geo_value %in% (data_substitutions$geo_value %>% unique())) + geom_point(data = data_substitutions, aes(x = time_value, y = value)) + facet_wrap(~geo_value, scale = "free")
+```
+
+which doesn't look all that great. 
+To calculate how much closer (or further) we were from the final value, first we construct the relevant snapshots:
+```{r}
+final_values <- nhsn_archive_flu %>% epix_as_of_current() %>% mutate(time_value = round_date(time_value, unit = "week", week_start = 6))
+data_as_it_was <- map(
+  data_substitutions$forecast_date %>% unique(),
+  \(version) nhsn_archive_flu %>% epix_as_of(version) %>% mutate(forecast_date = version)
+) %>%
+  list_rbind() %>% mutate(time_value = round_date(time_value, unit = "week", week_start = 6))
+```
+
+realigning all of
+
+```{r}
+final_values %>% filter(time_value > "2025-01-03")
+full_table <- data_substitutions %>%
+  left_join(
+    final_values,
+    by = join_by(geo_value, time_value), suffix = c("_substituted", "_final")
+  ) %>%
+  left_join(
+    data_as_it_was,
+    by = join_by(geo_value, forecast_date, time_value)
+  ) %>%
+  rename(as_of_value = value) %>%
+  mutate()
+  
+diffs <- full_table %>%
+  mutate(
+    abs_diff = value_substituted - value_final,
+    rel_diff = abs_diff / value_final,
+    rel_rev_diff = abs_diff / (-value_final + as_of_value),
+    ) %>%
+  arrange(rel_diff)
+diffs %>%
+  select(-forecast_date, -value_substituted, -value_final, -as_of_value) %>%
+  print(n = 23)
+```
+
+The table is sorted by `rel_diff`.
+- `abs_diff` gives how much our adjustment was over by (so positive means we were over the latest value).
+
+- `rel_diff` gives the difference relative to the latest value; for `nh` on `03/29` (the last entry in the table), our estimate was nearly twice as large as the latest value.
+
+- `rel_rev_diff` on the other hand divides that by how much the value as of the forecast date was off; for `nh` on `03/29` again, it was merely 73%, so we did bring it closer to the actual value. Any of these which are <1 are "successful" in the sense that we were closer to the latest value than the as_of value was. An infinite value tells us that we adjusted a value that hasn't been corrected. The sign for `rel_rev_diff` is a bit confusing, and tells us whether our estimate and the as of value were both larger/smaller than the latest value, or one larger and one smaller.
+
+How many did we substitute a more accurate value?
+
+```{r}
+mean(abs(diffs$rel_rev_diff) < 1)
+```
+
+34%, so not a great track record overall.
+How about lower than the target vs higher than the target?
+```{r}
+diffs %>%
+  mutate(is_over = rel_diff > 0) %>%
+  group_by(is_over) %>%
+  summarize(fraction_improved = mean(abs(rel_rev_diff) < 1))
+```
+
+So we did marginally better when it was below, but much worse when it was above.
+
+Overall, it turns out our value substitutions did not actually help much.
+
+## NSSP
+### Revision behavior
+### Correlation with latest
+Does NSSP actually correlate better with the latest value than nhsn itself does?
+This was a property we were relying on through the season to generate our corrections.
+
+# Covid revision
+And now for ~ the same idea, but for covid
+## NHSN
+First we get the archive and remove the data older than the first version so as not to clog up the revision behavior, and display the overall revision summary[^1].
+
+```{r}
+nhsn_archive_covid <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nhsn_archive_data"))
+
+nhsn_archive_covid <- nhsn_archive_covid$DT %>% filter(time_value >= "2024-11-19") %>%
+  filter(geo_value %nin% c("vi", "as", "gu")) %>% as_epi_archive()
+nhsn_archive_covid$time_type <- "day"
+revision_summary <- nhsn_archive_covid %>%
+  epiprocess::revision_analysis(value, min_waiting_period = NULL) 
+revision_summary %>% print(quick_revision = 7)
+```
+
+Around a fifth have no revisions, around a third resolve within a week, and around 3/4ths have a small number of revisions.
+Around 60% of those with revisions have little relative change (10% of the max value).
+The "actual value" change isn't really worth thinking about because this is counts data (so there being only 6 doesn't tell us much).
+
+Here's a plot of the version changes for all locations.
+
+```{r}
+nhsn_archive_covid %>% autoplot() + theme(strip.text.x = element_text(size = 8))
+```
+
+Since this is probably too small to actually be legible, let's figure out the states with the worst revision behavior and plot those.
+Worst in this case meaning worst average relative spread
+
+```{r}
+av_re_spread <- revision_summary$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+av_re_spread %>%
+  print(n=20)
+```
+
+Which, if you compare with the average relative spread in the [Flu section](##NHSN) is remarkably similar.
+The worst 9 excluding the geo's we don't actually forecast (so no `as` or `vi`, `gu`).
+
+```{r}
+nhsn_archive_covid %>% autoplot(.facet_filter = geo_value %in% av_re_spread$geo_value[1:9]) + theme(strip.text.x = element_text(size = 8))
+```
+
+And the next 9 worse
+
+```{r}
+nhsn_archive_covid %>% autoplot(.facet_filter = geo_value %in% av_re_spread$geo_value[10:18]) + theme(strip.text.x = element_text(size = 8))
+```
+
+Strictly visually, this seems to revise more than the flu data (this doesn't actually fit well with the numeric revision analysis so something odd is going on).
+Perhaps the revisions are more chaotic.
+`mn` instead of having a single time point for a single version has it's entire trajectory wrong in the same way that `az` does, possibly on the same `version`.
+`az` has similar revision behavior (a couple of weeks where they were wildly off).
+
+`nh` has similar behavior in over-estimating a specific single time value quite badly, but otherwise having typical under-reporting problems.
+
+`dc` has some new and wild behavior; this is likely as visually striking as it is because the values are so small.
+
+`mo` has new revision behavior, primarily in the magnitude of the difference.
+
+`ok` has more extreme under-reporting than in the case of flu, but again this seems to likely be a factor of the number of cases, suggesting their underreporting happens in absolute number of cases rather than relative[^2].
+
+Like flu, these seem likely to be estimable beforehand.
+### Data substitutions
+And we actually need to compare revision behavior with our estimates of the correct values:
+```{r}
+data_substitutions <- readr::read_csv(
+    here::here(glue::glue("covid_data_substitutions.csv")),
+    comment = "#",
+    show_col_types = FALSE
+  ) %>%
+  mutate(time_value = round_date(time_value, unit = "week", week_start = 6))
+nhsn_archive_covid %>%
+  autoplot(value, .facet_filter = geo_value %in% (data_substitutions$geo_value %>% unique())) + geom_point(data = data_substitutions, aes(x = time_value, y = value)) + facet_wrap(~geo_value, scale = "free")
+```
+
+To calculate how much closer (or further) we were from the final value, first we construct the relevant snapshots:
+```{r}
+final_values <- nhsn_archive_covid %>% epix_as_of_current() %>% mutate(time_value = round_date(time_value, unit = "week", week_start = 6))
+data_as_it_was <- map(
+  data_substitutions$forecast_date %>% unique(),
+  \(version) nhsn_archive_covid %>% epix_as_of(version) %>% mutate(forecast_date = version)
+) %>%
+  list_rbind() %>% mutate(time_value = round_date(time_value, unit = "week", week_start = 6))
+```
+
+
+```{r}
+final_values %>% filter(time_value > "2025-01-03")
+full_table <- data_substitutions %>%
+  left_join(
+    final_values,
+    by = join_by(geo_value, time_value), suffix = c("_substituted", "_final")
+  ) %>%
+  left_join(
+    data_as_it_was,
+    by = join_by(geo_value, forecast_date, time_value)
+  ) %>%
+  rename(as_of_value = value) %>%
+  mutate()
+  
+diffs <- full_table %>%
+  mutate(
+    abs_diff = value_substituted - value_final,
+    rel_diff = abs_diff / value_final,
+    rel_rev_diff = abs_diff / (-value_final + as_of_value),
+    ) %>%
+  arrange(rel_diff)
+diffs %>%
+  select(-forecast_date, -value_substituted, -value_final, -as_of_value) %>%
+  print(n = 23)
+```
+
+The table is sorted by `rel_diff`.
+- `abs_diff` gives how much our adjustment was over by (so positive means we were over the latest value).
+
+- `rel_diff` gives the difference relative to the latest value.
+
+- `rel_rev_diff` on the other hand divides that by how much the value as of the forecast date was off. Any of these which are <1 are "successful" in the sense that we were closer to the latest value than the as_of value was. An infinite value tells us that we adjusted a value that hasn't been corrected. The sign for `rel_rev_diff` is a bit confusing, and tells us whether our estimate and the as of value were both larger/smaller than the latest value, or one larger and one smaller.
+
+We did fewer substitutions in Covid, but they were more regularly good, and there were no cases where we shouldn't have changed the value and did.
+
+How many did we substitute a more accurate value?
+
+```{r}
+mean(abs(diffs$rel_rev_diff) < 1)
+```
+
+50%, so overall basically guessing.
+How about lower than the target vs higher than the target?
+```{r}
+diffs %>%
+  mutate(is_over = rel_diff > 0) %>%
+  group_by(is_over) %>%
+  summarize(fraction_improved = mean(abs(rel_rev_diff) < 1))
+```
+
+When we were under, we always improved the situation. However when we were above, sometimes we made it worse.
+
+
+# Correlations between the two archives
+
+[^1]: `min_waiting_period` is `NULL` here since we're plotting mid-season, while `quick_revision = 7` because this is weekly data represented using days (because the versions are days).
+
+[^2]: which would definitely be a bit odd of an effect.
