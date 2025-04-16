@@ -8,8 +8,9 @@
 ### Scoring this season
 
 
-## Exploration Reports
+## Summary Reports
 
+- [Season Summary](season_summary.html)
 - [An Analysis of Decreasing Behavior in Forecasters](decreasing_forecasters.html)
 - [NHSN 2024-2025 Data Analysis](new_data.html)
 
@@ -105,10 +106,6 @@ TODO: Add descriptions.
 
 This is more closely in line with the [RobustScaler](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.RobustScaler.html#sklearn.preprocessing.RobustScaler) from scikit-learn (using a much wider quantile than the default settings there).
 
-## Overall comparison
-
-This takes the best mean WIS result from each of the forecaster families below, and puts them in the same notebook for inter-family comparison.
-
 ## Forecaster Families
 
 ### AR with population scaling
@@ -152,10 +149,3 @@ $f$ is either the identity or 2 sine terms, defined so that the first has half a
 ### Flatline
 
 This is what the FluSight-baseline is based on, so they should be identical. However, at the moment, this has scaling issues.
-
-# Covid Forecasts 2024-2025
-
-For now, just AR forecasters with source-pooled data. Forecaster descriptions
-are the same as above.
-
-TODO: Get lagged correlations notebook hosted.
