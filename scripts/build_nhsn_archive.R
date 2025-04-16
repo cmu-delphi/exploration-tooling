@@ -116,7 +116,15 @@ update_nhsn_data_raw <- function() {
   # Since we may have downloaded a duplicate file above, filter out the ones
   # that have the same ETag. (I don't feel like rederiving AWS S3's ETag field
   # and computing ahead of time.)
-  delete_duplicates_from_s3_by_etag(config$s3_bucket, config$raw_file_name_prefix, dry_run = FALSE)
+  delete_df <- delete_duplicates_from_s3_by_etag(config$s3_bucket, config$raw_file_name_prefix, dry_run = FALSE)
+  cli_inform("Deleted {nrow(delete_df)} duplicate files from S3.")
+  if (nrow(delete_df) > 0) {
+    cli_inform("Deleted files:")
+    cli_inform(paste0(" - ", delete_df$Key))
+  } else {
+    cli_inform("No duplicate files to delete.")
+  }
+  cli_inform("Finished downloading NHSN data.")
 }
 
 #' Process Raw NHSN Data File

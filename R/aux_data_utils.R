@@ -709,6 +709,8 @@ delete_duplicates_from_s3_by_etag <- function(bucket, prefix, dry_run = TRUE, .p
 
   # Delete
   delete_files_from_s3(bucket = bucket, keys = delete_df$Key, .progress = .progress)
+
+  return(invisible(delete_df))
 }
 
 #' Delete files from S3
