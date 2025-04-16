@@ -284,6 +284,7 @@ plot_dec_forecasts(all_one_lag_forecasts, default_geos)
 Still constantly falling, unfortunately, and a surprisingly similar forecast.
 
 ## Removing 2020/21 and 2021/22 improves but doesn't fix the situation
+
 The first 2 years are bad for flu, as there was ~no spread.
 In practice we know this behavior happens when we remove those years, and even the summers.
 I'm including this primarily to compare the change in growth rates.
@@ -306,7 +307,9 @@ basic_gr %>% ggplot(aes(x = growth)) +
 ```
 
 which are more or less the same level of bad.
+
 ### Linear only
+
 However if we filter to 2022 onwards and use a linear engine:
 
 ```{r}
@@ -334,7 +337,6 @@ First lets examine the coefficients that are actually fit; to do that from withi
 For the sake of reproducibility, we will make the steps by hand.
 Note that I've tried this section with both filtering pre 2022 values and not, and the results are approximately the same.
 
-filtering the data
 ```{r}
 hhs_forecast <- hhs_archive %>%
   epix_as_of(forecast_date) %>%
@@ -432,7 +434,7 @@ plot_linear_data <- function(fit_data_long) {
   fit_data_long %>%
     ggplot(aes(x = lag_7_hhs, y = value)) +
     geom_point(aes(color = epi_week), alpha = 1, size = 0.7) +
-    geom_smooth(method = "lm", formula = y ~ x) +
+    geom_smooth(method = "lm", formula = y ~ x+0) +
     geom_abline(intercept = 0, slope = 1) +
     facet_wrap(~ahead_value, scales = "free") +
     scale_color_viridis_c() +
@@ -895,5 +897,5 @@ quantile_bounds <-
   pull(gr) %>%
   quantile(c(0.25, 0.75), na.rm = TRUE)
 growth_rates %>% ggplot(aes( x = gr)) + geom_histogram(bins = 300) + geom_vline(aes(xintercept = quantile_bounds[[1]])) + scale_x_log10()
-(quantile_bounds[[1]] < gr_res) & (gr_res < quantile_bounds[[2]])
+# (quantile_bounds[[1]] < gr_res) & (gr_res < quantile_bounds[[2]])
 ```
