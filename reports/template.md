@@ -12,6 +12,7 @@
 
 - [Season Summary](season_summary.html)
 - [An Analysis of Decreasing Behavior in Forecasters](decreasing_forecasters.html)
+- [Revision Behavior](revision_summary_2025.html)
 - [NHSN 2024-2025 Data Analysis](new_data.html)
 
 ### Flu
