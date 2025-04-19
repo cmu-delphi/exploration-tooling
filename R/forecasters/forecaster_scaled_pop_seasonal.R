@@ -35,25 +35,27 @@
 #' @importFrom zeallot %<-%
 #' @importFrom recipes all_numeric
 #' @export
-scaled_pop_seasonal <- function(epi_data,
-                                outcome,
-                                extra_sources = "",
-                                ahead = 1,
-                                pop_scaling = TRUE,
-                                drop_non_seasons = FALSE,
-                                scale_method = c("quantile", "std", "none"),
-                                center_method = c("median", "mean", "none"),
-                                nonlin_method = c("quart_root", "none"),
-                                seasonal_method = c("none", "flu", "covid", "indicator", "window", "climatological"),
-                                seasonal_backward_window = 5 * 7,
-                                seasonal_forward_window = 3 * 7,
-                                train_residual = FALSE,
-                                trainer = epipredict::quantile_reg(),
-                                quantile_levels = covidhub_probs(),
-                                filter_source = "",
-                                filter_agg_level = "",
-                                clip_lower = TRUE,
-                                ...) {
+scaled_pop_seasonal <- function(
+  epi_data,
+  outcome,
+  extra_sources = "",
+  ahead = 1,
+  pop_scaling = TRUE,
+  drop_non_seasons = FALSE,
+  scale_method = c("quantile", "std", "none"),
+  center_method = c("median", "mean", "none"),
+  nonlin_method = c("quart_root", "none"),
+  seasonal_method = c("none", "flu", "covid", "indicator", "window", "climatological"),
+  seasonal_backward_window = 5 * 7,
+  seasonal_forward_window = 3 * 7,
+  train_residual = FALSE,
+  trainer = epipredict::quantile_reg(),
+  quantile_levels = covidhub_probs(),
+  filter_source = "",
+  filter_agg_level = "",
+  clip_lower = TRUE,
+  ...
+) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
@@ -62,6 +64,9 @@ scaled_pop_seasonal <- function(epi_data,
   extra_sources <- unwrap_argument(extra_sources)
   trainer <- unwrap_argument(trainer)
 
+  if (typeof(seasonal_method) == "list") {
+    seasonal_method <- seasonal_method[[1]]
+  }
   if (all(seasonal_method == c("none", "flu", "covid", "indicator", "window", "climatological"))) {
     seasonal_method <- "none"
   }
@@ -100,7 +105,8 @@ scaled_pop_seasonal <- function(epi_data,
   args_list <- inject(default_args_list(!!!args_input))
   # if you want to hardcode particular predictors in a particular forecaster
   predictors <- c(outcome, extra_sources)
-  c(args_list, predictors, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
+  c(args_list, predictors, trainer) %<-%
+    sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
 
   if ("season_week" %nin% names(epi_data)) {
     epi_data %<>% add_season_info()
@@ -116,13 +122,27 @@ scaled_pop_seasonal <- function(epi_data,
     season_data <- epi_data
   }
   # TODO: Jank way to avoid having hhs_region get centered; this isn't very general
-  learned_params <- calculate_whitening_params(season_data, setdiff(predictors, "hhs_region"), scale_method, center_method, nonlin_method)
+  learned_params <- calculate_whitening_params(
+    season_data,
+    setdiff(predictors, "hhs_region"),
+    scale_method,
+    center_method,
+    nonlin_method
+  )
   epi_data %<>% data_whitening(setdiff(predictors, "hhs_region"), learned_params, nonlin_method)
 
   # get the seasonal features
   # first add PCA
   if (("flu" %in% seasonal_method) || ("covid" %in% seasonal_method)) {
-    epi_data <- compute_pca(epi_data, seasonal_method, ahead, scale_method, center_method, nonlin_method, normalize = train_residual)
+    epi_data <- compute_pca(
+      epi_data,
+      seasonal_method,
+      ahead,
+      scale_method,
+      center_method,
+      nonlin_method,
+      normalize = train_residual
+    )
 
     if (train_residual) {
       epi_data <- epi_data %>% mutate(across(all_of(outcome), ~ .x - PC1))
@@ -172,14 +192,15 @@ scaled_pop_seasonal <- function(epi_data,
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {
-    preproc %<>% step_population_scaling(
-      all_of(predictors),
-      df = epidatasets::state_census,
-      df_pop_col = "pop",
-      create_new = FALSE,
-      rate_rescaling = 1e5,
-      by = c("geo_value" = "abbr")
-    )
+    preproc %<>%
+      step_population_scaling(
+        all_of(predictors),
+        df = epidatasets::state_census,
+        df_pop_col = "pop",
+        create_new = FALSE,
+        rate_rescaling = 1e5,
+        by = c("geo_value" = "abbr")
+      )
   }
   if ("indicator" %in% seasonal_method) {
     preproc %<>%
@@ -201,14 +222,16 @@ scaled_pop_seasonal <- function(epi_data,
   postproc <- frosting()
   postproc %<>% arx_postprocess(trainer, args_list)
   if (pop_scaling) {
-    postproc %<>% layer_population_scaling(
-      .pred, .pred_distn,
-      df = epidatasets::state_census,
-      df_pop_col = "pop",
-      create_new = FALSE,
-      rate_rescaling = 1e5,
-      by = c("geo_value" = "abbr")
-    )
+    postproc %<>%
+      layer_population_scaling(
+        .pred,
+        .pred_distn,
+        df = epidatasets::state_census,
+        df_pop_col = "pop",
+        create_new = FALSE,
+        rate_rescaling = 1e5,
+        by = c("geo_value" = "abbr")
+      )
   }
   # with all the setup done, we execute and format
   pred <- run_workflow_and_format(preproc, postproc, trainer, season_data, epi_data)
@@ -217,7 +240,10 @@ scaled_pop_seasonal <- function(epi_data,
   # finally, any postprocessing not supported by epipredict e.g. calibration
   #
   # undo subtraction if we're training on residuals
-  if (train_residual && (("flu" %in% seasonal_method) || ("covid" %in% seasonal_method) || ("climatological" %in% seasonal_method))) {
+  if (
+    train_residual &&
+      (("flu" %in% seasonal_method) || ("covid" %in% seasonal_method) || ("climatological" %in% seasonal_method))
+  ) {
     pred <- pred %>%
       mutate(epi_week = epiweek(target_end_date)) %>%
       left_join(values_subtracted, by = join_by(geo_value, source, epi_week == epiweek)) %>%
@@ -228,7 +254,12 @@ scaled_pop_seasonal <- function(epi_data,
   # reintroduce color into the value
   pred_final <- pred %>%
     rename({{ outcome }} := value) %>%
-    data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
+    data_coloring(
+      outcome,
+      learned_params,
+      join_cols = key_colnames(epi_data, exclude = "time_value"),
+      nonlin_method = nonlin_method
+    ) %>%
     rename(value = {{ outcome }})
   if (clip_lower) {
     pred_final %<>% mutate(value = pmax(0, value))

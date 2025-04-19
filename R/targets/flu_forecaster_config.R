@@ -10,50 +10,29 @@
 #' @export
 get_flu_forecaster_params <- function() {
   out <- rlang::list2(
-    # just the data, possibly population scaled; likely to run into troubles
-    # because of the scales of the different sources
-    scaled_pop_main = bind_rows(
-      tidyr::expand_grid(
-        forecaster = "scaled_pop",
-        trainer = "quantreg",
-        lags = list2(
-          c(0, 7),
-          c(0, 7, 14, 21),
-        ),
-        pop_scaling = FALSE,
-        filter_source = "nhsn",
-        filter_agg_level = "state",
-        scale_method = "none",
-        center_method = "median",
-        nonlin_method = c("quart_root", "none"),
-        n_training = Inf,
-        drop_non_seasons = TRUE,
-        keys_to_ignore = g_very_latent_locations
+    scaled_pop_main = tidyr::expand_grid(
+      forecaster = "scaled_pop",
+      trainer = "quantreg",
+      lags = list2(
+        c(0, 7),
+        c(0, 7, 14, 21),
       ),
-      tidyr::expand_grid(
-        forecaster = "scaled_pop",
-        trainer = "quantreg",
-        lags = list2(
-          c(0, 7),
-          c(0, 7, 14, 21),
-        ),
-        pop_scaling = FALSE,
-        filter_source = "nhsn",
-        filter_agg_level = "state",
-        scale_method = "quantile",
-        center_method = "median",
-        nonlin_method = "quart_root",
-        n_training = Inf,
-        drop_non_seasons = TRUE,
-        keys_to_ignore = g_very_latent_locations
-      )
+      pop_scaling = FALSE,
+      filter_source = "nhsn",
+      filter_agg_level = "state",
+      scale_method = "quantile",
+      center_method = "median",
+      nonlin_method = "quart_root",
+      n_training = Inf,
+      drop_non_seasons = TRUE,
+      keys_to_ignore = g_very_latent_locations
     ),
     scaled_pop_data_augmented = tidyr::expand_grid(
       forecaster = "scaled_pop",
       trainer = "quantreg",
-      lags = list(
+      lags = list2(
+        c(0, 7),
         c(0, 7, 14, 21),
-        c(0, 7)
       ),
       pop_scaling = FALSE,
       scale_method = "quantile",
@@ -65,9 +44,6 @@ get_flu_forecaster_params <- function() {
       drop_non_seasons = TRUE,
       keys_to_ignore = g_very_latent_locations
     ),
-    ## # The covid forecaster, ported over to flu. Also likely to struggle with the
-    ## # extra data
-    # the thing to beat (a simplistic baseline forecast)
     flatline = tidyr::expand_grid(
       forecaster = "flatline_fc",
       filter_source = "nhsn",
@@ -82,7 +58,7 @@ get_flu_forecaster_params <- function() {
         extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region", "va_flu_per_100k"),
         lags = list2(
           list2(
-            c(0, 7, 14, 21), # hhs
+            c(0, 7), # hhs
             c(0, 7) # exogenous feature
           )
         ),
@@ -112,7 +88,7 @@ get_flu_forecaster_params <- function() {
         ),
         lags = list2(
           list2(
-            c(0, 7, 14, 21), # hhs
+            c(0, 7), # hhs
             c(0, 7), # first feature
             c(0, 7) # second feature
           )
@@ -135,7 +111,7 @@ get_flu_forecaster_params <- function() {
         ),
         lags = list2(
           list2(
-            c(0, 7, 14, 21), # hhs
+            c(0, 7), # hhs
             c(0, 7), # nssp
             c(0, 7), # google symptoms
             c(0, 7), # nwss
@@ -154,108 +130,95 @@ get_flu_forecaster_params <- function() {
         keys_to_ignore = g_very_latent_locations,
       )
     ),
-    ## # another kind of baseline forecaster
-    ## no_recent_quant = tidyr::expand_grid(
-    ##   forecaster = "no_recent_outcome",
-    ##   trainer = "quantreg",
-    ##   scale_method = "quantile",
-    ##   nonlin_method = "quart_root",
-    ##   filter_source = "",
-    ##   use_population = c(TRUE, FALSE),
-    ##   use_density = c(TRUE, FALSE),
-    ##   week_method = "sine",
-    ##   keys_to_ignore = g_very_latent_locations
-    ## ),
-    no_recent_but_exogenous = bind_rows(
-      expand_grid(
-        forecaster = "no_recent_outcome",
-        trainer = "quantreg",
-        # since it's a list, this gets expanded out to a single one in each row
-        extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region", "va_flu_per_100k"),
-        lags = list2(
-          list2(
-            # no hhs
-            c(0, 7) # exogenous feature
-          )
-        ),
-        scale_method = "quantile",
-        nonlin_method = "quart_root",
-        filter_source = c("", "nhsn"),
-        use_population = TRUE,
-        use_density = FALSE,
-        week_method = "sine",
-        n_training = Inf,
-        keys_to_ignore = g_very_latent_locations
-      ),
-      # expand_grid(
-      #   forecaster = "no_recent_outcome",
-      #   trainer = "quantreg",
-      #   extra_sources = list2(
-      #     c("nssp", "google_symptoms"),
-      #     c("nssp", "nwss"),
-      #     c("nssp", "nwss_region"),
-      #     c("google_symptoms", "nwss"),
-      #     c("google_symptoms", "nwss_region"),
-      #     c("nwss", "nwss_region")
-      #   ),
-      #   lags = list2(
-      #     list2(
-      #       # no hhs
-      #       c(0, 7), # first feature
-      #       c(0, 7) # second feature
-      #     )
-      #   ),
-      #   scale_method = "quantile",
-      #   nonlin_method = "quart_root",
-      #   filter_source = c("", "nhsn"),
-      #   use_population = TRUE,
-      #   use_density = FALSE,
-      #   week_method = "sine",
-      #   n_training = Inf,
-      #   keys_to_ignore = g_very_latent_locations
-      # ),
-      expand_grid(
-        forecaster = "no_recent_outcome",
-        trainer = "quantreg",
-        extra_sources = list2(
-          c("nssp", "google_symptoms", "nwss", "nwss_region", "va_flu_per_100k"),
-        ),
-        lags = list2(
-          list2(
-            # no hhs
-            c(0, 7), # nssp
-            c(0, 7), # google symptoms
-            c(0, 7), # nwss
-            c(0, 7), # nwss_region
-            c(0, 7), # va_flu_per_100k
-          )
-        ),
-        scale_method = "quantile",
-        nonlin_method = "quart_root",
-        filter_source = c("", "nhsn"),
-        use_population = TRUE,
-        use_density = FALSE,
-        week_method = "sine",
-        n_training = Inf,
-        keys_to_ignore = g_very_latent_locations
-      )
-    ),
+    # This is broken (scale issue?)
+    # no_recent_but_exogenous = bind_rows(
+    #   expand_grid(
+    #     forecaster = "no_recent_outcome",
+    #     trainer = "quantreg",
+    #     # since it's a list, this gets expanded out to a single one in each row
+    #     extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region", "va_flu_per_100k"),
+    #     lags = list2(
+    #       list2(
+    #         # no hhs
+    #         c(0, 7) # exogenous feature
+    #       )
+    #     ),
+    #     scale_method = "quantile",
+    #     nonlin_method = "quart_root",
+    #     filter_source = "",
+    #     use_population = TRUE,
+    #     use_density = FALSE,
+    #     week_method = "sine",
+    #     n_training = Inf,
+    #     keys_to_ignore = g_very_latent_locations
+    #   ),
+    #   expand_grid(
+    #     forecaster = "no_recent_outcome",
+    #     trainer = "quantreg",
+    #     extra_sources = list2(
+    #       c("nssp", "google_symptoms"),
+    #       c("nssp", "nwss"),
+    #       c("nssp", "nwss_region"),
+    #       c("google_symptoms", "nwss"),
+    #       c("google_symptoms", "nwss_region"),
+    #       c("nwss", "nwss_region")
+    #     ),
+    #     lags = list2(
+    #       list2(
+    #         # no hhs
+    #         c(0, 7), # first feature
+    #         c(0, 7) # second feature
+    #       )
+    #     ),
+    #     scale_method = "quantile",
+    #     nonlin_method = "quart_root",
+    #     filter_source = "",
+    #     use_population = TRUE,
+    #     use_density = FALSE,
+    #     week_method = "sine",
+    #     n_training = Inf,
+    #     keys_to_ignore = g_very_latent_locations
+    #   ),
+    #   expand_grid(
+    #     forecaster = "no_recent_outcome",
+    #     trainer = "quantreg",
+    #     extra_sources = list2(
+    #       c("nssp", "google_symptoms", "nwss", "nwss_region", "va_flu_per_100k"),
+    #     ),
+    #     lags = list2(
+    #       list2(
+    #         # no hhs
+    #         c(0, 7), # nssp
+    #         c(0, 7), # google symptoms
+    #         c(0, 7), # nwss
+    #         c(0, 7), # nwss_region
+    #         c(0, 7), # va_flu_per_100k
+    #       )
+    #     ),
+    #     scale_method = "quantile",
+    #     nonlin_method = "quart_root",
+    #     filter_source = "",
+    #     use_population = TRUE,
+    #     use_density = FALSE,
+    #     week_method = "sine",
+    #     n_training = Inf,
+    #     keys_to_ignore = g_very_latent_locations
+    #   )
+    # ),
     scaled_pop_season = bind_rows(
       tidyr::expand_grid(
         forecaster = "scaled_pop_seasonal",
         trainer = "quantreg",
-        lags = list(
-          c(0, 7, 14, 21),
+        lags = list2(
           c(0, 7)
         ),
         seasonal_method = list("flu", "indicator", "climatological"),
         pop_scaling = FALSE,
         train_residual = c(TRUE, FALSE),
-        filter_source = "nhsn",
+        filter_source = c("", "nhsn"),
         filter_agg_level = "state",
         drop_non_seasons = c(TRUE, FALSE),
         n_training = Inf,
-        seasonal_backward_window = 5,
         keys_to_ignore = g_very_latent_locations
       ),
       # Window-based seasonal method shouldn't drop non-seasons
@@ -272,23 +235,6 @@ get_flu_forecaster_params <- function() {
         filter_agg_level = "state",
         drop_non_seasons = FALSE,
         n_training = Inf,
-        seasonal_backward_window = 5,
-        keys_to_ignore = g_very_latent_locations
-      ),
-      tidyr::expand_grid(
-        forecaster = "scaled_pop_seasonal",
-        trainer = "quantreg",
-        lags = list(
-          c(0, 7, 14, 21)
-        ),
-        seasonal_method = list("window", c("window", "flu"), c("window", "climatological")),
-        pop_scaling = FALSE,
-        train_residual = c(FALSE, TRUE),
-        filter_source = c("", "nhsn"),
-        filter_agg_level = "state",
-        drop_non_seasons = FALSE,
-        n_training = Inf,
-        seasonal_backward_window = 8,
         keys_to_ignore = g_very_latent_locations
       )
     ),
@@ -306,7 +252,7 @@ get_flu_forecaster_params <- function() {
         ),
         seasonal_method = "window",
         pop_scaling = FALSE,
-        filter_source = "",
+        filter_source = c("", "nhsn"),
         filter_agg_level = "state",
         n_training = Inf,
         drop_non_seasons = FALSE,
@@ -319,15 +265,15 @@ get_flu_forecaster_params <- function() {
       lags = list(
         c(0, 7)
       ),
-      seasonal_method = list("window"),
+      seasonal_method = "window",
       pop_scaling = FALSE,
       train_residual = FALSE,
-      filter_source = "",
+      filter_source = c("", "nhsn"),
       filter_agg_level = "state",
       drop_non_seasons = FALSE,
       n_training = Inf,
-      seasonal_backward_window = c(3, 5, 7, 9, 52),
-      seasonal_forward_window = c(3, 5, 7),
+      seasonal_backward_window = c(3 * 7, 5 * 7, 7 * 7),
+      seasonal_forward_window = c(7, 3 * 7, 5 * 7),
       keys_to_ignore = g_very_latent_locations
     ),
     climate_linear = bind_rows(
@@ -381,9 +327,6 @@ get_flu_forecaster_params <- function() {
       x <- add_id(x)
       if ("trainer" %in% names(x) && is.list(x$trainer)) {
         x$trainer <- x$trainer[[1]]
-      }
-      if ("seasonal_method" %in% names(x) && is.list(x$seasonal_method)) {
-        x$seasonal_method <- x$seasonal_method[[1]]
       }
       # Add the outcome to each forecaster.
       x$outcome <- "hhs"

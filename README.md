@@ -127,7 +127,7 @@ Some general tips:
 
 - Do not rely on a forecasting pipeline to get the data you need. Forecasting
   pipelines are bulky and are not designed for fast polling, which is the
-  opposite of what you want from an up-to-date data script. Instead, write a
+  opposite of what you want from a fast fetching script. Instead, write a
   script that polls your source frequently, gets the raw data, and builds an
   archive. See `scripts/build_nhsn_archive.R` for an example of how to do this.
   Then, you can make your forecasting pipeline depend on this archive, which
@@ -159,10 +159,10 @@ you into the R debugger.
 
 ### Adding a new forecaster
 
-To add a new forecaster, we recommend the following process.
-
-First, add a new forecaster function in `R/forecasters/` with the following
-general format:
+To add a new forecaster, we recommend copying the `scaled_pop` forecaster and
+modifying it to suit your needs. What follows is a brief introduction to the
+structure of a typical forecaster function. First, add a new forecaster function
+in `R/forecasters/` with the following general format:
 
 ```r
 function(epi_data,

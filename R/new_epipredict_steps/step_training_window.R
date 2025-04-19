@@ -15,7 +15,7 @@
 #'   Expects n_recent to be finite.
 #' @param seasonal_forward_window An integer value that represents the number of days
 #'   after a season week to include in the training window. The default value
-#'   is 14. Only valid when seasonal is TRUE.
+#'   is 21. Only valid when seasonal is TRUE.
 #' @param seasonal_backward_window An integer value that represents the number of days
 #'   before a season week to include in the training window. The default value
 #'   is 35. Only valid when seasonal is TRUE.
@@ -50,14 +50,16 @@
 #'   prep(tib) %>%
 #'   bake(new_data = NULL)
 step_epi_training_window <-
-  function(recipe,
-           role = NA,
-           n_recent = 50,
-           seasonal = FALSE,
-           seasonal_forward_window = 14,
-           seasonal_backward_window = 35,
-           epi_keys = NULL,
-           id = rand_id("epi_training_window")) {
+  function(
+    recipe,
+    role = NA,
+    n_recent = 50,
+    seasonal = FALSE,
+    seasonal_forward_window = 21,
+    seasonal_backward_window = 35,
+    epi_keys = NULL,
+    id = rand_id("epi_training_window")
+  ) {
     epipredict:::arg_is_scalar(n_recent, id, seasonal, seasonal_forward_window, seasonal_backward_window)
     epipredict:::arg_is_pos(n_recent, seasonal_forward_window, seasonal_backward_window)
     if (is.finite(n_recent)) epipredict:::arg_is_pos_int(n_recent)
@@ -150,7 +152,6 @@ bake.step_epi_training_window <- function(object, new_data, ...) {
     new_data %<>% filter(time_value %in% date_ranges)
   }
 
-
   new_data
 }
 
@@ -162,8 +163,17 @@ print.step_epi_training_window <-
       n_recent <- x$n_recent
       seasonal_forward_window <- x$seasonal_forward_window
       seasonal_backward_window <- x$seasonal_backward_window
-      tr_obj <- recipes::format_selectors(rlang::enquos(n_recent, seasonal_forward_window, seasonal_backward_window), width)
-      recipes::print_step(tr_obj, rlang::enquos(n_recent, seasonal_forward_window, seasonal_backward_window), x$trained, title, width)
+      tr_obj <- recipes::format_selectors(
+        rlang::enquos(n_recent, seasonal_forward_window, seasonal_backward_window),
+        width
+      )
+      recipes::print_step(
+        tr_obj,
+        rlang::enquos(n_recent, seasonal_forward_window, seasonal_backward_window),
+        x$trained,
+        title,
+        width
+      )
     } else {
       title <- "# of recent observations per key limited to:"
       n_recent <- x$n_recent
