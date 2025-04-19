@@ -182,11 +182,13 @@ Some other common arguments are:
 
 - `extra_sources`: a string of column names of additional data to use for the
   forecast. This is often empty, but useful if you have exogenous variables.
-- `filter_source`: a string of the source to filter to. This is often empty, but
-  sometimes it's a string like "nhsn". This allows us to create one large
-  dataset (such as `joined_archive_data`) that contains all the data for all
-  sources, which we can feed uniformly to every forecaster and have them select
-  which data they want to use.
+- `filter_source`: a string of the source to filter to. Most of the time, it
+  should just be a string like "nhsn", but if you want to use augmented data
+  (i.e. treat data from other sources as additional rescaled observations for
+  "NHSN" data), you can leave this as "", which won't filter anything. This
+  allows us to have a single dataset (such as `joined_archive_data`) that's
+  passed uniformly to all forecasters and have them select which data they want
+  to use.
 - `...`: any other arguments are passed to `default_args_list` to control the
   training and prediction process of epipredict (such as lags, quantile levels,
   nonneg, etc.)
