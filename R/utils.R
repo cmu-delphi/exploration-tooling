@@ -316,6 +316,19 @@ write_submission_file <- function(pred, forecast_reference_date, submission_dire
   readr::write_csv(pred, file_path)
 }
 
+#' The quantile levels used by the covidhub repository
+#'
+#' @param type either standard or inc_case, with inc_case being a small subset of the standard
+#'
+#' @export
+covidhub_probs <- function(type = c("standard", "inc_case")) {
+  type <- match.arg(type)
+  switch(type,
+    standard = c(0.01, 0.025, seq(0.05, 0.95, by = 0.05), 0.975, 0.99),
+    inc_case = c(0.025, 0.100, 0.250, 0.500, 0.750, 0.900, 0.975)
+  ) |> round(digits = 3)
+}
+
 #' Utility to get the reference date for a given date. This is the last day of
 #' the epiweek that the date falls in.
 get_forecast_reference_date <- function(date) {
