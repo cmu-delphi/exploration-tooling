@@ -470,12 +470,37 @@ if (g_backtest_mode) {
       name = joined_forecasts_and_ensembles,
       ensemble_targets[["forecasts_and_ensembles"]],
       command = {
-        dplyr::bind_rows(!!!.x, external_forecasts)
+        local_together <- dplyr::bind_rows(!!!.x)
+        # only seek to score on dates that are present both locally and in the
+        # remote
+        viable_dates <- inner_join(
+          local_together %>%
+            select(geo_value, forecast_date) %>%
+            distinct() %>%
+            arrange(forecast_date) %>%
+            mutate(
+              forecast_date = ceiling_date(forecast_date, unit = "week", week_start = 6)
+            ),
+          external_forecasts %>%
+            select(geo_value, forecast_date) %>%
+            distinct() %>% filter(forecast_date > "2024-10-01"),
+          by = c("geo_value", "forecast_date")
+        )
+        dplyr::bind_rows(
+          local_together %>%
+            mutate(
+              forecast_date = ceiling_date(forecast_date, unit = "week", week_start = 6)
+            ) %>%
+            inner_join(viable_dates, by = c("geo_value", "forecast_date")),
+          external_forecasts %>%
+            inner_join(viable_dates, by = c("geo_value", "forecast_date"))
+        )
       }
     ),
     tar_target(
       name = scores,
       command = {
+        browser()
         nhsn_latest_end_of_week <-
           nhsn_latest_data %>%
           mutate(

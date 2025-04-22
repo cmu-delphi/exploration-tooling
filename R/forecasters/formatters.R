@@ -80,17 +80,17 @@ format_scoring_utils <- function(forecasts_and_ensembles, disease = c("flu", "co
   fc_ens[, "horizon"] <- as.integer(floor((fc_ens$target_end_date - fc_ens$reference_date) / 7))
   fc_ens[, "output_type"] <- "quantile"
   fc_ens[, "output_type_id"] <- fc_ens$quantile
-  left_join(
-    fc_ens,
-    get_population_data() %>%
-      select(state_id, state_code),
-    by = c("geo_value" = "state_id")
-  ) %>%
+  fc_ens %>%
+    left_join(
+      get_population_data() %>%
+        select(state_id, state_code),
+      by = c("geo_value" = "state_id")
+    ) %>%
     rename(location = state_code, model_id = forecaster) %>%
     select(reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value, model_id) %>%
     drop_na() %>%
     arrange(location, target_end_date, reference_date, output_type_id) %>%
-    group_by(location, target_end_date, reference_date) %>%
+    group_by(model_id, location, target_end_date, reference_date) %>%
     mutate(value = sort(value)) %>%
     ungroup()
 }

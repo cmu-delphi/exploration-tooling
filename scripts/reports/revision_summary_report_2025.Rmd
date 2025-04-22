@@ -44,7 +44,7 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 # Overall takeaways
 
-There is substantial underreporting behavior that is fairly consistent for a single geo.
+There is substantial under-reporting behavior that is fairly consistent for a single geo.
 We can probably improve our forecasts by including revision behavior.
 Further, flu and covid revision behavior is fairly strongly correlated; it is reported through the same channels by the same people, so this makes sense.
 We should look into the extra columns to see if it provides useful information for handling revision behavior.

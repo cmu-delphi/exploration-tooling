@@ -10,9 +10,10 @@
 
 ## Summary Reports
 
-- [Season Summary](season_summary.html)
+- [Season Summary](season_summary.html) The other documents are also linked from here
 - [An Analysis of Decreasing Behavior in Forecasters](decreasing_forecasters.html)
-- [Revision Behavior](revision_summary_2025.html)
+- [Revision Behavior](revision_summary_report_2025.html)
+- [Covid's problematic initial forecast](first_day_wrong.html)
 - [NHSN 2024-2025 Data Analysis](new_data.html)
 
 ### Flu

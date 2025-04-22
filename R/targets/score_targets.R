@@ -36,9 +36,6 @@ score_forecasts <- function(nhsn_latest_data, joined_forecasts_and_ensembles, di
     joined_forecasts_and_ensembles[joined_forecasts_and_ensembles$forecast_date <= max_forecast_date,] %>%
     format_scoring_utils(disease = disease)
   scores <- forecasts_formatted %>%
-    arrange(location, target_end_date, reference_date, output_type_id) %>%
-    group_by(location, target_end_date, reference_date) %>%
-    mutate(value = sort(value)) %>%
     filter(location %nin% c("US", "60", "66", "78")) %>%
     hubEvals::score_model_out(
       truth_data,
