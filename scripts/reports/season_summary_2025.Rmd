@@ -8,6 +8,20 @@ editor_options:
   chunk_output_type: console
 ---
 
+```{css, echo=FALSE}
+body {
+  display: block;
+  max-width: 1280px !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+body .main-container {
+  max-width: 1280px !important;
+  width: 1280px !important;
+}
+```
+
 $$\\[.4in]$$
 
 ```{r echo=FALSE}
@@ -21,4 +35,483 @@ ggplot2::theme_set(ggplot2::theme_bw())
 source(here::here("R/load_all.R"))
 ```
 
-Draw the rest of the owl.
+# Season Scoring
+<!-- NOTE: to run this, you must run `make prod-flu` and `make prod-covid` successfully, as it will read the targets directly from the store. -->
+
+```{r setup, include=FALSE}
+library(DT)
+
+# Define aggregation functions
+Mean <- function(x) mean(x, na.rm = TRUE)
+GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
+flu_scores <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "scores"))
+forecast_dates <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "forecast_dates"))
+covid_scores <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "scores"))
+```
+
+Some overall conclusions here about the scores for the season.
+
+## Flu Scores
+
+Some conclusions here about the scores for the season.
+
+
+Before we get into the actual scores, we need to define how we go about creating 3 different phases.
+For the details, see the fold.
+They are `increasing`, `peak`, and `decreasing`.
+<details>
+  <summary> Splitting the season </summary>
+### Splitting the season
+
+Since our forecasters tend to do very differently depending on the phase in the pandemic, in addition to an overall score, let's split according to phase.
+There's a great deal of ambiguity in defining the phase however; to keep it simple, lets divide the season into 3 periods:
+
+1. `increasing` Before the peak; normally increasing but may include inital flat periods
+2. `peak` The time interval where the cases are oscillating near or around the peak
+3. `decreasing` The trailing end of the season after the peak; normally decreasing, but probably including flat periods towards the end
+
+2 is the most ambiguous of these, since sometimes there is a clean peak, and sometimes there are multiple peaks.
+To do this simply, let's see what seasons we get if we use "above 50% of the peak value" to define phase 2.
+
+```{r}
+flu_archive <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
+flu_current <- flu_archive %>%
+  epix_as_of_current() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"))
+compute_peak_season <- function(data_current, threshold = 0.5, start_of_year = as.Date("2024-11-01")) {
+  season_length <- data_current %>% pull(time_value) %>% max() - start_of_year
+  data_current %>%
+    filter(time_value > start_of_year) %>%
+    group_by(geo_value) %>%
+    mutate(max_val = max(value)) %>%
+    filter(value >= threshold * max_val) %>%
+    summarize(first_above = min(time_value), last_above = max(time_value)) %>%
+    mutate(
+      duration = last_above - first_above,
+      rel_duration = as.integer(duration) / as.integer(season_length))
+}
+classify_phase <- function(time_value, first_above, last_above, rel_duration, threshold) {
+  case_when(
+    rel_duration > threshold ~ "flat",
+    time_value < first_above ~ "increasing",
+    time_value > last_above ~ "decreasing",
+    .default = "peak"
+  ) %>% factor(levels = c("increasing", "peak", "decreasing", "flat"))
+}
+flu_within_max <- compute_peak_season(flu_current)
+sanity_check_classifying <- flu_current %>%
+  left_join(flu_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(time_value, first_above, last_above, rel_duration, 0.6)) %>%
+  group_by(geo_value) %>%
+  distinct(phase)
+```
+
+
+```{r, fig.width = 15, fig.height = 15}
+flu_current %>%
+  filter(time_value > "2024-11-01") %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(data = flu_within_max, aes(xintercept = first_above)) +
+  geom_vline(data = flu_within_max, aes(xintercept = last_above)) +
+  facet_wrap(~geo_value, scale = "free") +
+  theme(legend.position = "none")
+```
+
+There is a wide variety of length for the peak by this definition, but it does seem to naturally reflect the difference in dynamics.
+`ok` is quite short for example, because it has a simple clean peak, whereas `or` has literally 2 peaks with the same height, so the entire interval between them is classified as peak.
+
+</details>
+### Forecaster Scores for Flu:  {.tabset}
+
+Forecast dates: `r forecast_dates`
+
+#### Scores Aggregated By Forecaster
+
+```{r, fig.height = 60, fig.width = 12, echo=FALSE}
+flu_scores %>%
+  group_by(forecaster) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_coverage_90 = round(Mean(interval_coverage_90), 2),
+    n = n()
+  ) %>%
+  rename(id = forecaster) %>%
+  datatable()
+```
+
+#### Scores Aggregated By Phase
+
+```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+phase_scores <- flu_scores %>%
+  left_join(flu_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, 0.6)) %>%
+  group_by(forecaster, phase) %>%
+  summarize(
+    across(c(wis, ae_median, interval_coverage_90), \(x) round(Mean(x), 2)),
+    n = n(),
+    .groups = "drop"
+  )
+p <- ggplot(phase_scores, aes(x = phase, y = wis, color = forecaster, group = forecaster)) +
+  geom_line() +
+  geom_point() +
+  theme_bw() +
+  labs(x = "Phase", y = "Mean WIS") 
+
+ggplotly(p)
+```
+
+#### Scores Aggregated By Forecast Date
+
+```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+agg_flu <- flu_scores %>%
+  filter(forecast_date > "2024-10-01") %>%
+  filter(forecast_date != as.Date("2025-01-25")) %>%
+  group_by(forecaster, forecast_date) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_interval_coverage_90 = round(Mean(interval_coverage_90), 2),
+  )
+
+# Plot the scores as lines across forecast_date
+p <- ggplot(agg_flu, aes(x = forecast_date, y = mean_wis, color = forecaster)) +
+  geom_line() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Forecast Date", y = "Mean WIS")
+
+ggplotly(p)
+```
+
+#### Scores Aggregated By Ahead
+
+```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+agg <- flu_scores %>%
+  group_by(forecaster, ahead) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_interval_coverage_90 = round(Mean(interval_coverage_90), 2),
+  )
+
+# Plot the scores as lines across forecast_date
+p <- ggplot(agg, aes(x = ahead, y = mean_wis, color = forecaster)) +
+  geom_line() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Ahead", y = "Mean WIS")
+ggplotly(p)
+```
+
+
+## Covid Scores
+
+Some conclusions here about the scores for the season.
+
+One peculiar thing about Covid scoring: the first day has *much* worse scores than almost any of the subsequent days (you can see this in the Scores Aggregated By Forecast Date tab below).
+This mostly comes from the first week having larger revisions than normal.
+This is discussed in more detail in [this notebook](first_day_wrong.html).
+
+
+Before we get into the actual scores, we need to define how we go about creating 4 different phases.
+They are `increasing`, `peak`, `decreasing`, and `flat`.
+The last phase, `flat`, covers geos which didn't have an appreciable season for the year, which was relatively common for covid.
+For the details, see the fold.
+
+<details>
+  <summary> Splitting the season </summary>
+### Splitting the season
+
+Lets see what kind of phase boundaries we get by reusing the concept from flu for covid.
+That is, the peak phase for a given geo is defined to be the interval when the value is within 50% of the peak.
+
+```{r}
+covid_archive <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nhsn_archive_data"))
+covid_current <- covid_archive %>%
+  epix_as_of_current() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"))
+covid_within_max <- compute_peak_season(covid_current)
+```
+
+```{r, fig.width = 15, fig.height = 15}
+covid_current %>%
+  filter(time_value > "2024-11-01") %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(data = covid_within_max, aes(xintercept = first_above)) +
+  geom_vline(data = covid_within_max, aes(xintercept = last_above)) +
+  facet_wrap(~geo_value, scale = "free") +
+  ylim(0, NA) +
+  theme(legend.position = "none")
+```
+
+This definition may be a bit more problematic for covid than for flu.
+`dc` `ga`, `nc`, and `nv` bin ~the entire season into the "peak" phase.
+Primarily this is actually because only some locations actually had a covid season this year; if we drop the filter for this season and add a vline indicating the season start:
+
+```{r, fig.width = 15, fig.height = 15}
+covid_current %>%
+  filter(time_value > "2022-06-01") %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(aes(xintercept = as.Date("2024-11-01"))) +
+  ylim(0, NA) +
+  theme(legend.position = "none")
+```
+
+Then we can see a very muted season in many locations, such as `ar` or `co`, and no season at all in some locations, such as `ak`.
+Others, such as `az`, `in`, or `mn` have a season that is on-par with historical ones.
+
+How to handle this? 
+One option is to include a separate phase for no season that applies to the entire `geo_value` if more than half of the `time_value`s are within 50% of the peak:
+
+```{r}
+no_phase <- covid_within_max %>% arrange(desc(rel_duration)) %>% filter(rel_duration > 0.6)
+no_phase %>% arrange(rel_duration)
+```
+
+which is 27 out of our 53 geos.
+0.6 is admittedly a pretty arbitrary cut-off, chosen so that `geo_value`s with high `rel_duration`s which still appear to have a clear peak, such as `de`, `us`, `wy`, and `mi` aren't assigned to `flat`.
+We can probably decrase this filter as we move later into the season and locations which are still decreasing finish dropping.
+As a sanity check, let's plot just these locations to confirm that we're not pulling in geos with actual peaks
+
+```{r, fig.width = 15, fig.height = 15}
+covid_current %>%
+  filter(time_value > "2022-06-01") %>%
+  filter(geo_value %in% no_phase$geo_value) %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(aes(xintercept = as.Date("2024-11-01"))) +
+  ylim(0, NA) +
+  theme(legend.position = "none")
+```
+
+
+
+</details>
+### Forecaster Scores for Covid:  {.tabset}
+
+Forecast dates: `r forecast_dates`
+
+#### Scores Aggregated By Forecaster
+
+```{r, fig.height = 60, fig.width = 12, echo=FALSE}
+covid_scores %>%
+  group_by(forecaster) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_coverage_90 = round(Mean(interval_coverage_90), 2),
+    n = n()
+  ) %>%
+  rename(id = forecaster) %>%
+  datatable()
+```
+
+#### Scores Aggregated By Phase
+
+```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+phase_scores <- covid_scores %>%
+  left_join(covid_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, 0.6)) %>%
+  group_by(forecaster, phase) %>%
+  summarize(
+    across(c(wis, ae_median, interval_coverage_90), \(x) round(Mean(x), 2)),
+    n = n(),
+    .groups = "drop"
+  )
+p <- ggplot(phase_scores, aes(x = phase, y = wis, color = forecaster, group = forecaster)) +
+  geom_line() +
+  geom_point() +
+  theme_bw() +
+  labs(x = "Phase", y = "Mean WIS")
+
+ggplotly(p)
+```
+#### Scores Aggregated By Forecast Date
+
+```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+agg_flu <- covid_scores %>%
+  filter(forecast_date > "2024-10-01") %>%
+  filter(forecast_date != as.Date("2025-01-25")) %>%
+  group_by(forecaster, forecast_date) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_interval_coverage_90 = round(Mean(interval_coverage_90), 2),
+  )
+
+# Plot the scores as lines across forecast_date
+p <- ggplot(agg_flu, aes(x = forecast_date, y = mean_wis, color = forecaster)) +
+  geom_line() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Forecast Date", y = "Mean WIS")
+
+ggplotly(p)
+```
+
+#### Scores Aggregated By Ahead
+
+```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+agg <- covid_scores %>%
+  group_by(forecaster, ahead) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_interval_coverage_90 = round(Mean(interval_coverage_90), 2),
+  )
+
+# Plot the scores as lines across forecast_date
+p <- ggplot(agg, aes(x = ahead, y = mean_wis, color = forecaster)) +
+  geom_line() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Ahead", y = "Mean WIS")
+ggplotly(p)
+```
+
+# Revision behavior and data substitution
+
+This is covered in more detail in [revision_summary_report_2025](revision_summary_report_2025.html).
+NHSN has substantial under-reporting behavior that is fairly consistent for any single geo, though there a number of aberrant revisions, some of which change the entire trajectory for a couple of weeks.
+This is even more true for NSSP than NHSN, though the size of the revisions is much smaller, and they occur more quickly, so handling the revisions would be most useful for prediction, rather than for correcting data for fitting the forecaster.
+We can probably improve our forecasts by incorporating revision behavior.
+
+Further, flu and covid revision behavior is fairly strongly correlated; it is reported through the same channels by the same people, so this makes sense.
+We should look into the extra columns to see if it provides useful information for handling revision behavior.
+
+
+## Data substitution
+
+In short, this didn't go well.
+It was a coin toss for covid, and worse than not doing corrections for flu.
+
+## Revision examples
+
+```{r}
+nhsn_archive_flu <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
+
+nhsn_archive_flu <- nhsn_archive_flu$DT %>% filter(time_value >= "2024-11-19", geo_value %nin% c("vi", "as", "gu")) %>% as_epi_archive()
+nhsn_archive_flu$time_type <- "day"
+revision_summary <- nhsn_archive_flu %>% epiprocess::revision_analysis(value, min_waiting_period = NULL)
+av_re_spread <- revision_summary$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+nhsn_archive_flu %>% autoplot(value, .facet_filter = geo_value %in% av_re_spread$geo_value[1:9]) +
+  theme(strip.text.x = element_text(size = 8), plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Flu revisions for the highest mean relative spread")
+```
+
+```{r}
+nhsn_archive_covid <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nhsn_archive_data"))
+
+nhsn_archive_covid <- nhsn_archive_covid$DT %>% filter(time_value >= "2024-11-19", geo_value %nin% c("vi", "as", "gu")) %>% as_epi_archive()
+nhsn_archive_covid$time_type <- "day"
+revision_summary <- nhsn_archive_covid %>% epiprocess::revision_analysis(value, min_waiting_period = NULL)
+av_re_spread <- revision_summary$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+nhsn_archive_covid %>% autoplot(value, .facet_filter = geo_value %in% av_re_spread$geo_value[1:9]) +
+  theme(strip.text.x = element_text(size = 8), plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Covid revisions for the highest mean relative spread")
+```
+
+
+# Appendix
+## Methods of selecting season phase
+There's a lot of flexibility in this decision.
+Here's some alternatives that we looked at.
+
+```{r}
+flu_gr <- flu_current %>%
+  group_by(geo_value) %>%
+  mutate(gr = growth_rate(value, method = "linear_reg", h = 3)) %>%
+  filter(time_value > "2024-11-01")
+flu_gr %>% autoplot(gr, .facet_by = "geo_value")
+flu_max_dates <- flu_current %>%
+  group_by(geo_value) %>%
+  slice_max(value) %>%
+  select(geo_value, time_value_max = time_value)
+flu_peak_season <- flu_max_dates %>% ungroup() %>% summarize(peak_start = min(time_value_max), peak_end = max(time_value_max)) %>% pivot_longer(cols = c(peak_start, peak_end))
+flu_gr %>%
+  mutate(value = value / max(value)) %>%
+  mutate(neg = gr < 0) %>%
+  group_by(geo_value) %>%
+  arrange(desc(time_value)) %>%
+  mutate(count_so_far = TRUE, count_so_far = cumsum(count_so_far), frac_neg = (cumsum(neg)) / sum(neg)) %>%
+  arrange(geo_value) %>%
+  left_join(flu_max_dates, by = "geo_value") %>%
+  ggplot(aes(x = time_value, y = frac_neg)) +
+  geom_point() +
+  geom_line(aes(y = gr)) +
+  geom_line(aes(y = value)) +
+  geom_vline(data = flu_peak_season, aes(xintercept = value)) +
+  facet_wrap(~geo_value, scale = "free")
+flu_gr %>%
+  left_join(flu_max_dates, by = "geo_value") %>%
+  filter(time_value > time_value_max) %>%
+  arrange(time_value)
+```
+
+```{r}
+flu_within_max <- flu_current %>%
+  filter(time_value > "2024-11-01") %>%
+  group_by(geo_value) %>%
+  mutate(max_val = max(value)) %>%
+  filter(value >= max_val/2) %>%
+  summarize(first_above = min(time_value), last_above = max(time_value))
+flu_current %>%
+  filter(time_value > "2024-11-01") %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(data = flu_within_max, aes(xintercept = first_above)) +
+  geom_vline(data = flu_within_max, aes(xintercept = last_above)) +
+  geom_vline(data = flu_peak_season, aes(xintercept = value, color = "green")) +
+  facet_wrap(~geo_value, scale = "free")
+```
+
+```{r}
+covid_gr <- covid_archive %>%
+  epix_as_of_current() %>%
+  filter(geo_value %nin% c("as", "gu", "mp")) %>%
+  group_by(geo_value) %>%
+  mutate(gr = growth_rate(value, method = "linear_reg", h = 3)) %>%
+  filter(time_value > "2024-09-01")
+covid_gr %>% autoplot(gr, .facet_by = "geo_value")
+```
+
+```{r}
+covid_gr %>%
+  mutate(value = value / max(value)) %>%
+  mutate(neg = gr < 0) %>%
+  group_by(geo_value) %>%
+  arrange(desc(time_value)) %>%
+  mutate(count_so_far = TRUE, count_so_far = cumsum(count_so_far), frac_neg = (cumsum(neg)) / sum(neg)) %>%
+  arrange(geo_value) %>%
+  ggplot(aes(x = time_value, y = frac_neg)) +
+  geom_point() +
+  geom_line(aes(y = gr)) +
+  geom_line(aes(y = value)) +
+  facet_wrap(~geo_value, scale = "free")
+covid_max_dates <- covid_gr %>%
+  slice_max(gr) %>%
+  select(geo_value, time_value_max = time_value)
+covid_gr %>%
+  left_join(covid_max_dates, by = "geo_value") %>%
+  filter(time_value > time_value_max) %>%
+  arrange(time_value)
+```
