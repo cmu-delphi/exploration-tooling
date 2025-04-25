@@ -42,7 +42,7 @@ if (!g_backtest_mode) {
   # override this. It should be a Wednesday.
   g_forecast_dates <- round_date(g_forecast_generation_dates, "weeks", week_start = 3)
 } else {
-  g_forecast_generation_dates <- c(as.Date(c("2024-11-22", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
+  g_forecast_generation_dates <- c(as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
   g_forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 }
 
@@ -470,30 +470,9 @@ if (g_backtest_mode) {
       name = joined_forecasts_and_ensembles,
       ensemble_targets[["forecasts_and_ensembles"]],
       command = {
-        local_together <- dplyr::bind_rows(!!!.x)
-        # only seek to score on dates that are present both locally and in the
-        # remote
-        viable_dates <- inner_join(
-          local_together %>%
-            select(geo_value, forecast_date) %>%
-            distinct() %>%
-            arrange(forecast_date) %>%
-            mutate(
-              forecast_date = ceiling_date(forecast_date, unit = "week", week_start = 6)
-            ),
-          external_forecasts %>%
-            select(geo_value, forecast_date) %>%
-            distinct() %>% filter(forecast_date > "2024-10-01"),
-          by = c("geo_value", "forecast_date")
-        )
-        dplyr::bind_rows(
-          local_together %>%
-            mutate(
-              forecast_date = ceiling_date(forecast_date, unit = "week", week_start = 6)
-            ) %>%
-            inner_join(viable_dates, by = c("geo_value", "forecast_date")),
-          external_forecasts %>%
-            inner_join(viable_dates, by = c("geo_value", "forecast_date"))
+        filter_shared_geo_dates(
+          dplyr::bind_rows(!!!.x),
+          external_forecasts
         )
       }
     ),
@@ -504,7 +483,7 @@ if (g_backtest_mode) {
         nhsn_latest_end_of_week <-
           nhsn_latest_data %>%
           mutate(
-            time_value = ceiling_date(time_value, unit = "week", week_start = 6)
+            time_value = round_date(time_value, unit = "week", week_start = 6)
           )
         score_forecasts(nhsn_latest_end_of_week, joined_forecasts_and_ensembles, "flu")
       }

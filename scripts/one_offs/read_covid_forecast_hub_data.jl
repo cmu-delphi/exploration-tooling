@@ -1,9 +1,11 @@
 # this was run from within the https://github.com/reichlab/covid19-forecast-hub repo,
-# specifically in the data-processed folder
+# specifically in the model-output folder
+# cd("../../../covid19-forecast-hub/model-output")
+# if started here
 # to get the rds, run
 #
-# full_results <- readr::read_csv("../covid19-forecast-hub/data-processed/covid19-2023season-results.csv")
-# aws.s3::s3save(full_results, object = "covid19_forecast_hub_2023_full_summed.rds", bucket = "forecasting-team-data")
+# full_results <- readr::read_csv(here::here("cache/covid19-2024season-results.csv"))
+# aws.s3::s3save(full_results, object = "covid19_forecast_hub_2024_full.rds", bucket = "forecasting-team-data")
 #
 using Base: floatrange
 using CSV
@@ -13,13 +15,14 @@ using Dates
 using RData
 import Base.lowercase
 pwd()
-res = CSV.read("COVIDhub_CDC-ensemble/2023-10-02-COVIDhub_CDC-ensemble.csv", DataFrame)
-pathname = "COVIDhub_CDC-ensemble/"
-filename = "2023-10-02-COVIDhub_CDC-ensemble.csv"
-state_names = CSV.read("../data-locations/locations.csv", DataFrame)
+res = CSV.read("CovidHub-ensemble/2024-11-23-CovidHub-ensemble.csv", DataFrame)
+pathname = "CovidHub-ensemble"
+filename = "2024-11-23-CovidHub-ensemble.csv"
+state_names = CSV.read("../auxiliary-data/locations.csv", DataFrame)
 lowercase(m::Missing) = m
 @rtransform! state_names @passmissing :abbreviation = lowercase(:abbreviation)
 @select! state_names :abbreviation :location
+format_file(pathname, filename, state_names)
 function format_file(pathname, filename, state_names)
     if length(filename) < 10 ||
        match(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", filename[1:10]) == nothing ||
@@ -28,23 +31,29 @@ function format_file(pathname, filename, state_names)
     end
     println(joinpath(pathname, filename))
     res = CSV.read(joinpath(pathname, filename), DataFrame, missingstring="NA", types=Dict("value" => Float64))
-    if !("forecast_date" in names(res)) ||
-       res[!, :forecast_date] |> minimum < Date(2023, 1, 1)
+    if "forecast_date" in names(res)
+        @rename! res :reference_date = :forecast_date
+    end
+    if !("reference_date" in names(res)) ||
+       (res[!, :reference_date] |> minimum) < Date(2023, 1, 1)
         return DataFrame()
     end
-    @transform(res, :target = (:target))
     res = @chain res begin
-        @rtransform :target = parse(Int64, match(r"[0-9]*", :target).match)
+        # old format problem, ahead is now recorded elsewhere
+        #@rtransform :target = parse(Int64, match(r"[0-9]*", :target).match)
         @transform :forecaster = pathname[3:end]
-        @rsubset :type == "quantile"
+        @rsubset :output_type == "quantile"
     end
     res = leftjoin(res, state_names, on=:location)
-    @select! res :forecaster :geo_value = :abbreviation :forecast_date :target_end_date :ahead = :target :quantile :value
-    @chain res begin
-        @rtransform :week_ahead = div(:ahead, 7)
-        @groupby :forecaster :geo_value :forecast_date :week_ahead :quantile
-        @combine :value = sum(:value)
-    end
+    names(res)
+    res[!, :output_type_id]
+    @select res :forecaster :geo_value = :abbreviation :forecast_date = :reference_date :target_end_date :ahead = :horizon :quantile = :output_type_id :value
+    # this is for converting daily forecasts into weekly, whereas this script is currently downloading weekly forecasts
+    #@chain res begin
+    #    @rtransform :week_ahead = div(:ahead, 7)
+    #    @groupby :forecaster :geo_value :reference_date :week_ahead :quantile
+    #    @combine :value = sum(:value)
+    #end
 end
 results = DataFrame[]
 for (root, dirs, files) in walkdir(".")
@@ -52,5 +61,7 @@ for (root, dirs, files) in walkdir(".")
         push!(results, format_file(root, file, state_names))
     end
 end
+maximum(size.(results, 2))
 full_results = vcat(results...)
-CSV.write("covid19-2023season-results.csv", full_results)
+CSV.write("../../exploration-tooling/cache/covid19-2024season-results.csv", full_results)
+pwd()

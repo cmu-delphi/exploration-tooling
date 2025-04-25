@@ -569,7 +569,7 @@ get_targets_errors <- function(project = tar_path_store(), top_n = 10) {
 #'   wait_seconds = 1,
 #'   fn = pub_covidcast,
 #'   source = "nssp",
-#'   signals= "pct_ed_visits_covid",
+#'   signals = "pct_ed_visits_covid",
 #'   geo_type = "state",
 #'   geo_values = "*",
 #'   time_type = "week"
@@ -605,4 +605,51 @@ validate_epi_data <- function(epi_data) {
 #' Convenience wrapper for working with Delphi S3 bucket.
 get_bucket_df_delphi <- function(prefix = "", bucket = "forecasting-team-data") {
   aws.s3::get_bucket_df(prefix = prefix, bucket = bucket) %>% tibble()
+}
+
+
+
+#' get the unique shared (geo_value, forecast_date, target_end_date) tuples present for each forecaster in `forecasts`
+get_unique <- function(forecasts) {
+  forecasters <- forecasts %>%
+    pull(forecaster) %>%
+    unique()
+  distinct <- map(
+    forecasters,
+    \(x) forecasts %>%
+      filter(forecaster == x) %>%
+      select(geo_value, forecast_date, target_end_date) %>%
+      distinct()
+  )
+  distinct_dates <- reduce(distinct, \(x, y) x %>% inner_join(y, by = c("geo_value", "forecast_date", "target_end_date")))
+  mutate(
+    distinct_dates,
+    forecast_date = round_date(forecast_date, unit = "week", week_start = 6)
+  )
+}
+
+#' filter the external and local forecasts to just the shared dates/geos
+#' some forecasters have a limited set of geos; we want to include those
+#' anyways, they are `tructated_forecasters`, while the external_forecasts may
+#' have previous years forecasts that we definitely want to exclude via
+#' `season_start`.
+filter_shared_geo_dates <- function(local_forecasts, external_forecasts, season_start = "2024-11-01", trucated_forecasters = "windowed_seasonal_extra_sources") {
+  viable_dates <- inner_join(
+    local_forecasts %>%
+      filter(forecaster %nin% trucated_forecasters) %>%
+      get_unique(),
+    external_forecasts %>%
+      filter(forecast_date > season_start) %>%
+      get_unique(),
+    by = c("geo_value", "forecast_date", "target_end_date")
+  )
+  dplyr::bind_rows(
+    local_forecasts %>%
+      mutate(
+        forecast_date = round_date(forecast_date, unit = "week", week_start = 6)
+      ) %>%
+      inner_join(viable_dates, by = c("geo_value", "forecast_date", "target_end_date")),
+    external_forecasts %>%
+      inner_join(viable_dates, by = c("geo_value", "forecast_date", "target_end_date"))
+  )
 }

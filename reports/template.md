@@ -10,7 +10,9 @@
 
 ## Summary Reports
 
-- [Season Summary](season_summary.html) The other documents are also linked from here
+### 2025
+
+- [Season Summary](season_summary_2025.html) The other documents are also linked from here
 - [An Analysis of Decreasing Behavior in Forecasters](decreasing_forecasters.html)
 - [Revision Behavior](revision_summary_report_2025.html)
 - [Covid's problematic initial forecast](first_day_wrong.html)
