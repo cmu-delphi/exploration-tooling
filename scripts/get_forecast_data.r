@@ -13,7 +13,8 @@
 # 4. TODO: Add a companion metadata file that describes the forecasts in the parquet file
 # 5. TODO: Add the metadata file to the S3 bucket
 # 6. TODO: Allow incremental updates to the forecasts, by downloading only the new files
-
+print("-------------------------------------------------------")
+print(glue::glue("starting at {Sys.time()}"))
 suppressPackageStartupMessages({
   library(tidyverse)
   library(httr)
@@ -32,7 +33,7 @@ run_time_local <- with_tz(run_time)
 # Configuration
 covid_config <- list(
   base_url = "https://raw.githubusercontent.com/cdcgov/covid19-forecast-hub/main/model-output",
-  forecasters = c("CMU-TimeSeries", "CovidHub-baseline", "CovidHub-ensemble"),
+  forecasters = c("CMU-TimeSeries", "CovidHub-baseline", "CovidHub-ensemble", "UMass-ar6_pooled", "UMass-gbqr", "CEPH-Rtrend_covid", "Metaculus-cp"),
   s3_bucket = "forecasting-team-data",
   s3_key = "exploration/2024-2025_covid_hosp_forecasts.parquet",
   disease = "covid"
@@ -40,7 +41,7 @@ covid_config <- list(
 # same but for flu
 flu_config <- list(
   base_url = "https://raw.githubusercontent.com/cdcepi/FluSight-forecast-hub/main/model-output",
-  forecasters = c("FluSight-baseline", "FluSight-ensemble", "CMU-TimeSeries"),
+  forecasters = c("FluSight-baseline", "FluSight-ensemble", "CMU-TimeSeries", "PSI-PROF", "FluSight-lop_norm", "UMass-flusion", "NIH-Flu_ARIMA", "Metaculus-cp"),
   s3_bucket = "forecasting-team-data",
   s3_key = "exploration/2024-2025_flu_hosp_forecasts.parquet",
   disease = "flu"
@@ -152,3 +153,7 @@ cli::cli_alert_info("Fetching COVID forecasts {run_time_local} (UTC: {run_time})
 fetch_forecast_files(sync_to_s3 = FALSE, disease = "covid")
 cli::cli_alert_info("Fetching FLU forecasts {run_time_local} (UTC: {run_time})")
 fetch_forecast_files(sync_to_s3 = FALSE, disease = "flu")
+
+print(glue::glue("Run successfully finished at {Sys.time()}"))
+print("-------------------------------------------------------")
+print("-------------------------------------------------------")
