@@ -150,9 +150,9 @@ fetch_forecast_files <- function(sync_to_s3 = TRUE, disease) {
 }
 
 cli::cli_alert_info("Fetching COVID forecasts {run_time_local} (UTC: {run_time})")
-fetch_forecast_files(sync_to_s3 = FALSE, disease = "covid")
+fetch_forecast_files(disease = "covid")
 cli::cli_alert_info("Fetching FLU forecasts {run_time_local} (UTC: {run_time})")
-fetch_forecast_files(sync_to_s3 = FALSE, disease = "flu")
+fetch_forecast_files(disease = "flu")
 
 print(glue::glue("Run successfully finished at {Sys.time()}"))
 print("-------------------------------------------------------")
