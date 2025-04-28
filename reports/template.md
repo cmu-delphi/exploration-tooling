@@ -20,13 +20,16 @@
 
 ### Flu
 
+All forecasters population scale their data, use geo pooling, and train using quantreg.
+These definitions are in the `flu_forecaster_config.R` file.
+
 - [Flu Overall](flu-overall-notebook.html)
-- [Flu AR with population scaling (quantile reg)](flu-notebook-scaled_pop_main.html)
-- [Flu AR with population scaling and data augmented](flu-notebook-scaled_pop_data_augmented.html)
-- [Flu AR with population scaling, data augmented, and exogenous features](flu-notebook-scaled_pop_exogenous.html)
-- [Flu AR with seasonal features](flu-notebook-scaled_pop_season.html)
-- [Flu AR seasonal window size comparisons](flu-notebook-season_window_sizes.html)
-- [Flu AR with seasonal features and exogenous features](flu-notebook-scaled_pop_season_exogenous.html)
+- [Flu AR](flu-notebook-scaled_pop_main.html)
+- [Flu AR with augmented data](flu-notebook-scaled_pop_data_augmented.html)
+- [Flu AR with exogenous features](flu-notebook-scaled_pop_exogenous.html)
+- [Flu AR with different seasonal schemes](flu-notebook-scaled_pop_season.html)
+- [Flu AR with augmented data and with different seasonal window sizes](flu-notebook-season_window_sizes.html)
+- [Flu AR with augmented data, exogenous features, and seasonal windowing](flu-notebook-scaled_pop_season_exogenous.html)
 
 Simplistic/low data methods:
 
@@ -34,11 +37,14 @@ Simplistic/low data methods:
 - [Flu flatline](flu-notebook-flatline.html)
 - [Flu climate](flu-notebook-climate_linear.html)
 
-### Covid (new)
+### Covid
 
-- [Covid AR with population scaling](covid-notebook-scaled_pop_main.html)
-- [Covid AR with population scaling and seasonal features](covid-notebook-scaled_pop_season.html)
-- [Covid AR with population scaling, and exogenous features](covid-notebook-scaled_pop_exogenous.html)
+All forecasters population scale their data, use geo pooling, and train using quantreg.
+These definitions are in the `covid_forecaster_config.R` file.
+
+- [Covid AR](covid-notebook-scaled_pop_main.html)
+- [Covid AR with seasonal features](covid-notebook-scaled_pop_season.html)
+- [Covid AR with exogenous features](covid-notebook-scaled_pop_exogenous.html)
 - [Covid Flatline](covid-notebook-flatline_forecaster.html)
 
 Simplistic/low data methods:
@@ -46,12 +52,6 @@ Simplistic/low data methods:
 - [Covid no recent](covid-notebook-no_recent_quant.html)
 - [Covid flatline](covid-notebook-flatline.html)
 - [Covid climate](covid-notebook-climate_linear.html)
-
-### Covid (old)
-
-- [Covid AR with population scaling](covid-notebook-1.html)
-- [Covid AR with population scaling and smoothed features](covid-notebook-2.html)
-- [Covid Flatline](covid-notebook-3.html)
 
 ## Descriptions of Forecaster Families
 
