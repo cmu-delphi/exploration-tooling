@@ -4,6 +4,7 @@ date: "compiled on `r format(Sys.time(), '%d %B %Y')`"
 output:
   html_document:
     code_folding: hide
+    toc: True
 editor_options:
   chunk_output_type: console
 ---
@@ -50,23 +51,13 @@ flu_scores <-
     "ens_ar_only" ~ "ensemble_windowed",
     .default = forecaster
     ))
-flu_scores %>% distinct(forecaster)
-
-covid_bucket <- s3read_using(
-  nanoparquet::read_parquet,
-  object = glue::glue("exploration/2024-2025_covid_hosp_forecasts.parquet"), bucket = "forecasting-team-data"
-)
-covid_bucket %>% distinct(forecast_date) %>% arrange(desc(forecast_date))
-covid_forecasts %>% distinct(forecast_date) %>% arrange(desc(forecast_date))
-flu_forecasts <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "joined_forecasts_and_ensembles")) %>%
-  mutate(forecaster = case_match(
-           forecaster,
+flu_forecasts <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "joined_forecasts_and_ensembles"))
+flu_forecasts$forecaster %<>% case_match(
     "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
     "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
     "ens_ar_only" ~ "ensemble_windowed",
-    .default = forecaster
-    ))
-
+    .default = flu_forecasts$forecaster
+    )
 forecast_dates <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "forecast_dates"))
 covid_scores <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "scores")) %>%
   mutate(forecaster = case_match(
@@ -76,11 +67,11 @@ covid_scores <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "scores"))
     "ens_ar_only" ~ "ensemble_windowed",
     .default = forecaster
     ))
-covid_scores %>% distinct(forecaster)
-
 ```
+
 # Models used
 One thing to note: all of these models filter out the 2020/21 and 2021/22 seasons.
+For both flu and covid they are either unusually large or unusually small, and don't warrant inclusion.
 We can split the models and ensembles into 3 categories: the ad-hoc models that we created in response to the actual data that we saw, the AR models that we had been backtesting, and the ensembles.
 
 ### The "ad-hoc" models
@@ -97,8 +88,26 @@ We can split the models and ensembles into 3 categories: the ad-hoc models that 
   It does two linear weightings between the linear model and the climate models.
   As the ahead goes from -1 to 4, it linearly interpolates between a 5% weight on the climate model and a 90% weight on the climate model (so the furthest ahead is mostly a climate model).
   At the same time, as the quantile level goes further away from the median, it interpolates between a 10% weight on the climate model at the median and a 100% weight on the climate model at either the 1% or 99% quantile levels.
-  In net, at the median -1 ahead, `climate_linear` has a weight .5%.
-  
+  In net, at the median -1 ahead, the climate models have a weight of 0.5%, and the linear model of 99.5%.
+
+<details>
+<summary> A plot of the `climate` weights </summary>
+
+```{r climate_weight_plot, fig.width = 12, fig.height = 3}
+weights <-
+  make_ahead_weights(-1:3) %>%
+  left_join(
+    make_quantile_weights(covidhub_probs()),
+    by = c("forecast_family"),
+    relationship = "many-to-many"
+  ) %>%
+  mutate(weight = weight.x * weight.y) %>%
+  select(forecast_family, quantile, ahead, weight)
+weights %>% filter(forecast_family == "climate") %>% ggplot(aes(x = factor(ahead), y = factor(quantile), fill = weight)) + geom_tile() + scale_fill_viridis_c(limits = c(0,1))
+```
+
+</details>
+
 ### The AR models
 
 - `windowed_seasonal` is an AR forecaster using lags 0 and 7 that uses training data from an 8 week window from each year.
@@ -122,7 +131,7 @@ We can split the models and ensembles into 3 categories: the ad-hoc models that 
   
   <details>
   <summary> A timeline of the changes to `CMU-timeseries` </summary>
-  ```{r, echo=FALSE}
+  ```{r cmu_timeseries_timeline, echo=FALSE}
   tribble(~Date, ~`Change for flu`, ~`Change for covid`,
           as.Date("2024-11-21"), "Initial forecast. Uses a simple average of the `climate_base` and the `linear` models.", "Same model as Flu",
           as.Date("2024-11-27"), "Start using the `climate_linear` model", "start using the `climate_linear` model",
@@ -191,7 +200,7 @@ There's a great deal of ambiguity in defining the phase however; to keep it simp
 2 is the most ambiguous of these, since sometimes there is a clean peak, and sometimes there are multiple peaks.
 To do this simply, let's see what seasons we get if we use "above 50% of the peak value" to define phase 2.
 
-```{r}
+```{r split_season_functions}
 flu_archive <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
 flu_current <- flu_archive %>%
   epix_as_of_current() %>%
@@ -217,6 +226,7 @@ classify_phase <- function(time_value, first_above, last_above, rel_duration, th
   ) %>% factor(levels = c("increasing", "peak", "decreasing", "flat"))
 }
 covid_flat_threshold <- 0.6
+flu_flat_threshold <- 0.9
 flu_within_max <- compute_peak_season(flu_current)
 sanity_check_classifying <- flu_current %>%
   left_join(flu_within_max, by = "geo_value") %>%
@@ -226,7 +236,7 @@ sanity_check_classifying <- flu_current %>%
 ```
 
 
-```{r, fig.width = 15, fig.height = 15}
+```{r flu_season_definitions, fig.width = 15, fig.height = 15}
 flu_current %>%
   filter(time_value > "2024-11-01") %>%
   autoplot(value, .facet_by = "geo_value") +
@@ -242,18 +252,18 @@ There is a wide variety of length for the peak by this definition, but it does s
 Boiling down these plots somewhat, let's look at the averages for the start of the peak and the end of the peak. 
 First, for the start:
 
-```{r}
-covid_within_max %>%
-  filter(rel_duration < covid_flat_threshold) %>%
+```{r flu_peak_start}
+flu_within_max %>%
+  filter(rel_duration < flu_flat_threshold) %>%
   pull(first_above) %>%
   summary()
 ```
 
 So the `increasing` phase ends at earliest on November 2nd, on average on December 21st, and at the latest on January 4th.
 
-```{r}
-covid_within_max %>%
-  filter(rel_duration < covid_flat_threshold) %>%
+```{r flu_peak_end}
+flu_within_max %>%
+  filter(rel_duration < flu_flat_threshold) %>%
   pull(last_above) %>%
   summary()
 ```
@@ -271,9 +281,9 @@ Forecast dates: `r forecast_dates`
 Generally there are far too few to have a major effect (something like 2% of the scores).
 The standard deviation for a given forecaster is significantly larger than the actual mean, so we should avoid drawing too many conclusions from these overall scores.
 
-`mean_pop_norm_wis` and `mean_pop_norm_ae` are on a rate per 100,000.
+`pop_norm_wis` and `pop_norm_ae` are on a rate per 100,000.
 
-```{r, fig.height = 60, fig.width = 12, echo=FALSE}
+```{r flu_datatable, fig.height = 60, fig.width = 12, echo=FALSE}
 # set the offset to be the minimum non-zero score
 flu_score_summary <- flu_scores %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
@@ -301,8 +311,9 @@ flu_score_summary %>%
 
 #### Scores Aggregated By Phase
 Note that the standard deviation is frequently double the actual value, much like in the totally general case.
+Adding it to the plot here results in bands that wash out all variation between forecasters (which you can see by un-commenting the `geom_ribbon` line).
 
-```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+```{r plot_flu_by_phase, fig.height = 8, fig.width = 12, echo=FALSE}
 phase_scores <-
   flu_scores %>%
   left_join(flu_within_max, by = "geo_value") %>%
@@ -317,16 +328,19 @@ phase_scores <-
   )
 p <- ggplot(phase_scores, aes(x = phase, y = wis, color = forecaster, group = forecaster)) +
   geom_line() +
+  #geom_ribbon(aes(ymin = wis - wis_sd, ymax = wis + wis_sd, fill = forecaster), alpha = 0.3) +
   geom_point() +
   theme_bw() +
-  labs(x = "Phase", y = "Mean WIS") 
+  labs(x = "Phase", y = "Mean WIS")
 
 ggplotly(p)
 ```
 
 #### Scores Aggregated By Forecast Date
+Note that the standard deviation is frequently double the actual value, much like in the totally general case.
+Adding it to the plot here results in bands that wash out all variation between forecasters (which you can see by un-commenting the `geom_ribbon` line).
 
-```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+```{r plot_flu_by_forecast_date, fig.height = 8, fig.width = 12, echo=FALSE}
 agg_flu <- flu_scores %>%
   filter(forecast_date > "2024-10-01") %>%
   filter(forecast_date != as.Date("2025-01-25")) %>%
@@ -346,6 +360,7 @@ agg_flu <- flu_scores %>%
 # Plot the scores as lines across forecast_date
 p <- ggplot(agg_flu, aes(x = forecast_date, y = mean_wis, color = forecaster)) +
   geom_line() +
+  #geom_ribbon(aes(ymin = mean_wis - wis_sd, ymax = mean_wis + wis_sd, fill = forecaster), alpha = 0.1) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   labs(x = "Forecast Date", y = "Mean WIS")
@@ -355,7 +370,7 @@ ggplotly(p)
 
 #### Scores Aggregated By Ahead
 
-```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+```{r plot_flu_by_ahead, fig.height = 8, fig.width = 12, echo=FALSE}
 agg <- flu_scores %>%
   group_by(forecaster, ahead) %>%
   summarize(
@@ -386,7 +401,7 @@ Even after normalizing by population, there is a large variation in scale for th
 Concentration towards the left corresponds to a better score; for example, `peak` is frequently a flatter distribution, which means most models are doing worse than they were during the `increasing` period.
 `climate_geo_agged` is flatter overall than `ens_ar_only`
 
-```{r, fig.height = 20, fig.width = 13, echo=FALSE}
+```{r flu_score_histogram, fig.height = 20, fig.width = 13, echo=FALSE}
 #, levels = exp(seq(log(min(pop)), log(max(pop)), length.out = 10))
 flu_scores %>%
   left_join(flu_within_max, by = "geo_value") %>%
@@ -538,7 +553,7 @@ Forecast dates: `r forecast_dates`
 
 #### Scores Aggregated By Forecaster
 
-```{r, fig.height = 60, fig.width = 12, echo=FALSE}
+```{r covid_datatable, fig.height = 60, fig.width = 12, echo=FALSE}
 covid_scores %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
   group_by(forecaster) %>%
@@ -563,18 +578,20 @@ covid_scores %>%
 
 #### Scores Aggregated By Phase
 
-```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+```{r plot_covid_by_phase, fig.height = 8, fig.width = 12, echo=FALSE}
 phase_scores <- covid_scores %>%
   left_join(covid_within_max, by = "geo_value") %>%
   mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
   group_by(forecaster, phase) %>%
   summarize(
+    wis_sd = sd(wis, na.rm = TRUE),
     across(c(wis, ae_median, interval_coverage_90), \(x) round(Mean(x), 2)),
     n = n(),
     .groups = "drop"
   )
 p <- ggplot(phase_scores, aes(x = phase, y = wis, color = forecaster, group = forecaster)) +
   geom_line() +
+  #geom_ribbon(aes(ymin = wis - wis_sd, ymax = wis + wis_sd, fill = forecaster), alpha = 0.1) +
   geom_point() +
   theme_bw() +
   labs(x = "Phase", y = "Mean WIS")
@@ -586,18 +603,20 @@ ggplotly(p)
 
 Since the `flat` classification is somewhat ambiguous, we should also bin everything as we otherwise would.
 
-```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+```{r plot_covid_by_phase_no_flat, fig.height = 8, fig.width = 12, echo=FALSE}
 phase_scores <- covid_scores %>%
   left_join(covid_within_max, by = "geo_value") %>%
   mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, 1)) %>%
   group_by(forecaster, phase) %>%
   summarize(
+    wis_sd = sd(wis, na.rm = TRUE),
     across(c(wis, ae_median, interval_coverage_90), \(x) round(Mean(x), 2)),
     n = n(),
     .groups = "drop"
   )
 p <- ggplot(phase_scores, aes(x = phase, y = wis, color = forecaster, group = forecaster)) +
   geom_line() +
+  #geom_ribbon(aes(ymin = wis - wis_sd, ymax = wis + wis_sd, fill = forecaster), alpha = 0.1) +
   geom_point() +
   theme_bw() +
   labs(x = "Phase", y = "Mean WIS")
@@ -608,12 +627,13 @@ ggplotly(p)
 #### Scores Aggregated By Forecast Date
 
 ```{r, fig.height = 8, fig.width = 12, echo=FALSE}
-agg_flu <- covid_scores %>%
+agg_covid <- covid_scores %>%
   filter(forecast_date > "2024-10-01") %>%
   filter(forecast_date != as.Date("2025-01-25")) %>%
   group_by(forecaster, forecast_date) %>%
   summarize(
     mean_wis = round(Mean(wis), 2),
+    wis_sd = round(sd(wis), 2),
     geomean_wis = round(GeoMean(wis), 2),
     mean_ae = round(Mean(ae_median), 2),
     geomean_ae = round(GeoMean(ae_median), 2),
@@ -621,8 +641,9 @@ agg_flu <- covid_scores %>%
   )
 
 # Plot the scores as lines across forecast_date
-p <- ggplot(agg_flu, aes(x = forecast_date, y = mean_wis, color = forecaster)) +
+p <- ggplot(agg_covid, aes(x = forecast_date, y = mean_wis, color = forecaster)) +
   geom_line() +
+  #geom_ribbon(aes(ymin = mean_wis - wis_sd, ymax = mean_wis + wis_sd, fill = forecaster), alpha = 0.1) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   labs(x = "Forecast Date", y = "Mean WIS")
@@ -637,6 +658,7 @@ agg <- covid_scores %>%
   group_by(forecaster, ahead) %>%
   summarize(
     mean_wis = round(Mean(wis), 2),
+    wis_sd = round(sd(wis), 2),
     geomean_wis = round(GeoMean(wis), 2),
     mean_ae = round(Mean(ae_median), 2),
     geomean_ae = round(GeoMean(ae_median), 2),
@@ -646,6 +668,7 @@ agg <- covid_scores %>%
 # Plot the scores as lines across forecast_date
 p <- ggplot(agg, aes(x = ahead, y = mean_wis, color = forecaster)) +
   geom_line() +
+  #geom_ribbon(aes(ymin = mean_wis - wis_sd, ymax = mean_wis + wis_sd, fill = forecaster), alpha = 0.1) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   labs(x = "Ahead", y = "Mean WIS")
