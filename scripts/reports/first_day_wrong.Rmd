@@ -1,0 +1,108 @@
+---
+title: "Why are the scores so bad on the first day?"
+date: "compiled on `r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+editor_options:
+  chunk_output_type: console
+---
+
+```{css, echo=FALSE}
+body {
+  display: block;
+  max-width: 1280px !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+body .main-container {
+  max-width: 1280px !important;
+  width: 1280px !important;
+}
+```
+
+$$\\[.4in]$$
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+knitr::opts_template$set(figure1 = list(fig.height = 4, fig.width=4))
+source(here::here("R/load_all.R"))
+```
+
+The scores on the first day are all unusually bad, bad enough we initially thought it was a bug.
+This notebook is a demonstration that these forecasts are somewhat reasonable given the context, and separated out because it would otherwise be distracting.
+The primary reason is that it has an unusual amount of revision.
+First, getting the necessary archive, forecasts, and scores, and plotting the versions around the first forecast day `2024-11-20` (the week of `2024-11-23`):
+
+```{r, fig.height = 15, fig.width = 15}
+covid_scores <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "scores"))
+covid_forecasts <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "joined_forecasts_and_ensembles"))
+covid_archive <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nhsn_archive_data"))
+text_size <- 6
+covid_archive$DT %>%
+  filter(time_value < as.Date("2024-11-23") + 4*7, time_value > "2024-09-01") %>%
+  as_epi_archive() %>%
+  autoplot(.versions = c(as.Date("2024-11-20"), covid_archive$versions_end)) + 
+  geom_vline(aes(xintercept = as.Date("2024-11-23")))
+```
+
+Most locations have a significantly different version on `2024-11-20`, some by as much as 4 times the final version.
+
+Building a function to plot the different forecasters
+```{r}
+plot_problem_day <- function(forecaster, text_size = 6) {
+  covid_scores %>% filter(forecast_date == "2024-11-23") %>% arrange(wis) 
+covid_forecasts %>% filter(forecaster =="climate_base") %>% filter(forecast_date == "2024-11-23")
+  cmu_timeseries_fc <- covid_forecasts %>% filter(forecaster ==.env$forecaster) %>% filter(forecast_date == "2024-11-23")
+  cmu_timeseries_wide <- cmu_timeseries_fc %>%
+    pivot_wider(names_from = "quantile", values_from = "value")
+  covid_archive$DT %>% filter(time_value < as.Date("2024-11-23") + 4*7, time_value > "2024-09-01") %>% as_epi_archive() %>% autoplot() +
+    geom_vline(aes(xintercept = as.Date("2024-11-23"))) +
+    geom_ribbon(data = cmu_timeseries_wide, aes(x = target_end_date, ymin = `0.1`, ymax = `0.9`), alpha = 0.3) +
+    geom_ribbon(data = cmu_timeseries_wide, aes(x = target_end_date, ymin = `0.25`, ymax = `0.75`), alpha = 0.3) +
+    geom_line(data = cmu_timeseries_wide, aes(x = target_end_date, y = `0.5`)) +
+    facet_wrap(~geo_value, scale = "free")
+}
+```
+
+### Windowed seasonal
+```{r, fig.height = 15, fig.width = 15}
+plot_problem_day("windowed_seasonal")
+```
+
+which is extrapolating out in a straight line from trends that are reporting artifacts.
+
+### Covidhub-baseline
+Covidhub baseline forms a good sanity check, since it is forecasting out from the versioned data (which explains why it is ~as  bad as `windowed_seasonal_extra_sources`)
+
+```{r, fig.height = 15, fig.width = 15}
+plot_problem_day("CovidHub-baseline")
+```
+
+### Linear
+```{r, fig.height = 15, fig.width = 15}
+plot_problem_day("linear")
+```
+
+which is extrapolating out in a straight line from trends that are reporting artifacts.
+
+### Climate
+```{r, fig.height = 15, fig.width = 15}
+plot_problem_day("climate_base")
+```
+
+This one is wrong simply because this season was unusually low at this point.
+
+### CMU-TimeSeries
+This is a bit odd, since the forecaster we were using at the time was a simple average of the linear and climate forecasters, and so is off because of a combination of the reasons the linear and climate forecasts are off.
+
+```{r, fig.height = 15, fig.width = 15}
+plot_problem_day("CMU-TimeSeries")
+```

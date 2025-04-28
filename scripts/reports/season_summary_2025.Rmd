@@ -70,6 +70,13 @@ covid_scores <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "scores"))
     "ens_ar_only" ~ "ensemble_windowed",
     .default = forecaster
     ))
+covid_forecasts <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "joined_forecasts_and_ensembles")) %>% ungroup()
+covid_forecasts$forecaster %<>% case_match(
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = covid_forecasts$forecaster
+    )
 
 forecast_week <- flu_scores$forecast_date %>% unique()
 forecast_weeks_to_plot <- c(seq.Date(min(forecast_week), max(forecast_week), by = 3*7), as.Date("2025-01-18"))
@@ -480,7 +487,7 @@ filtered_flu_forecasts <- flu_forecasts %>%
   filter(quantile %in% c(0.1, 0.5, 0.9), geo_value %in% plot_geos)
 
 
-flu_forecasts <- filtered_flu_forecasts %>%
+flu_forecast_plt <- filtered_flu_forecasts %>%
   filter(forecast_date %in% forecast_weeks_to_plot) %>%
   mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
   mutate(our_forecaster = forecaster %in% our_forecasters) %>%
@@ -500,9 +507,8 @@ flu_forecasts <- filtered_flu_forecasts %>%
   scale_fill_brewer(palette = "Set2") +
   facet_grid(forecaster ~ geo_value, scale = "free") +
   theme(legend.position = "none")
-flu_forecasts
 
-ggplotly(flu_forecasts)
+ggplotly(flu_forecast_plt)
 ```
 
 ### Results
@@ -677,6 +683,8 @@ covid_score_summary <- covid_scores %>%
   ) %>% 
   arrange(mean_wis)
 
+wis_score_order <- covid_score_summary %>% pull(forecaster)
+pop_score_order <- covid_score_summary %>% arrange(pop_norm_wis) %>% pull(forecaster)
 datatable(covid_score_summary)
 ```
 
@@ -807,7 +815,7 @@ score_geo <- covid_scores %>%
   ungroup() %>%
   mutate(forecaster = factor(forecaster, levels = pop_wis_order))
 score_geo %>% filter(mean_wis > y_limit) %>% arrange(mean_wis)
-score_geo %>%
+geo_plot <- score_geo %>%
   filter(forecaster != "climate_geo_agged") %>%
   #mutate(mean_wis = pmin(mean_wis, y_limit)) %>%
   ggplot(aes(x = geo_value, y = pop_norm_wis, fill = pop)) +
@@ -816,6 +824,8 @@ score_geo %>%
   scale_y_continuous(breaks = scales::pretty_breaks(n=10), labels = scales::comma) +
   scale_fill_viridis_c(breaks = scales::breaks_log(n=4), labels = scales::label_log(), transform="log") +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.0, hjust = 0.75))
+
+ggplotly(geo_plot)
 ```
 
 ```{r}
@@ -858,6 +868,44 @@ covid_scores %>%
   scale_color_viridis_d()
 ```
 
+#### Sample Forecasts
+
+We're plotting the 80% CI along with the median.
+The locations were chosen based on the scores to have a sample of large and small states with large and small (population normalized) WIS.
+We've scaled so everything is in rates per 100k so that it's easier to actually compare; even so the peak value varies drastically.
+Forecasters we've produced are blue, while forecasters from other teams are red.
+They are ordered by `mean_wis` score, best to worst.
+
+```{r covid_plot_sample_forecast, fig.height = 20, fig.width = 13, echo=FALSE}
+plot_geos <- c("ca", "dc", "pa", "hi", "tx")
+plot_geos <- c("ca", "de", "pa", "wy")
+filtered_covid_forecasts <- covid_forecasts %>%
+  ungroup() %>%
+  filter(quantile %in% c(0.1, 0.5, 0.9), geo_value %in% plot_geos)
+
+covid_forecast_plt <- filtered_covid_forecasts %>%
+  filter(forecast_date %in% forecast_weeks_to_plot) %>%
+  mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
+  mutate(our_forecaster = forecaster %in% our_forecasters) %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(value = value * 1e5/ pop) %>%
+  pivot_wider(names_from = quantile, values_from = value) %>%
+  ggplot(aes(x = target_end_date)) +
+  geom_ribbon(aes(ymin = `0.1`, ymax = `0.9`, color = our_forecaster, fill = our_forecaster, group = forecast_date), alpha = 0.5) +
+  geom_line(aes(y = `0.5`, color = our_forecaster, group = forecast_date)) +
+  geom_line(
+    data = covid_current %>%
+      filter(time_value > "2024-11-01", geo_value %in% plot_geos) %>%
+      left_join(state_census, by = join_by(geo_value == abbr)) %>%
+      mutate(value = value * 1e5/ pop),
+    aes(x = time_value, y = value)) +
+  scale_color_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2") +
+  facet_grid(forecaster ~ geo_value, scale = "free") +
+  theme(legend.position = "none")
+
+ggplotly(covid_forecast_plt)
+```
 ### Results
 
 Some words on covid scores
