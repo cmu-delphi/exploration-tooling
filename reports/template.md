@@ -1,9 +1,36 @@
 <style>
+/* Some basic styling (a reasonable reading width and dark mode support) */
 body {
   max-width: 800px;
   margin: 2rem auto;
   padding: 0 1rem;
   font-family: sans-serif;
+  background: white;
+  color: black;
+}
+
+a:link {
+  color: blue;
+}
+
+a:visited {
+  color: purple;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #121212;
+    color: #e0e0e0;
+  }
+
+  a:link {
+    color: #80cbc4;
+  }
+
+  a:visited {
+    color: #b39ddb; /* light purple for contrast on dark bg */
+  }
 }
 </style>
 
@@ -106,9 +133,9 @@ However, we also had mixed results from tests of this feature in very simple syn
 - We also tried using the climatological median of the target variable as a feature (see below for definition of "climatological").
 - Note that unusually, the last two features are actually led rather than lagged, since we should be predicting using the target's coefficient, rather than the present one.
 
-### Autoregressive models with seasonal and exogenous features
+### Autoregressive models with exogenous features
 
-Internal name: `scaled_pop_seasonal` (with `filter_source = "nhsn"`).
+Internal name: `scaled_pop_seasonal`.
 
 These models could opt into the same seasonal features as the `scaled_pop_seasonal` forecaster, but also included exogenous features.
 
@@ -126,7 +153,7 @@ The symptom set used was s01, s03, and s04 from [here](https://cmu-delphi.github
 - NSSP - same as flu.
 - Google-Symptoms - same as flu, though we used a slightly different symtom set (just s04 and s05 from [here](https://cmu-delphi.github.io/delphi-epidata/api/covidcast-signals/google-symptoms.html)).
 
-### Augmented Data Forecaster
+### Autoregressive models with augmented data
 
 Internal name: `scaled_pop` (with `filter_source = ""`).
 
