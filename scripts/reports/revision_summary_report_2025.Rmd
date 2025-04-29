@@ -1,6 +1,5 @@
 ---
-title: "Revision summary 2025"
-author: Delphi Forecast Team
+title: "Revision Summary 2025"
 date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
 output:
   html_document:
@@ -8,10 +7,8 @@ output:
     toc: True
     # self_contained: False
     # lib_dir: libs
-params:
-  disease: "covid"
-  scores: ""
-  forecast_dates: ""
+editor_options:
+  chunk_output_type: console
 ---
 
 ```{css, echo=FALSE}
@@ -28,18 +25,17 @@ body .main-container {
 }
 ```
 
-```{r echo=FALSE}
+$$\\[.4in]$$
+
+```{r echo=FALSE, warning=FALSE,message=FALSE}
 knitr::opts_chunk$set(
   fig.align = "center",
-  message = TRUE,
+  message = FALSE,
   warning = FALSE,
   cache = FALSE
 )
 ggplot2::theme_set(ggplot2::theme_bw())
-```
-
-```{r setup, include=FALSE}
-suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+source(here::here("R/load_all.R"))
 ```
 
 # Overall takeaways
@@ -127,7 +123,7 @@ nhsn_archive_flu %>%
   autoplot(value, .facet_filter = geo_value %in% (data_substitutions$geo_value %>% unique())) + geom_point(data = data_substitutions, aes(x = time_value, y = value)) + facet_wrap(~geo_value, scale = "free")
 ```
 
-which doesn't look all that great. 
+which doesn't look all that great.
 To calculate how much closer (or further) we were from the final value, first we construct the relevant snapshots:
 ```{r}
 final_values <- nhsn_archive_flu %>% epix_as_of_current() %>% mutate(time_value = round_date(time_value, unit = "week", week_start = 6))
@@ -152,7 +148,7 @@ full_table <- data_substitutions %>%
   ) %>%
   rename(as_of_value = value) %>%
   mutate()
-  
+
 diffs <- full_table %>%
   mutate(
     abs_diff = value_substituted - value_final,
@@ -248,7 +244,7 @@ nhsn_archive_covid <- nhsn_archive_covid$DT %>% filter(time_value >= "2024-11-19
   filter(geo_value %nin% c("vi", "as", "gu")) %>% as_epi_archive()
 nhsn_archive_covid$time_type <- "day"
 revision_summary <- nhsn_archive_covid %>%
-  epiprocess::revision_analysis(value, min_waiting_period = NULL) 
+  epiprocess::revision_analysis(value, min_waiting_period = NULL)
 revision_summary %>% print(quick_revision = 7)
 ```
 
@@ -340,7 +336,7 @@ full_table <- data_substitutions %>%
   ) %>%
   rename(as_of_value = value) %>%
   mutate()
-  
+
 diffs <- full_table %>%
   mutate(
     abs_diff = value_substituted - value_final,
