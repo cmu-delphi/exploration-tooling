@@ -124,13 +124,13 @@ Internal name: `scaled_pop_seasonal`.
 
 We tried a few different attempts at incorporating seasonal features:
 
-- The approach that performed the best was using a training window that grabbed a window of data (about 4 weeks before and ahead) around the forecast epiweek from the current and previous seasons.
-- Two indicator variables that roughly correspond to before, during, and after the typical peak (roughly, `before = season_week < 16`, `during = 16 <= season_week <= 20`, and `after = season_week > 20`).
-- Taking the first two principal components of the full whitened augmented data reshaped as `(epiweek, state_source_season_value)`.
+- The approach that performed the best was using a *seasonal training window* that grabbed a window of data (about 4 weeks before and ahead) around the forecast epiweek from the current and previous seasons.
+- Two *indicator variables* that roughly correspond to before, during, and after the typical peak (roughly, `before = season_week < 16`, `during = 16 <= season_week <= 20`, and `after = season_week > 20`).
+- Taking the first two *principal components* of the full whitened augmented data reshaped as `(epiweek, state_source_season_value)`.
 (We found that this was not particularly effective, so we did not use it.
 Despite spending a week debugging this, we could not rule out the possibility that it was a bug.
 However, we also had mixed results from tests of this feature in very simple synthetic data cases.)
-- We also tried using the climatological median of the target variable as a feature (see below for definition of "climatological").
+- We also tried using the *climatological median* of the target variable as a feature (see below for definition of "climatological").
 - Note that unusually, the last two features are actually led rather than lagged, since we should be predicting using the target's coefficient, rather than the present one.
 
 ### Autoregressive models with exogenous features
