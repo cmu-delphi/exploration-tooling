@@ -86,15 +86,15 @@ forecast_weeks_to_plot %in% (covid_scores$forecast_date %>% unique())
 
 # Models used
 One thing to note: all of these models filter out the 2020/21 and 2021/22 seasons.
-For both flu and covid they are either unusually large or unusually small, and don't warrant inclusion.
+For both flu and covid these seasons are either unusually large or unusually small, and don't warrant inclusion.
 We can split the models and ensembles into 3 categories: the ad-hoc models that we created in response to the actual data that we saw, the AR models that we had been backtesting, and the ensembles.
 
 ### The "ad-hoc" models
 
-- `climate_base` uses a 7 week window around the target and forecast date to establish quantiles. 
-  `climate_base` does this separately for each geo
+- `climate_base` uses a 7 week window around the target and forecast date to establish quantiles.
+  `climate_base` does this separately for each geo.
 - `climate_geo_agged` on the other hand converts to rates, pools all geos, computes quantiles using similar time windows, and then converts back to counts.
-  There is effectively only one prediction, scaled to fit each geo. 
+  There is effectively only one prediction, scaled to fit each geo.
 - `linear` does a linear extrapolation of the last 4 weeks of data on a rates scale.
   Initially it had an intercept, but this was removed when it caused the model to not reproduce the -1 ahead data exactly.
   This change was made on Jan 8th, in the commit with hash 5f7892b.
@@ -127,9 +127,9 @@ weights %>% filter(forecast_family == "climate") %>% ggplot(aes(x = factor(ahead
 
 - `windowed_seasonal` is an AR forecaster using lags 0 and 7 that uses training data from an 8 week window from each year.
   It does quartic root scaling along with quantile and median whitening.
+  In addition to dropping the first 2 seasons, the windowed models drop the summers for the purposes of determining whitening behavior.
   For flu, this augments with ili and flusurv (so they are added as additional rows, with their own scaling/centering).
   Covid doesn't have a comparable dataset.
-  In addition to dropping the first 2 seasons, the windowed models drop the summers for the purposes of determining whitening behavior.
 - `windowed_seasonal_nssp` is like `windowed_seasonal`, but also has `nssp` as an exogenous component.
   Note that for flu, this effectively means throwing out the ili and flusurv data, since `nssp` is only defined recently.
   For covid, `windowed_seasonal_nssp` is effectively the same model, but with auxiliary data.
@@ -141,9 +141,9 @@ weights %>% filter(forecast_family == "climate") %>% ggplot(aes(x = factor(ahead
 - `retro_submission` is a retroactive recreation of `CMU-TimeSeries` using updated methods (`linear` always matching the most recent value, for example).
   The weights for the various models can be found in [`flu_geo_exclusions`](https://github.com/cmu-delphi/exploration-tooling/blob/main/flu_geo_exclusions.csv) or [`covid_geo_exclusions`](https://github.com/cmu-delphi/exploration-tooling/blob/main/covid_geo_exclusions.csv).
   These can vary on a state by state basis.
-- `CMU-TimeSeries` is what we actually submitted. 
+- `CMU-TimeSeries` is what we actually submitted.
   This is a moving target that has changed a number of times. For a detailed list of the weights used, see [`flu_geo_exclusions`](https://github.com/cmu-delphi/exploration-tooling/blob/main/flu_geo_exclusions.csv) or [`covid_geo_exclusions`](https://github.com/cmu-delphi/exploration-tooling/blob/main/covid_geo_exclusions.csv) for specific weights.
-  
+
   <details>
   <summary> A timeline of the changes to `CMU-timeseries` </summary>
   ```{r cmu_timeseries_timeline, echo=FALSE}
@@ -192,7 +192,7 @@ The best wis-scoring model is actually just the ensemble at 35.2, with the next-
 Coverage in covid is somewhat better, though a larger fraction of teams are within +/-10% of 95% coverage; we specifically got within 1%.
 Like with flu, there was systematic under-coverage though, so the models are also biased towards too small of intervals for the 95% band.
 The 50% coverage is likewise more accurate than for flu, with most forecasts within +/-10%.
-`CMU-TimeSeries` is at 52.7%, so slightly over. 
+`CMU-TimeSeries` is at 52.7%, so slightly over.
 Generally, more teams were under 50% coverage than over, so there is also a systemic bias towards under-coverage in covid.
 
 ## Flu Scores
@@ -266,7 +266,7 @@ flu_current %>%
 There is a wide variety of length for the peak by this definition, but it does seem to naturally reflect the difference in dynamics.
 `ok` is quite short for example, because it has a simple clean peak, whereas `or` has literally 2 peaks with the same height, so the entire interval between them is classified as peak.
 
-Boiling down these plots somewhat, let's look at the averages for the start of the peak and the end of the peak. 
+Boiling down these plots somewhat, let's look at the averages for the start of the peak and the end of the peak.
 First, for the start:
 
 ```{r flu_peak_start}
@@ -561,9 +561,8 @@ It is worth noting that phase doesn't correspond to just grouping the dates, bec
 
 #### Ahead
 
-Factoring by ahead, the models that include an AR component generally degrade with ahead less badly. 
-Interestingly, the pure `climate` models having a mostly consistent (and bad) score, but remains much more consistent as aheads increase.
-Most of the advantage of `PSI-PROF` and `FluSight-lop_norm` comes from having more accurate 2 and 3 week aheads.
+Factoring by ahead, the models that include an AR component generally degrade with ahead less badly.
+Interestingly, the pure `climate` models having a mostly consistent (and bad) score, but remains much more consistent as aheads increase (after the -1 ahead where it typically has exact data).
 
 #### Sample forecasts
 
@@ -574,13 +573,6 @@ The well performing models from other teams also had this behavior this year.
 
 
 ## Covid Scores
-
-Overall, the best covid forecaster is `windowed_seasonal_extra_sources`, which uses a window of data around the given time period
-
-One peculiar thing about Covid scoring: the first day has *much* worse scores than almost any of the subsequent days (you can see this in the Scores Aggregated By Forecast Date tab below).
-This mostly comes from the first week having larger revisions than normal.
-This is discussed in more detail in [this notebook](first_day_wrong.html).
-
 
 Before we get into the actual scores, we need to define how we go about creating 4 different phases.
 They are `increasing`, `peak`, `decreasing`, and `flat`.
@@ -630,7 +622,7 @@ covid_current %>%
 Then we can see a very muted season in many locations, such as `ar` or `co`, and no season at all in some locations, such as `ak`.
 Others, such as `az`, `in`, or `mn` have a season that is on-par with historical ones.
 
-How to handle this? 
+How to handle this?
 One option is to include a separate phase for no season that applies to the entire `geo_value` if more than half of the `time_value`s are within 50% of the peak:
 
 ```{r}
@@ -661,22 +653,19 @@ Possible exceptions:
 There are several locations such as `al` and `ar` which don't have a peak so much as an elevated level for approximately the entire period.
 This is awkward to handle for this classification.
 
-Finally, like for Flu we should examine a summary of the start/end dates for the peak of the season.
-Boiling down these plots somewhat, let's look at the averages for the start of the peak and the end of the peak. 
-First, for the start:
+Finally, like for Flu, we should examine a summary of the start/end dates for the peak of the covid season.
+Boiling down these plots somewhat, let's look at the averages for the start of the peak and the end of the peak.
+First, for the start of start of the peak:
 
 ```{r}
 covid_within_max$first_above %>% summary()
 ```
 
-So the `increasing` phase ends at earliest on December 28st, on average on January 18th, and at the latest on April 19th.
-Which suggests
+Second, for the end of the peak:
 
 ```{r}
 covid_within_max$last_above %>% summary()
 ```
-
-Similarly, the `peak` phase ends at the earliest on the 11th of December, on average on the first of March, and at the latest on March 22nd.
 
 </details>
 
@@ -704,12 +693,10 @@ covid_score_summary <- covid_scores %>%
     mean_coverage_50 = round(Mean(interval_coverage_50), 2),
     mean_coverage_90 = round(Mean(interval_coverage_90), 2),
     n = n()
-  ) %>% 
-  arrange(mean_wis)
-
-wis_score_order <- covid_score_summary %>% pull(forecaster)
-pop_score_order <- covid_score_summary %>% arrange(pop_norm_wis) %>% pull(forecaster)
-datatable(covid_score_summary)
+  ) %>%
+  arrange(mean_wis) %>%
+  rename(id = forecaster) %>%
+  datatable()
 ```
 
 #### Scores Aggregated By Phase
@@ -937,10 +924,20 @@ covid_forecast_plt <- filtered_covid_forecasts %>%
 
 ggplotly(covid_forecast_plt)
 ```
+
 ### Results
 
-`windowed_seasonal_nssp` is a clear winner regardless of the metric used.
-`ensemble_windowed` is nearly as good, but since it is effectively averaging `windowed_seasonal_nssp` with `windowed_seasonal` and losing accuracy as a result, it is hardly worth it.
+One peculiar thing about Covid scoring: on the first forecast date, CMU-TimeSeries has *much* worse scores than almost any of the subsequent days (you can see this in the Scores Aggregated By Forecast Date tab below).
+There are two related issues here:
+- first, our initial model combined climate_base and linear, and the climate_base component was unusually bad early in the season, because this season started later than previous seasons,
+- second, the data had substantial revisions (this is discussed in detail in [this notebook](first_day_wrong.html)), however this effect is much smaller, since other forecasters had access to the same data.
+
+This mishap dragged the CMU-TimeSeries score down overall by quite a lot and its better performance later in the season is not enough to make up for it.
+
+Overall, the best covid forecaster is `windowed_seasonal_nssp`, outperforming `CovidHub-ensemble`, regardless of the metric used.
+This forecaster uses a window of data around the given time period, along with the NSSP exogenous features.
+`ensemble_windowed` is nearly as good, but since it is effectively averaging `windowed_seasonal_nssp` with `windowed_seasonal` and losing accuracy as a result, so it is hardly worth it.
+Given its simplicity, the `climate_linear` forecaster does quite well, though it's not as good as `windowed_seasonal_nssp`.
 
 The pure climate models were substantially worse for covid than for flu, at ~4.6x the best model, rather than ~2x.
 Given the unusual nature of the season, this is somewhat unsurprising.
@@ -975,11 +972,12 @@ The always decreasing problem is definitely not present in these forecasts.
 If anything, our best forecasts are *too* eager to predict an increasing value, e.g. in `tx` and `ca`.
 Several of our worse forecasts are clearly caused by revision behavior.
 
+
 # Revision behavior and data substitution
 
-This is covered in more detail in [revision_summary_report_2025](revision_summary_report_2025.html).
+This is covered in more detail in [revision_summary_report_2025](revision_summary_2025.html).
 NHSN has substantial under-reporting behavior that is fairly consistent for any single geo, though there a number of aberrant revisions, some of which change the entire trajectory for a couple of weeks.
-This is even more true for NSSP than NHSN, though the size of the revisions is much smaller, and they occur more quickly. 
+This is even more true for NSSP than NHSN, though the size of the revisions is much smaller, and they occur more quickly.
 Because of the speed in revision behavior, it matters only for prediction, rather than for correcting data for fitting the forecaster.
 We can probably improve our forecasts by incorporating revision behavior for both nhsn and nssp.
 
@@ -1109,5 +1107,5 @@ covid_gr %>%
       It's scored on N=4160 vs the local 3692, which probably comes down to negative aheads.
       Note that both "bests" in this paragraph are ignoring models which have far fewer submission values, since they're likely to be unrepresentative.
 
-[^2]: this is further off both in absolute and further yet in relative terms from our local scoring, which has `CMU-TimeSeries` at 46.32 rather than 44.8. 
+[^2]: this is further off both in absolute and further yet in relative terms from our local scoring, which has `CMU-TimeSeries` at 46.32 rather than 44.8.
       It's unclear why; there are 3952 samples scored on the remote vs 3692 locally, so ~300 scored there that we don't score where we apparently did better.
