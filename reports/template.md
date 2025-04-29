@@ -1,3 +1,12 @@
+<style>
+body {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  font-family: sans-serif;
+}
+</style>
+
 # Forecast Reports
 
 [GitHub Repo](https://github.com/cmu-delphi/explorationt-tooling/)
