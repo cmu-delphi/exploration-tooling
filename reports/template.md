@@ -7,7 +7,7 @@ body {
 }
 </style>
 
-# Forecast Reports
+# Delphi Forecast Reports
 
 [GitHub Repo](https://github.com/cmu-delphi/explorationt-tooling/)
 
@@ -62,6 +62,7 @@ body {
 ## Description of Forecaster Families
 
 The main forecaster families were:
+
 - Autoregressive models (AR)
   - with seasonal features
   - with exogenous features
