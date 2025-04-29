@@ -1,5 +1,5 @@
 ---
-title: "Why are the scores so bad on the first day?"
+title: "Why are the COVID 2024-2025 season scores so bad on the first day?"
 date: "compiled on `r format(Sys.time(), '%d %B %Y')`"
 output:
   html_document:
@@ -36,9 +36,13 @@ knitr::opts_template$set(figure1 = list(fig.height = 4, fig.width=4))
 source(here::here("R/load_all.R"))
 ```
 
-The scores on the first day are all unusually bad, bad enough we initially thought it was a bug.
+The scores on the first forecast day for COVID are all unusually bad, bad enough we initially thought it was a bug.
 This notebook is a demonstration that these forecasts are somewhat reasonable given the context, and separated out because it would otherwise be distracting.
 The primary reason is that it has an unusual amount of revision.
+In comparison, the flu season delayed their initial forecast by a day, which allowed a new data revision to be used, which explains why flu doesn't have this problem.
+
+# Revision Behavior
+
 First, getting the necessary archive, forecasts, and scores, and plotting the versions around the first forecast day `2024-11-20` (the week of `2024-11-23`):
 
 ```{r, fig.height = 15, fig.width = 15}
@@ -49,16 +53,16 @@ text_size <- 6
 covid_archive$DT %>%
   filter(time_value < as.Date("2024-11-23") + 4*7, time_value > "2024-09-01") %>%
   as_epi_archive() %>%
-  autoplot(.versions = c(as.Date("2024-11-20"), covid_archive$versions_end)) + 
+  autoplot(.versions = c(as.Date("2024-11-20"), covid_archive$versions_end)) +
   geom_vline(aes(xintercept = as.Date("2024-11-23")))
 ```
 
 Most locations have a significantly different version on `2024-11-20`, some by as much as 4 times the final version.
 
-Building a function to plot the different forecasters
 ```{r}
+# Building a function to plot the different forecasters
 plot_problem_day <- function(forecaster, text_size = 6) {
-  covid_scores %>% filter(forecast_date == "2024-11-23") %>% arrange(wis) 
+  covid_scores %>% filter(forecast_date == "2024-11-23") %>% arrange(wis)
 covid_forecasts %>% filter(forecaster =="climate_base") %>% filter(forecast_date == "2024-11-23")
   cmu_timeseries_fc <- covid_forecasts %>% filter(forecaster ==.env$forecaster) %>% filter(forecast_date == "2024-11-23")
   cmu_timeseries_wide <- cmu_timeseries_fc %>%
