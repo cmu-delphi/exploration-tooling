@@ -392,38 +392,8 @@ update_site <- function(sync_to_s3 = TRUE) {
     )
 
     # Insert into Production Reports section, skipping a line
-    prod_reports_index <- which(grepl("## Production Reports", report_md_content)) + 1
+    prod_reports_index <- which(grepl("## Weekly Fanplots 2024-2025 Season", report_md_content)) + 1
     report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
-  }
-  # add scoring notebooks if they exist
-  score_files <- dir_ls(reports_dir, regexp = ".*_backtesting_2024_2025_on_.*.html")
-  if (length(score_files) > 0) {
-    # a tibble of all score files, along with their generation date and disease
-    score_table <- tibble(
-      filename = score_files,
-      dates = str_match_all(filename, "[0-9]{4}-..-..")
-    ) %>%
-      unnest_wider(dates, names_sep = "_") %>%
-      rename(generation_date = dates_1) %>%
-      mutate(
-        generation_date = ymd(generation_date),
-        disease = str_match(filename, "flu|covid")
-      )
-    used_files <- score_table %>%
-      group_by(disease) %>%
-      slice_max(generation_date)
-    # iterating over the diseases
-    for (row_num in seq_along(used_files$filename)) {
-      file_name <- path_file(used_files$filename[[row_num]])
-      scoring_index <- which(grepl("### Scoring this season", report_md_content)) + 1
-      score_link <- sprintf(
-        "- [%s Scoring, Rendered %s](%s)",
-        str_to_title(used_files$disease[[row_num]]),
-        used_files$generation_date[[row_num]],
-        file_name
-      )
-      report_md_content <- append(report_md_content, score_link, after = scoring_index)
-    }
   }
 
   # Write the updated content to report.md

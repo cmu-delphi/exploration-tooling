@@ -2,154 +2,164 @@
 
 [GitHub Repo](https://github.com/cmu-delphi/explorationt-tooling/)
 
-## Production Reports
+## Overview
+
+- The weekly fanplots were used by the team for visual inspections of the forecasts.
+- The season reports provide a general analysis of the season's data and forecasts performance.
+- The backtesting reports provide a detailed analysis of a wide variety of forecasters' performance on the previous season's data.
+- A description of the forecaster families explored is provided at the bottom of the page.
+
+## Weekly Fanplots 2024-2025 Season
 
 
-### Scoring this season
+## 2024-2025 Season Reports
 
-
-## Summary Reports
-
-### 2025
-
-- [Season Summary](season_summary_2025.html) The other documents are also linked from here
+- [Season Summary](season_summary_2025.html) (the notebooks below are linked from here)
+  - [Covid's Problematic Initial Forecast](first_day_wrong.html)
+  - [NHSN Revision Behavior](revision_summary_2025.html)
 - [An Analysis of Decreasing Behavior in Forecasters](decreasing_forecasters.html)
-- [Revision Behavior](revision_summary_report_2025.html)
-- [Covid's problematic initial forecast](first_day_wrong.html)
 - [NHSN 2024-2025 Data Analysis](new_data.html)
 
-### Flu
+## Backtesting on 2023-2024 Season
 
-All forecasters population scale their data, use geo pooling, and train using quantreg.
-These definitions are in the `flu_forecaster_config.R` file.
+- [Exploration Summary](exploration_summary_2024.html)
+- Flu
+  - All forecasters population scale their data, use geo pooling, and train using quantreg.
+  - These definitions are in the `flu_forecaster_config.R` file.
+  - [Flu Overall](flu-overall-notebook.html)
+  - [Flu AR](flu-notebook-scaled_pop_main.html)
+  - [Flu AR with augmented data](flu-notebook-scaled_pop_data_augmented.html)
+  - [Flu AR with exogenous features](flu-notebook-scaled_pop_exogenous.html)
+  - [Flu AR with different seasonal schemes](flu-notebook-scaled_pop_season.html)
+  - [Flu AR with augmented data and with different seasonal window sizes](flu-notebook-season_window_sizes.html)
+  - [Flu AR with augmented data, exogenous features, and seasonal windowing](flu-notebook-scaled_pop_season_exogenous.html)
+  - Simplistic/low data methods:
+    - [Flu no recent](flu-notebook-no_recent_quant.html)
+    - [Flu no recent](flu-notebook-no_recent_quant.html)
+    - [Flu flatline](flu-notebook-flatline.html)
+    - [Flu climate](flu-notebook-climate_linear.html)
+- Covid
+  - All forecasters population scale their data, use geo pooling, and train using quantreg.
+  - These definitions are in the `covid_forecaster_config.R` file.
+  - [Covid AR](covid-notebook-scaled_pop_main.html)
+  - [Covid AR with seasonal features](covid-notebook-scaled_pop_season.html)
+  - [Covid AR with exogenous features](covid-notebook-scaled_pop_exogenous.html)
+  - [Covid Flatline](covid-notebook-flatline_forecaster.html)
+  - Simplistic/low data methods:
+    - [Covid no recent](covid-notebook-no_recent_quant.html)
+    - [Covid flatline](covid-notebook-flatline.html)
+    - [Covid climate](covid-notebook-climate_linear.html)
 
-- [Flu Overall](flu-overall-notebook.html)
-- [Flu AR](flu-notebook-scaled_pop_main.html)
-- [Flu AR with augmented data](flu-notebook-scaled_pop_data_augmented.html)
-- [Flu AR with exogenous features](flu-notebook-scaled_pop_exogenous.html)
-- [Flu AR with different seasonal schemes](flu-notebook-scaled_pop_season.html)
-- [Flu AR with augmented data and with different seasonal window sizes](flu-notebook-season_window_sizes.html)
-- [Flu AR with augmented data, exogenous features, and seasonal windowing](flu-notebook-scaled_pop_season_exogenous.html)
+## Description of Forecaster Families
 
-Simplistic/low data methods:
+The main forecaster families were:
+- Autoregressive models (AR)
+  - with seasonal features
+  - with exogenous features
+  - with augmented data
+- Climatological
+- Linear trend
+- No recent outcome
+- Flatline
 
-- [Flu no recent](flu-notebook-no_recent_quant.html)
-- [Flu flatline](flu-notebook-flatline.html)
-- [Flu climate](flu-notebook-climate_linear.html)
+All the AR models had the option of population scaling, seasonal features, exogenous features, and augmented data.
+We tried all possible combinations of these features.
+All models had the option of using the `linreg`, `quantreg`, or `grf` engine.
+We found that `quantreg` gave better results than `linreg` and we had computational issues with `grf`, so we used `quantreg` the rest of the time.
 
-### Covid
-
-All forecasters population scale their data, use geo pooling, and train using quantreg.
-These definitions are in the `covid_forecaster_config.R` file.
-
-- [Covid AR](covid-notebook-scaled_pop_main.html)
-- [Covid AR with seasonal features](covid-notebook-scaled_pop_season.html)
-- [Covid AR with exogenous features](covid-notebook-scaled_pop_exogenous.html)
-- [Covid Flatline](covid-notebook-flatline_forecaster.html)
-
-Simplistic/low data methods:
-
-- [Covid no recent](covid-notebook-no_recent_quant.html)
-- [Covid flatline](covid-notebook-flatline.html)
-- [Covid climate](covid-notebook-climate_linear.html)
-
-## Descriptions of Forecaster Families
-
-### Training Data Information
-
-(Taken from [David's Org File](https://github.com/cmu-delphi/exploration-tooling/blob/5a6da8d0d0202da6d79a5ee8e702d4654364ce46/forecasters_description.org#flusion).)
-
-Some use just NHSN, while others use historical data from ILI+ and Flusurv+ as
-additional rows in training. ILI+ and Flusurv+ have been adjusted so that the
-total for the season matches NHSN’s total. Flusurv is taken from epidata, but
-ILI+ was constructed by Evan and given to Richard. The testing date range is
-roughly the 2023 season, so October 2023 through late April 2024.
-
-### Flu exogenous features
-
-- NSSP
-  Note that this data set is possibly cheating, as we don't have revisions before April of this year, so it is using the latest data.
-  If we narrow down to `time_value`s after that, the revision behavior is
-
-  ```
-  Min lag (time to first version):
-      min median     mean     max
-  7 days 7 days 7.7 days 14 days
-  Fraction of epi_key+time_values with
-  No revisions:
-  • 362 out of 954 (37.95%)
-  Quick revisions (last revision within 3 days of the `time_value`):
-  • 0 out of 954 (0%)
-  Few revisions (At most 3 revisions for that `time_value`):
-  • 946 out of 954 (99.16%)
-
-  Fraction of revised epi_key+time_values which have:
-  Less than 0.1 spread in relative value:
-  • 329 out of 592 (55.57%)
-  Spread of more than 0.1015 in actual value (when revised):
-  • 18 out of 592 (3.04%)
-  days until within 20% of the latest value:
-      min median   mean     max
-  7 days 7 days 9 days 70 days
-  ```
-
-  So most days have some revisioning, but with fairly small total changes, with the vast majority of days being within 20% of their eventual value within a week (with some much longer exceptions, apparently).
-  So the impact of the cheating is likely small but of course hard to know.
-
-- Google-Symptoms
-  This dataset doesn't have revisions, but has a history of suddenly disappearing.
-  The latest value was used to simulate actually having the data; at worst, it breaks down to being the underlying forecaster.
-- NWSS and NWSS_regional
-  The originating dataset has minimal revisions, but as this is a dataset with quite a lot of processing from the underlying that involves some amount of time travel, it is unclear how much revision behavior it effectively has.
-
-### Data Whitening
-
-The data augmented models using ILI+ and FluSurv+ take a few different approaches to data whitening, depending on the `scale_method, center_method, nonlin_method` parameters.
-
-TODO: Add descriptions.
-
-This is more closely in line with the [RobustScaler](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.RobustScaler.html#sklearn.preprocessing.RobustScaler) from scikit-learn (using a much wider quantile than the default settings there).
-
-## Forecaster Families
-
-### AR with population scaling
+### Autoregressive models (AR)
 
 Internal name: `scaled_pop`.
 
-A simple model, which predicts using
+A simple autoregressive model, which predicts using
 
 $$x_{t+k} = ar(x)$$
 
-where $x$ is scaled according to each state’s population.
+where $x$ is the target variable and $ar(x)$ is a linear combination of the target variable's past values, which can be scaled according to each state's population or whitened according to another scheme (or both). In practice, we found that using lags (0, 7) was quite effective (with (0, 7, 14) and (0, 7, 14, 21) providing no discernible advantage), so we focused on those, so in practice our model was
 
-Three versions, two with different engines `quantreg` and `grf`, and the final one with augmented data.
+$$x_{t+k} = x_t + x_{t-7}$$
 
-### AR with population scaling and seasonal features
+where $k \in \{0, 7, 14, 21, 28\}$ is the forecast horizon.
+
+### Autoregressive models with seasonal features
 
 Internal name: `scaled_pop_seasonal`.
 
-There are 2 seasonal features that we're trying here:
+We tried a few different attempts at incorporating seasonal features:
 
-1. taking the first 3 PC components from the whitened fused data (so nhsn, ILI+, and Flusurv). (Note that it's 2 for covid).
-2. 2 indicators that roughly correspond to before, during and after the typical peak (first is true when `season_week < 16`, the second is true when `season_week > 20`, and the peak is captured by the overall constant).
-   Note that unusually, these features are actually led rather than lagged, since we should be predicting using the target's coefficient, rather than the present one.
+- The approach that performed the best was using a training window that grabbed a window of data (about 4 weeks before and ahead) around the forecast epiweek from the current and previous seasons.
+- Two indicator variables that roughly correspond to before, during, and after the typical peak (roughly, `before = season_week < 16`, `during = 16 <= season_week <= 20`, and `after = season_week > 20`).
+- Taking the first two principal components of the full whitened augmented data reshaped as `(epiweek, state_source_season_value)`.
+(We found that this was not particularly effective, so we did not use it.
+Despite spending a week debugging this, we could not rule out the possibility that it was a bug.
+However, we also had mixed results from tests of this feature in very simple synthetic data cases.)
+- We also tried using the climatological median of the target variable as a feature (see below for definition of "climatological").
+- Note that unusually, the last two features are actually led rather than lagged, since we should be predicting using the target's coefficient, rather than the present one.
 
-### Flusion-like
+### Autoregressive models with seasonal and exogenous features
 
-Roughly designed in line with the flusion model.
+Internal name: `scaled_pop_seasonal` (with `filter_source = "nhsn"`).
+
+These models could opt into the same seasonal features as the `scaled_pop_seasonal` forecaster, but also included exogenous features.
+
+#### Flu exogenous features
+
+- NSSP - we don't have revisions before Spring 2024 for this data, so we used a revision analysis from the data collected after that date to estimate the lag (roughly 7 days) and used that lag to simulate delays.
+- Google-Symptoms - this dataset doesn't have revisions, but has a history of suddenly disappearing, resulting in intermittent long update lags.
+We did not simulate a lag and just used to latest value for a best case scenario.
+The symptom set used was s01, s03, and s04 from [here](https://cmu-delphi.github.io/delphi-epidata/api/covidcast-signals/google-symptoms.html).
+- NWSS - the originating dataset has minimal revisions, but as this is a dataset with quite a lot of processing from the underlying that involves some amount of time travel, so it is unclear how much revision behavior is present.
+- NWSS_regional - same as NWSS, just aggregated to the HHS region level.
+
+#### Covid exogenous features
+
+- NSSP - same as flu.
+- Google-Symptoms - same as flu, though we used a slightly different symtom set (just s04 and s05 from [here](https://cmu-delphi.github.io/delphi-epidata/api/covidcast-signals/google-symptoms.html)).
+
+### Augmented Data Forecaster
+
+Internal name: `scaled_pop` (with `filter_source = ""`).
+
+This forecaster is still the standard autoregressive model, but with additional training data.
+Inspired by UMass-flusion, the additional training data consisted of historical data from ILI+ and Flusurv+, which was brought to a comprable level with NHSN and treated as additional observations of the target variable (hence the name "augmented data").
+Flusurv was taken from epidata, but ILI+ was constructed by Evan Ray and given to Richard (Berkeley Summer 2024 intern).
+Naturally, this forecaster was only used for flu, as the same data was not available for covid.
+
+#### Scaling Parameters (Data Whitening)
+
+The augmented data forecasters took a few different approaches to data whitening (akin to [RobustScaler](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.RobustScaler.html#sklearn.preprocessing.RobustScaler) from scikit-learn).
+
+- `scale_method`
+  - `quantile` - scales the data so that the difference between the 5th and 95th quantiles is 1
+  - `quantile_upper` - scales the data so that the 95th quantile is 1 (this was used by UMass-flusion)
+  - `std` - scales the data so that one standard deviation is 1
+  - `none` - no scaling
+  - We did not see a significant difference in changing the above parameter, so we used the default `quantile` the rest of the time.
+- `center_method`
+  - `median` - centers the data so that the median is 0
+  - `mean` - centers the data so that the mean is 0
+  - `none` - no centering
+  - We did not see a significant difference in changing the above parameter, so we used the default `median` the rest of the time.
+- `nonlin_method`
+  - `quart_root` - takes the 4th root of the data (and adds 0.01 to avoid negative values)
+  - `none` - no non-linear transformation
+  - Of these, `quart_root` gave us the best results, so we used that the rest of the time. There were occasional issues with the epsilon offset causing a positive value to become the floor as the inversion was taken.
+
+### Climatological
+
+This was our term for a forecaster that directly forecast a distribution built from similar weeks from previous seasons (in analogy with baseline weather forecasting).
+We found that in some cases it made a reasonable baseline, though when the current season's peak time was significatly different from the seasons in the training data, it was not particularly effective.
 
 ### No Recent Outcome
 
-This is the fall-back forecaster, in case we have no data, but are forced to make a prediction.
+This was a fall-back forecaster built for the scenario where NHSN data was not going to reported in time for the start of the forecasting challenge.
 
 A flusion-adjacent model pared down to handle the case of not having the target as a predictor.
 
-$$\bar{x}_{t+k} = f(t_{season}) + p + d + \big\langle y_{t-k}\big\rangle_{k=0:1} + \big\langle y_{t-k}\big\rangle_{t=0:3}$$
+$$\bar{x}_{t+k} = \big\langle y_{t-k}\big\rangle_{k=0:1} + \big\langle y_{t-k}\big\rangle_{t=0:3}$$
 
-where $y$ here is any exogenous variables; initially this will be empty, as nssp is missing some states, so we will have to rewrite these models to handle missing geos (most likely by having a separate model for the case when an exogenous variable is missing).
-
-$f$ is either the identity or 2 sine terms, defined so that the first has half a period during the season, and is zero after it, while the second is one period over the season, with zero after
+where $y$ here is any set of exogenous variables.
 
 ### Flatline
 
-This is what the FluSight-baseline is based on, so they should be identical. However, at the moment, this has scaling issues.
+A simple "LOCF" forecaster that simply forecasts the last observed value and uses residuals to create a distributional forecast. This is what the FluSight-baseline is based on, so they should be identical.
