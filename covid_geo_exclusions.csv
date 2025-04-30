@@ -21,7 +21,7 @@ forecast_date,forecaster,geo_value,weight
 2025-04-30, linear, all, 3
 2025-04-30, linearlog, all, 0
 2025-04-30, climate_base, all, 2
-2025-04-30, climate_geo_agged, all, 0,
+2025-04-30, climate_geo_agged, all, 0
 2025-04-30, climate_quantile_extrapolated, all, 0
 ##################
 # April 23rd
