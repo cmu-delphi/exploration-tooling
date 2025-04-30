@@ -43,7 +43,7 @@ library(DT)
 # Define aggregation functions
 Mean <- function(x) mean(x, na.rm = TRUE)
 GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
-our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries")
+our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "seasonal_nssp_latest")
 flu_scores <-
   qs2::qs_read(here::here("flu_hosp_prod", "objects", "scores")) %>%
   mutate(forecaster = case_match(
@@ -196,6 +196,8 @@ The 50% coverage is likewise more accurate than for flu, with most forecasts wit
 Generally, more teams were under 50% coverage than over, so there is also a systemic bias towards under-coverage in covid.
 
 ## Flu Scores
+
+Note that `seasonal_nssp_latest` uses the latest version of the data, to see how much better or worse our forecasts might be if we could get a correct estimate of the revisions.
 
 Before we get into the actual scores, we need to define how we go about creating 3 different phases.
 They are `increasing`, `peak`, and `decreasing`.
@@ -544,6 +546,7 @@ Our best forecasters cluster around a mean wis between 124 and 132, with our act
 The absolute best forecaster this season was `Psi-PROF`, with a `mean_wis` of 113, which is within 10% of `CMU-TimeSeries`.
 While we couldn't have improved our `mean_wis`, we could have improved our population normalized mean wis `pop_norm_wis` by using `windowed_seasonal_nssp` by ~10% as well.
 
+
 Absolute error before and after population normalizing has a similar story, though the order for models from other labs changes, and our relative score improves.
 
 Using `mean_cov_50`, our 50% coverage is generally good, with most models within 10 percentage points of 50%.
@@ -551,6 +554,11 @@ There's quite a bit of variability in other's models, with most models having to
 
 Using `mean_cov_90`, most of these models have quantiles that are too narrow, though `CMU-TimeSeries` is within 5 percentage points; `climate_geo_agged` has a 90% coverage, but it is otherwise quite inaccurate.
 `retro_submission` does surprisingly well on this metric by hitting 90% exactly.
+
+
+Note that `seasonal_nssp_latest` is better than the other models by any metric, suggesting that revision information would be quite useful for forecasting, if we could get a hold of it. 
+It is otherwise identical to `windowed_seasonal_nssp`, so it improves by ~20% and has better coverage.
+Looking at the Phase tab, it does especially well during the `increasing` and `peak` phases, with about the same performance as `windowed_seasonal_nssp` in the `decreasing` phase.
 
 #### Phase
 
@@ -695,7 +703,8 @@ covid_score_summary <- covid_scores %>%
     n = n()
   ) %>%
   arrange(mean_wis) %>%
-  rename(id = forecaster) %>%
+  rename(id = forecaster)
+covid_score_summary %>%
   datatable()
 ```
 
@@ -810,7 +819,7 @@ We have a separate plot for `climate_geo_agged` because it does so poorly on the
 If you want to see a non-population scaled version of this, switch `y = pop_norm_wis` to `y = mean_wis` below, and comment out the `climate_geo_agged` filter.
 
 ```{r covid_plot_geo_agged, fig.height = 8, fig.width = 12}
-pop_wis_order <- covid_score_summary %>% arrange(pop_norm_wis) %>% pull(forecaster)
+pop_wis_order <- covid_score_summary %>% arrange(pop_norm_wis) %>% pull(id)
 score_geo <- covid_scores %>%
   group_by(forecaster, geo_value) %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
@@ -868,13 +877,15 @@ Unlike in Flu, the `flat` phase exists, and roughly resembles `decreasing` in di
 `climate_base` is the closest any of these scores have come to normally distributed.
 `climate_geo_agged` is particularly bad for Covid.
 
-```{r, fig.height = 23, fig.width = 13}
+```{r covid_plot_score_histogram, fig.height = 23, fig.width = 13}
+pop_score_order <- covid_score_summary %>% arrange(pop_norm_wis) %>% pull(id)
+wis_score_order <- covid_score_summary %>% arrange(mean_wis) %>% pull(id)
 covid_scores %>%
   left_join(covid_within_max, by = "geo_value") %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
   mutate(wis = wis * 1e5/pop) %>%
   mutate(pop = factor(pop)) %>%
-  mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
+  mutate(forecaster = factor(forecaster, levels = pop_score_order)) %>%
   group_by(forecaster) %>%
   mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
   ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
@@ -927,9 +938,10 @@ ggplotly(covid_forecast_plt)
 
 ### Results
 
-One peculiar thing about Covid scoring: on the first forecast date, CMU-TimeSeries has *much* worse scores than almost any of the subsequent days (you can see this in the Scores Aggregated By Forecast Date tab below).
+One peculiar thing about Covid scoring: on the first forecast date, CMU-TimeSeries has *much* worse scores than almost any of the subsequent days (you can see this in the Scores Aggregated By Forecast Date tab above).
 There are two related issues here:
-- first, our initial model combined climate_base and linear, and the climate_base component was unusually bad early in the season, because this season started later than previous seasons,
+
+- first, our initial model simply averaged `climate_base` and `linear`, and the `climate_base` component was unusually bad early in the season, because this season started later than previous seasons,
 - second, the data had substantial revisions (this is discussed in detail in [this notebook](first_day_wrong.html)), however this effect is much smaller, since other forecasters had access to the same data.
 
 This mishap dragged the CMU-TimeSeries score down overall by quite a lot and its better performance later in the season is not enough to make up for it.
@@ -944,6 +956,8 @@ Given the unusual nature of the season, this is somewhat unsurprising.
 
 To some degree this explains the poor performance of `CMU-TimeSeries`.
 You can see this by looking at the "Scores Aggregated By Forecast Date" tab, where the first 3 weeks of `CMU-TimeSeries` are significantly worse than `climate_linear`, let alone the ensemble or our best models.
+
+`seasonal_nssp_latest`, which has access to the latest data, doesn't have a significantly different score from `windowed_seasonal_nssp`, which it is otherwise identical to.
 
 #### Aggregated by phase
 
@@ -984,13 +998,7 @@ We can probably improve our forecasts by incorporating revision behavior for bot
 Further, flu and covid revision behavior is fairly strongly correlated; it is reported through the same channels by the same people, so this makes sense.
 We should look into the extra columns to see if it provides useful information for handling revision behavior.
 
-
-## Data substitution
-
-In short, this didn't go well.
-It was a coin toss for covid, and worse than not doing corrections for flu.
-
-## Revision examples
+### Revision examples
 
 ```{r}
 nhsn_archive_flu <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
@@ -1024,84 +1032,11 @@ nhsn_archive_covid %>% autoplot(value, .facet_filter = geo_value %in% av_re_spre
   labs(title = "Covid revisions for the highest mean relative spread")
 ```
 
+### Data substitution
 
-# Appendix
-## Methods of selecting season phase
-There's a lot of flexibility in this decision.
-Here's some alternatives that we looked at.
+In short, this didn't go well.
+It was a coin toss for covid, and worse than not doing corrections for flu.
 
-```{r}
-flu_gr <- flu_current %>%
-  group_by(geo_value) %>%
-  mutate(gr = growth_rate(value, method = "linear_reg", h = 3)) %>%
-  filter(time_value > "2024-11-01")
-flu_gr %>% autoplot(gr, .facet_by = "geo_value")
-flu_max_dates <- flu_current %>%
-  group_by(geo_value) %>%
-  slice_max(value) %>%
-  select(geo_value, time_value_max = time_value)
-flu_peak_season <- flu_max_dates %>% ungroup() %>% summarize(peak_start = min(time_value_max), peak_end = max(time_value_max)) %>% pivot_longer(cols = c(peak_start, peak_end))
-flu_gr %>%
-  mutate(value = value / max(value)) %>%
-  mutate(neg = gr < 0) %>%
-  group_by(geo_value) %>%
-  arrange(desc(time_value)) %>%
-  mutate(count_so_far = TRUE, count_so_far = cumsum(count_so_far), frac_neg = (cumsum(neg)) / sum(neg)) %>%
-  arrange(geo_value) %>%
-  left_join(flu_max_dates, by = "geo_value") %>%
-  ggplot(aes(x = time_value, y = frac_neg)) +
-  geom_point() +
-  geom_line(aes(y = gr)) +
-  geom_line(aes(y = value)) +
-  geom_vline(data = flu_peak_season, aes(xintercept = value)) +
-  facet_wrap(~geo_value, scale = "free")
-flu_gr %>%
-  left_join(flu_max_dates, by = "geo_value") %>%
-  filter(time_value > time_value_max) %>%
-  arrange(time_value)
-```
-
-```{r}
-flu_current %>%
-  filter(time_value > "2024-11-01") %>%
-  autoplot(value, .facet_by = "geo_value") +
-  geom_vline(data = flu_within_max, aes(xintercept = first_above)) +
-  geom_vline(data = flu_within_max, aes(xintercept = last_above)) +
-  geom_vline(data = flu_peak_season, aes(xintercept = value, color = "green")) +
-  facet_wrap(~geo_value, scale = "free")
-```
-
-```{r}
-covid_gr <- covid_archive %>%
-  epix_as_of_current() %>%
-  filter(geo_value %nin% c("as", "gu", "mp")) %>%
-  group_by(geo_value) %>%
-  mutate(gr = growth_rate(value, method = "linear_reg", h = 3)) %>%
-  filter(time_value > "2024-09-01")
-covid_gr %>% autoplot(gr, .facet_by = "geo_value")
-```
-
-```{r}
-covid_gr %>%
-  mutate(value = value / max(value)) %>%
-  mutate(neg = gr < 0) %>%
-  group_by(geo_value) %>%
-  arrange(desc(time_value)) %>%
-  mutate(count_so_far = TRUE, count_so_far = cumsum(count_so_far), frac_neg = (cumsum(neg)) / sum(neg)) %>%
-  arrange(geo_value) %>%
-  ggplot(aes(x = time_value, y = frac_neg)) +
-  geom_point() +
-  geom_line(aes(y = gr)) +
-  geom_line(aes(y = value)) +
-  facet_wrap(~geo_value, scale = "free")
-covid_max_dates <- covid_gr %>%
-  slice_max(gr) %>%
-  select(geo_value, time_value_max = time_value)
-covid_gr %>%
-  left_join(covid_max_dates, by = "geo_value") %>%
-  filter(time_value > time_value_max) %>%
-  arrange(time_value)
-```
 
 [^1]: this is off from our local version of the scoring by .6, which is nonzero but not appreciably different.
       It's scored on N=4160 vs the local 3692, which probably comes down to negative aheads.
@@ -1109,3 +1044,21 @@ covid_gr %>%
 
 [^2]: this is further off both in absolute and further yet in relative terms from our local scoring, which has `CMU-TimeSeries` at 46.32 rather than 44.8.
       It's unclear why; there are 3952 samples scored on the remote vs 3692 locally, so ~300 scored there that we don't score where we apparently did better.
+
+# Further methods to explore
+
+The [decreasing forecasters notebook](decreasing_forecasters.html) has a number of suggestions, though that is a problem that occurs most frequently with Flu data rather than Covid.
+The broad categories there are 
+
+1. Filtering to the relevant phase; `windowed_seasonal_*` is roughly an example of this, which is likely why it outperformed simple AR by enough to be better.
+2. better use of non-linear models. This would allow us to capture increasing, decreasing, and flat trends in the same model.
+3. Explicitly using the growth rate as a co-variate, or fitting on differences rather than the raw value.
+
+A perhaps unexpected direction that came out of that notebook is some sort of non-linear per-state scaling; we found that scaling the counts by population^2 (or scaling rates by population) eliminated the decreasing forecasts problem.
+Hopefully the Yeo-Johnson step we have been working on will be able to choose an appropriate scaling factor to more systematically recreate this.
+
+Given the high utility of NSSP this season, the most important thing we can do is look for useful leading exogenous variables.
+In addition to signals in epidata and processed versions of those, NHSN releases a large number of accompanying variables which we should consider more explicitly.
+
+In addition to that, incorporating revision behavior would likely yield some results.
+The performance of `seasonal_nssp_latest` on Flu supports this, though it's performance on Covid was surprisingly lackluster.
