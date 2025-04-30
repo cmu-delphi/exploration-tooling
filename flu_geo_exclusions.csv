@@ -9,8 +9,20 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, linear, all, 2
 2024-10-01, linearlog, all, 0
 2024-10-01, climate_base, all, 0.5
-2024-10-01, climate_geo_agged, all, 0.25
+2024-10-01, climate_geo_agged, all, 0
 2024-10-01, climate_quantile_extrapolated, all, 0
+##################
+# April 30th
+##################
+2025-04-30, all, mp, 0
+2025-04-30, windowed_seasonal, all, 3
+2025-04-30, windowed_seasonal_extra_sources, all, 3
+2025-04-30, climate_linear, all, 3
+2025-04-30, linear, all, 2
+2025-04-30, linearlog, all, 0
+2025-04-30, climate_base, all, 0.5
+2025-04-30, climate_geo_agged, all, 0
+2025-04-30, climate_quantile_extrapolated, all, 0
 ##################
 # April 23rd
 ##################

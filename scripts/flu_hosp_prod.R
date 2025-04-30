@@ -445,7 +445,7 @@ ensemble_targets <- tar_map(
           ),
           params = list(
             disease = "flu",
-            forecast_res = forecasts_and_ensembles,
+            forecast_res = forecasts_and_ensembles%>% ungroup() %>% filter(forecaster != "climate_geo_agged"),
             forecast_date = as.Date(forecast_date_int),
             truth_data = truth_data
           )
