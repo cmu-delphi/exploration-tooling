@@ -103,9 +103,10 @@ g_windowed_seasonal_extra_sources <- function(epi_data, ahead, extra_data, ...) 
   fcst
 }
 g_forecaster_params_grid <- tibble(
-  id = c("linear", "windowed_seasonal", "windowed_seasonal_extra_sources", "climate_base", "climate_geo_agged"),
-  forecaster = rlang::syms(c("g_linear", "g_windowed_seasonal", "g_windowed_seasonal_extra_sources", "g_climate_base", "g_climate_geo_agged")),
+  id = c("linear", "windowed_seasonal", "windowed_seasonal_extra_sources", "climate_base", "climate_geo_agged", "seasonal_nssp_latest"),
+  forecaster = rlang::syms(c("g_linear", "g_windowed_seasonal", "g_windowed_seasonal_extra_sources", "g_climate_base", "g_climate_geo_agged", "g_windowed_seasonal_extra_sources")),
   params = list(
+    list(),
     list(),
     list(),
     list(),
@@ -113,6 +114,7 @@ g_forecaster_params_grid <- tibble(
     list()
   ),
   param_names = list(
+    list(),
     list(),
     list(),
     list(),
@@ -203,18 +205,27 @@ forecast_targets <- tar_map(
     full_data,
     command = {
       # Train data
+      if (grepl("latest", id)) {
+        train_data <- nhsn_archive_data %>%
+          epix_as_of(nhsn_archive_data$versions_end) %>% filter(time_value < as.Date(forecast_date_int))
+      } else {
       train_data <- nhsn_archive_data %>%
-        epix_as_of(min(as.Date(forecast_date_int), nhsn_archive_data$versions_end)) %>%
+        epix_as_of(min(as.Date(forecast_date_int), nhsn_archive_data$versions_end))
+      }
+    train_data %<>%
         add_season_info() %>%
         mutate(
           geo_value = ifelse(geo_value == "usa", "us", geo_value),
           time_value = time_value - 3,
           source = "nhsn"
-        ) %>%
-        data_substitutions(
-          flu_data_substitutions,
-          as.Date(forecast_generation_date_int)
-        ) %>%
+        )
+    if (!grepl("latest", id)) {
+    train_data %<>% data_substitutions(
+                      flu_data_substitutions,
+                      as.Date(forecast_generation_date_int)
+                    )
+    }
+     train_data %<>%
         filter(geo_value %nin% g_insufficient_data_geos)
       attributes(train_data)$metadata$as_of <- as.Date(forecast_date_int)
 
@@ -228,8 +239,14 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_res,
     command = {
-      nssp_data <- nssp_archive_data %>%
-        epix_as_of(min(as.Date(forecast_date_int), nssp_archive_data$versions_end))
+      if (grepl("latest", id)) {
+        nssp_data <- nssp_archive_data %>%
+          epix_as_of(nssp_archive_data$versions_end) %>%
+          filter(time_value < as.Date(forecast_date_int))
+      } else {
+        nssp_data <- nssp_archive_data %>%
+          epix_as_of(min(as.Date(forecast_date_int), nssp_archive_data$versions_end))
+      }
 
       forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
 
