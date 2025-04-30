@@ -97,6 +97,16 @@ filter_extraneous <- function(epi_data, filter_source, filter_agg_level) {
   return(epi_data)
 }
 
+#' the minus one ahead causes problems for `quantile_regression` if that data is
+#' actually present, so we should filter it out
+filter_minus_one_ahead <- function(epi_data, ahead) {
+  if (ahead < 0) {
+    dont_include <- attr(epi_data, "metadata")$as_of + ahead
+    epi_data %<>% filter(time_value < dont_include)
+  }
+  epi_data
+}
+
 #' Unwrap an argument if it's a list of length 1
 #'
 #' Many of our arguments to the forecasters come as lists not because we expect

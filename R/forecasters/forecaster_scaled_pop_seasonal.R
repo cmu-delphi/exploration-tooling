@@ -76,6 +76,8 @@ scaled_pop_seasonal <- function(
   epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
   # this is a temp fix until a real fix gets put into epipredict
   epi_data <- clear_lastminute_nas(epi_data, cols = c(outcome, extra_sources))
+  # predicting the -1 ahead when it is present sometimes lead to freezeing
+  epi_data %<>% filter_minus_one_ahead(ahead)
   # this next part is basically unavoidable boilerplate you'll want to copy
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
