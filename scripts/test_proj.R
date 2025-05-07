@@ -1,8 +1,106 @@
-suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+# Test project to test our forecasters on synthetic data.
+suppressPackageStartupMessages(source("R/load_all.R"))
 
-testthat::skip("Optional, long-running tests skipped.")
+# ================================ GLOBALS =================================
+# Variables prefixed with 'g_' are globals needed by the targets pipeline (they
+# need to persist during the actual targets run, since the commands are frozen
+# as expressions).
 
-# A list of forecasters to be tested. Add here to test new forecasters.
+# Setup targets config.
+set_targets_config()
+g_aheads <- -1:3
+g_submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
+g_insufficient_data_geos <- c("as", "mp", "vi", "gu")
+g_excluded_geos <- c("as", "gu", "mh")
+g_time_value_adjust <- 3
+g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
+g_disease <- "flu"
+g_external_object_name <- glue::glue("exploration/2024-2025_{g_disease}_hosp_forecasts.parquet")
+# needed for windowed_seasonal
+g_very_latent_locations <- list(list(
+  c("source"),
+  c("flusurv", "ILI+")
+))
+# Date to cut the truth data off at, so we don't have too much of the past for
+# plotting.
+g_truth_data_date <- "2023-09-01"
+# Whether we're running in backtest mode.
+# If TRUE, we don't run the report notebook, which is (a) slow and (b) should be
+# preserved as an ASOF snapshot of our production results for that week.
+# If TRUE, we run a scoring notebook, which scores the historical forecasts
+# against the truth data and compares them to the ensemble.
+# If FALSE, we run the weekly report notebook.
+g_backtest_mode <- as.logical(Sys.getenv("BACKTEST_MODE", FALSE))
+if (!g_backtest_mode) {
+  # This is the as_of for the forecast. If run on our typical schedule, it's
+  # today, which is a Wednesday. Sometimes, if we're doing a delayed forecast,
+  # it's a Thursday. It's used for stamping the data and for determining the
+  # appropriate as_of when creating the forecast.
+  g_forecast_generation_dates <- Sys.Date()
+  # Usually, the forecast_date is the same as the generation date, but you can
+  # override this. It should be a Wednesday.
+  g_forecast_dates <- round_date(g_forecast_generation_dates, "weeks", week_start = 3)
+} else {
+  g_forecast_generation_dates <- c(as.Date(c("2024-11-22", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
+  g_forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
+}
+
+# TODO: Forecaster definitions. We should have a representative from each forecaster.
+g_linear <- function(epi_data, ahead, extra_data, ...) {
+  epi_data %>%
+    filter(source == "nhsn") %>%
+    forecaster_baseline_linear(
+      ahead, ...,
+      residual_tail = 0.99,
+      residual_center = 0.35,
+      no_intercept = TRUE
+    )
+}
+g_climate_base <- function(epi_data, ahead, extra_data, ...) {
+  epi_data %>%
+    filter(source == "nhsn") %>%
+    climatological_model(ahead, ...)
+}
+g_climate_geo_agged <- function(epi_data, ahead, extra_data, ...) {
+  epi_data %>%
+    filter(source == "nhsn") %>%
+    climatological_model(ahead, ..., geo_agg = TRUE)
+}
+g_windowed_seasonal <- function(epi_data, ahead, extra_data, ...) {
+  scaled_pop_seasonal(
+    epi_data,
+    outcome = "value",
+    ahead = ahead * 7,
+    ...,
+    trainer = epipredict::quantile_reg(),
+    seasonal_method = "window",
+    pop_scaling = FALSE,
+    lags = c(0, 7),
+    keys_to_ignore = g_very_latent_locations
+  ) %>%
+    mutate(target_end_date = target_end_date + 3)
+}
+g_windowed_seasonal_extra_sources <- function(epi_data, ahead, extra_data, ...) {
+  fcst <-
+    epi_data %>%
+    left_join(extra_data, by = join_by(geo_value, time_value)) %>%
+    scaled_pop_seasonal(
+      outcome = "value",
+      ahead = ahead * 7,
+      extra_sources = "nssp",
+      ...,
+      seasonal_method = "window",
+      trainer = epipredict::quantile_reg(),
+      drop_non_seasons = TRUE,
+      pop_scaling = FALSE,
+      lags = list(c(0, 7), c(0, 7)),
+      keys_to_ignore = g_very_latent_locations
+    ) %>%
+    select(-source) %>%
+    mutate(target_end_date = target_end_date + 3) %>%
+  fcst
+}
+
 forecasters <- tibble::tribble(
   ~forecaster, ~forecaster_args, ~forecaster_args_names, ~fc_name, ~outcome, ~extra_sources, ~ahead,
   scaled_pop, list(TRUE), list("pop_scaling"), "scaled_pop", "a", "", 1,
@@ -10,39 +108,9 @@ forecasters <- tibble::tribble(
   flatline_fc, list(), list(), "flatline_fc", "a", "", 1,
   smoothed_scaled, list(list(c(0, 7, 14), c(0)), 14, 7), list("lags", "sd_width", "sd_mean_width"), "smoothed_scaled", "a", "", 1,
 )
-# Which forecasters expect the data to be non-identical?
-expects_nonequal <- c("scaled_pop", "smoothed_scaled")
 
-#' A wrapper for a common call to slide a forecaster over a dataset.
-#'
-#' @param dataset The dataset to be used for the forecast.
-#' @param ii The row of the forecasters table to be used.
-#' @param outcome The name of the target column in the dataset.
-#' @param extra_sources Any extra columns used for prediction that aren't
-#' default.
-#' @param expect_linreg_warnings Whether to expect and then suppress warnings
-#' from linear_reg.
-#'
-#' Notes:
-#' - n_training_pad is set to avoid warnings from the trainer.
-#' - linear_reg doesn't like exactly equal data when training and throws a
-#'   warning. wrapperfun is used to suppress that.
-default_slide_forecaster <- function(dataset, ii, expect_linreg_warnings = TRUE) {
-  if (any(forecasters$fc_name[[ii]] %in% expects_nonequal) && expect_linreg_warnings) {
-    wrapperfun <- function(x) {
-      suppressWarnings(expect_warning(x, regexp = "prediction from rank-deficient fit"))
-    }
-  } else {
-    wrapperfun <- identity
-  }
-  args <- forecasters %>%
-    select(-fc_name) %>%
-    slice(ii) %>%
-    purrr::transpose() %>%
-    pluck(1)
-  wrapperfun(res <- inject(slide_forecaster(epi_archive = dataset, n_training_pad = 30, !!!args)))
-  return(res)
-}
+
+### Datasets TODO: Convert to targets?
 
 # Some arbitrary magic numbers used to generate data.
 synth_mean <- 25
@@ -76,10 +144,12 @@ different_constants <- rbind(
 ) %>%
   arrange(version, time_value) %>%
   epiprocess::as_epi_archive()
+
 different_constants_truth <- different_constants$DT %>%
   tibble() %>%
   rename("true_value" = "a", "target_end_date" = "time_value") %>%
   select(-version)
+
 for (ii in seq_len(nrow(forecasters))) {
   test_that(paste(
     forecasters$fc_name[[ii]],
