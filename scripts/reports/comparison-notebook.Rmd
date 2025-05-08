@@ -1,6 +1,6 @@
 ---
 title: "`r params$forecaster_family`: evaluation on 2023/24 in 2024/25"
-date: "compiled on `r format(Sys.time(), '%d %B %Y')`"
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
 output:
   html_document:
     code_folding: hide
@@ -25,18 +25,7 @@ knitr::opts_chunk$set(
   cache = FALSE
 )
 ggplot2::theme_set(ggplot2::theme_bw())
-```
-
-```{r}
-library(data.table)
-library(dplyr)
-library(DT)
-library(ggplot2)
-library(plotly)
-library(readr)
-library(stringr)
-library(tidyr)
-library(purrr)
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 ```
 
 ```{r}

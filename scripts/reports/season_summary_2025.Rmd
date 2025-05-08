@@ -1,6 +1,6 @@
 ---
 title: "Season Summary 2024-2025"
-date: "compiled on `r format(Sys.time(), '%d %B %Y')`"
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
 output:
   html_document:
     code_folding: hide
@@ -33,13 +33,10 @@ knitr::opts_chunk$set(
   cache = FALSE
 )
 ggplot2::theme_set(ggplot2::theme_bw())
-source(here::here("R/load_all.R"))
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 ```
 
 ```{r setup, include=FALSE}
-library(scales)
-library(DT)
-
 # Define aggregation functions
 Mean <- function(x) mean(x, na.rm = TRUE)
 GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
@@ -85,21 +82,26 @@ forecast_weeks_to_plot %in% (covid_scores$forecast_date %>% unique())
 ```
 
 # Models used
-One thing to note: all of these models filter out the 2020/21 and 2021/22 seasons.
-For both flu and covid these seasons are either unusually large or unusually small, and don't warrant inclusion.
+
+**See [the bottom of the main reports page](https://delphi-forecasting-reports.netlify.app) for a detailed description of the models.**
+
 We can split the models and ensembles into 3 categories: the ad-hoc models that we created in response to the actual data that we saw, the AR models that we had been backtesting, and the ensembles.
+(One thing to note: all of these models filter out the 2020/21 and 2021/22 seasons.
+For both flu and covid these seasons are either unusually large or unusually small, and don't warrant inclusion.)
 
 ### The "ad-hoc" models
 
-- `climate_base` uses a 7 week window around the target and forecast date to establish quantiles.
-  `climate_base` does this separately for each geo.
-- `climate_geo_agged` on the other hand converts to rates, pools all geos, computes quantiles using similar time windows, and then converts back to counts.
+Roughly, these were "climatological" and "linear trend" models.
+
+- `climate_base` matches the current target and forecast date to the same 7 epiweek windows in previous seasons to establish quantiles.
+  `climate_base` gets separate quantiles for each geo.
+- `climate_geo_agged` takes the same approach as `base`, but pools all geos (converts to rates, computes quantiles using similar time windows, and then converts back to counts).
   There is effectively only one prediction, scaled to fit each geo.
 - `linear` does a linear extrapolation of the last 4 weeks of data on a rates scale.
   Initially it had an intercept, but this was removed when it caused the model to not reproduce the -1 ahead data exactly.
   This change was made on Jan 8th, in the commit with hash 5f7892b.
   The quantiles are ad-hoc; the residuals are pooled, symmetrized, truncated using some bounds hand-selected to set the quantiles at a reasonable width, and then propagated forward using `propagate_samples` from epipredict.
-- `climate_linear` combines the `climate_*` models with the `linear` model.
+- `climate_linear` combines the `climate_*` models with the `linear` model using a special weighting scheme.
   It does two linear weightings between the linear model and the climate models.
   As the ahead goes from -1 to 4, it linearly interpolates between a 5% weight on the climate model and a 90% weight on the climate model (so the furthest ahead is mostly a climate model).
   At the same time, as the quantile level goes further away from the median, it interpolates between a 10% weight on the climate model at the median and a 100% weight on the climate model at either the 1% or 99% quantile levels.
@@ -125,13 +127,13 @@ weights %>% filter(forecast_family == "climate") %>% ggplot(aes(x = factor(ahead
 
 ### The AR models
 
-- `windowed_seasonal` is an AR forecaster using lags 0 and 7 that uses training data from an 8 week window from each year.
+- `windowed_seasonal` is an AR forecaster using lags 0 and 7 that uses training data from a matching 8 week window from each year.
   It does quartic root scaling along with quantile and median whitening.
   In addition to dropping the first 2 seasons, the windowed models drop the summers for the purposes of determining whitening behavior.
   For flu, this augments with ili and flusurv (so they are added as additional rows, with their own scaling/centering).
   Covid doesn't have a comparable dataset.
 - `windowed_seasonal_nssp` is like `windowed_seasonal`, but also has `nssp` as an exogenous component.
-  Note that for flu, this effectively means throwing out the ili and flusurv data, since `nssp` is only defined recently.
+  Note that for flu, this effectively means throwing out the ili and flusurv data, since `nssp` is only defined recently (and ili data goes back to 2000).
   For covid, `windowed_seasonal_nssp` is effectively the same model, but with auxiliary data.
 
 ### The general ensembles
@@ -556,7 +558,7 @@ Using `mean_cov_90`, most of these models have quantiles that are too narrow, th
 `retro_submission` does surprisingly well on this metric by hitting 90% exactly.
 
 
-Note that `seasonal_nssp_latest` is better than the other models by any metric, suggesting that revision information would be quite useful for forecasting, if we could get a hold of it. 
+Note that `seasonal_nssp_latest` is better than the other models by any metric, suggesting that revision information would be quite useful for forecasting, if we could get a hold of it.
 It is otherwise identical to `windowed_seasonal_nssp`, so it improves by ~20% and has better coverage.
 Looking at the Phase tab, it does especially well during the `increasing` and `peak` phases, with about the same performance as `windowed_seasonal_nssp` in the `decreasing` phase.
 
@@ -986,6 +988,17 @@ The always decreasing problem is definitely not present in these forecasts.
 If anything, our best forecasts are *too* eager to predict an increasing value, e.g. in `tx` and `ca`.
 Several of our worse forecasts are clearly caused by revision behavior.
 
+# Future Work
+
+Some ideas for future work:
+
+- Incorporate revision behavior.
+  - Nowcasting could help mitigate routine mis-reporting (see below).
+- Change data substitution approach.
+  - Would like to be able to widen uncertainty around a point rather than doing a point substitution.
+- Use the difference rather than the raw value.
+  - Following standard ARIMA practice, this should bring our time series closer to stationarity.
+  - We have some simple demonstrations of this approach forecasts in the [decreasing forecasters notebook](decreasing_forecasters.html).
 
 # Revision behavior and data substitution
 
@@ -1048,7 +1061,7 @@ It was a coin toss for covid, and worse than not doing corrections for flu.
 # Further methods to explore
 
 The [decreasing forecasters notebook](decreasing_forecasters.html) has a number of suggestions, though that is a problem that occurs most frequently with Flu data rather than Covid.
-The broad categories there are 
+The broad categories there are
 
 1. Filtering to the relevant phase; `windowed_seasonal_*` is roughly an example of this, which is likely why it outperformed simple AR by enough to be better.
 2. better use of non-linear models. This would allow us to capture increasing, decreasing, and flat trends in the same model.

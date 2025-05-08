@@ -36,12 +36,10 @@ knitr::opts_chunk$set(
   cache = FALSE
 )
 ggplot2::theme_set(ggplot2::theme_bw())
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 ```
 
 ```{r setup, include=FALSE}
-suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
-library(DT)
-
 # Define aggregation functions
 Mean <- function(x) mean(x, na.rm = TRUE)
 GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))

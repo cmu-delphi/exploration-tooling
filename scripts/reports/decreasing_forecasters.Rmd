@@ -1,7 +1,7 @@
 ---
 title: "Decreasing Forecasters"
 author: Delphi Forecast Team
-date: "compiled on `r format(Sys.time(), '%d %B %Y')`"
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
 output:
   html_document:
     code_folding: hide
@@ -772,6 +772,8 @@ forecast %>% plot_dec_forecasts(default_geos)
 ```
 
 Turns out, we get better coverage this way.
+
+Note that this is a very naive implementation for the quantiles: each quantile is computed independently, while a more correct approach would convolve the one-ahead quantile distribution of the diffs repeatedly with itself.
 
 Now let's try training on the augmented data (fluview and ILI).
 

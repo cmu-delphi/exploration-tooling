@@ -20,26 +20,10 @@ knitr::opts_chunk$set(
   cache = FALSE
 )
 ggplot2::theme_set(ggplot2::theme_bw())
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 ```
 
 ```{r}
-library(dplyr)
-library(ggplot2)
-library(lubridate)
-library(MMWRweek)
-library(readr)
-library(rlang)
-library(magrittr)
-library(aws.s3)
-library(data.table)
-library(dplyr)
-library(DT)
-library(ggplot2)
-library(plotly)
-library(readr)
-library(stringr)
-library(tidyr)
-suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 forecast_date <- as.Date("2024-11-20")
 epi_data <- readr::read_csv("https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=20000&$select=weekendingdate,jurisdiction,totalconfflunewadm")
 epi_data <- epi_data %>% add_season_info()

@@ -30,7 +30,7 @@ $$\\[.4in]$$
 ```{r echo=FALSE, warning=FALSE,message=FALSE}
 knitr::opts_chunk$set(
   fig.align = "center",
-  message = FALSE,
+  message = TRUE,
   warning = FALSE,
   cache = FALSE
 )
