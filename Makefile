@@ -1,8 +1,7 @@
 current_date:=$(shell date +%F)
 
 install:
-	Rscript -e "install.packages(c('renv', 'pak', 'rspm'))"
-	Rscript -e "renv::restore()"
+	Rscript -e "install.packages(c('renv', 'pak', 'rspm')); renv::restore()"
 
 .PHONY: all test test-forecasters run run-nohup sync download upload dashboard
 
@@ -13,59 +12,47 @@ run:
 	Rscript scripts/run.R
 
 prod-covid:
-	export TAR_RUN_PROJECT=covid_hosp_prod; \
-	Rscript scripts/run.R
+	export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
 
 prod-flu:
-	export TAR_RUN_PROJECT=flu_hosp_prod; \
-	Rscript scripts/run.R
+	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R
 
 prod: prod-covid prod-flu update-site netlify
 
 explore-covid:
-	export TAR_RUN_PROJECT=covid_hosp_explore; \
-	Rscript scripts/run.R
+	export TAR_RUN_PROJECT=covid_hosp_explore; Rscript scripts/run.R
 
 explore-flu:
-	export TAR_RUN_PROJECT=flu_hosp_explore; \
-	Rscript scripts/run.R
+	export TAR_RUN_PROJECT=flu_hosp_explore; Rscript scripts/run.R
 
 explore: explore-covid explore-flu update-site netlify
 
-submit-covid:
+commit-covid:
 	cd ../covid19-forecast-hub; \
-	git pull origin main; \
+	git pull --rebase --autostash origin main; \
 	git add model-output/CMU-TimeSeries/*; \
 	git add model-output/CMU-climate_baseline/*; \
 	git commit -am "CMU-Delphi submission $(current_date)"; \
-	git push delphi main; \
+	git push --force delphi main
+
+commit-flu:
+	cd ../FluSight-forecast-hub; \
+	git pull --rebase --autostash origin main; \
+	git add model-output/CMU-TimeSeries/*; \
+	git add model-output/CMU-climate_baseline/*; \
+	git commit -am "CMU-Delphi submission $(current_date)"; \
+	git push --force delphi main
+
+submit-covid: commit-covid
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcgov/covid19-forecast-hub
 
-submit-flu:
-	cd ../FluSight-forecast-hub; \
-	git pull origin main; \
-	git add model-output/CMU-TimeSeries/*; \
-	git add model-output/CMU-climate_baseline/*; \
-	git commit -am "CMU-Delphi submission $(current_date)"; \
-	git push delphi main; \
+submit-flu: commit-flu
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcepi/FluSight-forecast-hub
 
-submit-covid-dry:
-	cd ../covid19-forecast-hub; \
-	git pull origin main; \
-	git add model-output/CMU-TimeSeries/*; \
-	git add model-output/CMU-climate_baseline/*; \
-	git commit -am "CMU-Delphi submission $(current_date)"; \
-	git push delphi main; \
+submit-covid-dry: commit-covid
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcgov/covid19-forecast-hub --dry-run
 
-submit-flu-dry:
-	cd ../FluSight-forecast-hub; \
-	git pull origin main; \
-	git add model-output/CMU-TimeSeries/*; \
-	git add model-output/CMU-climate_baseline/*; \
-	git commit -am "CMU-Delphi submission $(current_date)"; \
-	git push delphi main; \
+submit-flu-dry: commit-flu
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcepi/FluSight-forecast-hub --dry-run
 
 submit: submit-covid submit-flu
