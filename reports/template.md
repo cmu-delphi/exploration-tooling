@@ -1,5 +1,4 @@
 <style>
-/* Some basic styling (a reasonable reading width and dark mode support) */
 body {
   max-width: 800px;
   margin: 2rem auto;
@@ -7,30 +6,6 @@ body {
   font-family: sans-serif;
   background: white;
   color: black;
-}
-
-a:link {
-  color: blue;
-}
-
-a:visited {
-  color: purple;
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  body {
-    background: #121212;
-    color: #e0e0e0;
-  }
-
-  a:link {
-    color: #80cbc4;
-  }
-
-  a:visited {
-    color: #b39ddb; /* light purple for contrast on dark bg */
-  }
 }
 </style>
 
