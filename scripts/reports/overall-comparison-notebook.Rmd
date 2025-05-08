@@ -28,13 +28,13 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 ```
 
 ```{r}
-params <- list(
-  forecaster_parameters = tar_read(forecaster_parameter_combinations),
-  forecasts = tar_read(joined_forecasts),
-  scores = tar_read(joined_scores),
-  truth_data = tar_read(hhs_evaluation_data),
-  disease = "flu"
-)
+# params <- list(
+#   forecaster_parameters = tar_read(forecaster_parameter_combinations),
+#   forecasts = tar_read(joined_forecasts),
+#   scores = tar_read(joined_scores),
+#   truth_data = tar_read(hhs_evaluation_data),
+#   disease = "flu"
+# )
 
 if (params$disease == "flu") {
   base_forecaster_name <- "FluSight-baseline"

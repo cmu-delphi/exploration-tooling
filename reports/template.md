@@ -171,7 +171,7 @@ A simple linear trend model that predicts the median using linear extrapolation 
 
 ### No Recent Outcome
 
-This was a fall-back forecaster built for the scenario where NHSN data was not going to reported in time for the start of the forecasting challenge.
+This was a fall-back forecaster built for the scenario where NHSN data was not going to be reported in time for the start of the forecasting challenge.
 
 A flusion-adjacent model pared down to handle the case of not having the target as a predictor.
 
