@@ -1,40 +1,7 @@
----
-title: "Exploration Summary 2024-2025"
-date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
-output:
-  html_document:
-    code_folding: hide
-    toc: True
-editor_options:
-  chunk_output_type: console
----
+<!-- Render this with pandoc -->
+<!-- pandoc scripts/reports/exploration_summary_2025.md -s -o reports/exploration_summary_2025.html --css reports/style.css --metadata pagetitle='Exploration Summary 2024-2025' -->
 
-```{css, echo=FALSE}
-body {
-  display: block;
-  max-width: 1280px !important;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-body .main-container {
-  max-width: 1280px !important;
-  width: 1280px !important;
-}
-```
-
-$$\\[.4in]$$
-
-```{r echo=FALSE, warning=FALSE,message=FALSE}
-knitr::opts_chunk$set(
-  fig.align = "center",
-  message = FALSE,
-  warning = FALSE,
-  cache = FALSE
-)
-ggplot2::theme_set(ggplot2::theme_bw())
-source(here::here("R/load_all.R"))
-```
+# Exploration Summary 2024-2025
 
 In this document, we will summarize our findings from backtesting a large variety of forecasters on the 2023-2024 season.
 The forecaster family definitions can be found at the bottom of [this page](https://delphi-forecasting-reports.netlify.app/).
@@ -53,18 +20,18 @@ The forecaster family definitions can be found at the bottom of [this page](http
 - An ensemble of climatological and the linear trend model (we used this at the start of the season when we didn't trust the data to support a more complex model)
   - We were surprised to find that this was only 7 mean WIS points behind our best performing family.
 - For context, the gap between our best performing family and FluSight-baseline was only about 15 mean WIS points.
+- Surprisingly, AR forecasters with augmented data performed **worse** than those that did not.
+  However, AR forecasters with seasonal windows and augmented data performed better than AR forecasters with only seasonal windows.
 
 ### Covid
 
 [The best performing families](https://delphi-forecasting-reports.netlify.app/covid-overall-notebook) were:
 
-- AR with seasonal windows and the NSSP exogenous feature
-  - This forecaster was about 10 mean WIS points behind UMass-flusion, but on par with the FluSight-ensemble.
-- Surprisingly, the `climate_linear` model was not far behind our best performing family.
+- AR with seasonal windows and the NSSP exogenous feature.
+  - This forecaster outperformed the CDC ensemble by about 15 mean WIS points.
+- Surprisingly, the `climate_linear` model was only about 4 mean WIS points behind our best performing family.
   (`climate_linear` combines the `climate_*` models with the `linear` model using a special weighting scheme.
   See the [season summary](season_summary_2025.html) for more details.)
-
-
 
 ## Important Parameters
 

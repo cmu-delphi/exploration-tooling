@@ -593,7 +593,7 @@ forecast_subset <- params$forecasts %>%
   pivot_wider(names_from = "quantile", values_from = "prediction") %>%
   mutate(ahead = as.numeric(target_end_date - forecast_date))
 
-p <- ggplot(
+ggplot(
   data = forecast_subset,
   aes(x = target_end_date, group = forecast_date)
 ) +
@@ -615,9 +615,6 @@ p <- ggplot(
   facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
-
-ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
-  layout(hoverlabel = list(bgcolor = "white"))
 ```
 
 #### Medium States
@@ -634,7 +631,7 @@ forecast_subset <- params$forecasts %>%
   pivot_wider(names_from = "quantile", values_from = "prediction") %>%
   mutate(ahead = as.numeric(target_end_date - forecast_date))
 
-p <- ggplot(
+ggplot(
   data = forecast_subset,
   aes(x = target_end_date, group = forecast_date)
 ) +
@@ -657,8 +654,6 @@ p <- ggplot(
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
 
-ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
-  layout(hoverlabel = list(bgcolor = "white"))
 ```
 
 #### Small States
@@ -675,7 +670,7 @@ forecast_subset <- params$forecasts %>%
   pivot_wider(names_from = "quantile", values_from = "prediction") %>%
   mutate(ahead = as.numeric(target_end_date - forecast_date))
 
-p <- ggplot(
+ggplot(
   data = forecast_subset,
   aes(x = target_end_date, group = forecast_date)
 ) +
@@ -697,7 +692,4 @@ p <- ggplot(
   facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
-
-ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
-  layout(hoverlabel = list(bgcolor = "white"))
 ```

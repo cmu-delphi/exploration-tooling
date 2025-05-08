@@ -146,6 +146,7 @@ get_covid_forecaster_params <- function() {
         residual_tail = 0.97,
         residual_center = 0.097
       ),
+      # only linear, a bunch of the parameters don't matter for it
       expand_grid(
         forecaster = "climate_linear_ensembled",
         scale_method = "none",

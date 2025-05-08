@@ -1,14 +1,3 @@
-<style>
-body {
-  max-width: 800px;
-  margin: 2rem auto;
-  padding: 0 1rem;
-  font-family: sans-serif;
-  background: white;
-  color: black;
-}
-</style>
-
 # Delphi Forecast Reports
 
 [GitHub Repo](https://github.com/cmu-delphi/explorationt-tooling/)
@@ -35,8 +24,6 @@ body {
 
 - [Forecaster Exploration Summary](exploration_summary_2024.html)
 - Flu
-  - All forecasters population scale their data, use geo pooling, and train using quantreg.
-  - These definitions are in the `flu_forecaster_config.R` file.
   - [Flu Overall](flu-overall-notebook.html)
   - [Flu AR](flu-notebook-scaled_pop_main.html)
   - [Flu AR with augmented data](flu-notebook-scaled_pop_data_augmented.html)
@@ -46,12 +33,9 @@ body {
   - [Flu AR with augmented data, exogenous features, and seasonal windowing](flu-notebook-scaled_pop_season_exogenous.html)
   - Simplistic/low data methods:
     - [Flu no recent](flu-notebook-no_recent_quant.html)
-    - [Flu no recent](flu-notebook-no_recent_quant.html)
     - [Flu flatline](flu-notebook-flatline.html)
-    - [Flu climate](flu-notebook-climate_linear.html)
+    - [Flu climate and linear](flu-notebook-climate_linear.html)
 - Covid
-  - All forecasters population scale their data, use geo pooling, and train using quantreg.
-  - These definitions are in the `covid_forecaster_config.R` file.
   - [Covid Overall](covid-overall-notebook.html)
   - [Covid AR](covid-notebook-scaled_pop_main.html)
   - [Covid AR with seasonal features](covid-notebook-scaled_pop_season.html)
@@ -60,7 +44,7 @@ body {
   - Simplistic/low data methods:
     - [Covid no recent](covid-notebook-no_recent_quant.html)
     - [Covid flatline](covid-notebook-flatline.html)
-    - [Covid climate](covid-notebook-climate_linear.html)
+    - [Covid climate and linear](covid-notebook-climate_linear.html)
 
 ## Description of Forecaster Families
 
@@ -77,10 +61,13 @@ The main forecaster families were:
 - Baseline models
   - Flatline
 
-All the AR models had the option of population scaling, seasonal features, exogenous features, and augmented data.
-We tried all possible combinations of these features.
-All models had the option of using the `linreg`, `quantreg`, or `grf` engine.
-We found that `quantreg` gave better results than `linreg` and we had computational issues with `grf`, so we used `quantreg` the rest of the time.
+Notes:
+
+- All forecasters population scale their data, use geo pooling, and train using quantreg.
+  We found that `quantreg` gave better results than `linreg` and we had computational issues with `grf`, so we used `quantreg` the rest of the time.
+- All the AR models had the option of population scaling, seasonal features, exogenous features, and augmented data.
+  We tried all possible combinations of these features (in notebooks above).
+- The forecaster definitions are in the [`flu_forecaster_config.R`](https://github.com/cmu-delphi/exploration-tooling/blob/main/R/targets/flu_forecaster_config.R) and [`covid_forecaster_config.R`](https://github.com/cmu-delphi/exploration-tooling/blob/main/R/targets/covid_forecaster_config.R) files.
 
 ### Autoregressive models (AR)
 
