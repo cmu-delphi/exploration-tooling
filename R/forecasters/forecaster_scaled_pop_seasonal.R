@@ -63,7 +63,7 @@ scaled_pop_seasonal <- function(
   epi_data <- validate_epi_data(epi_data)
   extra_sources <- unlist(extra_sources)
 
-  if (all(seasonal_method == c("none", "flu", "covid", "indicator", "window", "climatological"))) {
+  if (identical(seasonal_method, c("none", "flu", "covid", "indicator", "window", "climatological"))) {
     seasonal_method <- "none"
   }
   # perform any preprocessing not supported by epipredict
