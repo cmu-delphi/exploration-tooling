@@ -38,7 +38,7 @@
 scaled_pop_seasonal <- function(
   epi_data,
   outcome,
-  extra_sources = "",
+  extra_sources = character(),
   ahead = 1,
   pop_scaling = TRUE,
   drop_non_seasons = FALSE,
@@ -61,12 +61,8 @@ scaled_pop_seasonal <- function(
   nonlin_method <- arg_match(nonlin_method)
 
   epi_data <- validate_epi_data(epi_data)
-  extra_sources <- unwrap_argument(extra_sources)
-  trainer <- unwrap_argument(trainer)
+  extra_sources <- unlist(extra_sources)
 
-  if (typeof(seasonal_method) == "list") {
-    seasonal_method <- seasonal_method[[1]]
-  }
   if (all(seasonal_method == c("none", "flu", "covid", "indicator", "window", "climatological"))) {
     seasonal_method <- "none"
   }

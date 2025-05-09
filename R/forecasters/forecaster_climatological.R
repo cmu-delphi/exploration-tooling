@@ -2,7 +2,7 @@
 #'
 climate_linear_ensembled <- function(epi_data,
                                      outcome,
-                                     extra_sources = "",
+                                     extra_sources = character(),
                                      ahead = 7,
                                      trainer = parsnip::linear_reg(),
                                      quantile_levels = covidhub_probs(),
@@ -22,8 +22,7 @@ climate_linear_ensembled <- function(epi_data,
   nonlin_method <- arg_match(nonlin_method)
 
   epi_data <- validate_epi_data(epi_data)
-  extra_sources <- unwrap_argument(extra_sources)
-  trainer <- unwrap_argument(trainer)
+  extra_sources <- unlist(extra_sources)
 
   args_list <- list(...)
   ahead <- as.integer(ahead / 7)

@@ -209,31 +209,16 @@ get_flu_forecaster_params <- function() {
       tidyr::expand_grid(
         forecaster = "scaled_pop_seasonal",
         trainer = "quantreg",
-        lags = list2(
-          c(0, 7)
+        lags = list2(c(0, 7)),
+        seasonal_method = list2(
+          list2("window"),
+          list2("window", "flu"),
+          list2("window", "climatological")
         ),
-        seasonal_method = list("flu", "indicator", "climatological"),
-        pop_scaling = FALSE,
-        train_residual = c(TRUE, FALSE),
-        filter_source = c("", "nhsn"),
-        filter_agg_level = "state",
-        drop_non_seasons = c(TRUE, FALSE),
-        n_training = Inf,
-        keys_to_ignore = g_very_latent_locations
-      ),
-      # Window-based seasonal method shouldn't drop non-seasons
-      tidyr::expand_grid(
-        forecaster = "scaled_pop_seasonal",
-        trainer = "quantreg",
-        lags = list(
-          c(0, 7)
-        ),
-        seasonal_method = list("window", c("window", "flu"), c("window", "climatological")),
         pop_scaling = FALSE,
         train_residual = c(FALSE, TRUE),
         filter_source = c("", "nhsn"),
         filter_agg_level = "state",
-        drop_non_seasons = FALSE,
         n_training = Inf,
         keys_to_ignore = g_very_latent_locations
       )
@@ -250,7 +235,7 @@ get_flu_forecaster_params <- function() {
             c(0, 7) # exogenous feature
           )
         ),
-        seasonal_method = "window",
+        seasonal_method = list2("window"),
         pop_scaling = FALSE,
         filter_source = c("", "nhsn"),
         filter_agg_level = "state",
@@ -262,10 +247,8 @@ get_flu_forecaster_params <- function() {
     season_window_sizes = tidyr::expand_grid(
       forecaster = "scaled_pop_seasonal",
       trainer = "quantreg",
-      lags = list(
-        c(0, 7)
-      ),
-      seasonal_method = "window",
+      lags = list2(c(0, 7)),
+      seasonal_method = list2("window"),
       pop_scaling = FALSE,
       train_residual = FALSE,
       filter_source = c("", "nhsn"),
@@ -325,9 +308,6 @@ get_flu_forecaster_params <- function() {
         x$forecaster <- "dummy_forecaster"
       }
       x <- add_id(x)
-      if ("trainer" %in% names(x) && is.list(x$trainer)) {
-        x$trainer <- x$trainer[[1]]
-      }
       # Add the outcome to each forecaster.
       x$outcome <- "hhs"
       x

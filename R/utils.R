@@ -30,7 +30,7 @@ forecaster_lookup <- function(pattern, forecaster_params_grid = NULL) {
 
   out <- forecaster_params_grid %>% filter(grepl(pattern, .data$id))
   if (nrow(out) > 0) {
-    out %>% glimpse()
+    out %>% unlist()
     return(out)
   }
 }

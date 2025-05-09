@@ -2,7 +2,7 @@
 #' it may whiten any old data as the outcome
 no_recent_outcome <- function(epi_data,
                               outcome,
-                              extra_sources = "",
+                              extra_sources = character(),
                               ahead = 7,
                               pop_scaling = FALSE,
                               trainer = epipredict::quantile_reg(),
@@ -24,8 +24,7 @@ no_recent_outcome <- function(epi_data,
   week_method <- arg_match(week_method)
 
   epi_data <- validate_epi_data(epi_data)
-  extra_sources <- unwrap_argument(extra_sources)
-  trainer <- unwrap_argument(trainer)
+  extra_sources <- unlist(extra_sources)
 
   # this is for the case where there are multiple sources in the same column
   epi_data %<>% filter_extraneous(filter_source, filter_agg_level)
