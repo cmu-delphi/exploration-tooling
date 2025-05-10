@@ -72,16 +72,15 @@ format_flusight <- function(pred, disease = c("flu", "covid")) {
 }
 
 format_scoring_utils <- function(forecasts_and_ensembles, disease = c("flu", "covid")) {
-  forecasts_and_ensembles %>%
-    filter(!grepl("region.*", geo_value)) %>%
-    mutate(
-      reference_date = get_forecast_reference_date(forecast_date),
-      target = glue::glue("wk inc {disease} hosp"),
-      horizon = as.integer(floor((target_end_date - reference_date) / 7)),
-      output_type = "quantile",
-      output_type_id = quantile,
-      value = value
-    ) %>%
+  # dplyr here was unreasonably slow on 1m+ rows, so replacing with direct access
+  fc_ens <- forecasts_and_ensembles
+  fc_ens <- fc_ens[!grepl("region.*", forecasts_and_ensembles$geo_value), ]
+  fc_ens[, "reference_date"] <- get_forecast_reference_date(fc_ens$forecast_date)
+  fc_ens[, "target"] <- glue::glue("wk inc {disease} hosp")
+  fc_ens[, "horizon"] <- as.integer(floor((fc_ens$target_end_date - fc_ens$reference_date) / 7))
+  fc_ens[, "output_type"] <- "quantile"
+  fc_ens[, "output_type_id"] <- fc_ens$quantile
+  fc_ens %>%
     left_join(
       get_population_data() %>%
         select(state_id, state_code),
@@ -89,7 +88,11 @@ format_scoring_utils <- function(forecasts_and_ensembles, disease = c("flu", "co
     ) %>%
     rename(location = state_code, model_id = forecaster) %>%
     select(reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value, model_id) %>%
-    drop_na()
+    drop_na() %>%
+    arrange(location, target_end_date, reference_date, output_type_id) %>%
+    group_by(model_id, location, target_end_date, reference_date) %>%
+    mutate(value = sort(value)) %>%
+    ungroup()
 }
 
 #' The quantile levels used by the covidhub repository

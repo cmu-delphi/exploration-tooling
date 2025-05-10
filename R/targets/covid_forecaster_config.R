@@ -7,6 +7,10 @@
 #'
 #' Variables with 'g_' prefix are globals defined in the calling script.
 #'
+#' Note that expand_grid has some quirks:
+#' - if an entry is a vector c() or a list(), each top-level element is expanded out to a row.
+#' - this means that list(list()) reuses the same inner list for each row.
+#'
 #' @param dummy_mode Boolean indicating whether to use dummy forecasters
 #' @return A list of forecaster parameter combinations
 #' @export
@@ -32,7 +36,6 @@ get_covid_forecaster_params <- function() {
       expand_grid(
         forecaster = "scaled_pop",
         trainer = "quantreg",
-        # since it's a list, this gets expanded out to a single one in each row
         extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region", "va_covid_per_100k"),
         lags = list2(
           list2(
@@ -105,18 +108,18 @@ get_covid_forecaster_params <- function() {
     scaled_pop_season = tidyr::expand_grid(
       forecaster = "scaled_pop_seasonal",
       trainer = "quantreg",
-      lags = list(
+      lags = list2(
         c(0, 7, 14, 21),
         c(0, 7)
       ),
       pop_scaling = FALSE,
       n_training = Inf,
-      seasonal_method = list(
-        c("covid"),
-        c("window"),
-        c("covid", "window"),
-        c("climatological"),
-        c("climatological", "window")
+      seasonal_method = list2(
+        list2("covid"),
+        list2("window"),
+        list2("covid", "window"),
+        list2("climatological"),
+        list2("climatological", "window")
       )
     ),
     climate_linear = bind_rows(
@@ -146,6 +149,7 @@ get_covid_forecaster_params <- function() {
         residual_tail = 0.97,
         residual_center = 0.097
       ),
+      # only linear, a bunch of the parameters don't matter for it
       expand_grid(
         forecaster = "climate_linear_ensembled",
         scale_method = "none",
@@ -164,9 +168,6 @@ get_covid_forecaster_params <- function() {
         x$forecaster <- "dummy_forecaster"
       }
       x <- add_id(x)
-      if ("trainer" %in% names(x) && is.list(x$trainer)) {
-        x$trainer <- x$trainer[[1]]
-      }
       # Add the outcome to each forecaster.
       x$outcome <- "hhs"
       x

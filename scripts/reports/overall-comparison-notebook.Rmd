@@ -1,6 +1,6 @@
 ---
 title: Overall Comparison of Hospitalization Forecasters
-date: "`r format(Sys.time(), '%d %B %Y')`"
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
 output:
   html_document:
     code_folding: hide
@@ -24,18 +24,7 @@ knitr::opts_chunk$set(
   cache = FALSE
 )
 ggplot2::theme_set(ggplot2::theme_bw())
-```
-
-```{r}
-library(data.table)
-library(dplyr)
-library(DT)
-library(ggplot2)
-library(plotly)
-library(readr)
-library(stringr)
-library(tidyr)
-library(purrr)
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 ```
 
 ```{r}
@@ -44,7 +33,7 @@ library(purrr)
 #   forecasts = tar_read(joined_forecasts),
 #   scores = tar_read(joined_scores),
 #   truth_data = tar_read(hhs_evaluation_data),
-#   disease = "covid"
+#   disease = "flu"
 # )
 
 if (params$disease == "flu") {
@@ -66,13 +55,10 @@ id_to_forecaster <- params$forecaster_parameters %>%
   bind_rows() %>%
   rename(forecaster_function = forecaster)
 
-Mean <- function(x) mean(x, na.rm = TRUE)
-GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
-
 overall_rating <- params$scores %>%
-  summarize(mean_score = Mean(wis), .by = forecaster) %>%
-  filter(mean_score > 20) %>%
+  summarize(mean_score = mean(wis), .by = forecaster) %>%
   arrange(mean_score) %>%
+  filter(mean_score > 20) %>%
   left_join(id_to_forecaster, by = join_by(forecaster == id)) %>%
   mutate(
     family_name = if_else(is.na(family_name), "external", family_name),

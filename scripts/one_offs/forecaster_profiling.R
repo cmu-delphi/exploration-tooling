@@ -11,7 +11,7 @@ p <- profvis::profvis({
     epi_archive = d,
     outcome = "hhs",
     ahead = 2,
-    extra_sources = "",
+    extra_sources = character(),
     forecaster = scaled_pop,
     n_training_pad = 30L,
     forecaster_args = list(

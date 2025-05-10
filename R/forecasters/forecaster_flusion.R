@@ -1,6 +1,6 @@
 flusion <- function(epi_data,
                     outcome,
-                    extra_sources = "",
+                    extra_sources = character(),
                     ahead = 7,
                     pop_scaling = FALSE,
                     trainer = rand_forest(
@@ -24,8 +24,7 @@ flusion <- function(epi_data,
   derivative_estimator <- arg_match(derivative_estimator)
 
   epi_data <- validate_epi_data(epi_data)
-  extra_sources <- unwrap_argument(extra_sources)
-  trainer <- unwrap_argument(trainer)
+  extra_sources <- unlist(extra_sources)
 
   # perform any preprocessing not supported by epipredict
   args_input <- list(...)

@@ -1,0 +1,1077 @@
+---
+title: "Season Summary 2024-2025"
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: True
+editor_options:
+  chunk_output_type: console
+---
+
+```{css, echo=FALSE}
+body {
+  display: block;
+  max-width: 1280px !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+body .main-container {
+  max-width: 1280px !important;
+  width: 1280px !important;
+}
+```
+
+$$\\[.4in]$$
+
+```{r echo=FALSE, warning=FALSE,message=FALSE}
+knitr::opts_chunk$set(
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+```
+
+```{r setup, include=FALSE}
+# Define aggregation functions
+Mean <- function(x) mean(x, na.rm = TRUE)
+GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
+our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "seasonal_nssp_latest")
+flu_scores <-
+  qs2::qs_read(here::here("flu_hosp_prod", "objects", "scores")) %>%
+  mutate(forecaster = case_match(
+           forecaster,
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = forecaster
+    )) %>%
+  mutate(our_forecaster = forecaster %in% our_forecasters)
+flu_forecasts <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "joined_forecasts_and_ensembles"))
+flu_forecasts$forecaster %<>% case_match(
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = flu_forecasts$forecaster
+    )
+forecast_dates <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "forecast_dates"))
+covid_scores <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "scores")) %>%
+  mutate(forecaster = case_match(
+           forecaster,
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = forecaster
+    ))
+covid_forecasts <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "joined_forecasts_and_ensembles")) %>% ungroup()
+covid_forecasts$forecaster %<>% case_match(
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = covid_forecasts$forecaster
+    )
+
+forecast_week <- flu_scores$forecast_date %>% unique()
+forecast_weeks_to_plot <- c(seq.Date(min(forecast_week), max(forecast_week), by = 3*7), as.Date("2025-01-18"), as.Date("2025-02-01"))
+forecast_weeks_to_plot %in% (flu_scores$forecast_date %>% unique())
+forecast_weeks_to_plot %in% (covid_scores$forecast_date %>% unique())
+```
+
+# Models used
+
+**See [the bottom of the main reports page](https://delphi-forecasting-reports.netlify.app) for a detailed description of the models.**
+
+We can split the models and ensembles into 3 categories: the ad-hoc models that we created in response to the actual data that we saw, the AR models that we had been backtesting, and the ensembles.
+(One thing to note: all of these models filter out the 2020/21 and 2021/22 seasons.
+For both flu and covid these seasons are either unusually large or unusually small, and don't warrant inclusion.)
+
+### The "ad-hoc" models
+
+Roughly, these were "climatological" and "linear trend" models.
+
+- `climate_base` matches the current target and forecast date to the same 7 epiweek windows in previous seasons to establish quantiles.
+  `climate_base` gets separate quantiles for each geo.
+- `climate_geo_agged` takes the same approach as `base`, but pools all geos (converts to rates, computes quantiles using similar time windows, and then converts back to counts).
+  There is effectively only one prediction, scaled to fit each geo.
+- `linear` does a linear extrapolation of the last 4 weeks of data on a rates scale.
+  Initially it had an intercept, but this was removed when it caused the model to not reproduce the -1 ahead data exactly.
+  This change was made on Jan 8th, in the commit with hash 5f7892b.
+  The quantiles are ad-hoc; the residuals are pooled, symmetrized, truncated using some bounds hand-selected to set the quantiles at a reasonable width, and then propagated forward using `propagate_samples` from epipredict.
+- `climate_linear` combines the `climate_*` models with the `linear` model using a special weighting scheme.
+  It does two linear weightings between the linear model and the climate models.
+  As the ahead goes from -1 to 4, it linearly interpolates between a 5% weight on the climate model and a 90% weight on the climate model (so the furthest ahead is mostly a climate model).
+  At the same time, as the quantile level goes further away from the median, it interpolates between a 10% weight on the climate model at the median and a 100% weight on the climate model at either the 1% or 99% quantile levels.
+  In net, at the median -1 ahead, the climate models have a weight of 0.5%, and the linear model of 99.5%.
+
+<details>
+<summary> A plot of the `climate` weights </summary>
+
+```{r climate_weight_plot, fig.width = 12, fig.height = 3}
+weights <-
+  make_ahead_weights(-1:3) %>%
+  left_join(
+    make_quantile_weights(covidhub_probs()),
+    by = c("forecast_family"),
+    relationship = "many-to-many"
+  ) %>%
+  mutate(weight = weight.x * weight.y) %>%
+  select(forecast_family, quantile, ahead, weight)
+weights %>% filter(forecast_family == "climate") %>% ggplot(aes(x = factor(ahead), y = factor(quantile), fill = weight)) + geom_tile() + scale_fill_viridis_c(limits = c(0,1))
+```
+
+</details>
+
+### The AR models
+
+- `windowed_seasonal` is an AR forecaster using lags 0 and 7 that uses training data from a matching 8 week window from each year.
+  It does quartic root scaling along with quantile and median whitening.
+  In addition to dropping the first 2 seasons, the windowed models drop the summers for the purposes of determining whitening behavior.
+  For flu, this augments with ili and flusurv (so they are added as additional rows, with their own scaling/centering).
+  Covid doesn't have a comparable dataset.
+- `windowed_seasonal_nssp` is like `windowed_seasonal`, but also has `nssp` as an exogenous component.
+  Note that for flu, this effectively means throwing out the ili and flusurv data, since `nssp` is only defined recently (and ili data goes back to 2000).
+  For covid, `windowed_seasonal_nssp` is effectively the same model, but with auxiliary data.
+
+### The general ensembles
+
+- `ensemble_windowed` combines the `windowed_seasonal` and `windowed_seasonal_nssp` in a simple half and half ensemble.
+  One would expect this to be more helpful for Flu than Covid, since they have different information available.
+- `retro_submission` is a retroactive recreation of `CMU-TimeSeries` using updated methods (`linear` always matching the most recent value, for example).
+  The weights for the various models can be found in [`flu_geo_exclusions`](https://github.com/cmu-delphi/exploration-tooling/blob/main/flu_geo_exclusions.csv) or [`covid_geo_exclusions`](https://github.com/cmu-delphi/exploration-tooling/blob/main/covid_geo_exclusions.csv).
+  These can vary on a state by state basis.
+- `CMU-TimeSeries` is what we actually submitted.
+  This is a moving target that has changed a number of times. For a detailed list of the weights used, see [`flu_geo_exclusions`](https://github.com/cmu-delphi/exploration-tooling/blob/main/flu_geo_exclusions.csv) or [`covid_geo_exclusions`](https://github.com/cmu-delphi/exploration-tooling/blob/main/covid_geo_exclusions.csv) for specific weights.
+
+  <details>
+  <summary> A timeline of the changes to `CMU-timeseries` </summary>
+  ```{r cmu_timeseries_timeline, echo=FALSE}
+  tribble(~Date, ~`Change for flu`, ~`Change for covid`,
+          as.Date("2024-11-21"), "Initial forecast. Uses a simple average of the `climate_base` and the `linear` models.", "Same model as Flu",
+          as.Date("2024-11-27"), "Start using the `climate_linear` model", "start using the `climate_linear` model",
+          as.Date("2024-12-04"), "-", "-",
+          as.Date("2024-12-11"), "Introduction of `windowed_seasonal` model", "model remains just `climate_linear`",
+          as.Date("2024-12-18"), "-", "-",
+          as.Date("2024-12-25"), "-", "-",
+          as.Date("2025-01-01"), "-", "-",
+          as.Date("2025-01-08"), "`linear` no longer has an intercept", "same change",
+          as.Date("2025-01-15"), "`windowed_seasonal_nssp` introduced to ensemble", "-",
+          as.Date("2025-01-22"), "data outage- no forecast", "`windowed_seasonal_nssp` introduced to ensemble, also missing data",
+          as.Date("2025-01-29"), "-", "-",
+          as.Date("2025-02-05"), "-", "`windowed_seasonal` introduced to ensemble",
+          as.Date("2025-02-12"), "-", "-",
+          as.Date("2025-02-19"), "-", "`windowed_seasonal` removed from ensemble",
+          as.Date("2025-02-26"), "-", "`windowed_seasonal` added to ensemble only for states where `nssp` is missing",
+          as.Date("2025-03-05"), "same from here on", "same from here on",
+          as.Date("2025-03-12"), "-", "-",
+          as.Date("2025-03-19"), "-", "-",
+          as.Date("2025-03-26"), "-", "-",
+          as.Date("2025-04-02"), "-", "-",
+          as.Date("2025-04-09"), "-", "-",
+          as.Date("2025-04-16"), "-", "-",
+          as.Date("2025-04-23"), "-", "-",
+          ) %>%
+    datatable(options = list(pageLength=100))
+  ```
+  </details>
+
+# Season Scoring
+<!-- NOTE: to run this, you must run `make prod-flu` and `make prod-covid` successfully, as it will read the targets directly from the store. -->
+
+In addition to the plots below, it is worth keeping in mind the all model comparisons from [flu eval dashboard](https://reichlab.io/flusight-dashboard/eval.html) and [covid](https://reichlab.io/covidhub-dashboard/eval.html).
+We've included the best models there below as well.
+
+For Flu, the best wis-scoring model there is `PSI-PROF` with a mean WIS of 128.6 vs the ensemble's 140.8 and `CMU-TimeSeries`'s 139.7[^1].
+The best MAE-scoring model there is `CEPH-Rtrend_fluH`, with a mean MAE of 187.4 vs the ensemble's 196.6 and `CMU-TimeSeries`'s 197.8.
+Most models are bad at getting 95% coverage, suggesting most teams have too narrow of extreme quantiles.
+50% coverage is more common, with about a quarter of forecasters being within a 40-60% range (including us).
+
+For Covid, there are far fewer models submitted overall.
+The best wis-scoring model is actually just the ensemble at 35.2, with the next-best being `UMass-ar6_pooled` at 37.8, compareed to `CMU-TimeSeries` at 44.8[^2].
+Coverage in covid is somewhat better, though a larger fraction of teams are within +/-10% of 95% coverage; we specifically got within 1%.
+Like with flu, there was systematic under-coverage though, so the models are also biased towards too small of intervals for the 95% band.
+The 50% coverage is likewise more accurate than for flu, with most forecasts within +/-10%.
+`CMU-TimeSeries` is at 52.7%, so slightly over.
+Generally, more teams were under 50% coverage than over, so there is also a systemic bias towards under-coverage in covid.
+
+## Flu Scores
+
+Note that `seasonal_nssp_latest` uses the latest version of the data, to see how much better or worse our forecasts might be if we could get a correct estimate of the revisions.
+
+Before we get into the actual scores, we need to define how we go about creating 3 different phases.
+They are `increasing`, `peak`, and `decreasing`.
+Roughly, `peak` is the interval where the value is within 50% of the max and the other two are before and after.
+For the details, see the fold.
+
+<details>
+  <summary> Splitting the season </summary>
+### Splitting the season
+
+Since our forecasters tend to do very differently depending on the phase in the pandemic, in addition to an overall score, let's split according to phase.
+There's a great deal of ambiguity in defining the phase however; to keep it simple, lets divide the season into 3 periods:
+
+1. `increasing` Before the peak; normally increasing but may include inital flat periods
+2. `peak` The time interval where the cases are oscillating near or around the peak
+3. `decreasing` The trailing end of the season after the peak; normally decreasing, but probably including flat periods towards the end
+
+2 is the most ambiguous of these, since sometimes there is a clean peak, and sometimes there are multiple peaks.
+To do this simply, let's see what seasons we get if we use "above 50% of the peak value" to define phase 2.
+
+```{r split_season_functions}
+flu_archive <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
+flu_current <- flu_archive %>%
+  epix_as_of_current() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"))
+flu_max <- flu_current %>% group_by(geo_value) %>% summarize(max_value = max(value))
+compute_peak_season <- function(data_current, threshold = 0.5, start_of_year = as.Date("2024-11-01")) {
+  season_length <- data_current %>% pull(time_value) %>% max() - start_of_year
+  data_current %>%
+    filter(time_value > start_of_year) %>%
+    group_by(geo_value) %>%
+    mutate(max_val = max(value)) %>%
+    filter(value >= threshold * max_val) %>%
+    summarize(first_above = min(time_value), last_above = max(time_value)) %>%
+    mutate(
+      duration = last_above - first_above,
+      rel_duration = as.integer(duration) / as.integer(season_length))
+}
+classify_phase <- function(time_value, first_above, last_above, rel_duration, threshold) {
+  case_when(
+    rel_duration > threshold ~ "flat",
+    time_value < first_above ~ "increasing",
+    time_value > last_above ~ "decreasing",
+    .default = "peak"
+  ) %>% factor(levels = c("increasing", "peak", "decreasing", "flat"))
+}
+covid_flat_threshold <- 0.6
+flu_flat_threshold <- 0.9
+flu_within_max <- compute_peak_season(flu_current)
+sanity_check_classifying <- flu_current %>%
+  left_join(flu_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(time_value, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  group_by(geo_value) %>%
+  distinct(phase)
+```
+
+
+```{r flu_season_definitions, fig.width = 15, fig.height = 15}
+flu_current %>%
+  filter(time_value > "2024-11-01") %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(data = flu_within_max, aes(xintercept = first_above)) +
+  geom_vline(data = flu_within_max, aes(xintercept = last_above)) +
+  facet_wrap(~geo_value, scale = "free") +
+  theme(legend.position = "none")
+```
+
+There is a wide variety of length for the peak by this definition, but it does seem to naturally reflect the difference in dynamics.
+`ok` is quite short for example, because it has a simple clean peak, whereas `or` has literally 2 peaks with the same height, so the entire interval between them is classified as peak.
+
+Boiling down these plots somewhat, let's look at the averages for the start of the peak and the end of the peak.
+First, for the start:
+
+```{r flu_peak_start}
+flu_within_max %>%
+  filter(rel_duration < flu_flat_threshold) %>%
+  pull(first_above) %>%
+  summary()
+```
+
+So the `increasing` phase ends at earliest on November 2nd, on average on December 21st, and at the latest on January 4th.
+
+```{r flu_peak_end}
+flu_within_max %>%
+  filter(rel_duration < flu_flat_threshold) %>%
+  pull(last_above) %>%
+  summary()
+```
+
+Similarly, the `peak` phase ends at the earliest on January the 18th, on average on February 15th, and at the latest on April 5th.
+
+</details>
+
+### Forecaster Scores for Flu:  {.tabset}
+
+Forecast dates: `r forecast_dates`
+
+#### Scores Aggregated By Forecaster
+`geomean` here uses an offset of the smallest non-zero wis score for that forecaster (accounting for floating point zeros).
+Generally there are far too few to have a major effect (something like 2% of the scores).
+The standard deviation for a given forecaster is significantly larger than the actual mean, so we should avoid drawing too many conclusions from these overall scores.
+
+`pop_norm_wis` and `pop_norm_ae` are on a rate per 100,000.
+
+```{r flu_datatable, fig.height = 60, fig.width = 12, echo=FALSE}
+flu_score_summary <- flu_scores %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  group_by(forecaster) %>%
+  mutate(
+    min_wis = min(wis[wis > 1e-5]),
+    min_ae = min(ae_median[ae_median > 1e-5])
+  ) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    pop_norm_wis = round(Mean(wis *1e5/pop), 2),
+    geo_wis = round(GeoMean(wis, min_wis), 2),
+    #nWISzero = sum(wis < 1e-5),
+    mean_ae = round(Mean(ae_median), 2),
+    pop_norm_ae = round(Mean(ae_median*1e5/pop), 2),
+    geo_ae = round(GeoMean(ae_median, min_ae), 2),
+    #nAEzero = sum(ae_median < 1e-5),
+    mean_cov_50 = round(Mean(interval_coverage_50), 2),
+    mean_cov_90 = round(Mean(interval_coverage_90), 2),
+    n = n()
+  ) %>%
+  rename(id = forecaster) %>%
+  arrange(mean_wis)
+wis_score_order <- flu_score_summary %>% pull(id)
+pop_score_order <- flu_score_summary %>% arrange(pop_norm_wis) %>% pull(id)
+flu_score_summary %>%
+  datatable()
+```
+
+#### Scores Aggregated By Phase
+Note that the standard deviation is frequently double the actual value, much like in the totally general case.
+Adding it to the plot here results in bands that wash out all variation between forecasters (which you can see by un-commenting the `geom_ribbon` line).
+
+```{r plot_flu_by_phase, fig.height = 8, fig.width = 12, echo=FALSE}
+phase_scores <-
+  flu_scores %>%
+  left_join(flu_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  group_by(forecaster, phase) %>%
+  summarize(
+    wis_sd = sd(wis, na.rm = TRUE),
+    ae_sd = sd(ae_median, na.rm = TRUE),
+    across(c(wis, ae_median, interval_coverage_90), \(x) round(Mean(x), 2)),
+    n = n(),
+    .groups = "drop"
+  )
+p <- ggplot(phase_scores, aes(x = phase, y = wis, color = forecaster, group = forecaster)) +
+  geom_line() +
+  #geom_ribbon(aes(ymin = wis - wis_sd, ymax = wis + wis_sd, fill = forecaster), alpha = 0.3) +
+  geom_point() +
+  scale_y_continuous(breaks = scales::pretty_breaks(n=20), labels = scales::comma) +
+  theme_bw() +
+  labs(x = "Phase", y = "Mean WIS")
+
+ggplotly(p)
+```
+
+#### Scores Aggregated By Forecast Date
+Note that the standard deviation is frequently double the actual value, much like in the totally general case.
+Adding it to the plot here results in bands that wash out all variation between forecasters (which you can see by un-commenting the `geom_ribbon` line).
+
+```{r plot_flu_by_forecast_date, fig.height = 8, fig.width = 12, echo=FALSE}
+agg_flu <- flu_scores %>%
+  filter(forecast_date > "2024-10-01") %>%
+  filter(forecast_date != as.Date("2025-01-25")) %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  group_by(forecaster, forecast_date) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    mean_pop_norm_wis = round(Mean(wis *1e5/pop), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    mean_pop_norm_ae = round(Mean(ae_median*1e5/pop), 2),
+    wis_sd = sd(wis),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_interval_coverage_90 = round(Mean(interval_coverage_90), 2),
+  )
+
+# Plot the scores as lines across forecast_date
+p <- ggplot(agg_flu, aes(x = forecast_date, y = mean_wis, color = forecaster)) +
+  geom_line() +
+  #geom_ribbon(aes(ymin = mean_wis - wis_sd, ymax = mean_wis + wis_sd, fill = forecaster), alpha = 0.1) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Forecast Date", y = "Mean WIS")
+
+ggplotly(p)
+```
+
+#### Scores Aggregated By Ahead
+
+```{r plot_flu_by_ahead, fig.height = 8, fig.width = 12, echo=FALSE}
+agg <- flu_scores %>%
+  group_by(forecaster, ahead) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_interval_coverage_90 = round(Mean(interval_coverage_90), 2),
+  )
+
+# Plot the scores as lines across forecast_date
+p <- ggplot(agg, aes(x = ahead, y = mean_wis, color = forecaster)) +
+  geom_line() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Ahead", y = "Mean WIS")
+ggplotly(p)
+```
+
+#### Scores Aggregated By State
+These give population normalized WIS for each state and forecaster.
+Since there seems to be a nonlinear effect of population on the target variable, we
+include color giving population on a log scale.
+
+`pr` is unsurprisingly quite high for most forecasters.
+
+```{r flu_plot_geo_agged, fig.height = 8, fig.width = 12}
+scored_geo <- flu_scores %>%
+  group_by(forecaster, geo_value) %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    pop_norm_wis = round(Mean(wis *1e5/pop), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_interval_coverage_90 = round(Mean(interval_coverage_90), 2),
+  ) %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  left_join(flu_max, by = "geo_value") %>%
+  ungroup()
+pop_score_order <- flu_score_summary %>% arrange(pop_norm_wis) %>% pull(id)
+geo_plot <-
+  scored_geo %>%
+  mutate(forecaster = factor(forecaster, levels = pop_score_order)) %>%
+  ggplot(aes(x = geo_value, y = pop_norm_wis, fill = pop)) +
+  geom_col() +
+  facet_wrap(~forecaster) +
+  scale_y_continuous(breaks = scales::pretty_breaks(n=10), labels = scales::comma) +
+  scale_fill_viridis_c(transform="log") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.0, hjust = 0.75))
+
+ggplotly(geo_plot)
+```
+
+#### Score Histograms
+
+The standard deviation is far too large to actually include it in any of the previous graphs and tables.
+It is routinely larger than the mean WIS.
+To try to represent this, in this tab we have the histogram of the WIS, split by phase and forecaster.
+Color below represents population, with darker blue corresponding to low `geo_value` population, and yellow representing high population (this is viridis).
+Even after normalizing by population, there is a large variation in scale for the scores.
+
+The forecasters are arranged according to mean WIS.
+Concentration towards the left corresponds to a better score; for example, `peak` is frequently a flatter distribution, which means most models are doing worse than they were during the `increasing` period.
+During the `peak`, very few forecasters actually have any results in the smallest bin; this implies that basically no forecasters were appreciably correct around the peak.
+
+In the `peak` and `decreasing` phases, the linear model simultaneously has a longer tail and a high degree of concentration otherwise, which implies it is both generally right, but catastrophically wrong when it's off.
+
+Comparing the `increasing` and `decreasing` phases across forecasters, `decreasing` tends to have a stronger concentration in the lowest two bins, but a much longer tail of large errors.
+
+```{r flu_score_histogram, fig.height = 20, fig.width = 13, echo=FALSE}
+#, levels = exp(seq(log(min(pop)), log(max(pop)), length.out = 10))
+flu_scores %>%
+  left_join(flu_within_max, by = "geo_value") %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(wis = wis * 1e5/pop) %>%
+  mutate(pop = factor(pop)) %>%
+  mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
+  group_by(forecaster) %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
+  geom_histogram(bins = 70) +
+  facet_grid(forecaster~ phase) +
+  labs(title = "Wis score histogram") +
+  ylab("count") +
+  xlab("wis, population normalized") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
+  scale_color_viridis_d()
+```
+
+#### Sample Forecasts
+
+We're plotting the 80% CI along with the median.
+The locations were chosen based on the scores to have a sample of large and small states with large and small (population normalized) WIS.
+We've scaled so everything is in rates per 100k so that it's easier to actually compare; even so the peak value varies drastically.
+Forecasters we've produced are blue, while forecasters from other teams are red.
+They are ordered by `mean_wis` score, best to worst.
+
+```{r}
+tribble(
+  ~state, ~performance, ~population,
+  "ca", "~best", "large",
+  "dc", "~worst", "small",
+  "pa", "terrible", "large",
+  "hi", "~best", "small",
+  "tx", "good", "large"
+) %>% datatable()
+```
+
+```{r flu_plot_sample_forecast, fig.height = 20, fig.width = 13, echo=FALSE}
+plot_geos <- c("ca", "dc", "pa", "hi", "tx")
+filtered_flu_forecasts <- flu_forecasts %>%
+  filter(quantile %in% c(0.1, 0.5, 0.9), geo_value %in% plot_geos)
+
+
+flu_forecast_plt <- filtered_flu_forecasts %>%
+  filter(forecast_date %in% forecast_weeks_to_plot) %>%
+  mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
+  mutate(our_forecaster = factor(forecaster %in% our_forecasters, levels = c(TRUE, FALSE))) %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(value = value * 1e5/ pop) %>%
+  pivot_wider(names_from = quantile, values_from = value) %>%
+  ggplot(aes(x = target_end_date)) +
+  geom_ribbon(aes(ymin = `0.1`, ymax = `0.9`, color = our_forecaster, fill = our_forecaster, group = forecast_date), alpha = 0.5) +
+  geom_line(aes(y = `0.5`, color = our_forecaster, group = forecast_date)) +
+  geom_line(
+    data = flu_current %>%
+      filter(time_value > "2024-11-01", geo_value %in% plot_geos) %>%
+      left_join(state_census, by = join_by(geo_value == abbr)) %>%
+      mutate(value = value * 1e5/ pop),
+    aes(x = time_value, y = value)) +
+  scale_color_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2") +
+  facet_grid(forecaster ~ geo_value, scale = "free") +
+  theme(legend.position = "none")
+
+ggplotly(flu_forecast_plt)
+```
+
+### Results
+
+Before digging into the score results, take a look at the Score histograms tab; all of these forecasters have a *wide* variation in actual score values, with the standard deviation frequently larger than the mean value.
+This means the mean scores below are going to be pretty sensitive to the large outliers.
+
+#### Overall scores
+
+Our best forecasters cluster around a mean wis between 124 and 132, with our actually submitted `CMU-TimeSeries` performing the best.
+The absolute best forecaster this season was `Psi-PROF`, with a `mean_wis` of 113, which is within 10% of `CMU-TimeSeries`.
+While we couldn't have improved our `mean_wis`, we could have improved our population normalized mean wis `pop_norm_wis` by using `windowed_seasonal_nssp` by ~10% as well.
+
+
+Absolute error before and after population normalizing has a similar story, though the order for models from other labs changes, and our relative score improves.
+
+Using `mean_cov_50`, our 50% coverage is generally good, with most models within 10 percentage points of 50%.
+There's quite a bit of variability in other's models, with most models having too narrow of 50% bands.
+
+Using `mean_cov_90`, most of these models have quantiles that are too narrow, though `CMU-TimeSeries` is within 5 percentage points; `climate_geo_agged` has a 90% coverage, but it is otherwise quite inaccurate.
+`retro_submission` does surprisingly well on this metric by hitting 90% exactly.
+
+
+Note that `seasonal_nssp_latest` is better than the other models by any metric, suggesting that revision information would be quite useful for forecasting, if we could get a hold of it.
+It is otherwise identical to `windowed_seasonal_nssp`, so it improves by ~20% and has better coverage.
+Looking at the Phase tab, it does especially well during the `increasing` and `peak` phases, with about the same performance as `windowed_seasonal_nssp` in the `decreasing` phase.
+
+#### Phase
+
+Breaking up the scoring by phase, most forecasters cluster together pretty tightly, with only `FluSight-baseline`, `linear`, and both `climate` only models having appreciably worse scores.
+`climate_linear` is competitive in the `increasing` phase, but once we hit either the `peak` or `decreasing` it is less accurate; likely this is because this season was both higher and had a longer duration than previous ones.
+All of the models do ~twice as worse at the peak as during either the `increasing` or `decreasing` phases, with most models doing marginally better during the `decreasing` phase than the `increasing` phase.
+It is worth noting that phase doesn't correspond to just grouping the dates, because different geographies enter a new phase at different times.
+
+#### Ahead
+
+Factoring by ahead, the models that include an AR component generally degrade with ahead less badly.
+Interestingly, the pure `climate` models having a mostly consistent (and bad) score, but remains much more consistent as aheads increase (after the -1 ahead where it typically has exact data).
+
+#### Sample forecasts
+
+Looking at a couple of forecasts, it primarily looks like our models were off because they were predicting the downturn far too early.
+Not as badly as our [pure AR forecasters](decreasing_forecasters.html) were however.
+The well performing models from other teams also had this behavior this year.
+
+
+
+## Covid Scores
+
+Before we get into the actual scores, we need to define how we go about creating 4 different phases.
+They are `increasing`, `peak`, `decreasing`, and `flat`.
+The last phase, `flat`, covers geos which didn't have an appreciable season for the year, which was relatively common for covid.
+For the details, see the fold.
+
+<details>
+  <summary> Splitting the season </summary>
+### Splitting the season
+
+Lets see what kind of phase boundaries we get by reusing the concept from flu for covid.
+That is, the peak phase for a given geo is defined to be the interval when the value is within 50% of the peak.
+
+```{r}
+covid_archive <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nhsn_archive_data"))
+covid_current <- covid_archive %>%
+  epix_as_of_current() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"))
+covid_max <- covid_current %>% group_by(geo_value) %>% summarize(max_value = max(value))
+covid_within_max <- compute_peak_season(covid_current)
+```
+
+```{r, fig.width = 15, fig.height = 15}
+covid_current %>%
+  filter(time_value > "2024-11-01") %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(data = covid_within_max, aes(xintercept = first_above)) +
+  geom_vline(data = covid_within_max, aes(xintercept = last_above)) +
+  facet_wrap(~geo_value, scale = "free") +
+  ylim(0, NA) +
+  theme(legend.position = "none")
+```
+
+This definition may be a bit more problematic for covid than for flu.
+`dc` `ga`, `nc`, and `nv` bin ~the entire season into the "peak" phase.
+Primarily this is actually because only some locations actually had a covid season this year; if we drop the filter for this season and add a vline indicating the season start:
+
+```{r, fig.width = 15, fig.height = 15}
+covid_current %>%
+  filter(time_value > "2022-06-01") %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(aes(xintercept = as.Date("2024-11-01"))) +
+  ylim(0, NA) +
+  theme(legend.position = "none")
+```
+
+Then we can see a very muted season in many locations, such as `ar` or `co`, and no season at all in some locations, such as `ak`.
+Others, such as `az`, `in`, or `mn` have a season that is on-par with historical ones.
+
+How to handle this?
+One option is to include a separate phase for no season that applies to the entire `geo_value` if more than half of the `time_value`s are within 50% of the peak:
+
+```{r}
+no_phase <- covid_within_max %>% arrange(desc(rel_duration)) %>% filter(rel_duration > covid_flat_threshold)
+no_phase %>% arrange(rel_duration)
+```
+
+which is 27 out of our 53 geos.
+`r covid_flat_threshold` is admittedly a pretty arbitrary cut-off, chosen so that `geo_value`s with high `rel_duration`s which still appear to have a clear peak, such as `de`, `us`, `wy`, and `mi` aren't assigned to `flat`.
+We can probably decrase this filter as we move later into the season and locations which are still decreasing finish dropping.
+As a sanity check, let's plot just these locations to confirm that we're not pulling in geos with actual peaks
+
+```{r, fig.width = 15, fig.height = 15}
+covid_current %>%
+  filter(time_value > "2022-06-01") %>%
+  filter(geo_value %in% no_phase$geo_value) %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(aes(xintercept = as.Date("2024-11-01"))) +
+  ylim(0, NA) +
+  theme(legend.position = "none")
+```
+
+Possible exceptions:
+
+- `pa` unfortunately does seem to have a season, but because it has an early wave, the interval counted as `peak` is too wide. Hopefully as the season actually concludes this will go away.
+- `nc` has a weak peak, but it has only recently declined below the 50% mark. It is likely it will be reclassified after the season is actually over.
+
+There are several locations such as `al` and `ar` which don't have a peak so much as an elevated level for approximately the entire period.
+This is awkward to handle for this classification.
+
+Finally, like for Flu, we should examine a summary of the start/end dates for the peak of the covid season.
+Boiling down these plots somewhat, let's look at the averages for the start of the peak and the end of the peak.
+First, for the start of start of the peak:
+
+```{r}
+covid_within_max$first_above %>% summary()
+```
+
+Second, for the end of the peak:
+
+```{r}
+covid_within_max$last_above %>% summary()
+```
+
+</details>
+
+### Forecaster Scores for Covid:  {.tabset}
+
+Forecast dates: `r forecast_dates`
+
+#### Scores Aggregated By Forecaster
+
+```{r covid_datatable, fig.height = 60, fig.width = 12, echo=FALSE}
+covid_score_summary <- covid_scores %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  group_by(forecaster) %>%
+  mutate(
+    min_wis = min(wis[wis > 1e-5]),
+    min_ae = min(ae_median[ae_median > 1e-5])
+  ) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    pop_norm_wis = round(Mean(wis *1e5/pop), 2),
+    geomean_wis = round(GeoMean(wis, min_wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    pop_norm_ae = round(Mean(ae_median*1e5/pop), 2),
+    geomean_ae = round(GeoMean(ae_median, min_ae), 2),
+    mean_coverage_50 = round(Mean(interval_coverage_50), 2),
+    mean_coverage_90 = round(Mean(interval_coverage_90), 2),
+    n = n()
+  ) %>%
+  arrange(mean_wis) %>%
+  rename(id = forecaster)
+covid_score_summary %>%
+  datatable()
+```
+
+#### Scores Aggregated By Phase
+
+```{r plot_covid_by_phase, fig.height = 8, fig.width = 12, echo=FALSE}
+phase_scores <- covid_scores %>%
+  left_join(covid_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  group_by(forecaster, phase) %>%
+  summarize(
+    wis_sd = sd(wis, na.rm = TRUE),
+    across(c(wis, ae_median, interval_coverage_90), \(x) round(Mean(x), 2)),
+    n = n(),
+    .groups = "drop"
+  )
+p <- ggplot(phase_scores, aes(x = phase, y = wis, color = forecaster, group = forecaster)) +
+  geom_line() +
+  #geom_ribbon(aes(ymin = wis - wis_sd, ymax = wis + wis_sd, fill = forecaster), alpha = 0.1) +
+  geom_point() +
+  theme_bw() +
+  labs(x = "Phase", y = "Mean WIS")
+
+ggplotly(p)
+```
+
+#### Scores Aggregated By Phase (no flat)
+
+Since the `flat` classification is somewhat ambiguous, we should also bin everything as we otherwise would.
+
+```{r plot_covid_by_phase_no_flat, fig.height = 8, fig.width = 12, echo=FALSE}
+phase_scores <- covid_scores %>%
+  left_join(covid_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, 1)) %>%
+  group_by(forecaster, phase) %>%
+  summarize(
+    wis_sd = sd(wis, na.rm = TRUE),
+    across(c(wis, ae_median, interval_coverage_90), \(x) round(Mean(x), 2)),
+    n = n(),
+    .groups = "drop"
+  )
+p <- ggplot(phase_scores, aes(x = phase, y = wis, color = forecaster, group = forecaster)) +
+  geom_line() +
+  #geom_ribbon(aes(ymin = wis - wis_sd, ymax = wis + wis_sd, fill = forecaster), alpha = 0.1) +
+  geom_point() +
+  theme_bw() +
+  labs(x = "Phase", y = "Mean WIS")
+
+ggplotly(p)
+```
+
+#### Scores Aggregated By Forecast Date
+
+```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+agg_covid <- covid_scores %>%
+  filter(forecast_date > "2024-10-01") %>%
+  filter(forecast_date != as.Date("2025-01-25")) %>%
+  group_by(forecaster, forecast_date) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    wis_sd = round(sd(wis), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_interval_coverage_90 = round(Mean(interval_coverage_90), 2),
+  )
+
+# Plot the scores as lines across forecast_date
+p <- ggplot(agg_covid, aes(x = forecast_date, y = mean_wis, color = forecaster)) +
+  geom_line() +
+  #geom_ribbon(aes(ymin = mean_wis - wis_sd, ymax = mean_wis + wis_sd, fill = forecaster), alpha = 0.1) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Forecast Date", y = "Mean WIS")
+
+ggplotly(p)
+```
+
+#### Scores Aggregated By Ahead
+
+```{r, fig.height = 8, fig.width = 12, echo=FALSE}
+agg <- covid_scores %>%
+  group_by(forecaster, ahead) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    wis_sd = round(sd(wis), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_interval_coverage_90 = round(Mean(interval_coverage_90), 2),
+  )
+
+# Plot the scores as lines across forecast_date
+p <- ggplot(agg, aes(x = ahead, y = mean_wis, color = forecaster)) +
+  geom_line() +
+  #geom_ribbon(aes(ymin = mean_wis - wis_sd, ymax = mean_wis + wis_sd, fill = forecaster), alpha = 0.1) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Ahead", y = "Mean WIS")
+ggplotly(p)
+```
+
+
+#### Scores Aggregated By State
+
+These give population normalized WIS for each state and forecaster.
+Since there seems to be a nonlinear effect of population on the target variable, we
+include color giving population on a log scale.
+They are ordered by their average population normalized WIS.
+We have a separate plot for `climate_geo_agged` because it does so poorly on the small states that it washes out our ability to compare across states and forecasters (note that max is an order of magnitude higher, 2.4 vs 26).
+
+If you want to see a non-population scaled version of this, switch `y = pop_norm_wis` to `y = mean_wis` below, and comment out the `climate_geo_agged` filter.
+
+```{r covid_plot_geo_agged, fig.height = 8, fig.width = 12}
+pop_wis_order <- covid_score_summary %>% arrange(pop_norm_wis) %>% pull(id)
+score_geo <- covid_scores %>%
+  group_by(forecaster, geo_value) %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    pop_norm_wis = round(Mean(wis *1e5/pop), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_interval_coverage_90 = round(Mean(interval_coverage_90), 2),
+  ) %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  ungroup() %>%
+  mutate(forecaster = factor(forecaster, levels = pop_wis_order))
+
+geo_plot <- score_geo %>%
+  filter(forecaster != "climate_geo_agged") %>%
+  #mutate(mean_wis = pmin(mean_wis, y_limit)) %>%
+  ggplot(aes(x = geo_value, y = pop_norm_wis, fill = pop)) +
+  geom_col() +
+  facet_wrap(~forecaster) +
+  scale_y_continuous(breaks = scales::pretty_breaks(n=10), labels = scales::comma) +
+  scale_fill_viridis_c(transform="log") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.0, hjust = 0.75))
+
+ggplotly(geo_plot)
+```
+
+```{r}
+score_geo %>%
+  filter(forecaster == "climate_geo_agged") %>%
+  ggplot(aes(x = geo_value, y = pop_norm_wis, fill = pop)) +
+  geom_col() +
+  facet_wrap(~forecaster) +
+  scale_y_continuous(breaks = scales::pretty_breaks(n=10), labels = scales::comma) +
+  scale_fill_viridis_c(breaks = scales::breaks_log(n=4), labels = scales::label_log(), transform="log") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.0, hjust = 0.75))
+```
+
+#### Score Histograms
+
+The standard deviation is far too large to actually include it in any of the previous graphs and tables meaningfully.
+It is routinely larger than the wis value itself.
+Like with Flu, in this tab we have the histogram of the wis, split by phase and forecaster.
+Color below represents population, with darker blue corresponding to low `geo_value` population, and yellow representing high population (this is viridis).
+Even after normalizing by population, there is a variation in scale for the scores.
+
+The forecasters are ordered according to mean WIS.
+Concentration towards the left corresponds to a better score; for example, `peak` is frequently a flatter distribution, which means most models are doing worse than they were during the `increasing` period.
+
+Like in Flu, in the `peak` phase, basically all forecasters are basically missing the first bin, so no forecasters are right during the peak.
+Unlike in Flu, the `flat` phase exists, and roughly resembles `decreasing` in distribution.
+`increasing` is overall a much smaller proportion of all samples.
+
+`climate_base` is the closest any of these scores have come to normally distributed.
+`climate_geo_agged` is particularly bad for Covid.
+
+```{r covid_plot_score_histogram, fig.height = 23, fig.width = 13}
+pop_score_order <- covid_score_summary %>% arrange(pop_norm_wis) %>% pull(id)
+wis_score_order <- covid_score_summary %>% arrange(mean_wis) %>% pull(id)
+covid_scores %>%
+  left_join(covid_within_max, by = "geo_value") %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(wis = wis * 1e5/pop) %>%
+  mutate(pop = factor(pop)) %>%
+  mutate(forecaster = factor(forecaster, levels = pop_score_order)) %>%
+  group_by(forecaster) %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
+  geom_histogram(bins = 120) +
+  facet_grid(forecaster~ phase) +
+  labs(title = "Wis score histogram") +
+  ylab("count") +
+  xlab("wis, population normalized") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
+  scale_color_viridis_d()
+```
+
+#### Sample Forecasts
+
+We're plotting the 80% CI along with the median.
+The locations were chosen based on the scores to have a sample of large and small states with large and small (population normalized) WIS.
+We've scaled so everything is in rates per 100k so that it's easier to actually compare; even so the peak value varies drastically.
+Forecasters we've produced are blue, while forecasters from other teams are red.
+They are ordered by `mean_wis` score, best to worst.
+
+```{r covid_plot_sample_forecast, fig.height = 23, fig.width = 13, echo=FALSE}
+plot_geos <- c("ca", "de", "pa", "nh", "tx")
+filtered_covid_forecasts <- covid_forecasts %>%
+  ungroup() %>%
+  filter(quantile %in% c(0.1, 0.5, 0.9), geo_value %in% plot_geos)
+
+covid_forecast_plt <- filtered_covid_forecasts %>%
+  filter(forecast_date %in% forecast_weeks_to_plot) %>%
+  mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
+  mutate(our_forecaster = factor(forecaster %in% our_forecasters, levels = c(TRUE, FALSE))) %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(value = value * 1e5/ pop) %>%
+  pivot_wider(names_from = quantile, values_from = value) %>%
+  ggplot(aes(x = target_end_date)) +
+  geom_ribbon(aes(ymin = `0.1`, ymax = `0.9`, color = our_forecaster, fill = our_forecaster, group = forecast_date), alpha = 0.5) +
+  geom_line(aes(y = `0.5`, color = our_forecaster, group = forecast_date)) +
+  geom_line(
+    data = covid_current %>%
+      filter(time_value > "2024-11-01", geo_value %in% plot_geos) %>%
+      left_join(state_census, by = join_by(geo_value == abbr)) %>%
+      mutate(value = value * 1e5/ pop),
+    aes(x = time_value, y = value)) +
+  scale_color_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2") +
+  facet_grid(forecaster ~ geo_value, scale = "free") +
+  theme(legend.position = "none")
+
+ggplotly(covid_forecast_plt)
+```
+
+### Results
+
+One peculiar thing about Covid scoring: on the first forecast date, CMU-TimeSeries has *much* worse scores than almost any of the subsequent days (you can see this in the Scores Aggregated By Forecast Date tab above).
+There are two related issues here:
+
+- first, our initial model simply averaged `climate_base` and `linear`, and the `climate_base` component was unusually bad early in the season, because this season started later than previous seasons,
+- second, the data had substantial revisions (this is discussed in detail in [this notebook](first_day_wrong.html)), however this effect is much smaller, since other forecasters had access to the same data.
+
+This mishap dragged the CMU-TimeSeries score down overall by quite a lot and its better performance later in the season is not enough to make up for it.
+
+Overall, the best covid forecaster is `windowed_seasonal_nssp`, outperforming `CovidHub-ensemble`, regardless of the metric used.
+This forecaster uses a window of data around the given time period, along with the NSSP exogenous features.
+`ensemble_windowed` is nearly as good, but since it is effectively averaging `windowed_seasonal_nssp` with `windowed_seasonal` and losing accuracy as a result, so it is hardly worth it.
+Given its simplicity, the `climate_linear` forecaster does quite well, though it's not as good as `windowed_seasonal_nssp`.
+
+The pure climate models were substantially worse for covid than for flu, at ~4.6x the best model, rather than ~2x.
+Given the unusual nature of the season, this is somewhat unsurprising.
+
+To some degree this explains the poor performance of `CMU-TimeSeries`.
+You can see this by looking at the "Scores Aggregated By Forecast Date" tab, where the first 3 weeks of `CMU-TimeSeries` are significantly worse than `climate_linear`, let alone the ensemble or our best models.
+
+`seasonal_nssp_latest`, which has access to the latest data, doesn't have a significantly different score from `windowed_seasonal_nssp`, which it is otherwise identical to.
+
+#### Aggregated by phase
+
+There are two tabs dedicated to this, one with and one without a separate `flat` phase, which labels an entire state as `flat` if the duration of the `peak` is too long.
+Either way, the general shape is similar to Flu, with `increasing` scores lower than `peak` scores, but higher than `decreasing` scores.
+All of the phases are closer together than they were in the case of Flu, with the best `peak` phase forecaster nearly better than the worst `increasing` phase forecaster.
+`flat` roughly resembles increasing.
+Even disregarding the climate models, the distribution within a phase is wider than it was in the case of Flu.
+`windowed_seasonal_nssp` particularly shines during the `peak` and to some degree the `decreasing` phases.
+
+#### Aggregated by ahead
+
+Nothing terribly surprising here, most models are ~linear in score at increasing ahead.
+`windowed_seasonal_nssp` is the exception, which does comparatively worse at further aheads.
+
+#### Aggregated by State
+
+Across all forecasters, `wy` is a particularly difficult location to forecast, while `ca` is particularly easy.
+Scores don't seem to correlate particularly well with the population of the state.
+The variation in state scores for other group's forecasters is fairly similar to our non-climate forecasters.
+Both climate forecasters have a different distribution of which states are correct and which are wrong, and differ greatly from each-other.
+
+#### Sample Forecasts
+
+The always decreasing problem is definitely not present in these forecasts.
+If anything, our best forecasts are *too* eager to predict an increasing value, e.g. in `tx` and `ca`.
+Several of our worse forecasts are clearly caused by revision behavior.
+
+# Future Work
+
+Some ideas for future work:
+
+- Incorporate revision behavior.
+  - Nowcasting could help mitigate routine mis-reporting (see below).
+- Change data substitution approach.
+  - Would like to be able to widen uncertainty around a point rather than doing a point substitution.
+- Use the difference rather than the raw value.
+  - Following standard ARIMA practice, this should bring our time series closer to stationarity.
+  - We have some simple demonstrations of this approach forecasts in the [decreasing forecasters notebook](decreasing_forecasters.html).
+
+# Revision behavior and data substitution
+
+This is covered in more detail in [revision_summary_report_2025](revision_summary_2025.html).
+NHSN has substantial under-reporting behavior that is fairly consistent for any single geo, though there a number of aberrant revisions, some of which change the entire trajectory for a couple of weeks.
+This is even more true for NSSP than NHSN, though the size of the revisions is much smaller, and they occur more quickly.
+Because of the speed in revision behavior, it matters only for prediction, rather than for correcting data for fitting the forecaster.
+We can probably improve our forecasts by incorporating revision behavior for both nhsn and nssp.
+
+Further, flu and covid revision behavior is fairly strongly correlated; it is reported through the same channels by the same people, so this makes sense.
+We should look into the extra columns to see if it provides useful information for handling revision behavior.
+
+### Revision examples
+
+```{r}
+nhsn_archive_flu <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
+
+nhsn_archive_flu <- nhsn_archive_flu$DT %>% filter(time_value >= "2024-11-19", geo_value %nin% c("vi", "as", "gu")) %>% as_epi_archive()
+nhsn_archive_flu$time_type <- "day"
+revision_summary <- nhsn_archive_flu %>% epiprocess::revision_analysis(value, min_waiting_period = NULL)
+av_re_spread <- revision_summary$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+nhsn_archive_flu %>% autoplot(value, .facet_filter = geo_value %in% av_re_spread$geo_value[1:9]) +
+  theme(strip.text.x = element_text(size = 8), plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Flu revisions for the highest mean relative spread")
+```
+
+```{r}
+nhsn_archive_covid <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nhsn_archive_data"))
+
+nhsn_archive_covid <- nhsn_archive_covid$DT %>% filter(time_value >= "2024-11-19", geo_value %nin% c("vi", "as", "gu")) %>% as_epi_archive()
+nhsn_archive_covid$time_type <- "day"
+revision_summary <- nhsn_archive_covid %>% epiprocess::revision_analysis(value, min_waiting_period = NULL)
+av_re_spread <- revision_summary$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+nhsn_archive_covid %>% autoplot(value, .facet_filter = geo_value %in% av_re_spread$geo_value[1:9]) +
+  theme(strip.text.x = element_text(size = 8), plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Covid revisions for the highest mean relative spread")
+```
+
+### Data substitution
+
+In short, this didn't go well.
+It was a coin toss for covid, and worse than not doing corrections for flu.
+
+
+[^1]: this is off from our local version of the scoring by .6, which is nonzero but not appreciably different.
+      It's scored on N=4160 vs the local 3692, which probably comes down to negative aheads.
+      Note that both "bests" in this paragraph are ignoring models which have far fewer submission values, since they're likely to be unrepresentative.
+
+[^2]: this is further off both in absolute and further yet in relative terms from our local scoring, which has `CMU-TimeSeries` at 46.32 rather than 44.8.
+      It's unclear why; there are 3952 samples scored on the remote vs 3692 locally, so ~300 scored there that we don't score where we apparently did better.
+
+# Further methods to explore
+
+The [decreasing forecasters notebook](decreasing_forecasters.html) has a number of suggestions, though that is a problem that occurs most frequently with Flu data rather than Covid.
+The broad categories there are
+
+1. Filtering to the relevant phase; `windowed_seasonal_*` is roughly an example of this, which is likely why it outperformed simple AR by enough to be better.
+2. better use of non-linear models. This would allow us to capture increasing, decreasing, and flat trends in the same model.
+3. Explicitly using the growth rate as a co-variate, or fitting on differences rather than the raw value.
+
+A perhaps unexpected direction that came out of that notebook is some sort of non-linear per-state scaling; we found that scaling the counts by population^2 (or scaling rates by population) eliminated the decreasing forecasts problem.
+Hopefully the Yeo-Johnson step we have been working on will be able to choose an appropriate scaling factor to more systematically recreate this.
+
+Given the high utility of NSSP this season, the most important thing we can do is look for useful leading exogenous variables.
+In addition to signals in epidata and processed versions of those, NHSN releases a large number of accompanying variables which we should consider more explicitly.
+
+In addition to that, incorporating revision behavior would likely yield some results.
+The performance of `seasonal_nssp_latest` on Flu supports this, though it's performance on Covid was surprisingly lackluster.

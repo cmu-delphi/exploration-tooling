@@ -30,7 +30,7 @@ forecaster_lookup <- function(pattern, forecaster_params_grid = NULL) {
 
   out <- forecaster_params_grid %>% filter(grepl(pattern, .data$id))
   if (nrow(out) > 0) {
-    out %>% glimpse()
+    out %>% unlist()
     return(out)
   }
 }
@@ -402,7 +402,7 @@ update_site <- function(sync_to_s3 = TRUE) {
 
   # Convert the markdown file to HTML
   system(
-    "pandoc reports/report.md -s -o reports/index.html --css=reports/style.css --mathjax='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js' --metadata pagetitle='Delphi Reports'"
+    "pandoc reports/report.md -s -o reports/index.html --css=style.css --mathjax='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js' --metadata pagetitle='Delphi Reports'"
   )
 }
 
@@ -693,5 +693,52 @@ get_socrata_updated_at <- function(dataset_url, missing_value = MAX_TIMESTAMP) {
     error = function(cond) {
       return(missing_value)
     }
+  )
+}
+
+
+
+#' get the unique shared (geo_value, forecast_date, target_end_date) tuples present for each forecaster in `forecasts`
+get_unique <- function(forecasts) {
+  forecasters <- forecasts %>%
+    pull(forecaster) %>%
+    unique()
+  distinct <- map(
+    forecasters,
+    \(x) forecasts %>%
+      filter(forecaster == x) %>%
+      select(geo_value, forecast_date, target_end_date) %>%
+      distinct()
+  )
+  distinct_dates <- reduce(distinct, \(x, y) x %>% inner_join(y, by = c("geo_value", "forecast_date", "target_end_date")))
+  mutate(
+    distinct_dates,
+    forecast_date = round_date(forecast_date, unit = "week", week_start = 6)
+  )
+}
+
+#' filter the external and local forecasts to just the shared dates/geos
+#' some forecasters have a limited set of geos; we want to include those
+#' anyways, they are `tructated_forecasters`, while the external_forecasts may
+#' have previous years forecasts that we definitely want to exclude via
+#' `season_start`.
+filter_shared_geo_dates <- function(local_forecasts, external_forecasts, season_start = "2024-11-01", trucated_forecasters = "windowed_seasonal_extra_sources") {
+  viable_dates <- inner_join(
+    local_forecasts %>%
+      filter(forecaster %nin% trucated_forecasters) %>%
+      get_unique(),
+    external_forecasts %>%
+      filter(forecast_date > season_start) %>%
+      get_unique(),
+    by = c("geo_value", "forecast_date", "target_end_date")
+  )
+  dplyr::bind_rows(
+    local_forecasts %>%
+      mutate(
+        forecast_date = round_date(forecast_date, unit = "week", week_start = 6)
+      ) %>%
+      inner_join(viable_dates, by = c("geo_value", "forecast_date", "target_end_date")),
+    external_forecasts %>%
+      inner_join(viable_dates, by = c("geo_value", "forecast_date", "target_end_date"))
   )
 }

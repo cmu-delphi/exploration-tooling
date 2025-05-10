@@ -68,9 +68,6 @@ confirm_sufficient_data <- function(epi_data, ahead, args_input, outcome, extra_
   # TODO: Buffer should probably be 2 * n(lags) * n(predictors). But honestly,
   # this needs to be fixed in epipredict itself, see
   # https://github.com/cmu-delphi/epipredict/issues/106.
-  if (identical(extra_sources, "")) {
-    extra_sources <- character(0L)
-  }
   has_no_last_nas <- epi_data %>%
     drop_na(c(!!outcome, !!!extra_sources)) %>%
     group_by(geo_value) %>%
@@ -105,18 +102,4 @@ filter_minus_one_ahead <- function(epi_data, ahead) {
     epi_data %<>% filter(time_value < dont_include)
   }
   epi_data
-}
-
-#' Unwrap an argument if it's a list of length 1
-#'
-#' Many of our arguments to the forecasters come as lists not because we expect
-#' them that way, but as a byproduct of tibble and expand_grid.
-unwrap_argument <- function(arg, default_trigger = "", default = character(0L)) {
-  if (is.list(arg) && length(arg) == 1) {
-    arg <- arg[[1]]
-  }
-  if (identical(arg, default_trigger)) {
-    return(default)
-  }
-  return(arg)
 }

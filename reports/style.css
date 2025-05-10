@@ -1,8 +1,8 @@
 body {
-    font-family: Arial, sans-serif;
-    margin: 2em;
-}
-.container {
-    max-width: 800px;
-    margin: auto;
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  font-family: sans-serif;
+  background: white;
+  color: black;
 }

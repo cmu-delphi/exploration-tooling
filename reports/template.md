@@ -1,48 +1,12 @@
-<style>
-/* Some basic styling (a reasonable reading width and dark mode support) */
-body {
-  max-width: 800px;
-  margin: 2rem auto;
-  padding: 0 1rem;
-  font-family: sans-serif;
-  background: white;
-  color: black;
-}
-
-a:link {
-  color: blue;
-}
-
-a:visited {
-  color: purple;
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  body {
-    background: #121212;
-    color: #e0e0e0;
-  }
-
-  a:link {
-    color: #80cbc4;
-  }
-
-  a:visited {
-    color: #b39ddb; /* light purple for contrast on dark bg */
-  }
-}
-</style>
-
 # Delphi Forecast Reports
 
 [GitHub Repo](https://github.com/cmu-delphi/explorationt-tooling/)
 
 ## Overview
 
-- The weekly fanplots were used by the team for visual inspections of the forecasts.
-- The season reports provide a general analysis of the season's data and forecasts performance.
-- The backtesting reports provide a detailed analysis of a wide variety of forecasters' performance on the previous season's data.
+- The weekly fanplots were used by the team to visually inspect the forecasts.
+- The season reports provide a general analysis of the 2024-2025 season's data and forecaster performance.
+- The backtesting reports were pre-season tests of a variety of forecasters on the 2023-2024 season's data.
 - A description of the forecaster families explored is provided at the bottom of the page.
 
 ## Weekly Fanplots 2024-2025 Season
@@ -56,12 +20,10 @@ a:visited {
 - [An Analysis of Decreasing Behavior in Forecasters](decreasing_forecasters.html)
 - [NHSN 2024-2025 Data Analysis](new_data.html)
 
-## Backtesting on 2023-2024 Season
+## 2023-2024 Season Backtesting
 
-- [Exploration Summary](exploration_summary_2024.html)
+- [Forecaster Exploration Summary](exploration_summary_2025.html)
 - Flu
-  - All forecasters population scale their data, use geo pooling, and train using quantreg.
-  - These definitions are in the `flu_forecaster_config.R` file.
   - [Flu Overall](flu-overall-notebook.html)
   - [Flu AR](flu-notebook-scaled_pop_main.html)
   - [Flu AR with augmented data](flu-notebook-scaled_pop_data_augmented.html)
@@ -71,12 +33,10 @@ a:visited {
   - [Flu AR with augmented data, exogenous features, and seasonal windowing](flu-notebook-scaled_pop_season_exogenous.html)
   - Simplistic/low data methods:
     - [Flu no recent](flu-notebook-no_recent_quant.html)
-    - [Flu no recent](flu-notebook-no_recent_quant.html)
     - [Flu flatline](flu-notebook-flatline.html)
-    - [Flu climate](flu-notebook-climate_linear.html)
+    - [Flu climate and linear](flu-notebook-climate_linear.html)
 - Covid
-  - All forecasters population scale their data, use geo pooling, and train using quantreg.
-  - These definitions are in the `covid_forecaster_config.R` file.
+  - [Covid Overall](covid-overall-notebook.html)
   - [Covid AR](covid-notebook-scaled_pop_main.html)
   - [Covid AR with seasonal features](covid-notebook-scaled_pop_season.html)
   - [Covid AR with exogenous features](covid-notebook-scaled_pop_exogenous.html)
@@ -84,7 +44,7 @@ a:visited {
   - Simplistic/low data methods:
     - [Covid no recent](covid-notebook-no_recent_quant.html)
     - [Covid flatline](covid-notebook-flatline.html)
-    - [Covid climate](covid-notebook-climate_linear.html)
+    - [Covid climate and linear](covid-notebook-climate_linear.html)
 
 ## Description of Forecaster Families
 
@@ -94,15 +54,20 @@ The main forecaster families were:
   - with seasonal features
   - with exogenous features
   - with augmented data
-- Climatological
-- Linear trend
-- No recent outcome
-- Flatline
+- "Ad-hoc" models
+  - Climatological
+  - Linear trend
+  - No recent outcome
+- Baseline models
+  - Flatline
 
-All the AR models had the option of population scaling, seasonal features, exogenous features, and augmented data.
-We tried all possible combinations of these features.
-All models had the option of using the `linreg`, `quantreg`, or `grf` engine.
-We found that `quantreg` gave better results than `linreg` and we had computational issues with `grf`, so we used `quantreg` the rest of the time.
+Notes:
+
+- All forecasters population scale their data, use geo pooling, and train using quantreg.
+  We found that `quantreg` gave better results than `linreg` and we had computational issues with `grf`, so we used `quantreg` the rest of the time.
+- All the AR models had the option of population scaling, seasonal features, exogenous features, and augmented data.
+  We tried all possible combinations of these features (in notebooks above).
+- The forecaster definitions are in the [`flu_forecaster_config.R`](https://github.com/cmu-delphi/exploration-tooling/blob/main/R/targets/flu_forecaster_config.R) and [`covid_forecaster_config.R`](https://github.com/cmu-delphi/exploration-tooling/blob/main/R/targets/covid_forecaster_config.R) files.
 
 ### Autoregressive models (AR)
 
@@ -124,13 +89,13 @@ Internal name: `scaled_pop_seasonal`.
 
 We tried a few different attempts at incorporating seasonal features:
 
-- The approach that performed the best was using a *seasonal training window* that grabbed a window of data (about 4 weeks before and ahead) around the forecast epiweek from the current and previous seasons.
-- Two *indicator variables* that roughly correspond to before, during, and after the typical peak (roughly, `before = season_week < 16`, `during = 16 <= season_week <= 20`, and `after = season_week > 20`).
-- Taking the first two *principal components* of the full whitened augmented data reshaped as `(epiweek, state_source_season_value)`.
+- The approach that performed the best was using a **seasonal training window** that grabbed a window of data (about 4 weeks before and ahead) around the forecast epiweek from the current and previous seasons.
+- Two **indicator variables** that roughly correspond to before, during, and after the typical peak (roughly, `before = season_week < 16`, `during = 16 <= season_week <= 20`, and `after = season_week > 20`).
+- Taking the first two **principal components** of the full whitened augmented data reshaped as `(epiweek, state_source_season_value)`.
 (We found that this was not particularly effective, so we did not use it.
 Despite spending a week debugging this, we could not rule out the possibility that it was a bug.
 However, we also had mixed results from tests of this feature in very simple synthetic data cases.)
-- We also tried using the *climatological median* of the target variable as a feature (see below for definition of "climatological").
+- We also tried using the **climatological median** of the target variable as a feature (see below for definition of "climatological").
 - Note that unusually, the last two features are actually led rather than lagged, since we should be predicting using the target's coefficient, rather than the present one.
 
 ### Autoregressive models with exogenous features
@@ -164,10 +129,10 @@ Naturally, this forecaster was only used for flu, as the same data was not avail
 
 #### Scaling Parameters (Data Whitening)
 
-The augmented data forecasters took a few different approaches to data whitening (akin to [RobustScaler](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.RobustScaler.html#sklearn.preprocessing.RobustScaler) from scikit-learn).
+We tried a few different approaches to data whitening.
 
 - `scale_method`
-  - `quantile` - scales the data so that the difference between the 5th and 95th quantiles is 1
+  - `quantile` - scales the data so that the difference between the 5th and 95th quantiles is 1 (akin to [RobustScaler](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.RobustScaler.html#sklearn.preprocessing.RobustScaler) from scikit-learn)
   - `quantile_upper` - scales the data so that the 95th quantile is 1 (this was used by UMass-flusion)
   - `std` - scales the data so that one standard deviation is 1
   - `none` - no scaling
@@ -180,16 +145,20 @@ The augmented data forecasters took a few different approaches to data whitening
 - `nonlin_method`
   - `quart_root` - takes the 4th root of the data (and adds 0.01 to avoid negative values)
   - `none` - no non-linear transformation
-  - Of these, `quart_root` gave us the best results, so we used that the rest of the time. There were occasional issues with the epsilon offset causing a positive value to become the floor as the inversion was taken.
+  - Of these, `quart_root` gave us the best results, so we used that the rest of the time (beware: the epsilon offset can interact poorly with forecasts clipped to be non-negative).
 
 ### Climatological
 
 This was our term for a forecaster that directly forecast a distribution built from similar weeks from previous seasons (in analogy with baseline weather forecasting).
 We found that in some cases it made a reasonable baseline, though when the current season's peak time was significatly different from the seasons in the training data, it was not particularly effective.
 
+### Linear Trend
+
+A simple linear trend model that predicts the median using linear extrapolation from the past 4 weeks of data and then uses residuals to create a distributional forecast.
+
 ### No Recent Outcome
 
-This was a fall-back forecaster built for the scenario where NHSN data was not going to reported in time for the start of the forecasting challenge.
+This was a fall-back forecaster built for the scenario where NHSN data was not going to be reported in time for the start of the forecasting challenge.
 
 A flusion-adjacent model pared down to handle the case of not having the target as a predictor.
 

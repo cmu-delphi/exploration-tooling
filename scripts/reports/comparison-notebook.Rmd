@@ -1,6 +1,6 @@
 ---
 title: "`r params$forecaster_family`: evaluation on 2023/24 in 2024/25"
-date: "compiled on `r format(Sys.time(), '%d %B %Y')`"
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
 output:
   html_document:
     code_folding: hide
@@ -25,18 +25,7 @@ knitr::opts_chunk$set(
   cache = FALSE
 )
 ggplot2::theme_set(ggplot2::theme_bw())
-```
-
-```{r}
-library(data.table)
-library(dplyr)
-library(DT)
-library(ggplot2)
-library(plotly)
-library(readr)
-library(stringr)
-library(tidyr)
-library(purrr)
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 ```
 
 ```{r}
@@ -604,7 +593,7 @@ forecast_subset <- params$forecasts %>%
   pivot_wider(names_from = "quantile", values_from = "prediction") %>%
   mutate(ahead = as.numeric(target_end_date - forecast_date))
 
-p <- ggplot(
+ggplot(
   data = forecast_subset,
   aes(x = target_end_date, group = forecast_date)
 ) +
@@ -626,9 +615,6 @@ p <- ggplot(
   facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
-
-ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
-  layout(hoverlabel = list(bgcolor = "white"))
 ```
 
 #### Medium States
@@ -645,7 +631,7 @@ forecast_subset <- params$forecasts %>%
   pivot_wider(names_from = "quantile", values_from = "prediction") %>%
   mutate(ahead = as.numeric(target_end_date - forecast_date))
 
-p <- ggplot(
+ggplot(
   data = forecast_subset,
   aes(x = target_end_date, group = forecast_date)
 ) +
@@ -668,8 +654,6 @@ p <- ggplot(
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
 
-ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
-  layout(hoverlabel = list(bgcolor = "white"))
 ```
 
 #### Small States
@@ -686,7 +670,7 @@ forecast_subset <- params$forecasts %>%
   pivot_wider(names_from = "quantile", values_from = "prediction") %>%
   mutate(ahead = as.numeric(target_end_date - forecast_date))
 
-p <- ggplot(
+ggplot(
   data = forecast_subset,
   aes(x = target_end_date, group = forecast_date)
 ) +
@@ -708,7 +692,4 @@ p <- ggplot(
   facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
   labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
   theme(legend.position = "none")
-
-ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
-  layout(hoverlabel = list(bgcolor = "white"))
 ```

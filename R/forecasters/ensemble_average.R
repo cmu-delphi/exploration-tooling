@@ -25,7 +25,7 @@
 ensemble_average <- function(epi_data,
                              forecasts,
                              outcome,
-                             extra_sources = "",
+                             extra_sources = character(),
                              ensemble_args = list(),
                              ensemble_args_names = NULL) {
   # unique parameters must be buried in ensemble_args so that the generic function signature is stable

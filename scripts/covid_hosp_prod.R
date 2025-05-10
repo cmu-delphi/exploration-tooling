@@ -35,7 +35,7 @@ if (!g_backtest_mode) {
   # override this. It should be a Wednesday.
   g_forecast_dates <- round_date(g_forecast_generation_dates, "weeks", week_start = 3)
 } else {
-  g_forecast_generation_dates <- c(as.Date(c("2024-11-22", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
+  g_forecast_generation_dates <- c(as.Date(c("2024-11-20", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
   g_forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 }
 
@@ -91,9 +91,10 @@ g_windowed_seasonal_extra_sources <- function(epi_data, ahead, extra_data, ...) 
   fcst
 }
 g_forecaster_params_grid <- tibble(
-  id = c("linear", "windowed_seasonal", "windowed_seasonal_extra_sources", "climate_base", "climate_geo_agged"),
-  forecaster = rlang::syms(c("g_linear", "g_windowed_seasonal", "g_windowed_seasonal_extra_sources", "g_climate_base", "g_climate_geo_agged")),
+  id = c("linear", "windowed_seasonal", "windowed_seasonal_extra_sources", "climate_base", "climate_geo_agged", "seasonal_nssp_latest"),
+  forecaster = rlang::syms(c("g_linear", "g_windowed_seasonal", "g_windowed_seasonal_extra_sources", "g_climate_base", "g_climate_geo_agged", "g_windowed_seasonal_extra_sources")),
   params = list(
+    list(),
     list(),
     list(),
     list(),
@@ -101,6 +102,7 @@ g_forecaster_params_grid <- tibble(
     list()
   ),
   param_names = list(
+    list(),
     list(),
     list(),
     list(),
@@ -175,19 +177,31 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_res,
     command = {
-      nhsn_data <- nhsn_archive_data %>%
-        epix_as_of(min(as.Date(forecast_date_int), nhsn_archive_data$versions_end)) %>%
+      # if the forecaster is named latest, it should use the most up to date
+      # version of the data
+      if (grepl("latest", id)) {
+        nhsn_data <- nhsn_archive_data %>%
+          epix_as_of(nhsn_archive_data$versions_end) %>% filter(time_value < as.Date(forecast_date_int))
+        nssp_data <- nssp_archive_data %>%
+          epix_as_of(nssp_archive_data$versions_end) %>% filter(time_value < as.Date(forecast_date_int))
+      } else {
+        nhsn_data <- nhsn_archive_data %>%
+        epix_as_of(min(as.Date(forecast_date_int), nhsn_archive_data$versions_end))
+        nssp_data <- nssp_archive_data %>%
+          epix_as_of(min(as.Date(forecast_date_int), nssp_archive_data$versions_end))
+      }
+      nhsn_data <- nhsn_data %>%
         add_season_info() %>%
         mutate(
           geo_value = ifelse(geo_value == "usa", "us", geo_value),
           time_value = time_value - 3
         ) %>%
-        data_substitutions(covid_data_substitutions, as.Date(forecast_generation_date_int)) %>%
         filter(geo_value %nin% g_insufficient_data_geos)
+      if (!grepl("latest", id)) {
+        nhsn_data %<>%
+          data_substitutions(covid_data_substitutions, as.Date(forecast_generation_date_int))
+      }
       attributes(nhsn_data)$metadata$as_of <- as.Date(forecast_date_int)
-
-      nssp_data <- nssp_archive_data %>%
-        epix_as_of(min(as.Date(forecast_date_int), nssp_archive_data$versions_end))
 
       forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
 
@@ -429,13 +443,16 @@ if (g_backtest_mode) {
       name = joined_forecasts_and_ensembles,
       ensemble_targets[["forecasts_and_ensembles"]],
       command = {
-        dplyr::bind_rows(!!!.x, external_forecasts)
+        filter_shared_geo_dates(
+          dplyr::bind_rows(!!!.x),
+          external_forecasts
+        )
       }
     ),
     tar_target(
       name = scores,
       command = {
-        score_forecasts(nhsn_latest_data, joined_forecasts_and_ensembles)
+        score_forecasts(nhsn_latest_data, joined_forecasts_and_ensembles, "covid")
       }
     ),
     tar_target(

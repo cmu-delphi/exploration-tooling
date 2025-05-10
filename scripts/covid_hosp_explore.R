@@ -29,9 +29,9 @@ g_reports_dir <- "reports"
 g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
 # Geos with insufficient data for forecasting.
 g_insufficient_data_geos <- c("as", "pr", "vi", "gu", "mp")
-# Human-readable object to be used for inspecting the forecasters in the pipeline.
+# Parameters object used for grouping forecasters by family.
 g_forecaster_parameter_combinations <- get_covid_forecaster_params()
-# Targets-readable object to be used for running the pipeline.
+# Targets-readable object used for running the pipeline.
 g_forecaster_params_grid <- g_forecaster_parameter_combinations %>%
   imap(\(x, i) make_forecaster_grid(x, i)) %>%
   bind_rows()

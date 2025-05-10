@@ -153,14 +153,14 @@ forecast_date,forecaster,geo_value,weight
 ##################
 # feb 12
 ##################
-2025-02-05, all, mp, 0
-2025-02-05, windowed_seasonal, all, 3
-2025-02-05, windowed_seasonal_extra_sources, all, 0.0
-2025-02-05, climate_linear, all, 3
-2025-02-05, linear, all, 0.5
-2025-02-05, linearlog, all, 0
-2025-02-05, climate_base, all, 0
-2025-02-05, climate_geo_agged, all, 0.0
+2025-02-12, all, mp, 0
+2025-02-12, windowed_seasonal, all, 3
+2025-02-12, windowed_seasonal_extra_sources, all, 0.0
+2025-02-12, climate_linear, all, 3
+2025-02-12, linear, all, 0.5
+2025-02-12, linearlog, all, 0
+2025-02-12, climate_base, all, 0
+2025-02-12, climate_geo_agged, all, 0.0
 ##################
 # feb 5
 ##################

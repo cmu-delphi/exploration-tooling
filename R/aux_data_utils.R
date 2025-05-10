@@ -213,13 +213,15 @@ daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), keys = "geo_v
 #' @param epi_arch the archive to aggregate.
 #' @param agg_columns the columns to aggregate.
 #' @param agg_method the method to use to aggregate the data, one of "sum" or "mean".
-#' @param day_of_week the day of the week to use as the reference day.
-#' @param day_of_week_end the day of the week to use as the end of the week.
+#' @param week_reference the day of the week to use as the reference day (Wednesday is default).
+#'   Note that this is 1-indexed, so 1 = Sunday, 2 = Monday, ..., 7 = Saturday.
+#' @param week_start the day of the week to use as the start of the week (Sunday is default).
+#'   Note that this is 1-indexed, so 1 = Sunday, 2 = Monday, ..., 7 = Saturday.
 daily_to_weekly_archive <- function(epi_arch,
                                     agg_columns,
                                     agg_method = c("sum", "mean"),
-                                    day_of_week = 4L,
-                                    day_of_week_end = 7L) {
+                                    week_reference = 4L,
+                                    week_start = 7L) {
   # How to aggregate the windowed data.
   agg_method <- arg_match(agg_method)
   # The columns we will later group by when aggregating.
@@ -230,67 +232,24 @@ daily_to_weekly_archive <- function(epi_arch,
     sort()
   # Choose a fast function to use to slide and aggregate.
   if (agg_method == "sum") {
-    slide_fun <- epi_slide_sum
+    # If the week is complete, this is equivalent to the sum. If the week is not
+    # complete, this is equivalent to 7/(number of days in the week) * the sum,
+    # which should be a decent approximation.
+    agg_fun <- \(x) 7 * mean(x, na.rm = TRUE)
   } else if (agg_method == "mean") {
-    slide_fun <- epi_slide_mean
+    agg_fun <- \(x) mean(x, na.rm = TRUE)
   }
   # Slide over the versions and aggregate.
   epix_slide(
     epi_arch,
     .versions = ref_time_values,
     function(x, group_keys, ref_time) {
-      # The last day of the week we will slide over.
-      ref_time_last_week_end <- floor_date(ref_time, "week", day_of_week_end - 1)
-
-      # To find the days we will slide over, we need to find the first and last
-      # complete weeks of data. Get the max and min times, and then find the
-      # first and last complete weeks of data.
-      min_time <- min(x$time_value)
-      max_time <- max(x$time_value)
-
-      # Let's determine if the min and max times are in the same week.
-      ceil_min_time <- ceiling_date(min_time, "week", week_start = day_of_week_end - 1)
-      ceil_max_time <- ceiling_date(max_time, "week", week_start = day_of_week_end - 1)
-
-      # If they're not in the same week, this means we have at least one
-      # complete week of data to slide over.
-      if (ceil_min_time < ceil_max_time) {
-        valid_slide_days <- seq.Date(
-          from = ceiling_date(min_time, "week", week_start = day_of_week_end - 1),
-          to = floor_date(max_time, "week", week_start = day_of_week_end - 1),
-          by = 7L
-        )
-      } else {
-        # This is the degenerate case, where we have about 1 week or less of
-        # data. In this case, we opt to return nothing for two reasons:
-        # 1. in most cases here, the data is incomplete for a single week,
-        # 2. if the data is complete, a single week of data is not enough to
-        #    reasonably perform any kind of aggregation.
-        return(tibble())
-      }
-
-      # If the last day of the week is not the end of the week, add it to the
-      # list of valid slide days (this will produce an incomplete slide, but
-      # that's fine for us, since it should only be 1 day, historically.)
-      if (wday(max_time) != day_of_week_end) {
-        valid_slide_days <- c(valid_slide_days, max_time)
-      }
-
       # Slide over the days and aggregate.
       x %>%
-        group_by(across(all_of(keys))) %>%
-        slide_fun(
-          agg_columns,
-          .window_size = 7L,
-          na.rm = TRUE,
-          .ref_time_values = valid_slide_days
-        ) %>%
-        select(-all_of(agg_columns)) %>%
-        rename_with(~ gsub("slide_value_", "", .x)) %>%
-        rename_with(~ gsub("_7dsum", "", .x)) %>%
-        # Round all dates to reference day of the week. These will get
-        # de-duplicated by compactify in as_epi_archive below.
-        mutate(time_value = round_date(time_value, "week", day_of_week - 1)) %>%
+        mutate(week_start = ceiling_date(time_value, "week", week_start = week_start)-1) %>%
+        summarize(across(all_of(agg_columns), agg_fun), .by = all_of(c(keys, "week_start"))) %>%
+        mutate(time_value = round_date(week_start, "week", week_reference - 1)) %>%
+        select(-week_start) %>%
         as_tibble()
     }
   ) %>%
