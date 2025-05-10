@@ -11,6 +11,12 @@ test:
 run:
 	Rscript scripts/run.R
 
+run-nohup:
+	nohup Rscript scripts/run.R &
+
+run-nohup-restarting:
+	scripts/hardRestarting.sh &
+
 prod-covid:
 	export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
 
@@ -64,12 +70,6 @@ get-nwss:
 	cd scripts/nwss_export_tool/; \
 	python nwss_covid_export.py; \
 	python nwss_influenza_export.py
-
-run-nohup:
-	nohup Rscript scripts/run.R &
-
-run-nohup-restarting:
-	scripts/hardRestarting.sh &
 
 sync:
 	Rscript -e "source('R/sync_aws.R'); sync_aws()"
