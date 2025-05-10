@@ -98,3 +98,6 @@ get-flu-prod-errors:
 
 get-covid-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'covid_hosp_prod')"
+
+summary_reports:
+	Rscript scripts/summary_reports.R
