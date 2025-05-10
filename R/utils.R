@@ -402,7 +402,7 @@ update_site <- function(sync_to_s3 = TRUE) {
 
   # Convert the markdown file to HTML
   system(
-    "pandoc reports/report.md -s -o reports/index.html --css=reports/style.css --mathjax='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js' --metadata pagetitle='Delphi Reports'"
+    "pandoc reports/report.md -s -o reports/index.html --css=style.css --mathjax='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js' --metadata pagetitle='Delphi Reports'"
   )
 }
 
