@@ -163,7 +163,7 @@ weights %>% filter(forecast_family == "climate") %>% ggplot(aes(x = factor(ahead
           as.Date("2025-01-29"), "-", "-",
           as.Date("2025-02-05"), "-", "`windowed_seasonal` introduced to ensemble",
           as.Date("2025-02-12"), "-", "-",
-          as.Date("2025-02-19"), "-", "`windowed_seasonal` removed from ensemble",
+          as.Date("2025-02-19"), "-", "`windowed_seasonal` and `climate_linear`removed from ensemble",
           as.Date("2025-02-26"), "-", "`windowed_seasonal` added to ensemble only for states where `nssp` is missing",
           as.Date("2025-03-05"), "same from here on", "same from here on",
           as.Date("2025-03-12"), "-", "-",

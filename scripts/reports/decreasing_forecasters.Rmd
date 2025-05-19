@@ -74,6 +74,8 @@ Here's a table of the number of locations that have their max on any given week:
 ```{r}
 hhs_gr <- hhs_archive %>%
   epix_as_of_current() %>%
+  drop_na(hhs) %>%
+  as_epi_df() %>%
   group_by(geo_value) %>%
   mutate(gr_hhs = growth_rate(hhs)) %>%
   filter(time_value > "2023-10-01")
@@ -96,7 +98,7 @@ hhs_gr %>% autoplot(gr_hhs) +
   labs(title = "growth rates")
 ```
 
-A plot to confirm that most  locations are still increasing on the 29th.
+A plot to confirm that most locations are still increasing on the 29th.
 
 Note that this is RATE DATA, and not count data, so `pop_scaling = FALSE` should be the default.
 
@@ -159,6 +161,7 @@ get_growth_rates <- function(forecasts, quantiles = NULL, outlier_bound = 1e2, .
   forecasts %>%
     group_by(geo_value, quantile) %>%
     filter(min(value) != max(value), quantile %in% quantiles) %>%
+    drop_na(value) %>%
     mutate(growth = growth_rate(value, ...)) %>%
     filter(abs(growth) < outlier_bound)
 }
@@ -712,15 +715,19 @@ Does adding an I (integrated) component to our model improve things?
 hhs_forecast <- hhs_archive %>% epix_as_of(forecast_date)
 # Get the latest values so we know where to sum from later
 latest_values <- hhs_forecast %>%
+  drop_na(hhs) %>%
   filter(geo_value %in% default_geos) %>%
   slice_max(time_value, by=geo_value) %>%
   select(geo_value, time_value, value = hhs)
 # Take data diffs
 diffed_data <- hhs_forecast %>%
+  drop_na() %>%
+  as_epi_df(as_of = (hhs_forecast %@% metadata)$as_of) %>%
   group_by(geo_value) %>%
   mutate(value_diff = hhs - lag(hhs)) %>%
   ungroup() %>%
   select(geo_value, time_value, value_diff)
+diffed_data %>% autoplot(value_diff, .facet_by = "geo_value")
 # Forecast the diffs and appean the starting values from the original data
 diffed_forecast <- forecast_aheads(\(x, ahead) scaled_pop(x, "value_diff", ahead = ahead, pop_scaling = FALSE), epi_data = diffed_data)
 diffed_forecast %<>%
@@ -824,6 +831,7 @@ First we'll define the function that will filter based on the growth rate.
 filter_hhs <- function(geo_value, time_value, lagged, quantile_lower = 0.25, quantile_upper = 0.75, ...) {
   growth_rates <- tibble(geo_value, time_value, lagged) %>%
     group_by(geo_value) %>%
+    drop_na(lagged) %>%
     mutate(gr = growth_rate(lagged, ...))
   gr_res <- growth_rates %>% pull(gr)
   quantile_bounds <- gr_res %>% quantile(c(quantile_lower, quantile_upper), na.rm = TRUE)
@@ -892,6 +900,8 @@ Let's take a closer look at the growth rates that we're using to do this filteri
 
 ```{r}
 growth_rates <- hhs_forecast %>%
+  drop_na() %>%
+  as_epi_df() %>%
   group_by(geo_value) %>%
   mutate(gr = growth_rate(hhs, method = "smooth_spline"))
 quantile_bounds <-

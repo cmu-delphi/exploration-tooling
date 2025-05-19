@@ -16,7 +16,7 @@
 
 - [Season Summary](season_summary_2025.html) (the notebooks below are linked from here)
   - [Covid's Problematic Initial Forecast](first_day_wrong.html)
-  - [NHSN Revision Behavior](revision_summary_2025.html)
+  - [NHSN and NSSP Revision Behavior](revision_summary_2025.html)
 - [An Analysis of Decreasing Behavior in Forecasters](decreasing_forecasters.html)
 - [NHSN 2024-2025 Data Analysis](new_data.html)
 
@@ -83,6 +83,26 @@ $$x_{t+k} = x_t + x_{t-7}$$
 
 where $k \in \{0, 7, 14, 21, 28\}$ is the forecast horizon.
 
+### Autoregressive models with exogenous features
+
+Internal name: `scaled_pop_seasonal`.
+
+These models could opt into the same seasonal features as the `scaled_pop_seasonal` forecaster, but also included exogenous features.
+
+#### Flu exogenous features
+
+- NSSP - we don't have revisions before Spring 2024 for this data, so we used a revision analysis from the data collected after that date to estimate the lag (roughly 7 days) and used that lag to simulate delays. The [Revision summary](revision_summary_2025.html) from this year suggests that this likely missed revisions, so the backtested version was overly optimistic.
+- Google-Symptoms - this dataset doesn't have revisions, but has a history of suddenly disappearing, resulting in intermittent long update lags.
+We did not simulate a lag and just used to latest value for a best case scenario.
+The symptom set used was s01, s03, and s04 from [here](https://cmu-delphi.github.io/delphi-epidata/api/covidcast-signals/google-symptoms.html).
+- NWSS - the originating dataset has minimal revisions, but as this is a dataset with quite a lot of processing from the underlying that involves some amount of time travel, so it is unclear how much revision behavior is present.
+- NWSS_regional - same as NWSS, just aggregated to the HHS region level.
+
+#### Covid exogenous features
+
+- NSSP - same as flu.
+- Google-Symptoms - same as flu, though we used a slightly different symtom set (just s04 and s05 from [here](https://cmu-delphi.github.io/delphi-epidata/api/covidcast-signals/google-symptoms.html)).
+
 ### Autoregressive models with seasonal features
 
 Internal name: `scaled_pop_seasonal`.
@@ -97,26 +117,6 @@ Despite spending a week debugging this, we could not rule out the possibility th
 However, we also had mixed results from tests of this feature in very simple synthetic data cases.)
 - We also tried using the **climatological median** of the target variable as a feature (see below for definition of "climatological").
 - Note that unusually, the last two features are actually led rather than lagged, since we should be predicting using the target's coefficient, rather than the present one.
-
-### Autoregressive models with exogenous features
-
-Internal name: `scaled_pop_seasonal`.
-
-These models could opt into the same seasonal features as the `scaled_pop_seasonal` forecaster, but also included exogenous features.
-
-#### Flu exogenous features
-
-- NSSP - we don't have revisions before Spring 2024 for this data, so we used a revision analysis from the data collected after that date to estimate the lag (roughly 7 days) and used that lag to simulate delays.
-- Google-Symptoms - this dataset doesn't have revisions, but has a history of suddenly disappearing, resulting in intermittent long update lags.
-We did not simulate a lag and just used to latest value for a best case scenario.
-The symptom set used was s01, s03, and s04 from [here](https://cmu-delphi.github.io/delphi-epidata/api/covidcast-signals/google-symptoms.html).
-- NWSS - the originating dataset has minimal revisions, but as this is a dataset with quite a lot of processing from the underlying that involves some amount of time travel, so it is unclear how much revision behavior is present.
-- NWSS_regional - same as NWSS, just aggregated to the HHS region level.
-
-#### Covid exogenous features
-
-- NSSP - same as flu.
-- Google-Symptoms - same as flu, though we used a slightly different symtom set (just s04 and s05 from [here](https://cmu-delphi.github.io/delphi-epidata/api/covidcast-signals/google-symptoms.html)).
 
 ### Autoregressive models with augmented data
 
@@ -150,11 +150,19 @@ We tried a few different approaches to data whitening.
 ### Climatological
 
 This was our term for a forecaster that directly forecast a distribution built from similar weeks from previous seasons (in analogy with baseline weather forecasting).
-We found that in some cases it made a reasonable baseline, though when the current season's peak time was significatly different from the seasons in the training data, it was not particularly effective.
+We found that in some cases it made a reasonable baseline, though when the current season's peak time was significantly different from the seasons in the training data, it was not particularly effective.
 
 ### Linear Trend
 
 A simple linear trend model that predicts the median using linear extrapolation from the past 4 weeks of data and then uses residuals to create a distributional forecast.
+
+### Climate linear
+
+An ensemble model that combines a climatological forecast with a linear trend forecast.
+It is a bilinear interpolation between the two forecasts across the ahead and quantile extremity; as the quantile moves away from the median, and the ahead moves further in the future, the ensemble interpolates between the linear and climate forecasts.
+As the ahead goes from -1 to 4, it linearly interpolates between a 5% weight on the climate model and a 90% weight on the climate model (so the furthest ahead is mostly a climate model).
+At the same time, as the quantile level goes further away from the median, it interpolates between a 10% weight on the climate model at the median and a 100% weight on the climate model at either the 1% or 99% quantile levels.
+In net, at the median -1 ahead, the climate models have a weight of 0.5%, and the linear model of 99.5%.
 
 ### No Recent Outcome
 

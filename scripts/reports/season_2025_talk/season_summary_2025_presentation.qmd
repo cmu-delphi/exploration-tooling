@@ -1,0 +1,28 @@
+ ---
+talk-title: "Forecasting Season 2024/25 Summary"
+talk-short-title: "season 2025"
+talk-subtitle: "Flu and Covid state level quantile forecasting"
+talk-date: "2025/05/22"
+format: revealjs
+---
+  
+some other text
+
+## and a slide
+```{r theme-load-pkg}
+#| cache: false
+print(here::here())
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+library(tidyverse)
+library(epidatr)
+library(epipredict)
+library(epidatasets)
+theme_set(theme_bw())
+knitr::opts_chunk$set(
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
