@@ -235,6 +235,12 @@ nhsn_filtered$DT %<>%
 autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8))
 ```
 
+::: {.notes}
+
+Note that some revisions are massive: NH, AZ, MN, MO.
+
+:::
+
 ## Data Revisions: Covid largest mean revision
 
 ```{r covid_revision}
@@ -255,6 +261,12 @@ nhsn_filtered$DT %<>%
 ```{r Covid_revision_plot, fig.width = 20, fig.height = 8, fig.align = "center"}
 autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8))
 ```
+
+::: {.notes}
+
+Note that some revisions are massive: DC, AZ, MN, MO, HI.
+
+:::
 
 # Models
 
@@ -285,15 +297,15 @@ weights %>%
   scale_fill_viridis_c(limits = c(0,1))
 ```
 
-## Our AR models
+## Our Models: autoregressive
 
 - `windowed_seasonal`: an AR model where the training data is taken from a window 4 weeks before and after the training
   + Covid predicted this on rates data
-  + For flu, this model also uses ILI+ data and fluSURV, with the forecasts done on variance stabilized, scaled, and centered data, on a per-geo-source basis.
+  + For flu, this model also uses ILI+ data and fluSURV, with the forecasts done on variance-stabilized, scaled, and centered data, on a per-geo-source basis.
     - the variance stabilization is a 4th root
     - the scaling is by the difference between the 5th and 95th quantiles
     - the centering is so that the median is zero
-  + Lags are just 0 and 7 (because of latency, this is actually `c(7,14)`)
+  + Lags are just 0 and 7 (because of data delays, this is actually `c(7,14)`)
 - `windowed_seasonal_nssp`: like `windowed_seasonal` without the data scaling, and using `nssp` (emergency department visits) as an exogenous predictor (same lags).
 
 ## Timeline of models used {.smaller}
@@ -404,6 +416,7 @@ flu_score_summary %>%
 flu_score_summary %>%
   filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
   select(forecaster, mean_ae, ae_sd, pop_norm_ae, pop_norm_ae_sd, mean_cov_50, mean_cov_90, n) %>%
+  arrange(mean_ae) %>%
   datatable(
     fillContainer = FALSE,
     options = list(
@@ -418,7 +431,7 @@ flu_score_summary %>%
 ## Flu Scores: Histogram
 
 ::: {.notes}
-These scores are rates rather than counts, and color gives population
+These scores are rates rather than counts, and color gives population. The x-axis is log10.
 :::
 
 ```{r flu_score_histogram, fig.height = 13, fig.width = 25, echo=FALSE}
@@ -433,10 +446,11 @@ flu_scores %>%
   mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
   ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
   geom_histogram(bins = 70) +
-  facet_grid(phase~forecaster) +
+  scale_x_log10() +
+  facet_grid(forecaster~phase) +
   labs(title = "Wis score histogram") +
   ylab("count") +
-  xlab("wis, population normalized") +
+  xlab("wis, population normalized, log10") +
   theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
   scale_color_viridis_d()
 ```
