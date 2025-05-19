@@ -1,18 +1,110 @@
- ---
-talk-title: "Forecasting Season 2024/25 Summary"
-talk-short-title: "season 2025"
-talk-subtitle: "Flu and Covid state level quantile forecasting"
-talk-date: "2025/05/22"
-format: revealjs
 ---
-  
-some other text
+talk-title: "Forecasting Season 2024/25 Summary"
+talk-short-title: "Season 2025"
+talk-subtitle: "State level quantile forecasting of flu and covid hospitalizations"
+author: "Dmitry Shemetov & David Weber"
+other-authors: ""
+repo-address: ""
+date: "2025-05-22"
+format:
+  revealjs:
+    theme: [default, themer.scss]
+    css: tachyons-minimal.css
+    logo: "gfx/delphi.jpg"
+    chalkboard: true
+    width: 1280
+    height: 720
+    html-math-method: mathjax
+    slide-number: true
+    fig-format: svg
+    fig-align: center
+    fig-width: 5.33
+    fig-height: 3
+    scrollable: false
+    history: false
+    link-external-icon: true
+    link-external-newwindow: true
+    code-overflow: wrap
+    lang: en-CA
+    footer: "{{< meta talk-short-title >}} --- {{< meta repo-address >}}"
+    output-file: "season_summary_2025_presentation.html"
+---
 
-## and a slide
-```{r theme-load-pkg}
-#| cache: false
-print(here::here())
-suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+<!-- Set any of the above to "" to omit them -->
+
+<!-- The below is _titleslide.qmd from before -->
+
+---
+---
+
+\DeclareMathOperator*{\minimize}{minimize}
+
+```{r setup}
+#| include: false
+primary <- "#a8201a"
+secondary <- "#f9c80e"
+tertiary <- "#2a76dd"
+fourth_colour <- "#311847"
+library(epiprocess)
+suppressMessages(library(tidyverse))
+x <- archive_cases_dv_subset
+x_latest <- epix_as_of(x, max_version = max(x$DT$version))
+self_max = max(x$DT$version)
+versions = seq(as.Date("2020-06-01"), self_max - 1, by = "1 month")
+snapshots_all <- map_dfr(versions, function(v) {
+  epix_as_of(x, max_version = v) %>% mutate(version = v)}) %>%
+  bind_rows(x_latest %>% mutate(version = self_max)) %>%
+  mutate(latest = version == self_max)
+snapshots <- snapshots_all %>%
+  filter(geo_value %in% c("ca", "fl"))
+```
+
+```{r}
+#| include: false
+#| label: cover-art
+snapshots_all |>
+  arrange(geo_value, version, time_value) |>
+  # filter(!latest) |>
+  ggplot(aes(x = time_value, y = percent_cli)) +
+  geom_line(
+    aes(color = factor(version), group = interaction(geo_value, version))
+  ) +
+  # geom_vline(aes(color = factor(version), xintercept = version), lty = 3,
+  #           size = 0.5) +
+  scale_x_date(minor_breaks = "month", labels = NULL) +
+  labs(x = "", y = "") +
+  theme_void() +
+  coord_cartesian(xlim = as.Date(c("2020-10-01", NA)), ylim = c(-5, NA)) +
+  scale_color_viridis_d(option = "B", end = .8) +
+  theme(legend.position = "none", panel.background = element_blank()) +
+  geom_line(
+    data = snapshots %>% filter(latest),
+    aes(x = time_value, y = percent_cli, group = geo_value),
+    inherit.aes = FALSE, color = primary)
+```
+
+::: flex
+::: w-30
+
+:::
+::: w-70
+
+## {{< meta talk-title >}} {background-image="gfx/cover-art-1.svg" background-position="bottom"}
+
+### {{< meta talk-subtitle >}}
+
+<br>
+
+#### {{< meta author >}}
+{{< meta other-authors >}}
+
+{{< meta date >}}
+:::
+:::
+
+<!-- The above is _titleslide.qmd from before -->
+
+```{r data_setup, include=FALSE}
 library(tidyverse)
 library(epidatr)
 library(epipredict)
@@ -22,7 +114,400 @@ knitr::opts_chunk$set(
   fig.align = "center",
   message = FALSE,
   warning = FALSE,
-  cache = FALSE
+  cache = FALSE,
+  dev = "png"
 )
 ggplot2::theme_set(ggplot2::theme_bw())
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+# Define aggregation functions
+Mean <- function(x) mean(x, na.rm = TRUE)
+GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
+our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "seasonal_nssp_latest")
+flu_scores <-
+  qs2::qs_read(here::here("flu_hosp_prod", "objects", "scores")) %>%
+  mutate(forecaster = case_match(
+           forecaster,
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = forecaster
+    )) %>%
+  mutate(our_forecaster = forecaster %in% our_forecasters)
+flu_forecasts <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "joined_forecasts_and_ensembles"))
+flu_forecasts$forecaster %<>% case_match(
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = flu_forecasts$forecaster
+    )
+forecast_dates <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "forecast_dates"))
+covid_scores <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "scores")) %>%
+  mutate(forecaster = case_match(
+           forecaster,
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = forecaster
+    ))
+covid_forecasts <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "joined_forecasts_and_ensembles")) %>% ungroup()
+covid_forecasts$forecaster %<>% case_match(
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = covid_forecasts$forecaster
+    )
+
+forecast_week <- flu_scores$forecast_date %>% unique()
+forecast_weeks_to_plot <- c(seq.Date(min(forecast_week), max(forecast_week), by = 3*7), as.Date("2025-01-18"), as.Date("2025-02-01"))
+forecast_weeks_to_plot %in% (flu_scores$forecast_date %>% unique())
+forecast_weeks_to_plot %in% (covid_scores$forecast_date %>% unique())
 ```
+
+# The data
+
+## Shape of the Season Data: Flu
+
+```{r flu_archive, fig.width = 20, fig.height = 10, fig.align = "center"}
+nhsn_archive_flu <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
+nhsn_latest <- nhsn_archive_flu %>%
+  epix_as_of_current() %>%
+  add_season_info() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"))
+ggplot(nhsn_latest, aes(x = season_week, y = value, color = season, size = season)) +
+  geom_line() +
+  facet_wrap(~geo_value, scale = "free") +
+  theme(legend.text = element_text(size = 12)) +
+  scale_size_manual(values = c(rep(0.5,5), 1))
+```
+
+::: {.notes}
+Much worse season than recent years, and historically the worst season in 15 years
+[SciAm article with some speculation on why](https://www.scientificamerican.com/article/why-this-years-flu-season-is-the-worst-in-more-than-a-decade/).
+- Late start -> less protection + 2nd wave
+- different strain (H3N2 H1N1)
+- decreased vaccination (not that low)
+- lower levels of immunity from decreased exposure
+
+This bears out somewhat in nssp, but it is not as extreme an increase, so it may be a change in reporting.
+:::
+
+## Shape of the Season Data: Covid
+
+```{r covid_archive, fig.width = 20, fig.height = 10, fig.align = "center"}
+nhsn_archive_covid <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nhsn_archive_data"))
+nhsn_latest_covid <- nhsn_archive_covid %>%
+  epix_as_of_current() %>%
+  add_season_info() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"), season %nin% c("2019/20", "2020/21", "2021/22"))
+ggplot(nhsn_latest_covid, aes(x = season_week, y = value, color = season, size = season)) +
+  geom_line() +
+  facet_wrap(~geo_value, scale = "free") +
+  theme(legend.text = element_text(size = 12)) +
+  scale_size_manual(values = c(rep(0.5, 2), 1))
+```
+
+::: {.notes}
+
+Note that we've dropped the 2020 through 2022 seasons because they absolutely swamp the past 3 years.
+
+Even so, this year is frequently without a season at all depending on the geo; part of the reason for this is the late summer wave, which is not visible in this data.
+
+:::
+
+## Data Revisions: Flu largest mean revision
+
+```{r flu_revision}
+nhsn_archive_flu$time_type <- "day"
+revision_sum <- nhsn_archive_flu %>% epiprocess::revision_analysis(value, min_waiting_period = NULL)
+av_re_spread <- revision_sum$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+nhsn_filtered <- nhsn_archive_flu %>%
+  filter(geo_value %in% av_re_spread$geo_value[1:18]) %>%
+  filter(time_value >= "2024-11-19")
+nhsn_filtered$DT %<>%
+  mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value[1:18]))
+```
+
+```{r flu_revision_plot, fig.width = 20, fig.height = 8, fig.align = "center"}
+autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8))
+```
+
+## Data Revisions: Covid largest mean revision
+
+```{r covid_revision}
+nhsn_archive_covid$time_type <- "day"
+revision_sum <- nhsn_archive_covid %>% epiprocess::revision_analysis(value, min_waiting_period = NULL)
+av_re_spread <- revision_sum$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+nhsn_filtered <- nhsn_archive_covid %>%
+  filter(geo_value %in% av_re_spread$geo_value[1:18]) %>%
+  filter(time_value >= "2024-11-19")
+nhsn_filtered$DT %<>%
+  mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value[1:18]))
+```
+
+```{r Covid_revision_plot, fig.width = 20, fig.height = 8, fig.align = "center"}
+autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8))
+```
+
+# Models
+
+## Our Models: Simplest
+
+::: {.notes}
+In order of increasing complexity/usage
+:::
+
+- `linear`: linearly extrapolate the last 4 weeks
+- `climate_base`: a climatological model, quantiles estimated from a 7 week period centered on the `target_date`'s season week from historical data for that geo
+- `climate_geo`: a climatological model, like `climate_base` but converts to rates, and then creates quantiles using all geos.
+- `climate_linear`: a weighted ensemble of the climatological and linear
+```{r climate_weight_plot, fig.width = 20, fig.height = 3, fig.align = "center"}
+weights <-
+  make_ahead_weights(-1:3) %>%
+  left_join(
+    make_quantile_weights(covidhub_probs()),
+    by = c("forecast_family"),
+    relationship = "many-to-many"
+  ) %>%
+  mutate(weight = weight.x * weight.y) %>%
+  select(forecast_family, quantile, ahead, weight)
+weights %>%
+  filter(forecast_family == "climate") %>%
+  ggplot(aes(y = factor(ahead), x = factor(quantile), fill = weight)) +
+  geom_tile() +
+  scale_fill_viridis_c(limits = c(0,1))
+```
+
+## Our AR models
+
+- `windowed_seasonal`: an AR model where the training data is taken from a window 4 weeks before and after the training
+  + Covid predicted this on rates data
+  + For flu, this model also uses ILI+ data and fluSURV, with the forecasts done on variance stabilized, scaled, and centered data, on a per-geo-source basis.
+    - the variance stabilization is a 4th root
+    - the scaling is by the difference between the 5th and 95th quantiles
+    - the centering is so that the median is zero
+  + Lags are just 0 and 7 (because of latency, this is actually `c(7,14)`)
+- `windowed_seasonal_nssp`: like `windowed_seasonal` without the data scaling, and using `nssp` (emergency department visits) as an exogenous predictor (same lags).
+
+## Timeline of models used {.smaller}
+:::: {.columns}
+::: {.column width = "50%"}
+### Flu Model {.smaller}
+- `2024-11-21` initial forecast, straight average of `climate_base`, `climate_geo` and `linear`
+- `2024-11-27` `climate_linear` ensemble instead of average (2 weeks)
+- `2024-12-11` introduce `windowed_seasonal` to ensemble (5 weeks)
+- `2025-01-15` introduce `windowed_seasonal_nssp` to ensemble
+- Final model ensembles `windowed_seasonal` (which uses ILI+ and FluSURV), `windowed_seasonal_nssp` (which doesn't), and `climate_linear`
+:::
+
+::: {.column width = "50%"}
+### Covid Model {.smaller}
+- `2024-11-21` initial forecast, straight average of `climate_base`, `climate_geo` and `linear`
+- `2024-11-27` `climate_linear` ensemble instead of average (9 weeks)
+- `2025-01-29` `windowed_seasonal_nssp` introduced to ensemble
+- `2025-02-19` forecast using only `windowed_seasonal_nssp`
+- Final model uses only `windowed_seasonal_nssp`, except for states without `nssp`, where it ensembles `windowed_seasonal` and `climate_linear`
+:::
+
+::::
+
+## Flu Scores: WIS {.smaller}
+
+```{r computing_phase}
+flu_archive <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
+flu_current <- flu_archive %>%
+  epix_as_of_current() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"))
+flu_max <- flu_current %>% group_by(geo_value) %>% summarize(max_value = max(value))
+compute_peak_season <- function(data_current, threshold = 0.5, start_of_year = as.Date("2024-11-01")) {
+  season_length <- data_current %>% pull(time_value) %>% max() - start_of_year
+  data_current %>%
+    filter(time_value > start_of_year) %>%
+    group_by(geo_value) %>%
+    mutate(max_val = max(value)) %>%
+    filter(value >= threshold * max_val) %>%
+    summarize(first_above = min(time_value), last_above = max(time_value)) %>%
+    mutate(
+      duration = last_above - first_above,
+      rel_duration = as.integer(duration) / as.integer(season_length))
+}
+classify_phase <- function(time_value, first_above, last_above, rel_duration, threshold) {
+  case_when(
+    rel_duration > threshold ~ "flat",
+    time_value < first_above ~ "increasing",
+    time_value > last_above ~ "decreasing",
+    .default = "peak"
+  ) %>% factor(levels = c("increasing", "peak", "decreasing", "flat"))
+}
+covid_flat_threshold <- 0.6
+flu_flat_threshold <- 0.9
+flu_within_max <- compute_peak_season(flu_current)
+sanity_check_classifying <- flu_current %>%
+  left_join(flu_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(time_value, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  group_by(geo_value) %>%
+  distinct(phase)
+```
+
+```{r flu_datatable, fig.height = 60, fig.width = 12, echo=FALSE}
+flu_score_summary <- flu_scores %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  group_by(forecaster) %>%
+  mutate(
+    min_wis = min(wis[wis > 1e-5]),
+    min_ae = min(ae_median[ae_median > 1e-5])
+  ) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    wis_sd = round(sd(wis), 2),
+    pop_norm_wis = round(Mean(wis *1e5/pop), 2),
+    pop_norm_wis_sd = round(sd(wis * 1e5/pop), 2),
+    geo_wis = round(GeoMean(wis, min_wis), 2),
+    #nWISzero = sum(wis < 1e-5),
+    mean_ae = round(Mean(ae_median), 2),
+    ae_sd = round(sd(ae_median), 2),
+    pop_norm_ae = round(Mean(ae_median*1e5/pop), 2),
+    pop_norm_ae_sd = round(sd(ae_median * 1e5/pop), 2),
+    geo_ae = round(GeoMean(ae_median, min_ae), 2),
+    #nAEzero = sum(ae_median < 1e-5),
+    mean_cov_50 = round(Mean(interval_coverage_50), 2),
+    mean_cov_90 = round(Mean(interval_coverage_90), 2),
+    n = n()
+  ) %>%
+  arrange(mean_wis)
+wis_score_order <- flu_score_summary %>% pull(forecaster)
+pop_score_order <- flu_score_summary %>% arrange(pop_norm_wis) %>% pull(forecaster)
+flu_score_summary %>%
+  filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
+  select(forecaster, mean_wis, wis_sd, pop_norm_wis, pop_norm_wis_sd, mean_cov_50, mean_cov_90, n) %>%
+  datatable(
+    fillContainer = FALSE,
+    options = list(
+      initComplete = htmlwidgets::JS(
+          "function(settings, json) {",
+          paste0("$(this.api().table().container()).css({'font-size': '", "10pt", "'});"),
+          "}"),
+      pageLength = 25
+    )
+  )
+```
+
+## Flu Scores: Absolute Error {.smaller}
+```{r flu_scores_ae}
+flu_score_summary %>%
+  filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
+  select(forecaster, mean_ae, ae_sd, pop_norm_ae, pop_norm_ae_sd, mean_cov_50, mean_cov_90, n) %>%
+  datatable(
+    fillContainer = FALSE,
+    options = list(
+      initComplete = htmlwidgets::JS(
+          "function(settings, json) {",
+          paste0("$(this.api().table().container()).css({'font-size': '", "10pt", "'});"),
+          "}"),
+      pageLength = 25
+    )
+  )
+```
+## Flu Scores: Histogram
+
+::: {.notes}
+These scores are rates rather than counts, and color gives population
+:::
+
+```{r flu_score_histogram, fig.height = 13, fig.width = 25, echo=FALSE}
+flu_scores %>%
+  filter(forecaster %in% c("PSI-PROF", "FluSight-ensemble", "climate_base", "CMU-TimeSeries", "UMass-flusion"))  %>%
+  left_join(flu_within_max, by = "geo_value") %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(wis = wis * 1e5/pop) %>%
+  mutate(pop = factor(pop)) %>%
+  mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
+  group_by(forecaster) %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
+  geom_histogram(bins = 70) +
+  facet_grid(phase~forecaster) +
+  labs(title = "Wis score histogram") +
+  ylab("count") +
+  xlab("wis, population normalized") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
+  scale_color_viridis_d()
+```
+
+## Callouts
+
+::: {.callout-note}
+You can use these. See <https://quarto.org/docs/authoring/callouts.html>
+:::
+
+## Final slide {.smaller}
+
+
+### Thanks:
+
+```{r qr-codes}
+#| include: false
+#| fig-format: png
+# Code to generate QR codes to link to any external sources
+qrdat <- function(text, ecl = c("L", "M", "Q", "H")) {
+  x <- qrcode::qr_code(text, ecl)
+  n <- nrow(x)
+  s <- seq_len(n)
+  tib <- tidyr::expand_grid(x = s, y = rev(s))
+  tib$z <- c(x)
+  tib
+}
+qr1 <- qrdat("https://cmu-delphi.github.io/epiprocess/")
+qr2 <- qrdat("https://cmu-delphi.github.io/epipredict/")
+ggplot(qr1, aes(x, y, fill = z)) +
+  geom_raster() +
+  ggtitle("{epiprocess}") +
+  coord_equal(expand = FALSE) +
+  scale_fill_manual(values = c("white", "black"), guide = "none") +
+  theme_void(base_size = 18) +
+  theme(plot.title = element_text(hjust = .5))
+ggplot(qr2, aes(x, y, fill = z)) +
+  geom_raster() +
+  labs(title = "{epipredict}") +
+  coord_equal(expand = FALSE) +
+  scale_fill_manual(values = c("white", "black"), guide = "none") +
+  theme_void(base_size = 18) +
+  theme(plot.title = element_text(hjust = .5))
+```
+
+:::: {.columns}
+::: {.column width="50%"}
+- The whole [CMU Delphi Team](https://delphi.cmu.edu/about/team/) (across many institutions)
+- Optum/UnitedHealthcare, Change Healthcare.
+- Google, Facebook, Amazon Web Services.
+- Quidel, SafeGraph, Qualtrics.
+- Centers for Disease Control and Prevention.
+- Council of State and Territorial Epidemiologists
+:::
+
+::: {.column width="50%"}
+
+![](gfx/qr-epiprocess.png){width="300px"}
+![](gfx/qr-epipredict.png){width="300px"}
+
+:::
+
+::::
+
+::: {layout-row=1 fig-align="center"}
+![](gfx/delphi.jpg){height="100px"}
+![](gfx/berkeley.jpg){height="100px"}
+![](gfx/cmu.jpg){height="100px"}
+![](gfx/ubc.jpg){width="250px"}
+![](gfx/usc.jpg){width="250px"}
+![](gfx/stanford.jpg){width="250px"}
+:::
+
+

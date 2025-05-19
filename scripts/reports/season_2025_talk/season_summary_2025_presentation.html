@@ -6,10 +6,11 @@
 <script src="season_summary_2025_presentation_files/libs/quarto-html/tippy.umd.min.js"></script>
 <link href="season_summary_2025_presentation_files/libs/quarto-html/tippy.css" rel="stylesheet">
 <link href="season_summary_2025_presentation_files/libs/quarto-html/light-border.css" rel="stylesheet">
-<link href="season_summary_2025_presentation_files/libs/quarto-html/quarto-syntax-highlighting-2f5df379a58b258e96c21c0638c20c03.css" rel="stylesheet" id="quarto-text-highlighting-styles"><meta charset="utf-8">
-  <meta name="generator" content="quarto-1.6.42">
+<link href="season_summary_2025_presentation_files/libs/quarto-html/quarto-syntax-highlighting-e1a5c8363afafaef2c763b6775fbf3ca.css" rel="stylesheet" id="quarto-text-highlighting-styles"><meta charset="utf-8">
+  <meta name="generator" content="quarto-1.7.31">
 
-  <meta name="author" content="David Weber and Dmitry Shemetov">
+  <meta name="author" content="Dmitry Shemetov &amp; David Weber">
+  <meta name="dcterms.date" content="2025-05-22">
   <title>season_summary_2025_presentation</title>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -29,7 +30,7 @@
       vertical-align: middle;
     }
   </style>
-  <link rel="stylesheet" href="season_summary_2025_presentation_files/libs/revealjs/dist/theme/quarto-9cb113d5cea72b7ce4cbe05912f694e4.css">
+  <link rel="stylesheet" href="season_summary_2025_presentation_files/libs/revealjs/dist/theme/quarto-94be7aa989682d0bdacd835c1dcfebde.css">
   <link rel="stylesheet" href="tachyons-minimal.css">
   <link href="season_summary_2025_presentation_files/libs/revealjs/plugin/quarto-line-highlight/line-highlight.css" rel="stylesheet">
   <link href="season_summary_2025_presentation_files/libs/revealjs/plugin/reveal-menu/menu.css" rel="stylesheet">
@@ -124,6 +125,16 @@
       margin-right: 0; 
     }
   </style>
+  <link href="season_summary_2025_presentation_files/libs/htmltools-fill-0.5.8.1/fill.css" rel="stylesheet">
+  <script src="season_summary_2025_presentation_files/libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
+  <link href="season_summary_2025_presentation_files/libs/datatables-css-0.0.0/datatables-crosstalk.css" rel="stylesheet">
+  <script src="season_summary_2025_presentation_files/libs/datatables-binding-0.33/datatables.js"></script>
+  <script src="season_summary_2025_presentation_files/libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+  <link href="season_summary_2025_presentation_files/libs/dt-core-1.13.6/css/jquery.dataTables.min.css" rel="stylesheet">
+  <link href="season_summary_2025_presentation_files/libs/dt-core-1.13.6/css/jquery.dataTables.extra.css" rel="stylesheet">
+  <script src="season_summary_2025_presentation_files/libs/dt-core-1.13.6/js/jquery.dataTables.min.js"></script>
+  <link href="season_summary_2025_presentation_files/libs/crosstalk-1.2.1/css/crosstalk.min.css" rel="stylesheet">
+  <script src="season_summary_2025_presentation_files/libs/crosstalk-1.2.1/js/crosstalk.min.js"></script>
 </head>
 <body class="quarto-light">
   <div class="reveal">
@@ -132,22 +143,217 @@
 
 <section class="slide level2">
 
-<p>some other text</p>
+<!-- Set any of the above to "" to omit them -->
+<!-- The below is _titleslide.qmd from before -->
+<div class="flex">
+<div class="w-30">
+
+</div>
+<section id="section" class="slide level2 w-70" data-background-image="gfx/cover-art-1.svg" data-background-position="bottom">
+<h2>Forecasting Season 2024/25 Summary</h2>
+<h3 id="section-1">State level quantile forecasting of flu and covid hospitalizations</h3>
+<p><br></p>
+<h4 id="section-2">Dmitry Shemetov &amp; David Weber</h4>
+<p></p>
+<p>2025-05-22</p>
 </section>
-<section id="and-a-slide" class="slide level2">
-<h2>and a slide</h2>
-<div class="cell" data-layout-align="center">
-<div class="cell-output cell-output-stdout">
-<pre><code>[1] "/home/dsweber/allHail/delphi/exploration-tooling"</code></pre>
 </div>
-</div>
+<!-- The above is _titleslide.qmd from before -->
+</section>
+<section>
+<section id="the-data" class="title-slide slide level1 center">
+<h1>The data</h1>
 
 </section>
+<section id="shape-of-the-season-data-flu" class="slide level2">
+<h2>Shape of the Season Data: Flu</h2>
+
+<img data-src="season_summary_2025_presentation_files/figure-revealjs/flu_archive-1.png" class="quarto-figure quarto-figure-center r-stretch"><aside class="notes">
+<p>Much worse season than recent years, and historically the worst season in 15 years <a href="https://www.scientificamerican.com/article/why-this-years-flu-season-is-the-worst-in-more-than-a-decade/">SciAm article with some speculation on why</a>. - Late start -&gt; less protection + 2nd wave - different strain (H3N2 H1N1) - decreased vaccination (not that low) - lower levels of immunity from decreased exposure</p>
+<p>This bears out somewhat in nssp, but it is not as extreme an increase, so it may be a change in reporting.</p>
+<style type="text/css">
+        span.MJX_Assistive_MathML {
+          position:absolute!important;
+          clip: rect(1px, 1px, 1px, 1px);
+          padding: 1px 0 0 0!important;
+          border: 0!important;
+          height: 1px!important;
+          width: 1px!important;
+          overflow: hidden!important;
+          display:block!important;
+      }</style></aside>
+</section>
+<section id="shape-of-the-season-data-covid" class="slide level2">
+<h2>Shape of the Season Data: Covid</h2>
+
+<img data-src="season_summary_2025_presentation_files/figure-revealjs/covid_archive-1.png" class="quarto-figure quarto-figure-center r-stretch"><aside class="notes">
+<p>Note that we’ve dropped the 2020 through 2022 seasons because they absolutely swamp the past 3 years.</p>
+<p>Even so, this year is frequently without a season at all depending on the geo; part of the reason for this is the late summer wave, which is not visible in this data.</p>
+<style type="text/css">
+        span.MJX_Assistive_MathML {
+          position:absolute!important;
+          clip: rect(1px, 1px, 1px, 1px);
+          padding: 1px 0 0 0!important;
+          border: 0!important;
+          height: 1px!important;
+          width: 1px!important;
+          overflow: hidden!important;
+          display:block!important;
+      }</style></aside>
+</section>
+<section id="data-revisions-flu-largest-mean-revision" class="slide level2">
+<h2>Data Revisions: Flu largest mean revision</h2>
+
+<img data-src="season_summary_2025_presentation_files/figure-revealjs/flu_revision_plot-1.png" class="quarto-figure quarto-figure-center r-stretch"></section>
+<section id="data-revisions-covid-largest-mean-revision" class="slide level2">
+<h2>Data Revisions: Covid largest mean revision</h2>
+
+<img data-src="season_summary_2025_presentation_files/figure-revealjs/Covid_revision_plot-1.png" class="quarto-figure quarto-figure-center r-stretch"></section></section>
+<section>
+<section id="models" class="title-slide slide level1 center">
+<h1>Models</h1>
+
+</section>
+<section id="our-models-simplest" class="slide level2">
+<h2>Our Models: Simplest</h2>
+<aside class="notes">
+<p>In order of increasing complexity/usage</p>
+<style type="text/css">
+        span.MJX_Assistive_MathML {
+          position:absolute!important;
+          clip: rect(1px, 1px, 1px, 1px);
+          padding: 1px 0 0 0!important;
+          border: 0!important;
+          height: 1px!important;
+          width: 1px!important;
+          overflow: hidden!important;
+          display:block!important;
+      }</style></aside>
+<ul>
+<li><code>linear</code>: linearly extrapolate the last 4 weeks</li>
+<li><code>climate_base</code>: a climatological model, quantiles estimated from a 7 week period centered on the <code>target_date</code>’s season week from historical data for that geo</li>
+<li><code>climate_geo</code>: a climatological model, like <code>climate_base</code> but converts to rates, and then creates quantiles using all geos.</li>
+<li><code>climate_linear</code>: a weighted ensemble of the climatological and linear</li>
+</ul>
+
+<img data-src="season_summary_2025_presentation_files/figure-revealjs/climate_weight_plot-1.png" class="quarto-figure quarto-figure-center r-stretch"></section>
+<section id="our-ar-models" class="slide level2">
+<h2>Our AR models</h2>
+<ul>
+<li><code>windowed_seasonal</code>: an AR model where the training data is taken from a window 4 weeks before and after the training
+<ul>
+<li>Covid predicted this on rates data</li>
+<li>For flu, this model also uses ILI+ data and fluSURV, with the forecasts done on variance stabilized, scaled, and centered data, on a per-geo-source basis.
+<ul>
+<li>the variance stabilization is a 4th root</li>
+<li>the scaling is by the difference between the 5th and 95th quantiles</li>
+<li>the centering is so that the median is zero</li>
+</ul></li>
+<li>Lags are just 0 and 7 (because of latency, this is actually <code>c(7,14)</code>)</li>
+</ul></li>
+<li><code>windowed_seasonal_nssp</code>: like <code>windowed_seasonal</code> without the data scaling, and using <code>nssp</code> (emergency department visits) as an exogenous predictor (same lags).</li>
+</ul>
+</section>
+<section id="timeline-of-models-used" class="slide level2 smaller">
+<h2>Timeline of models used</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<h3 class="smaller" id="flu-model">Flu Model</h3>
+<ul>
+<li><code>2024-11-21</code> initial forecast, straight average of <code>climate_base</code>, <code>climate_geo</code> and <code>linear</code></li>
+<li><code>2024-11-27</code> <code>climate_linear</code> ensemble instead of average (2 weeks)</li>
+<li><code>2024-12-11</code> introduce <code>windowed_seasonal</code> to ensemble (5 weeks)</li>
+<li><code>2025-01-15</code> introduce <code>windowed_seasonal_nssp</code> to ensemble</li>
+<li>Final model ensembles <code>windowed_seasonal</code> (which uses ILI+ and FluSURV), <code>windowed_seasonal_nssp</code> (which doesn’t), and <code>climate_linear</code></li>
+</ul>
+</div><div class="column" style="width:50%;">
+<h3 class="smaller" id="covid-model">Covid Model</h3>
+<ul>
+<li><code>2024-11-21</code> initial forecast, straight average of <code>climate_base</code>, <code>climate_geo</code> and <code>linear</code></li>
+<li><code>2024-11-27</code> <code>climate_linear</code> ensemble instead of average (9 weeks)</li>
+<li><code>2025-01-29</code> <code>windowed_seasonal_nssp</code> introduced to ensemble</li>
+<li><code>2025-02-19</code> forecast using only <code>windowed_seasonal_nssp</code></li>
+<li>Final model uses only <code>windowed_seasonal_nssp</code>, except for states without <code>nssp</code>, where it ensembles <code>windowed_seasonal</code> and <code>climate_linear</code></li>
+</ul>
+</div></div>
+</section>
+<section id="flu-scores-wis" class="slide level2 smaller">
+<h2>Flu Scores: WIS</h2>
+<div class="cell" data-layout-align="center">
+<div class="cell-output-display">
+<div class="datatables html-widget html-fill-item" id="htmlwidget-11afaca2999b99649ecf" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-11afaca2999b99649ecf">{"x":{"filter":"none","vertical":false,"fillContainer":false,"data":[["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15"],["PSI-PROF","FluSight-lop_norm","UMass-flusion","windowed_seasonal_nssp","CMU-TimeSeries","FluSight-ensemble","ensemble_windowed","NIH-Flu_ARIMA","retro_submission","windowed_seasonal","climate_linear","linear","FluSight-baseline","climate_base","climate_geo_agged"],[113.48,116.11,122.94,124.33,124.38,124.96,125.78,126.75,132.77,133.04,170.43,180.89,184.54,216.04,270.57],[210.52,210.56,237.1,267.31,239.58,243.52,250.42,225.25,261.59,251.9,335.83,327.75,311.19,379.93,488.17],[2.04,1.99,2.14,1.94,2.11,2.15,2.1,2.37,2.18,2.26,2.75,3.2,3.06,3.49,4.55],[2.8,2.58,3.05,2.77,2.95,3.04,2.95,3.49,2.69,3.01,3.39,4.47,3.54,3.99,3.81],[0.49,0.51,0.33,0.44,0.57,0.42,0.47,0.23,0.5600000000000001,0.48,0.52,0.29,0.11,0.36,0.5],[0.82,0.86,0.71,0.8100000000000001,0.85,0.71,0.83,0.5600000000000001,0.9,0.82,0.87,0.57,0.52,0.78,0.91],[4008,4008,4008,3774,4008,4008,4008,4008,4008,4008,4008,4008,4008,4008,4008]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>forecaster<\/th>\n      <th>mean_wis<\/th>\n      <th>wis_sd<\/th>\n      <th>pop_norm_wis<\/th>\n      <th>pop_norm_wis_sd<\/th>\n      <th>mean_cov_50<\/th>\n      <th>mean_cov_90<\/th>\n      <th>n<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"initComplete":"function(settings, json) {\n$(this.api().table().container()).css({'font-size': '10pt'});\n}","pageLength":25,"columnDefs":[{"className":"dt-right","targets":[2,3,4,5,6,7,8]},{"orderable":false,"targets":0},{"name":" ","targets":0},{"name":"forecaster","targets":1},{"name":"mean_wis","targets":2},{"name":"wis_sd","targets":3},{"name":"pop_norm_wis","targets":4},{"name":"pop_norm_wis_sd","targets":5},{"name":"mean_cov_50","targets":6},{"name":"mean_cov_90","targets":7},{"name":"n","targets":8}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":["options.initComplete"],"jsHooks":[]}</script>
+</div>
+</div>
+</section>
+<section id="flu-scores-absolute-error" class="slide level2 smaller">
+<h2>Flu Scores: Absolute Error</h2>
+<div class="cell" data-layout-align="center">
+<div class="cell-output-display">
+<div class="datatables html-widget html-fill-item" id="htmlwidget-f340bde86e52b952341f" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-f340bde86e52b952341f">{"x":{"filter":"none","vertical":false,"fillContainer":false,"data":[["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15"],["PSI-PROF","FluSight-lop_norm","UMass-flusion","windowed_seasonal_nssp","CMU-TimeSeries","FluSight-ensemble","ensemble_windowed","NIH-Flu_ARIMA","retro_submission","windowed_seasonal","climate_linear","linear","FluSight-baseline","climate_base","climate_geo_agged"],[175.4,173.09,171.92,178.75,176.09,174.94,186.17,177.75,192.59,198.92,237.15,242.74,234.66,314.83,387],[328.53,321.99,313.53,365.94,336.23,323.02,367.73,305.75,372.94,382.02,436.07,415.21,360.63,521.35,651.9299999999999],[3.13,2.96,3,2.81,3,2.99,3.1,3.2,3.17,3.35,3.77,4.24,3.93,5.07,5.64],[3.98,3.73,3.83,3.7,3.91,3.73,4.03,4.25,4,4.22,4.56,5.31,3.97,5.15,5.51],[0.49,0.51,0.33,0.44,0.57,0.42,0.47,0.23,0.5600000000000001,0.48,0.52,0.29,0.11,0.36,0.5],[0.82,0.86,0.71,0.8100000000000001,0.85,0.71,0.83,0.5600000000000001,0.9,0.82,0.87,0.57,0.52,0.78,0.91],[4008,4008,4008,3774,4008,4008,4008,4008,4008,4008,4008,4008,4008,4008,4008]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th> <\/th>\n      <th>forecaster<\/th>\n      <th>mean_ae<\/th>\n      <th>ae_sd<\/th>\n      <th>pop_norm_ae<\/th>\n      <th>pop_norm_ae_sd<\/th>\n      <th>mean_cov_50<\/th>\n      <th>mean_cov_90<\/th>\n      <th>n<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"initComplete":"function(settings, json) {\n$(this.api().table().container()).css({'font-size': '10pt'});\n}","pageLength":25,"columnDefs":[{"className":"dt-right","targets":[2,3,4,5,6,7,8]},{"orderable":false,"targets":0},{"name":" ","targets":0},{"name":"forecaster","targets":1},{"name":"mean_ae","targets":2},{"name":"ae_sd","targets":3},{"name":"pop_norm_ae","targets":4},{"name":"pop_norm_ae_sd","targets":5},{"name":"mean_cov_50","targets":6},{"name":"mean_cov_90","targets":7},{"name":"n","targets":8}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":["options.initComplete"],"jsHooks":[]}</script>
+</div>
+</div>
+</section>
+<section id="flu-scores-histogram" class="slide level2">
+<h2>Flu Scores: Histogram</h2>
+<aside class="notes">
+<p>These scores are rates rather than counts, and color gives population</p>
+<style type="text/css">
+        span.MJX_Assistive_MathML {
+          position:absolute!important;
+          clip: rect(1px, 1px, 1px, 1px);
+          padding: 1px 0 0 0!important;
+          border: 0!important;
+          height: 1px!important;
+          width: 1px!important;
+          overflow: hidden!important;
+          display:block!important;
+      }</style></aside>
+
+<img data-src="season_summary_2025_presentation_files/figure-revealjs/flu_score_histogram-1.png" class="quarto-figure quarto-figure-center r-stretch"></section>
+<section id="callouts" class="slide level2">
+<h2>Callouts</h2>
+<div class="callout callout-note callout-titled callout-style-default">
+<div class="callout-body">
+<div class="callout-title">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<p><strong>Note</strong></p>
+</div>
+<div class="callout-content">
+<p>You can use these. See <a href="https://quarto.org/docs/authoring/callouts.html" class="uri">https://quarto.org/docs/authoring/callouts.html</a></p>
+</div>
+</div>
+</div>
+</section>
+<section id="final-slide" class="slide level2 smaller">
+<h2>Final slide</h2>
+<h3 id="thanks">Thanks:</h3>
+<div class="columns">
+<div class="column" style="width:50%;">
+<ul>
+<li>The whole <a href="https://delphi.cmu.edu/about/team/">CMU Delphi Team</a> (across many institutions)</li>
+<li>Optum/UnitedHealthcare, Change Healthcare.</li>
+<li>Google, Facebook, Amazon Web Services.</li>
+<li>Quidel, SafeGraph, Qualtrics.</li>
+<li>Centers for Disease Control and Prevention.</li>
+<li>Council of State and Territorial Epidemiologists</li>
+</ul>
+</div><div class="column" style="width:50%;">
+<p><img data-src="gfx/qr-epiprocess.png" width="300"> <img data-src="gfx/qr-epipredict.png" width="300"></p>
+</div></div>
+<div data-layout-row="1" data-fig-align="center">
+<p><img data-src="gfx/delphi.jpg" height="100"> <img data-src="gfx/berkeley.jpg" height="100"> <img data-src="gfx/cmu.jpg" height="100"> <img data-src="gfx/ubc.jpg" width="250"> <img data-src="gfx/usc.jpg" width="250"> <img data-src="gfx/stanford.jpg" width="250"></p>
+</div>
+
+</section></section>
     </div>
   <div class="quarto-auto-generated-content" style="display: none;">
 <p><img src="gfx/delphi.jpg" class="slide-logo"></p>
 <div class="footer footer-default">
-<p>season 2025 — <strong>?meta:repo-address</strong></p>
+<p>Season 2025 — </p>
 </div>
 </div></div>
 
@@ -400,197 +606,179 @@
     </script>
 
     <script id="quarto-html-after-body" type="application/javascript">
-    window.document.addEventListener("DOMContentLoaded", function (event) {
-      const toggleBodyColorMode = (bsSheetEl) => {
-        const mode = bsSheetEl.getAttribute("data-mode");
-        const bodyEl = window.document.querySelector("body");
-        if (mode === "dark") {
-          bodyEl.classList.add("quarto-dark");
-          bodyEl.classList.remove("quarto-light");
-        } else {
-          bodyEl.classList.add("quarto-light");
-          bodyEl.classList.remove("quarto-dark");
-        }
-      }
-      const toggleBodyColorPrimary = () => {
-        const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
-        if (bsSheetEl) {
-          toggleBodyColorMode(bsSheetEl);
-        }
-      }
-      toggleBodyColorPrimary();  
-      const tabsets =  window.document.querySelectorAll(".panel-tabset-tabby")
-      tabsets.forEach(function(tabset) {
-        const tabby = new Tabby('#' + tabset.id);
-      });
-      const isCodeAnnotation = (el) => {
-        for (const clz of el.classList) {
-          if (clz.startsWith('code-annotation-')) {                     
-            return true;
-          }
-        }
-        return false;
-      }
-      const onCopySuccess = function(e) {
-        // button target
-        const button = e.trigger;
-        // don't keep focus
-        button.blur();
-        // flash "checked"
-        button.classList.add('code-copy-button-checked');
-        var currentTitle = button.getAttribute("title");
-        button.setAttribute("title", "Copied!");
-        let tooltip;
-        if (window.bootstrap) {
-          button.setAttribute("data-bs-toggle", "tooltip");
-          button.setAttribute("data-bs-placement", "left");
-          button.setAttribute("data-bs-title", "Copied!");
-          tooltip = new bootstrap.Tooltip(button, 
-            { trigger: "manual", 
-              customClass: "code-copy-button-tooltip",
-              offset: [0, -8]});
-          tooltip.show();    
-        }
-        setTimeout(function() {
-          if (tooltip) {
-            tooltip.hide();
-            button.removeAttribute("data-bs-title");
-            button.removeAttribute("data-bs-toggle");
-            button.removeAttribute("data-bs-placement");
-          }
-          button.setAttribute("title", currentTitle);
-          button.classList.remove('code-copy-button-checked');
-        }, 1000);
-        // clear code selection
-        e.clearSelection();
-      }
-      const getTextToCopy = function(trigger) {
-          const codeEl = trigger.previousElementSibling.cloneNode(true);
-          for (const childEl of codeEl.children) {
-            if (isCodeAnnotation(childEl)) {
-              childEl.remove();
+      window.document.addEventListener("DOMContentLoaded", function (event) {
+        const tabsets =  window.document.querySelectorAll(".panel-tabset-tabby")
+        tabsets.forEach(function(tabset) {
+          const tabby = new Tabby('#' + tabset.id);
+        });
+        const isCodeAnnotation = (el) => {
+          for (const clz of el.classList) {
+            if (clz.startsWith('code-annotation-')) {                     
+              return true;
             }
           }
-          return codeEl.innerText;
-      }
-      const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
-        text: getTextToCopy
-      });
-      clipboard.on('success', onCopySuccess);
-      if (window.document.getElementById('quarto-embedded-source-code-modal')) {
-        const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
-          text: getTextToCopy,
-          container: window.document.getElementById('quarto-embedded-source-code-modal')
-        });
-        clipboardModal.on('success', onCopySuccess);
-      }
-        var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
-        var mailtoRegex = new RegExp(/^mailto:/);
-          var filterRegex = new RegExp('/' + window.location.host + '/');
-        var isInternal = (href) => {
-            return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+          return false;
         }
-        // Inspect non-navigation links and adorn them if external
-     	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
-        for (var i=0; i<links.length; i++) {
-          const link = links[i];
-          if (!isInternal(link.href)) {
-            // undo the damage that might have been done by quarto-nav.js in the case of
-            // links that we want to consider external
-            if (link.dataset.originalHref !== undefined) {
-              link.href = link.dataset.originalHref;
+        const onCopySuccess = function(e) {
+          // button target
+          const button = e.trigger;
+          // don't keep focus
+          button.blur();
+          // flash "checked"
+          button.classList.add('code-copy-button-checked');
+          var currentTitle = button.getAttribute("title");
+          button.setAttribute("title", "Copied!");
+          let tooltip;
+          if (window.bootstrap) {
+            button.setAttribute("data-bs-toggle", "tooltip");
+            button.setAttribute("data-bs-placement", "left");
+            button.setAttribute("data-bs-title", "Copied!");
+            tooltip = new bootstrap.Tooltip(button, 
+              { trigger: "manual", 
+                customClass: "code-copy-button-tooltip",
+                offset: [0, -8]});
+            tooltip.show();    
+          }
+          setTimeout(function() {
+            if (tooltip) {
+              tooltip.hide();
+              button.removeAttribute("data-bs-title");
+              button.removeAttribute("data-bs-toggle");
+              button.removeAttribute("data-bs-placement");
             }
-              // target, if specified
-              link.setAttribute("target", "_blank");
-              if (link.getAttribute("rel") === null) {
-                link.setAttribute("rel", "noopener");
+            button.setAttribute("title", currentTitle);
+            button.classList.remove('code-copy-button-checked');
+          }, 1000);
+          // clear code selection
+          e.clearSelection();
+        }
+        const getTextToCopy = function(trigger) {
+            const codeEl = trigger.previousElementSibling.cloneNode(true);
+            for (const childEl of codeEl.children) {
+              if (isCodeAnnotation(childEl)) {
+                childEl.remove();
               }
-              // default icon
-              link.classList.add("external");
-          }
+            }
+            return codeEl.innerText;
         }
-      function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
-        const config = {
-          allowHTML: true,
-          maxWidth: 500,
-          delay: 100,
-          arrow: false,
-          appendTo: function(el) {
-              return el.closest('section.slide') || el.parentElement;
-          },
-          interactive: true,
-          interactiveBorder: 10,
-          theme: 'light-border',
-          placement: 'bottom-start',
-        };
-        if (contentFn) {
-          config.content = contentFn;
-        }
-        if (onTriggerFn) {
-          config.onTrigger = onTriggerFn;
-        }
-        if (onUntriggerFn) {
-          config.onUntrigger = onUntriggerFn;
-        }
-          config['offset'] = [0,0];
-          config['maxWidth'] = 700;
-        window.tippy(el, config); 
-      }
-      const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
-      for (var i=0; i<noterefs.length; i++) {
-        const ref = noterefs[i];
-        tippyHover(ref, function() {
-          // use id or data attribute instead here
-          let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
-          try { href = new URL(href).hash; } catch {}
-          const id = href.replace(/^#\/?/, "");
-          const note = window.document.getElementById(id);
-          if (note) {
-            return note.innerHTML;
-          } else {
-            return "";
-          }
+        const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+          text: getTextToCopy
         });
-      }
-      const findCites = (el) => {
-        const parentEl = el.parentElement;
-        if (parentEl) {
-          const cites = parentEl.dataset.cites;
-          if (cites) {
-            return {
-              el,
-              cites: cites.split(' ')
-            };
-          } else {
-            return findCites(el.parentElement)
-          }
-        } else {
-          return undefined;
+        clipboard.on('success', onCopySuccess);
+        if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+          const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+            text: getTextToCopy,
+            container: window.document.getElementById('quarto-embedded-source-code-modal')
+          });
+          clipboardModal.on('success', onCopySuccess);
         }
-      };
-      var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
-      for (var i=0; i<bibliorefs.length; i++) {
-        const ref = bibliorefs[i];
-        const citeInfo = findCites(ref);
-        if (citeInfo) {
-          tippyHover(citeInfo.el, function() {
-            var popup = window.document.createElement('div');
-            citeInfo.cites.forEach(function(cite) {
-              var citeDiv = window.document.createElement('div');
-              citeDiv.classList.add('hanging-indent');
-              citeDiv.classList.add('csl-entry');
-              var biblioDiv = window.document.getElementById('ref-' + cite);
-              if (biblioDiv) {
-                citeDiv.innerHTML = biblioDiv.innerHTML;
+          var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+          var mailtoRegex = new RegExp(/^mailto:/);
+            var filterRegex = new RegExp('/' + window.location.host + '/');
+          var isInternal = (href) => {
+              return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+          }
+          // Inspect non-navigation links and adorn them if external
+         var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+          for (var i=0; i<links.length; i++) {
+            const link = links[i];
+            if (!isInternal(link.href)) {
+              // undo the damage that might have been done by quarto-nav.js in the case of
+              // links that we want to consider external
+              if (link.dataset.originalHref !== undefined) {
+                link.href = link.dataset.originalHref;
               }
-              popup.appendChild(citeDiv);
-            });
-            return popup.innerHTML;
+                // target, if specified
+                link.setAttribute("target", "_blank");
+                if (link.getAttribute("rel") === null) {
+                  link.setAttribute("rel", "noopener");
+                }
+                // default icon
+                link.classList.add("external");
+            }
+          }
+        function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+          const config = {
+            allowHTML: true,
+            maxWidth: 500,
+            delay: 100,
+            arrow: false,
+            appendTo: function(el) {
+                return el.closest('section.slide') || el.parentElement;
+            },
+            interactive: true,
+            interactiveBorder: 10,
+            theme: 'light-border',
+            placement: 'bottom-start',
+          };
+          if (contentFn) {
+            config.content = contentFn;
+          }
+          if (onTriggerFn) {
+            config.onTrigger = onTriggerFn;
+          }
+          if (onUntriggerFn) {
+            config.onUntrigger = onUntriggerFn;
+          }
+            config['offset'] = [0,0];
+            config['maxWidth'] = 700;
+          window.tippy(el, config); 
+        }
+        const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+        for (var i=0; i<noterefs.length; i++) {
+          const ref = noterefs[i];
+          tippyHover(ref, function() {
+            // use id or data attribute instead here
+            let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+            try { href = new URL(href).hash; } catch {}
+            const id = href.replace(/^#\/?/, "");
+            const note = window.document.getElementById(id);
+            if (note) {
+              return note.innerHTML;
+            } else {
+              return "";
+            }
           });
         }
-      }
-    });
-    </script>
+        const findCites = (el) => {
+          const parentEl = el.parentElement;
+          if (parentEl) {
+            const cites = parentEl.dataset.cites;
+            if (cites) {
+              return {
+                el,
+                cites: cites.split(' ')
+              };
+            } else {
+              return findCites(el.parentElement)
+            }
+          } else {
+            return undefined;
+          }
+        };
+        var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+        for (var i=0; i<bibliorefs.length; i++) {
+          const ref = bibliorefs[i];
+          const citeInfo = findCites(ref);
+          if (citeInfo) {
+            tippyHover(citeInfo.el, function() {
+              var popup = window.document.createElement('div');
+              citeInfo.cites.forEach(function(cite) {
+                var citeDiv = window.document.createElement('div');
+                citeDiv.classList.add('hanging-indent');
+                citeDiv.classList.add('csl-entry');
+                var biblioDiv = window.document.getElementById('ref-' + cite);
+                if (biblioDiv) {
+                  citeDiv.innerHTML = biblioDiv.innerHTML;
+                }
+                popup.appendChild(citeDiv);
+              });
+              return popup.innerHTML;
+            });
+          }
+        }
+      });
+      </script>
     
 
 </body></html>

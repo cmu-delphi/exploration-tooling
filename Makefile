@@ -101,3 +101,11 @@ get-covid-prod-errors:
 
 summary_reports:
 	Rscript scripts/summary_reports.R
+
+season_summary_2025_talk:
+	quarto render scripts/reports/season_2025_talk/season_summary_2025_presentation.qmd --to html --output-dir "../../../reports"
+	cp reports/tachyons-minimal.css reports/
+	cp -r scripts/reports/season_2025_talk/gfx reports/
+
+season_summary_2025_talk_preview:
+	quarto preview scripts/reports/season_2025_talk/season_summary_2025_presentation.qmd
