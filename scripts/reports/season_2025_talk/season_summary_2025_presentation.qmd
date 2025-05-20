@@ -389,13 +389,12 @@ classify_phase <- function(time_value, first_above, last_above, rel_duration, th
     .default = "peak"
   ) %>% factor(levels = c("increasing", "peak", "decreasing", "flat"))
 }
-covid_flat_threshold <- 0.6
 flu_flat_threshold <- 0.9
 flu_within_max <- compute_peak_season(flu_current)
 
 sanity_check_classifying <- flu_current %>%
   left_join(flu_within_max, by = "geo_value") %>%
-  mutate(phase = classify_phase(time_value, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  mutate(phase = classify_phase(time_value, first_above, last_above, rel_duration, flu_flat_threshold)) %>%
   group_by(geo_value) %>%
   distinct(phase)
 repo_forecasters <- c(setdiff(unique(flu_scores$forecaster), our_forecasters), "CMU-TimeSeries")
@@ -532,7 +531,17 @@ data <- flu_scores %>%
   mutate(pop = factor(pop)) %>%
   mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
   group_by(forecaster) %>%
-  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold))
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, flu_flat_threshold)) %>%
+  ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
+  geom_histogram(bins = 70) +
+  scale_x_log10() +
+  facet_grid(forecaster~phase) +
+  labs(title = "Wis score histogram") +
+  ylab("count") +
+  xlab("wis, population normalized, log10") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
+  scale_color_viridis_d()
+```
 
 ggplot(data, aes(x = wis, y = forecaster, fill = forecaster)) +
   geom_density_ridges(scale = 3, alpha = 0.7) +
@@ -566,7 +575,7 @@ phase_scores <-
   flu_scores %>%
   filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
   left_join(flu_within_max, by = "geo_value") %>%
-  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, flu_flat_threshold)) %>%
   group_by(forecaster, phase) %>%
   summarize(
     wis_sd = round(sd(wis, na.rm = TRUE), 2),
@@ -696,7 +705,7 @@ named `seasonal_nssp_latest` compare with `windowed_seasonal_nssp`. Generally ou
 phase_scores <-
   flu_scores %>%
   left_join(flu_within_max, by = "geo_value") %>%
-  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, flu_flat_threshold)) %>%
   group_by(forecaster, phase) %>%
   summarize(
     wis_sd = round(sd(wis, na.rm = TRUE), 2),
@@ -780,11 +789,13 @@ covid_current <- covid_archive %>%
 covid_max <- covid_current %>% group_by(geo_value) %>% summarize(max_value = max(value))
 covid_within_max <- compute_peak_season(covid_current)
 
+covid_flat_threshold <- 0.6
 sanity_check_classifying <- covid_current %>%
   left_join(covid_within_max, by = "geo_value") %>%
   mutate(phase = classify_phase(time_value, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
   group_by(geo_value) %>%
   distinct(phase)
+
 repo_forecasters <- c(setdiff(unique(covid_scores$forecaster), our_forecasters), "CMU-TimeSeries")
 covid_score_summary <- covid_scores %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
@@ -925,7 +936,7 @@ This was due to a naive use of the climatological baseline, which completely ove
 
 ```{r covid_score_histogram, fig.height = 13, fig.width = 25, echo=FALSE}
 data <- covid_scores %>%
-  filter(forecaster %in% c("PSI-PROF", "CovidHub-ensemble", "climate_base", "CMU-TimeSeries", "UMass-ar6_pooled"))  %>%
+  filter(forecaster %in% c("PSI-PROF", "CovidHub-ensemble", "climate_base", "CMU-TimeSeries", "UMass-ar6_pooled", "windowed_seasonal_nssp"))  %>%
   left_join(covid_within_max, by = "geo_value") %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
   mutate(wis = wis * 1e5/pop) %>%
@@ -969,41 +980,71 @@ phase_scores <-
   )
 sketch <- htmltools::withTags(table(
   class = 'display',
-  style = "font-size: 11px;",
+  style = "font-size: 12px;",
   thead(
     tr(
       th(colspan = 2, "forecaster"),
       th(colspan = 2, 'increasing'),
       th(colspan = 2, 'peak'),
-      th(colspan = 2, 'decreasing')
+      th(colspan = 2, 'decreasing'),
+      th(colspan = 2, 'flat')
     ),
     tr(
       list(th("peak_wis_rank"), th("name"),
-           lapply(rep(c('wis', 'sd'), 3), th)
+           lapply(rep(c('wis', 'sd'), 4), th)
            )
     )
   )
 ))
 phase_scores_wider <- phase_scores %>%
   select(forecaster, phase, wis, wis_sd, our_forecaster) %>%
-  pivot_wider(names_from = phase, values_from = c(wis, wis_sd))
-phase_scores_wider %>%
-  select(forecaster, wis_increasing, wis_sd_increasing, wis_peak, wis_sd_peak, wis_decreasing, wis_sd_decreasing) %>%
-  arrange(wis_peak) %>%
-  datatable(
-    fillContainer = FALSE,
-    options = list(
-      initComplete = htmlwidgets::JS(
+  pivot_wider(names_from = phase, values_from = c(wis, wis_sd)) %>%
+  select(forecaster, wis_increasing, wis_sd_increasing, wis_peak, wis_sd_peak, wis_decreasing, wis_sd_decreasing, wis_flat, wis_sd_flat) %>%
+  arrange(wis_peak)
+wis_max <- phase_scores_wider %>% select(wis_increasing, wis_peak, wis_decreasing) %>% max()
+datatable(
+  phase_scores_wider,
+  fillContainer = FALSE,
+  options = list(
+    initComplete = htmlwidgets::JS(
           "function(settings, json) {",
-          paste0("$(this.api().table().container()).css({'font-size': '", "11pt", "'});"),
+          paste0("$(this.api().table().container()).css({'font-size': '", "12pt", "'});"),
           "}"),
-      pageLength = 25
-    ),
-    container = sketch
-  ) %>%
+    pageLength = 25
+  ),
+  container = sketch
+) %>%
   formatStyle("forecaster", target = c("cell"),
               fontWeight = styleEqual(repo_forecasters, rep("900", length(repo_forecasters))),
-              textDecoration = styleEqual("CMU-TimeSeries", "underline"))
+              textDecoration = styleEqual("CMU-TimeSeries", "underline")) %>%
+  formatStyle(
+    "wis_increasing",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "wis_peak",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "wis_decreasing",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "wis_flat",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  )
 ```
 
 
@@ -1021,7 +1062,7 @@ They are ordered by `mean_wis` score, best to worst.
 plot_geos <- c("ca", "dc", "pa", "hi", "tx")
 filtered_covid_forecasts <- covid_forecasts %>%
   filter(quantile %in% c(0.1, 0.5, 0.9), geo_value %in% plot_geos) %>%
-  filter(forecaster %in% c("UMass-covidsion", "CMU-TimeSeries", "PSI-PROF", "windowed_seasonal"))
+  filter(forecaster %in% c("CovidHub-ensemble", "CMU-TimeSeries", "UMass-ar6_pooled", "windowed_seasonal_nssp"))
 
 covid_forecast_plt <-
   filtered_covid_forecasts %>%
@@ -1062,6 +1103,92 @@ ggplotly(covid_forecast_plt)
 - Check evaluation robustness via data "fuzzing"
   - A way to mitigate over-weighting the performance of a forecaster on a single season
   - Possibilities include parametric boot with observational noise (additive and/or shifts) or leave-one-out training across seasons (e.g. leave 2023 out and train on 2022 and 2024)
+
+
+## Covid: Forecasting on latest
+::: {.notes}
+The point is to demonstrate the upper bound of what accurate nowcasting would get us.
+named `seasonal_nssp_latest` compare with `windowed_seasonal_nssp`. Generally outperforms all other models by a good margin.
+:::
+
+```{r covid_phase_two}
+phase_scores <-
+  covid_scores %>% 
+  left_join(covid_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  group_by(forecaster, phase) %>%
+  summarize(
+    wis_sd = round(sd(wis, na.rm = TRUE), 2),
+    ae_sd = round(sd(ae_median, na.rm = TRUE), 2),
+    across(c(wis, ae_median, interval_coverage_90), \(x) round(Mean(x), 2)),
+    n = n(),
+    our_forecaster = first(our_forecaster),
+    .groups = "drop"
+  )
+
+sketch <- htmltools::withTags(table(
+  class = 'display',
+  style = "font-size: 11px;",
+  thead(
+    tr(
+      th(colspan = 2, "forecaster"),
+      th(colspan = 2, 'increasing'),
+      th(colspan = 2, 'peak'),
+      th(colspan = 2, 'decreasing')
+    ),
+    tr(
+      list(th("peak_wis_rank"), th("name"),
+           lapply(rep(c('wis', 'sd'), 3), th)
+           )
+    )
+  )
+))
+
+phase_scores_wider <- phase_scores %>%
+  select(forecaster, phase, wis, wis_sd, our_forecaster) %>%
+  pivot_wider(names_from = phase, values_from = c(wis, wis_sd))
+
+wis_max <- phase_scores_wider %>% select(wis_increasing, wis_peak, wis_decreasing) %>% max()
+
+phase_scores_wider %>%
+  select(forecaster, wis_increasing, wis_sd_increasing, wis_peak, wis_sd_peak, wis_decreasing, wis_sd_decreasing) %>%
+  arrange(wis_peak) %>%
+  datatable(
+    fillContainer = FALSE,
+    options = list(
+      initComplete = htmlwidgets::JS(
+          "function(settings, json) {",
+          paste0("$(this.api().table().container()).css({'font-size': '", "11pt", "'});"),
+          "}"),
+      pageLength = 25
+    ),
+    container = sketch
+  ) %>%
+  formatStyle("forecaster", target = c("cell"),
+              fontWeight = styleEqual(repo_forecasters, rep("900", length(repo_forecasters))),
+              textDecoration = styleEqual("CMU-TimeSeries", "underline")) %>%
+  formatStyle(
+    "wis_increasing",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "wis_peak",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "wis_decreasing",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  )
+```
 
 ## Final slide {.smaller}
 
@@ -1142,7 +1269,7 @@ ggplot(qr2, aes(x, y, fill = z)) +
 :::
 ::: {.column width="50%"}
 
-```{r, fig.width = 5, fig.height = 5}
+```{r wis_definition_intuition, fig.width = 5, fig.height = 5}
 df <- data.frame(x = seq(-1, 2, length.out = 3000))
 
 # Calculate y values for both functions
@@ -1171,3 +1298,41 @@ ggplot(df, aes(x = x)) +
 
 :::
 ::::
+
+
+## Explicit phase definitions: Flu
+
+```{r flu_season_definitions, fig.width = 25, fig.height = 15, fig.align = "center"}
+flu_current %>%
+  filter(time_value > "2024-11-01") %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(data = flu_within_max, aes(xintercept = first_above)) +
+  geom_vline(data = flu_within_max, aes(xintercept = last_above)) +
+  facet_wrap(~geo_value, scale = "free") +
+  theme(legend.position = "none")
+```
+
+
+## Explicit phase definitions: Covid
+```{r, fig.width = 18, fig.height = 9}
+no_phase <- covid_within_max %>% arrange(desc(rel_duration)) %>% filter(rel_duration > covid_flat_threshold)
+covid_current %>%
+  filter(time_value > "2024-11-01", geo_value %nin% no_phase$geo_value) %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(data = covid_within_max, aes(xintercept = first_above)) +
+  geom_vline(data = covid_within_max, aes(xintercept = last_above)) +
+  facet_wrap(~geo_value, scale = "free") +
+  ylim(0, NA) +
+  theme(legend.position = "none")
+```
+
+## Explicit phase definitions: Covid `flat`
+```{r, fig.width = 15, fig.height = 8}
+covid_current %>%
+  filter(time_value > "2022-06-01") %>%
+  filter(geo_value %in% no_phase$geo_value) %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(aes(xintercept = as.Date("2024-11-01"))) +
+  ylim(0, NA) +
+  theme(legend.position = "none")
+```
