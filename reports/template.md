@@ -17,6 +17,7 @@
 - [Season Summary](season_summary_2025.html) (the notebooks below are linked from here)
   - [Covid's Problematic Initial Forecast](first_day_wrong.html)
   - [NHSN and NSSP Revision Behavior](revision_summary_2025.html)
+- [Season Summary Talk](season_summary_2025_presentation.html)
 - [An Analysis of Decreasing Behavior in Forecasters](decreasing_forecasters.html)
 - [NHSN 2024-2025 Data Analysis](new_data.html)
 
