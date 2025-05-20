@@ -912,7 +912,8 @@ covid_scores %>%
   mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
   ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
   geom_histogram(bins = 70) +
-  facet_grid(phase~forecaster) +
+  scale_x_log10() +
+  facet_grid(forecaster~phase) +
   labs(title = "Wis score histogram") +
   ylab("count") +
   xlab("wis, population normalized") +
