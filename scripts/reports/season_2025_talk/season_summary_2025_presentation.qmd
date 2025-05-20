@@ -109,6 +109,7 @@ library(tidyverse)
 library(epidatr)
 library(epipredict)
 library(epidatasets)
+library(ggridges)
 theme_set(theme_bw())
 knitr::opts_chunk$set(
   fig.align = "center",
@@ -510,14 +511,20 @@ datatable(
   )
 ```
 
-## Flu Scores: Wis Rate Histogram
+## Flu Scores: WIS Rate Histogram
 
 ::: {.notes}
-These scores are rates rather than counts, and color gives population. The x-axis is log10.
+These scores are rates rather than counts, and color gives population.
+Note there's an implied fat tail in the distribution of scores.
+Overall, the distributions of scores are very similar.
+
+In the increasing phase, CMU-TimeSeries has a smaller left tail, but a more concentrated middle, and smaller right tail, so this doesn't show up in the aggregate.
+In the peak phase, CMU-TimeSeries has a thinner left tail (meaning we have fewer cases where we're dead on), which is enough to show up in the aggregate.
+The decreasing phase is about the same for the compared models.
 :::
 
 ```{r flu_score_histogram, fig.height = 13, fig.width = 25, echo=FALSE}
-flu_scores %>%
+data <- flu_scores %>%
   filter(forecaster %in% c("PSI-PROF", "FluSight-ensemble", "climate_base", "CMU-TimeSeries", "UMass-flusion"))  %>%
   left_join(flu_within_max, by = "geo_value") %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
@@ -525,16 +532,21 @@ flu_scores %>%
   mutate(pop = factor(pop)) %>%
   mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
   group_by(forecaster) %>%
-  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
-  ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
-  geom_histogram(bins = 70) +
-  scale_x_log10() +
-  facet_grid(forecaster~phase) +
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold))
+
+ggplot(data, aes(x = wis, y = forecaster, fill = forecaster)) +
+  geom_density_ridges(scale = 3, alpha = 0.7) +
+  scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
+  scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
+  scale_fill_brewer(palette = 4) +
+  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
+  theme_ridges() +
+  facet_wrap(~phase) +
   labs(title = "Wis score histogram") +
-  ylab("count") +
-  xlab("wis, population normalized, log10") +
+  ylab("phase") +
+  xlab("wis, population normalized") +
   theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
-  scale_color_viridis_d()
+  theme(legend.position = "none")
 ```
 
 ## Flu Scores: Phase
@@ -904,11 +916,15 @@ style(ggplotly(p), visible = "legendonly", traces = c(1, 6, 8, 9, 10, 11, 12, 13
 ## Covid Scores: Wis Rate Histogram
 
 ::: {.notes}
-These scores are rates rather than counts, and color gives population
+These scores are rates rather than counts.
+
+Note that again, the score distributions are very similar.
+You can see where CMU-TimeSeries performed worse at the beginning of the season in the top left.
+This was due to a naive use of the climatological baseline, which completely overestimated values in states that had no season.
 :::
 
 ```{r covid_score_histogram, fig.height = 13, fig.width = 25, echo=FALSE}
-covid_scores %>%
+data <- covid_scores %>%
   filter(forecaster %in% c("PSI-PROF", "CovidHub-ensemble", "climate_base", "CMU-TimeSeries", "UMass-ar6_pooled"))  %>%
   left_join(covid_within_max, by = "geo_value") %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
@@ -916,16 +932,21 @@ covid_scores %>%
   mutate(pop = factor(pop)) %>%
   mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
   group_by(forecaster) %>%
-  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
-  ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
-  geom_histogram(bins = 70) +
-  scale_x_log10() +
-  facet_grid(forecaster~phase) +
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold))
+
+ggplot(data, aes(x = wis, y = forecaster, fill = forecaster)) +
+  geom_density_ridges(scale = 3, alpha = 0.7) +
+  scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
+  scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
+  scale_fill_brewer(palette = 4) +
+  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
+  theme_ridges() +
+  facet_wrap(~phase) +
   labs(title = "Wis score histogram") +
-  ylab("count") +
+  ylab("phase") +
   xlab("wis, population normalized") +
   theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
-  scale_color_viridis_d()
+  theme(legend.position = "none")
 ```
 
 

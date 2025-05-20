@@ -1,5 +1,0 @@
-rmarkdown::render("scripts/reports/revision_summary_report_2025.Rmd", output_file = here::here("reports", "revision_summary_2025.html"))
-rmarkdown::render("scripts/reports/decreasing_forecasters.Rmd", output_file = here::here("reports", "decreasing_forecasters.html"))
-rmarkdown::render("scripts/reports/season_summary_2025.Rmd", output_file = here::here("reports", "season_summary_2025.html"))
-rmarkdown::render("scripts/reports/first_day_wrong.Rmd", output_file = here::here("reports", "first_day_wrong.html"))
-system("pandoc scripts/reports/exploration_summary_2025.md -s -o reports/exploration_summary_2025.html --css style.css --metadata pagetitle='Exploration Summary 2024-2025'")
