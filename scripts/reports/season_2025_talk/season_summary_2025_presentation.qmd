@@ -539,7 +539,14 @@ flu_scores %>%
 
 ## Flu Scores: Phase
 ::: {.notes}
-Phase here means when it's first past
+We classify the season into three phases: increasing, peak, and decreasing.
+Increasing is before the first time the value exceeds a threshold.
+Decreasing is the last time the value dips below the threshold.
+Peak is between these two.
+The threshold is chosen at 50% of the max value.
+
+Note that our WIS/AE is in the top 5, but everyone's score is quite similar and washed out.
+We performed well in the increasing/decreasing phases, but most of our error came in the peak phase.
 :::
 
 ```{r flu_phase}
@@ -1023,14 +1030,19 @@ covid_forecast_plt <-
 ggplotly(covid_forecast_plt)
 ```
 
-## Callouts
+## Future Work
 
-::: {.callout-note}
-You can use these. See <https://quarto.org/docs/authoring/callouts.html>
-:::
+- Account for "always decreasing" behavior observed in nearly all forecasters (include external forecasters)
+  - We've determined that this is due to data bias, so we need ways to mitigate that.
+  - Possible solution is to attempt to split the data into phase components and fit a different model to each phase.
+    (Was tried before, but didn't work as well as hoped; perhaps with a better phase definition it could be better?)
+- Nowcasting, revision anticipation
+- Forecasting at the city/county level for NSSP (metrocasting)
+- Check evaluation robustness via data "fuzzing"
+  - A way to mitigate over-weighting the performance of a forecaster on a single season
+  - Possibilities include parametric boot with observational noise (additive and/or shifts) or leave-one-out training across seasons (e.g. leave 2023 out and train on 2022 and 2024)
 
 ## Final slide {.smaller}
-
 
 ### Thanks:
 
