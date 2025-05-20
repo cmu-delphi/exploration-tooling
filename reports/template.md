@@ -75,19 +75,20 @@ Internal name: `scaled_pop`.
 
 A simple autoregressive model, which predicts using
 
-$$x_{t+k} = ar(x)$$
+$$x_{t+k} = x_{t-7} + x_{t-14}$$
 
-where $x$ is the target variable and $ar(x)$ is a linear combination of the target variable's past values, which can be scaled according to each state's population or whitened according to another scheme (or both). In practice, we found that using lags (0, 7) was quite effective (with (0, 7, 14) and (0, 7, 14, 21) providing no discernible advantage), so we focused on those, so in practice our model was
-
-$$x_{t+k} = x_t + x_{t-7}$$
-
-where $k \in \{0, 7, 14, 21, 28\}$ is the forecast horizon.
+where $x$ is the target variable (which can be scaled according to each state's population or whitened according to another scheme (or both)), $t$ is the data in days, and $k \in \{0, 7, 14, 21, 28\}$ is the forecast horizon.
+In practice, we found that adding more lags provided no discernible advantage (such as (0, 7, 14) and (0, 7, 14, 21))
 
 ### Autoregressive models with exogenous features
 
 Internal name: `scaled_pop_seasonal`.
 
-These models could opt into the same seasonal features as the `scaled_pop_seasonal` forecaster, but also included exogenous features.
+$$x_{t+k} = x_{t-7} + x_{t-14} + y_{t-7} + y_{t-14}$$
+
+where $x$ is the target variable, $y$ is the exogenous variable, and $t$ is the data in days.
+See the list of exogenous features below.
+These models could opt into the same seasonal features as the `scaled_pop_seasonal` forecaster (see below).
 
 #### Flu exogenous features
 
@@ -118,6 +119,8 @@ However, we also had mixed results from tests of this feature in very simple syn
 - We also tried using the **climatological median** of the target variable as a feature (see below for definition of "climatological").
 - Note that unusually, the last two features are actually led rather than lagged, since we should be predicting using the target's coefficient, rather than the present one.
 
+These models could be combined with the exogenous features (see above).
+
 ### Autoregressive models with augmented data
 
 Internal name: `scaled_pop` (with `filter_source = ""`).
@@ -126,6 +129,8 @@ This forecaster is still the standard autoregressive model, but with additional 
 Inspired by UMass-flusion, the additional training data consisted of historical data from ILI+ and Flusurv+, which was brought to a comprable level with NHSN and treated as additional observations of the target variable (hence the name "augmented data").
 Flusurv was taken from epidata, but ILI+ was constructed by Evan Ray and given to Richard (Berkeley Summer 2024 intern).
 Naturally, this forecaster was only used for flu, as the same data was not available for covid.
+
+These models could be combined with the exogenous features and the seasonal features (see above).
 
 #### Scaling Parameters (Data Whitening)
 

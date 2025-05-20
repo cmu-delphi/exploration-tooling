@@ -163,14 +163,24 @@ forecast_weeks_to_plot %in% (flu_scores$forecast_date %>% unique())
 forecast_weeks_to_plot %in% (covid_scores$forecast_date %>% unique())
 ```
 
-# The data
+# Major Forecasting Challenges
 
-## Shape of the Season Data: Flu
+- **non-stationarity** - varying vaccination rates, strains, mobility, superspreader events, etc.
+- **large seasonal variation (flu)** - season start, duration, and peak size vary
+- **lack of seasonal component (covid)** - seasonal pattern in the data is weak (post-pandemic)
+- **bad data quality** - initial observations are incomplete, regular reporting delays, errors, etc.
+- **few seasons to train on** - NHSN data starts in 2020, the first two seasons are excluded because they were anomalous due to the pandemic, so effectively only 2 seasons of data are available for training
+
+# The Data
+
+## Recent Seasons Data: Flu
 
 ```{r flu_archive, fig.width = 20, fig.height = 10, fig.align = "center"}
 nhsn_archive_flu <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
 nhsn_latest <- nhsn_archive_flu %>%
   epix_as_of_current() %>%
+  # Cut out the tiny fraction of 2019/20 data (there's like 58 data points)
+  filter(time_value >= "2020-10-01") %>%
   add_season_info() %>%
   filter(geo_value %nin% c("as", "gu", "mp", "vi"))
 ggplot(nhsn_latest, aes(x = season_week, y = value, color = season, size = season)) +
@@ -181,17 +191,20 @@ ggplot(nhsn_latest, aes(x = season_week, y = value, color = season, size = seaso
 ```
 
 ::: {.notes}
-Much worse season than recent years, and historically the worst season in 15 years
+Here we see the 2024/25 season in pink.
+It's the worst season in 15 years and very different from the previous 2 seasons.
+Before that, the 2020/21 and the 2021/22 seasons are essentially negligible due to the pandemic (so we've dropped them).
+
 [SciAm article with some speculation on why](https://www.scientificamerican.com/article/why-this-years-flu-season-is-the-worst-in-more-than-a-decade/).
 - Late start -> less protection + 2nd wave
 - different strain (H3N2 H1N1)
 - decreased vaccination (not that low)
 - lower levels of immunity from decreased exposure
 
-This bears out somewhat in nssp, but it is not as extreme an increase, so it may be a change in reporting.
+This bears out somewhat in NSSP, but it is not as extreme an increase, so it may be a change in reporting.
 :::
 
-## Shape of the Season Data: Covid
+## Recent Seasons Data: Covid
 
 ```{r covid_archive, fig.width = 20, fig.height = 10, fig.align = "center"}
 nhsn_archive_covid <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nhsn_archive_data"))
@@ -207,14 +220,11 @@ ggplot(nhsn_latest_covid, aes(x = season_week, y = value, color = season, size =
 ```
 
 ::: {.notes}
-
-Note that we've dropped the 2020 through 2022 seasons because they absolutely swamp the past 3 years.
-
-Even so, this year is frequently without a season at all depending on the geo; part of the reason for this is the late summer wave, which is not visible in this data.
-
+Here we've dropped the 2020 through 2022 seasons because they absolutely swamp the past 3 years.
+Even so, this year is frequently without a season at all depending on the geo (for instance, see CA and FL and TX); part of the reason for this is the late summer wave, which is not visible in this data.
 :::
 
-## Data Revisions: Flu largest mean revision
+## Data Revisions: Flu
 
 ```{r flu_revision}
 nhsn_archive_flu$time_type <- "day"
@@ -232,16 +242,16 @@ nhsn_filtered$DT %<>%
 ```
 
 ```{r flu_revision_plot, fig.width = 20, fig.height = 8, fig.align = "center"}
-autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8))
+autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8)) +
+  labs(title = "States with the largest mean revision")
 ```
 
 ::: {.notes}
-
+Here we see the revision behavior in the states with the largest mean revision.
 Note that some revisions are massive: NH, AZ, MN, MO.
-
 :::
 
-## Data Revisions: Covid largest mean revision
+## Data Revisions: Covid
 
 ```{r covid_revision}
 nhsn_archive_covid$time_type <- "day"
@@ -259,13 +269,13 @@ nhsn_filtered$DT %<>%
 ```
 
 ```{r Covid_revision_plot, fig.width = 20, fig.height = 8, fig.align = "center"}
-autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8))
+autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8)) +
+  labs(title = "States with the largest mean revision")
 ```
 
 ::: {.notes}
-
+Here we see the revision behavior in the states with the largest mean revision.
 Note that some revisions are massive: DC, AZ, MN, MO, HI.
-
 :::
 
 # Models
@@ -297,16 +307,30 @@ weights %>%
   scale_fill_viridis_c(limits = c(0,1))
 ```
 
-## Our Models: autoregressive
+## Our Models: Autoregressive
 
 - `windowed_seasonal`: an AR model where the training data is taken from a window 4 weeks before and after the training
+  + The model is roughly $x_t = x_{t-7} + x_{t-14}$, where $x$ is the scaled NHSN data (along with ILI+ and FluSURV) and $t$ is the target date in days.
   + Covid predicted this on rates data
   + For flu, this model also uses ILI+ data and fluSURV, with the forecasts done on variance-stabilized, scaled, and centered data, on a per-geo-source basis.
     - the variance stabilization is a 4th root
     - the scaling is by the difference between the 5th and 95th quantiles
     - the centering is so that the median is zero
-  + Lags are just 0 and 7 (because of data delays, this is actually `c(7,14)`)
+
+::: {.notes}
+This "training window" approach to handling seasonality gave a large improvement to the model score over the base AR model.
+The augmented data sources also improved the model score.
+We did not see much improvement from adding more lags or tweaking the whitening settings.
+:::
+
+## Our Models: Autoregressive with Exogenous Predictors
+
 - `windowed_seasonal_nssp`: like `windowed_seasonal` without the data scaling, and using `nssp` (emergency department visits) as an exogenous predictor (same lags).
+  + The model is roughly $x_t = x_{t-7} + x_{t-14} + y_{t-7} + y_{t-14}$, where $x$ is the scaled NHSN data (along with ILI+ and FluSURV) and $y$ is the NSSP data, and $t$ is the target date in days.
+
+::: {.notes}
+This exogenous predictor gave the largest improvement to the model score out of Google Symptoms and NWSS.
+:::
 
 ## Timeline of models used {.smaller}
 :::: {.columns}
@@ -329,6 +353,10 @@ weights %>%
 :::
 
 ::::
+
+::: {.notes}
+The takeaway here is mostly that we changed the model a lot as the season progressed.
+:::
 
 ## Flu Scores: WIS {.smaller}
 
@@ -410,6 +438,15 @@ flu_score_summary %>%
     )
   )
 ```
+
+::: {.notes}
+
+Takeaways:
+- `windowed_seasonal_nssp` attains very low WIS
+- `climate_linear` is the best model for flu
+- `seasonal_nssp_latest` is not a quantile forecast, and is not included
+
+:::
 
 ## Flu Scores: Absolute Error {.smaller}
 ```{r flu_scores_ae}
@@ -525,3 +562,48 @@ ggplot(qr2, aes(x, y, fill = z)) +
 :::
 
 
+# Appendix
+
+## Scoring Metrics
+
+:::: {.columns}
+::: {.column width="50%"}
+
+- Weighted interval score (WIS)
+  - Discrete approximation to CRPS, which sums the colored area in the figure squared
+- Absolute error (AE)
+  - $|y_t - m|$ where $m$ is the median forecast
+- 80% prediction interval coverage (80%PI)
+  - Proportion of times the true value falls within the center 80%
+:::
+::: {.column width="50%"}
+
+```{r, fig.width = 5, fig.height = 5}
+df <- data.frame(x = seq(-1, 2, length.out = 3000))
+
+# Calculate y values for both functions
+df$y1 <- pnorm(df$x, mean = 0.5, sd = 0.25)  # Normal CDF
+df$y2 <- ifelse(df$x >= 0.75, 1, 0)        # Step function
+
+# Plot
+ggplot(df, aes(x = x)) +
+  # Plot the functions with color aesthetic
+  geom_line(aes(y = y1, color = "CDF of forecast")) +
+  geom_line(aes(y = y2, color = "Eventually observed value")) +
+  # Add the ribbon between the functions
+  geom_ribbon(aes(ymin = pmin(y1, y2), ymax = pmax(y1, y2), fill = "WIS ~ ∫(F(x) - I(x ≥ .75))²"),
+              alpha = 0.3) +
+  # Customize colors and fills
+  scale_color_manual(name = "", values = c("CDF of forecast" = "red",
+                                          "Eventually observed value" = "blue")) +
+  scale_fill_manual(name = "", values = c("WIS ~ ∫(F(x) - I(x ≥ .75))²" = "red")) +
+  # Add legend inside plot
+  theme(legend.position = c(0.2, 0.8),  # Adjust these values to position the legend
+        legend.background = element_rect(fill = "white"),
+        legend.text = element_text(size = 6)) +
+  labs(x = "x", y = "CDF", title = "WIS example") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+:::
+::::
