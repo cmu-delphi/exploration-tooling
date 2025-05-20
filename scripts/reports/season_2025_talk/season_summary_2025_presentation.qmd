@@ -114,7 +114,7 @@ knitr::opts_chunk$set(
   fig.align = "center",
   message = FALSE,
   warning = FALSE,
-  cache = FALSE,
+  cache = TRUE,
   dev = "png"
 )
 ggplot2::theme_set(ggplot2::theme_bw())
@@ -463,12 +463,14 @@ datatable(
 ```
 
 ::: {.notes}
+The external forecasters are in bold.
+Our submitted forecasts are "CMU-TimeSeries".
+The rest are our component models (as they exist now).
 
 Takeaways:
 - `windowed_seasonal_nssp` attains very low WIS
-- `climate_linear` is the best model for flu
-- `seasonal_nssp_latest` is not a quantile forecast, and is not included
-
+- `climate_linear` performs surprisingly well given its simplicity
+- TODO: more commentary
 :::
 
 ## Flu Scores: Absolute Error {.smaller}
@@ -534,7 +536,6 @@ flu_scores %>%
   theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
   scale_color_viridis_d()
 ```
-
 
 ## Flu Scores: Phase
 ::: {.notes}
