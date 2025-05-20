@@ -477,8 +477,8 @@ flu_ae_summary <- flu_score_summary %>%
   arrange(mean_ae) %>%
   filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
   select(forecaster, mean_ae, ae_sd, pop_norm_ae, pop_norm_ae_sd, mean_cov_50, mean_cov_90, n) %>%
-  arrange(mean_ae) %>%
-  datatable(
+  arrange(mean_ae)
+datatable(
     flu_ae_summary,
     fillContainer = FALSE,
     options = list(
@@ -538,7 +538,7 @@ flu_scores %>%
 
 ## Flu Scores: Phase
 ::: {.notes}
-Phase here means when it's first past 
+Phase here means when it's first past
 :::
 
 ```{r flu_phase}
@@ -796,10 +796,10 @@ covid_score_summary <- covid_scores %>%
 ```{r covid_datatable, fig.height = 60, fig.width = 12, echo=FALSE}
 wis_score_order <- covid_score_summary %>% pull(forecaster)
 pop_score_order <- covid_score_summary %>% arrange(pop_norm_wis) %>% pull(forecaster)
-covid_wis_summary <- 
+covid_wis_summary <-
 covid_score_summary %>%
   filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
-  select(forecaster, mean_wis, wis_sd, pop_norm_wis, pop_norm_wis_sd, mean_cov_50, mean_cov_90, n) 
+  select(forecaster, mean_wis, wis_sd, pop_norm_wis, pop_norm_wis_sd, mean_cov_50, mean_cov_90, n)
 
   datatable(
     covid_wis_summary,
