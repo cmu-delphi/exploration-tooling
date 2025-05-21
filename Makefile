@@ -50,15 +50,19 @@ commit-flu:
 	git push --force delphi main
 
 submit-covid: commit-covid
-	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcgov/covid19-forecast-hub
+	cd ../covid19-forecast-hub; \
+	gh pr create --title "CMU-TimeSeries $(current_date)" --repo CDCgov/covid19-forecast-hub
 
 submit-flu: commit-flu
+	cd ../FluSight-forecast-hub; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcepi/FluSight-forecast-hub
 
 submit-covid-dry: commit-covid
-	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcgov/covid19-forecast-hub --dry-run
+	cd ../covid19-forecast-hub; \
+	gh pr create --title "CMU-TimeSeries $(current_date)" --repo CDCgov/covid19-forecast-hub --dry-run
 
 submit-flu-dry: commit-flu
+	cd ../FluSight-forecast-hub; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcepi/FluSight-forecast-hub --dry-run
 
 submit: submit-covid submit-flu
