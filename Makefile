@@ -103,17 +103,17 @@ get-flu-prod-errors:
 get-covid-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'covid_hosp_prod')"
 
-summary_reports:
+summary-reports:
 	Rscript -e "rmarkdown::render('scripts/reports/revision_summary_report_2025.Rmd', output_file = here::here('reports', 'revision_summary_2025.html'))"; \
 	Rscript -e "rmarkdown::render('scripts/reports/decreasing_forecasters.Rmd', output_file = here::here('reports', 'decreasing_forecasters.html'))"; \
 	Rscript -e "rmarkdown::render('scripts/reports/season_summary_2025.Rmd', output_file = here::here('reports', 'season_summary_2025.html'))"; \
 	Rscript -e "rmarkdown::render('scripts/reports/first_day_wrong.Rmd', output_file = here::here('reports', 'first_day_wrong.html'))"; \
 	pandoc scripts/reports/exploration_summary_2025.md -s -o reports/exploration_summary_2025.html --css style.css --metadata pagetitle='Exploration Summary 2024-2025'
 
-season_summary_2025_talk:
+season-summary-2025-talk:
 	quarto render scripts/reports/season_2025_talk/season_summary_2025_presentation.qmd --to html --output-dir "../../../reports"
 	cp reports/tachyons-minimal.css reports/
 	cp -r scripts/reports/season_2025_talk/gfx reports/
 
-season_summary_2025_talk_preview:
+season-summary-2025-talk-preview:
 	quarto preview scripts/reports/season_2025_talk/season_summary_2025_presentation.qmd
