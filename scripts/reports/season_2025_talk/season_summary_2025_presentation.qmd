@@ -116,7 +116,7 @@ knitr::opts_chunk$set(
   fig.align = "center",
   message = FALSE,
   warning = FALSE,
-  cache = TRUE,
+  cache = FALSE,
   dev = "png"
 )
 ggplot2::theme_set(ggplot2::theme_bw())
@@ -362,6 +362,9 @@ The takeaway here is mostly that we changed the model a lot as the season progre
 :::
 
 # Flu Scores
+
+Throughout, `se_mean` is the standard error of the sample mean with each state a separate estimate.
+
 ## Flu Scores: WIS {.smaller}
 
 ```{r computing_phase}
@@ -399,6 +402,30 @@ sanity_check_classifying <- flu_current %>%
   group_by(geo_value) %>%
   distinct(phase)
 repo_forecasters <- c(setdiff(unique(flu_scores$forecaster), our_forecasters), "CMU-TimeSeries")
+
+
+se_mean_states <- flu_scores %>%
+  left_join(flu_within_max, by = "geo_value") %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(wis_rate = wis * 1e5/pop) %>%
+  mutate(pop = factor(pop)) %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, flu_flat_threshold)) %>%
+  group_by(forecaster, geo_value) %>%
+  summarize(
+    mean_wis = Mean(wis),
+    geo_mean_wis = GeoMean(wis),
+    mean_ae = Mean(ae_median),
+    geomean_ae = GeoMean(ae_median)
+  ) %>%
+  group_by(forecaster) %>%
+  summarize(
+    se_mean_wis = sd(mean_wis) / sqrt(n()),
+    se_geomean_wis = sd(geo_mean_wis) / sqrt(n()),
+    se_mean_ae = sd(mean_ae) / sqrt(n()),
+    se_geomean_ae = sd(geomean_ae) / sqrt(n())
+  ) %>%
+  mutate(across(starts_with("se"), \(x) round(x, 2)))
+
 flu_score_summary <- flu_scores %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
   group_by(forecaster) %>%
@@ -411,19 +438,21 @@ flu_score_summary <- flu_scores %>%
     wis_sd = round(sd(wis), 2),
     pop_norm_wis = round(Mean(wis *1e5/pop), 2),
     pop_norm_wis_sd = round(sd(wis * 1e5/pop), 2),
-    geo_wis = round(GeoMean(wis, min_wis), 2),
+    geomean_wis = round(GeoMean(wis, min_wis), 2),
     #nWISzero = sum(wis < 1e-5),
     mean_ae = round(Mean(ae_median), 2),
     ae_sd = round(sd(ae_median), 2),
     pop_norm_ae = round(Mean(ae_median*1e5/pop), 2),
     pop_norm_ae_sd = round(sd(ae_median * 1e5/pop), 2),
-    geo_ae = round(GeoMean(ae_median, min_ae), 2),
+    geomean_ae = round(GeoMean(ae_median, min_ae), 2),
     #nAEzero = sum(ae_median < 1e-5),
     mean_cov_50 = round(Mean(interval_coverage_50), 2),
     mean_cov_90 = round(Mean(interval_coverage_90), 2),
     n = n()
   ) %>%
+  left_join(se_mean_states, by = "forecaster") %>%
   arrange(mean_wis)
+#flu_scores %>% group_by(geo_value,)
 ```
 
 ```{r flu_datatable, fig.height = 60, fig.width = 12, echo=FALSE}
@@ -431,8 +460,7 @@ wis_score_order <- flu_score_summary %>% pull(forecaster)
 pop_score_order <- flu_score_summary %>% arrange(pop_norm_wis) %>% pull(forecaster)
 flu_wis_summary <- flu_score_summary %>%
   filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
-  select(forecaster, mean_wis, wis_sd, pop_norm_wis, pop_norm_wis_sd, mean_cov_50, mean_cov_90, n)
-flu_wis_data_only <- flu_wis_summary %>% select(-forecaster, -n)
+  select(forecaster, mean_wis, se_mean_wis, pop_norm_wis, geomean_wis, se_geomean_wis)
 datatable(
   flu_wis_summary,
   fillContainer = FALSE,
@@ -460,6 +488,13 @@ datatable(
     backgroundSize = '98% 88%',
     backgroundRepeat = 'no-repeat',
     backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "geomean_wis",
+    background = styleColorBar(c(0, max(flu_wis_summary$geomean_wis)), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
   )
 ```
 
@@ -479,7 +514,7 @@ Takeaways:
 flu_ae_summary <- flu_score_summary %>%
   arrange(mean_ae) %>%
   filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
-  select(forecaster, mean_ae, ae_sd, pop_norm_ae, pop_norm_ae_sd, mean_cov_50, mean_cov_90, n) %>%
+  select(forecaster, mean_ae, se_mean_ae, pop_norm_ae, geomean_ae, se_geomean_ae) %>%
   arrange(mean_ae)
 datatable(
     flu_ae_summary,
@@ -508,9 +543,38 @@ datatable(
     backgroundSize = '98% 88%',
     backgroundRepeat = 'no-repeat',
     backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "geomean_ae",
+    background = styleColorBar(c(0, max(flu_ae_summary$geomean_ae)), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
   )
 ```
 
+
+## Flu Scores: Coverage {.smaller}
+```{r flu_coverage_datatable}
+flu_coverage_summary <- flu_score_summary %>%
+  arrange(mean_ae) %>%
+  filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
+  select(forecaster, mean_cov_50, mean_cov_90, n)
+datatable(
+  flu_coverage_summary,
+  fillContainer = FALSE,
+  options = list(
+    initComplete = htmlwidgets::JS(
+          "function(settings, json) {",
+          paste0("$(this.api().table().container()).css({'font-size': '", "10pt", "'});"),
+          "}"),
+    pageLength = 25
+  )
+) %>%
+  formatStyle("forecaster", target = c("cell"),
+              fontWeight = styleEqual(repo_forecasters, rep("900", length(repo_forecasters))),
+              textDecoration = styleEqual("CMU-TimeSeries", "underline"))
+```
 ## Flu Scores: WIS Rate Histogram
 
 ::: {.notes}
@@ -566,7 +630,7 @@ flu_scores %>%
   scale_color_viridis_d()
 ```
 
-## Flu Scores: Phase
+## Flu Scores: Phase {.smallest}
 ::: {.notes}
 We classify the season into three phases: increasing, peak, and decreasing.
 Increasing is before the first time the value exceeds a threshold.
@@ -579,11 +643,26 @@ We performed well in the increasing/decreasing phases, but most of our error cam
 :::
 
 ```{r flu_phase}
-phase_scores <-
-  flu_scores %>%
-  filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
+flu_include_phase <- flu_scores %>%
   left_join(flu_within_max, by = "geo_value") %>%
-  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, flu_flat_threshold)) %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, flu_flat_threshold))
+flu_phase_se <- flu_include_phase %>%
+  group_by(forecaster, geo_value, phase) %>%
+  summarize(
+    mean_wis = Mean(wis),
+    geo_mean_wis = GeoMean(wis),
+    mean_ae = Mean(ae_median),
+    geomean_ae = GeoMean(ae_median)
+  ) %>%
+  group_by(forecaster, phase) %>%
+  summarize(
+    se_mean_wis = sd(mean_wis) / sqrt(n()),
+    se_geomean_wis = sd(geo_mean_wis) / sqrt(n()),
+    se_mean_ae = sd(mean_ae) / sqrt(n()),
+    se_geomean_ae = sd(geomean_ae) / sqrt(n())
+  ) %>%
+  mutate(across(starts_with("se"), \(x) round(x, 2)))
+phase_scores <- flu_include_phase %>%
   group_by(forecaster, phase) %>%
   summarize(
     wis_sd = round(sd(wis, na.rm = TRUE), 2),
@@ -592,7 +671,8 @@ phase_scores <-
     n = n(),
     our_forecaster = first(our_forecaster),
     .groups = "drop"
-  )
+  ) %>%
+  left_join(flu_phase_se, by = c("forecaster", "phase"))
 sketch <- htmltools::withTags(table(
   class = 'display',
   style = "font-size: 11px;",
@@ -605,17 +685,18 @@ sketch <- htmltools::withTags(table(
     ),
     tr(
       list(th("peak_wis_rank"), th("name"),
-           lapply(rep(c('wis', 'sd'), 3), th)
+           lapply(rep(c('wis', "se_mean_wis"), 3), th)
            )
     )
   )
 ))
 phase_scores_wider <- phase_scores %>%
-  select(forecaster, phase, wis, wis_sd, our_forecaster) %>%
-  pivot_wider(names_from = phase, values_from = c(wis, wis_sd))
+  select(forecaster, phase, wis, se_mean_wis, our_forecaster) %>%
+  pivot_wider(names_from = phase, values_from = c(wis, se_mean_wis))
 wis_max <- phase_scores_wider %>% select(wis_increasing, wis_peak, wis_decreasing) %>% max()
 phase_scores_wider %>%
-  select(forecaster, wis_increasing, wis_sd_increasing, wis_peak, wis_sd_peak, wis_decreasing, wis_sd_decreasing) %>%
+  filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
+  select(forecaster, wis_increasing, se_mean_wis_increasing, wis_peak, se_mean_wis_peak, wis_decreasing, se_mean_wis_decreasing) %>%
   arrange(wis_peak) %>%
   datatable(
     fillContainer = FALSE,
@@ -709,43 +790,9 @@ The point is to demonstrate the upper bound of what accurate nowcasting would ge
 named `seasonal_nssp_latest` compare with `windowed_seasonal_nssp`. Generally outperforms all other models by a good margin.
 :::
 
-```{r flu_phase_two}
-phase_scores <-
-  flu_scores %>%
-  left_join(flu_within_max, by = "geo_value") %>%
-  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, flu_flat_threshold)) %>%
-  group_by(forecaster, phase) %>%
-  summarize(
-    wis_sd = round(sd(wis, na.rm = TRUE), 2),
-    ae_sd = round(sd(ae_median, na.rm = TRUE), 2),
-    across(c(wis, ae_median, interval_coverage_90), \(x) round(Mean(x), 2)),
-    n = n(),
-    our_forecaster = first(our_forecaster),
-    .groups = "drop"
-  )
-sketch <- htmltools::withTags(table(
-  class = 'display',
-  style = "font-size: 11px;",
-  thead(
-    tr(
-      th(colspan = 2, "forecaster"),
-      th(colspan = 2, 'increasing'),
-      th(colspan = 2, 'peak'),
-      th(colspan = 2, 'decreasing')
-    ),
-    tr(
-      list(th("peak_wis_rank"), th("name"),
-           lapply(rep(c('wis', 'sd'), 3), th)
-           )
-    )
-  )
-))
-phase_scores_wider <- phase_scores %>%
-  select(forecaster, phase, wis, wis_sd, our_forecaster) %>%
-  pivot_wider(names_from = phase, values_from = c(wis, wis_sd))
-wis_max <- phase_scores_wider %>% select(wis_increasing, wis_peak, wis_decreasing) %>% max()
+```{r flu_phase_on_latest}
 phase_scores_wider %>%
-  select(forecaster, wis_increasing, wis_sd_increasing, wis_peak, wis_sd_peak, wis_decreasing, wis_sd_decreasing) %>%
+  select(forecaster, wis_increasing, se_mean_wis_increasing, wis_peak, se_mean_wis_peak, wis_decreasing, se_mean_wis_decreasing) %>%
   arrange(wis_peak) %>%
   datatable(
     fillContainer = FALSE,
@@ -805,6 +852,30 @@ sanity_check_classifying <- covid_current %>%
   distinct(phase)
 
 repo_forecasters <- c(setdiff(unique(covid_scores$forecaster), our_forecasters), "CMU-TimeSeries")
+
+se_mean_states <- covid_scores %>%
+  left_join(covid_within_max, by = "geo_value") %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(wis_rate = wis * 1e5/pop) %>%
+  mutate(pop = factor(pop)) %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  group_by(forecaster, geo_value) %>%
+  summarize(
+    mean_wis = Mean(wis),
+    geo_mean_wis = GeoMean(wis),
+    mean_ae = Mean(ae_median),
+    geomean_ae = GeoMean(ae_median)
+  ) %>%
+  group_by(forecaster) %>%
+  summarize(
+    se_mean_wis = sd(mean_wis) / sqrt(n()),
+    se_geomean_wis = sd(geo_mean_wis) / sqrt(n()),
+    se_mean_ae = sd(mean_ae) / sqrt(n()),
+    se_geomean_ae = sd(geomean_ae) / sqrt(n())
+  ) %>%
+  mutate(across(starts_with("se"), \(x) round(x, 2)))
+
+
 covid_score_summary <- covid_scores %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
   group_by(forecaster) %>%
@@ -817,18 +888,17 @@ covid_score_summary <- covid_scores %>%
     wis_sd = round(sd(wis), 2),
     pop_norm_wis = round(Mean(wis *1e5/pop), 2),
     pop_norm_wis_sd = round(sd(wis * 1e5/pop), 2),
-    geo_wis = round(GeoMean(wis, min_wis), 2),
-    #nWISzero = sum(wis < 1e-5),
+    geomean_wis = round(GeoMean(wis, min_wis), 2),
     mean_ae = round(Mean(ae_median), 2),
     ae_sd = round(sd(ae_median), 2),
     pop_norm_ae = round(Mean(ae_median*1e5/pop), 2),
     pop_norm_ae_sd = round(sd(ae_median * 1e5/pop), 2),
-    geo_ae = round(GeoMean(ae_median, min_ae), 2),
-    #nAEzero = sum(ae_median < 1e-5),
+    geomean_ae = round(GeoMean(ae_median, min_ae), 2),
     mean_cov_50 = round(Mean(interval_coverage_50), 2),
     mean_cov_90 = round(Mean(interval_coverage_90), 2),
     n = n()
   ) %>%
+  left_join(se_mean_states, by = "forecaster") %>%
   arrange(mean_wis)
 ```
 
@@ -836,9 +906,9 @@ covid_score_summary <- covid_scores %>%
 wis_score_order <- covid_score_summary %>% pull(forecaster)
 pop_score_order <- covid_score_summary %>% arrange(pop_norm_wis) %>% pull(forecaster)
 covid_wis_summary <-
-covid_score_summary %>%
+  covid_score_summary %>%
   filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
-  select(forecaster, mean_wis, wis_sd, pop_norm_wis, pop_norm_wis_sd, mean_cov_50, mean_cov_90, n)
+  select(forecaster, mean_wis, se_mean_wis, pop_norm_wis, geomean_wis, se_geomean_wis)
 
   datatable(
     covid_wis_summary,
@@ -867,6 +937,13 @@ covid_score_summary %>%
     backgroundSize = '98% 88%',
     backgroundRepeat = 'no-repeat',
     backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "geomean_wis",
+    background = styleColorBar(c(0, max(flu_wis_summary$geomean_wis)), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
   )
 ```
 
@@ -875,18 +952,18 @@ covid_score_summary %>%
 covid_ae_summary <- covid_score_summary %>%
   arrange(mean_ae) %>%
   filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
-  select(forecaster, mean_ae, ae_sd, pop_norm_ae, pop_norm_ae_sd, mean_cov_50, mean_cov_90, n)
-  datatable(
-    covid_ae_summary,
-    fillContainer = FALSE,
-    options = list(
-      initComplete = htmlwidgets::JS(
+  select(forecaster, mean_ae, se_mean_ae, pop_norm_ae, geomean_ae, se_geomean_ae)
+datatable(
+  covid_ae_summary,
+  fillContainer = FALSE,
+  options = list(
+    initComplete = htmlwidgets::JS(
           "function(settings, json) {",
           paste0("$(this.api().table().container()).css({'font-size': '", "10pt", "'});"),
           "}"),
-      pageLength = 25
-    )
-  ) %>%
+    pageLength = 25
+  )
+) %>%
   formatStyle("forecaster", target = c("cell"),
               fontWeight = styleEqual(repo_forecasters, rep("900", length(repo_forecasters))),
               textDecoration = styleEqual("CMU-TimeSeries", "underline")) %>%
@@ -903,7 +980,36 @@ covid_ae_summary <- covid_score_summary %>%
     backgroundSize = '98% 88%',
     backgroundRepeat = 'no-repeat',
     backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "geomean_ae",
+    background = styleColorBar(c(0, max(flu_ae_summary$geomean_ae)), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
   )
+```
+
+## Covid Scores: Coverage {.smaller}
+```{r covid_coverage_datatable}
+covid_coverage_summary <- covid_score_summary %>%
+  arrange(mean_ae) %>%
+  filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
+  select(forecaster, mean_cov_50, mean_cov_90, n)
+datatable(
+  covid_coverage_summary,
+  fillContainer = FALSE,
+  options = list(
+    initComplete = htmlwidgets::JS(
+          "function(settings, json) {",
+          paste0("$(this.api().table().container()).css({'font-size': '", "10pt", "'});"),
+          "}"),
+    pageLength = 25
+  )
+) %>%
+  formatStyle("forecaster", target = c("cell"),
+              fontWeight = styleEqual(repo_forecasters, rep("900", length(repo_forecasters))),
+              textDecoration = styleEqual("CMU-TimeSeries", "underline"))
 ```
 ## Coivd Scores: Aggregated By Forecast Date
 
@@ -991,9 +1097,29 @@ data %>%
 ## Covid Scores: Phase
 
 ```{r covid_phase}
+covid_include_phase <- covid_scores %>%
+  left_join(covid_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold))
+
+covid_phase_se <- covid_include_phase %>%
+  group_by(forecaster, geo_value, phase) %>%
+  summarize(
+    mean_wis = Mean(wis),
+    geo_mean_wis = GeoMean(wis),
+    mean_ae = Mean(ae_median),
+    geomean_ae = GeoMean(ae_median)
+  ) %>%
+  group_by(forecaster, phase) %>%
+  summarize(
+    se_mean_wis = sd(mean_wis, na.rm = TRUE) / sqrt(n()),
+    se_geomean_wis = sd(geo_mean_wis, na.rm = TRUE) / sqrt(n()),
+    se_mean_ae = sd(mean_ae, na.rm = TRUE) / sqrt(n()),
+    se_geomean_ae = sd(geomean_ae, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  mutate(across(starts_with("se"), \(x) round(x, 2)))
+
 phase_scores <-
   covid_scores %>%
-  filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
   left_join(covid_within_max, by = "geo_value") %>%
   mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
   group_by(forecaster, phase) %>%
@@ -1004,7 +1130,8 @@ phase_scores <-
     n = n(),
     our_forecaster = first(our_forecaster),
     .groups = "drop"
-  )
+  ) %>%
+  left_join(covid_phase_se, by = c("forecaster", "phase"))
 sketch <- htmltools::withTags(table(
   class = 'display',
   style = "font-size: 12px;",
@@ -1018,19 +1145,22 @@ sketch <- htmltools::withTags(table(
     ),
     tr(
       list(th("peak_wis_rank"), th("name"),
-           lapply(rep(c('wis', 'sd'), 4), th)
+           lapply(rep(c('wis', 'se_mean_wis'), 4), th)
            )
     )
   )
 ))
 phase_scores_wider <- phase_scores %>%
-  select(forecaster, phase, wis, wis_sd, our_forecaster) %>%
-  pivot_wider(names_from = phase, values_from = c(wis, wis_sd)) %>%
-  select(forecaster, wis_increasing, wis_sd_increasing, wis_peak, wis_sd_peak, wis_decreasing, wis_sd_decreasing, wis_flat, wis_sd_flat) %>%
+  select(forecaster, phase, wis, se_mean_wis, our_forecaster) %>%
+  pivot_wider(names_from = phase, values_from = c(wis, se_mean_wis)) %>%
+  select(forecaster, wis_increasing, se_mean_wis_increasing, wis_peak, se_mean_wis_peak, wis_decreasing, se_mean_wis_decreasing, wis_flat, se_mean_wis_flat) %>%
   arrange(wis_peak)
-wis_max <- phase_scores_wider %>% select(wis_increasing, wis_peak, wis_decreasing) %>% max()
+wis_max <- phase_scores_wider %>% 
+  filter(forecaster %nin% c("seasonal_nssp_latest")) %>%
+  select(wis_increasing, wis_peak, wis_decreasing) %>%
+  max()
 datatable(
-  phase_scores_wider,
+  phase_scores_wider %>% filter(forecaster %nin% c("seasonal_nssp_latest")),
   fillContainer = FALSE,
   options = list(
     initComplete = htmlwidgets::JS(
@@ -1116,21 +1246,8 @@ covid_forecast_plt <-
   scale_y_continuous(breaks = scales::pretty_breaks(n = 16)) +
   ylab("rates")
 
-ggplotly(covid_forecast_plt)
+covid_forecast_plt
 ```
-
-## Future Work
-
-- Account for "always decreasing" behavior observed in nearly all forecasters (include external forecasters)
-  - We've determined that this is due to data bias, so we need ways to mitigate that.
-  - Possible solution is to attempt to split the data into phase components and fit a different model to each phase.
-    (Was tried before, but didn't work as well as hoped; perhaps with a better phase definition it could be better?)
-- Nowcasting, revision anticipation
-- Forecasting at the city/county level for NSSP (metrocasting)
-- Check evaluation robustness via data "fuzzing"
-  - A way to mitigate over-weighting the performance of a forecaster on a single season
-  - Possibilities include parametric boot with observational noise (additive and/or shifts) or leave-one-out training across seasons (e.g. leave 2023 out and train on 2022 and 2024)
-
 
 ## Covid: Forecasting on latest
 ::: {.notes}
@@ -1138,59 +1255,19 @@ The point is to demonstrate the upper bound of what accurate nowcasting would ge
 named `seasonal_nssp_latest` compare with `windowed_seasonal_nssp`. Generally outperforms all other models by a good margin.
 :::
 
-```{r covid_phase_two}
-phase_scores <-
-  covid_scores %>%
-  left_join(covid_within_max, by = "geo_value") %>%
-  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
-  group_by(forecaster, phase) %>%
-  summarize(
-    wis_sd = round(sd(wis, na.rm = TRUE), 2),
-    ae_sd = round(sd(ae_median, na.rm = TRUE), 2),
-    across(c(wis, ae_median, interval_coverage_90), \(x) round(Mean(x), 2)),
-    n = n(),
-    our_forecaster = first(our_forecaster),
-    .groups = "drop"
-  )
-
-sketch <- htmltools::withTags(table(
-  class = 'display',
-  style = "font-size: 11px;",
-  thead(
-    tr(
-      th(colspan = 2, "forecaster"),
-      th(colspan = 2, 'increasing'),
-      th(colspan = 2, 'peak'),
-      th(colspan = 2, 'decreasing')
-    ),
-    tr(
-      list(th("peak_wis_rank"), th("name"),
-           lapply(rep(c('wis', 'sd'), 3), th)
-           )
-    )
-  )
-))
-
-phase_scores_wider <- phase_scores %>%
-  select(forecaster, phase, wis, wis_sd, our_forecaster) %>%
-  pivot_wider(names_from = phase, values_from = c(wis, wis_sd))
-
-wis_max <- phase_scores_wider %>% select(wis_increasing, wis_peak, wis_decreasing) %>% max()
-
-phase_scores_wider %>%
-  select(forecaster, wis_increasing, wis_sd_increasing, wis_peak, wis_sd_peak, wis_decreasing, wis_sd_decreasing) %>%
-  arrange(wis_peak) %>%
-  datatable(
-    fillContainer = FALSE,
-    options = list(
-      initComplete = htmlwidgets::JS(
+```{r covid_phase_latest}
+datatable(
+  phase_scores_wider %>% filter(forecaster %nin% c("seasonal_nssp_latest")),
+  fillContainer = FALSE,
+  options = list(
+    initComplete = htmlwidgets::JS(
           "function(settings, json) {",
-          paste0("$(this.api().table().container()).css({'font-size': '", "11pt", "'});"),
+          paste0("$(this.api().table().container()).css({'font-size': '", "12pt", "'});"),
           "}"),
-      pageLength = 25
-    ),
-    container = sketch
-  ) %>%
+    pageLength = 25
+  ),
+  container = sketch
+) %>%
   formatStyle("forecaster", target = c("cell"),
               fontWeight = styleEqual(repo_forecasters, rep("900", length(repo_forecasters))),
               textDecoration = styleEqual("CMU-TimeSeries", "underline")) %>%
@@ -1214,70 +1291,28 @@ phase_scores_wider %>%
     backgroundSize = '98% 88%',
     backgroundRepeat = 'no-repeat',
     backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "wis_flat",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
   )
 ```
 
-## Final slide {.smaller}
 
-### Thanks:
+## Future Work {.smaller}
 
-```{r qr-codes}
-#| include: false
-#| fig-format: png
-# Code to generate QR codes to link to any external sources
-qrdat <- function(text, ecl = c("L", "M", "Q", "H")) {
-  x <- qrcode::qr_code(text, ecl)
-  n <- nrow(x)
-  s <- seq_len(n)
-  tib <- tidyr::expand_grid(x = s, y = rev(s))
-  tib$z <- c(x)
-  tib
-}
-qr1 <- qrdat("https://cmu-delphi.github.io/epiprocess/")
-qr2 <- qrdat("https://cmu-delphi.github.io/epipredict/")
-ggplot(qr1, aes(x, y, fill = z)) +
-  geom_raster() +
-  ggtitle("{epiprocess}") +
-  coord_equal(expand = FALSE) +
-  scale_fill_manual(values = c("white", "black"), guide = "none") +
-  theme_void(base_size = 18) +
-  theme(plot.title = element_text(hjust = .5))
-ggplot(qr2, aes(x, y, fill = z)) +
-  geom_raster() +
-  labs(title = "{epipredict}") +
-  coord_equal(expand = FALSE) +
-  scale_fill_manual(values = c("white", "black"), guide = "none") +
-  theme_void(base_size = 18) +
-  theme(plot.title = element_text(hjust = .5))
-```
-
-:::: {.columns}
-::: {.column width="50%"}
-- The whole [CMU Delphi Team](https://delphi.cmu.edu/about/team/) (across many institutions)
-- Optum/UnitedHealthcare, Change Healthcare.
-- Google, Facebook, Amazon Web Services.
-- Quidel, SafeGraph, Qualtrics.
-- Centers for Disease Control and Prevention.
-- Council of State and Territorial Epidemiologists
-:::
-
-::: {.column width="50%"}
-
-![](gfx/qr-epiprocess.png){width="300px"}
-![](gfx/qr-epipredict.png){width="300px"}
-
-:::
-
-::::
-
-::: {layout-row=1 fig-align="center"}
-![](gfx/delphi.jpg){height="100px"}
-![](gfx/berkeley.jpg){height="100px"}
-![](gfx/cmu.jpg){height="100px"}
-![](gfx/ubc.jpg){width="250px"}
-![](gfx/usc.jpg){width="250px"}
-![](gfx/stanford.jpg){width="250px"}
-:::
+- Account for "always decreasing" behavior observed in nearly all forecasters (include external forecasters)
+  - We've determined that this is due to data bias, so we need ways to mitigate that.
+  - Possible solution is to attempt to split the data into phase components and fit a different model to each phase.
+    (Was tried before, but didn't work as well as hoped; perhaps with a better phase definition it could be better?)
+- Nowcasting, revision anticipation
+- Forecasting at the city/county level for NSSP (metrocasting)
+- Check evaluation robustness via data "fuzzing"
+  - A way to mitigate over-weighting the performance of a forecaster on a single season
+  - Possibilities include parametric boot with observational noise (additive and/or shifts) or leave-one-out training across seasons (e.g. leave 2023 out and train on 2022 and 2024)
 
 
 # Appendix
