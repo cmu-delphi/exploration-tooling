@@ -1,21 +1,15 @@
+.PHONY: all test test-forecasters run sync download upload dashboard
+
 current_date:=$(shell date +%F)
 
 install:
 	Rscript -e "install.packages(c('renv', 'pak', 'rspm')); renv::restore()"
-
-.PHONY: all test test-forecasters run run-nohup sync download upload dashboard
 
 test:
 	Rscript -e "testthat::test_dir('tests/testthat')"
 
 run:
 	Rscript scripts/run.R
-
-run-nohup:
-	nohup Rscript scripts/run.R &
-
-run-nohup-restarting:
-	scripts/hardRestarting.sh &
 
 prod-covid:
 	export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
@@ -107,12 +101,11 @@ summary-reports:
 	Rscript -e "rmarkdown::render('scripts/reports/revision_summary_report_2025.Rmd', output_file = here::here('reports', 'revision_summary_2025.html'))"; \
 	Rscript -e "rmarkdown::render('scripts/reports/decreasing_forecasters.Rmd', output_file = here::here('reports', 'decreasing_forecasters.html'))"; \
 	Rscript -e "rmarkdown::render('scripts/reports/season_summary_2025.Rmd', output_file = here::here('reports', 'season_summary_2025.html'))"; \
-	Rscript -e "rmarkdown::render('scripts/reports/first_day_wrong.Rmd', output_file = here::here('reports', 'first_day_wrong.html'))"; \
-	pandoc scripts/reports/exploration_summary_2025.md -s -o reports/exploration_summary_2025.html --css style.css --metadata pagetitle='Exploration Summary 2024-2025'
+	Rscript -e "rmarkdown::render('scripts/reports/first_day_wrong.Rmd', output_file = here::here('reports', 'first_day_wrong.html'))";
 
 season-summary-2025-talk:
-	quarto render scripts/reports/season_2025_talk/season_summary_2025_presentation.qmd --to html --output-dir "../../../reports"
-	cp reports/tachyons-minimal.css reports/
+	quarto render scripts/reports/season_2025_talk/season_summary_2025_presentation.qmd --to html --output-dir "../../../reports"; \
+	cp scripts/reports/season_2025_talk/tachyons-minimal.css reports/; \
 	cp -r scripts/reports/season_2025_talk/gfx reports/
 
 season-summary-2025-talk-preview:
