@@ -312,13 +312,14 @@ add_hhs_region_sum <- function(archive_data_raw, hhs_region_table) {
   archive_data_raw
 }
 
-#' hhs data in covidcast currently
+#' Get versioned NHSN data from healthdata.gov because covidcast API has
+#' incorrect historical data for 2023-2024 season.
 get_health_data <- function(as_of, disease = c("covid", "flu")) {
   as_of <- as.Date(as_of)
   disease <- arg_match(disease)
   checkmate::assert_date(as_of, min.len = 1, max.len = 1)
 
-  cache_path <- here::here("aux_data", "healthdata")
+  cache_path <- here::here("cache", "healthdata")
   if (!dir.exists(cache_path)) {
     dir.create(cache_path, recursive = TRUE)
   }
