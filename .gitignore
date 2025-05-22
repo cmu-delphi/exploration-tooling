@@ -24,3 +24,10 @@ data/
 meta/
 **/unnamed-chunk*
 decreasing_forecasters_cache/
+reports/tachyons-minimal.css
+reports/season_summary_2025_presentation_files/
+reports/gfx/
+scripts/reports/season_2025_talk/season_summary_2025_presentation_files/
+scripts/reports/season_2025_talk/season_summary_2025_presentation.html
+scripts/reports/season_2025_talk/season_summary_2025_presentation_cache/
+test_proj

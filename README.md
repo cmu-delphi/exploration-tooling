@@ -33,17 +33,22 @@ AUX_DATA_PATH=aux_data
 Run the pipeline using:
 
 ```sh
+# Install R 4.4.1 (we recommend https://github.com/r-lib/rig)
 # Install renv and R dependencies
 make install
 
-# Pull various data used by the forecasters from the AWS bucket
+# Sync data and forecasts from the AWS bucket
+# - downloads the aux_data/ folder which contains non-public data used by some forecasters
+# - downloads previously generated forecasts, to save recomputing them
+# Requires the AWS CLI to be installed and configured
+# Reference: https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html
+# Installation instructions: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
 make pull
 
 # Make forecasts
 make prod-flu
 make prod-covid
 
-# The job output can be found in nohup.out
 # If there are errors, you can view the top n with the following command (replace with appropriate project)
 source("scripts/targets-common.R");
 get_targets_errors("covid_hosp_prod", top_n = 10)
@@ -57,6 +62,9 @@ make update_site && make netlify
 # and the gh CLI to be installed and configured, talk to Dmitry about this)
 make submit-flu
 make submit-covid
+
+# Push your forecasts to the AWS bucket (requires AWS CLI)
+make push
 ```
 
 ## Exploration Usage
@@ -72,6 +80,11 @@ make install
 # Run the pipeline
 make explore-flu
 make explore-covid
+
+# If you anticipate running the pipeline for a long time and possibly logging off, you can run the pipeline with nohup
+# The job output can be found in nohup.out
+nohup make explore-flu &
+nohup make explore-covid &
 ```
 
 ## Development Overview
@@ -214,7 +227,7 @@ We have a few utility functions that are useful for developing new forecasters.
 forecaster_lookup("forecast_surprised.tarantula")
 forecaster_lookup("surprised.tarantula")
 
-# Get the errors from the targets pipeline
+# Get the errors from a targets pipeline
 get_targets_errors("covid_hosp_explore", top_n = 10)
 
 # Look a tibble of the files we have on S3. Requires access to the Delphi

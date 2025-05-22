@@ -353,12 +353,15 @@ compute_pca <- function(epi_data, disease = "flu", ahead = 0, scale_method = "qu
   used_data <- epi_data %>%
     filter(time_value < filter_time) %>%
     select(geo_value, season, source, season_week, hhs)
-  cache_file_path <- paste0(
-    "aux_data/seasonal_features/",
-    disease[grepl("flu|covid", disease)],
-    rlang::hash(used_data),
-    ".parquet",
-    sep = "_"
+  cache_file_path <- here::here(
+    "cache",
+    "seasonal_features",
+    paste0(
+      disease[grepl("flu|covid", disease)],
+      rlang::hash(used_data),
+      ".parquet",
+      sep = "_"
+    )
   )
   if (file.exists(cache_file_path)) {
     seasonal_features <- qs::qread(cache_file_path)

@@ -328,9 +328,7 @@ get_forecast_reference_date <- function(date) {
 #' Looks at that `reports/` directory and updates `template.md` with new reports
 #' that follow a naming convention. This is translated into `report.md` which is
 #' then converted to `index.html` with pandoc.
-#'
-#' @param sync_to_s3 Whether to sync the reports to the S3 bucket.
-update_site <- function(sync_to_s3 = TRUE) {
+update_site <- function() {
   library(fs)
   library(stringr)
   # Define the directories
@@ -340,11 +338,6 @@ update_site <- function(sync_to_s3 = TRUE) {
   # Create the reports directory if it doesn't exist
   if (!dir_exists(reports_dir)) {
     dir_create(reports_dir)
-  }
-
-  # Sync the reports directory with the S3 bucket
-  if (sync_to_s3) {
-    aws.s3::s3sync(path = reports_dir, bucket = "forecasting-team-data", prefix = "reports-2024/", verbose = FALSE)
   }
 
   # Read the template file

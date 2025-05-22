@@ -2,7 +2,7 @@ tar_project <- Sys.getenv("TAR_PROJECT", "covid_hosp_explore")
 external_scores_path <- Sys.getenv("EXTERNAL_SCORES_PATH", "")
 debug_mode <- as.logical(Sys.getenv("DEBUG_MODE", TRUE))
 use_shiny <- as.logical(Sys.getenv("USE_SHINY", FALSE))
-aws_s3_prefix <- Sys.getenv("AWS_S3_PREFIX", "exploration")
+aws_s3_prefix <- Sys.getenv("AWS_S3_PREFIX", "2024")
 aws_s3_prefix <- paste0(aws_s3_prefix, "/", tar_project)
 suppressPackageStartupMessages({
   library(targets)

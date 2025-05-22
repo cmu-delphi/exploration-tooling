@@ -16,7 +16,7 @@ g_excluded_geos <- c("as", "gu", "mh")
 g_time_value_adjust <- 3
 g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
 g_disease <- "flu"
-g_external_object_name <- glue::glue("exploration/2024-2025_{g_disease}_hosp_forecasts.parquet")
+g_external_object_name <- glue::glue("2024/2024-2025_{g_disease}_hosp_forecasts.parquet")
 # needed for windowed_seasonal
 g_very_latent_locations <- list(list(
   c("source"),
@@ -139,11 +139,11 @@ parameters_and_date_targets <- rlang::list2(
   ),
   tar_file(
     flu_geo_exclusions,
-    command = "flu_geo_exclusions.csv"
+    command = "scripts/flu_geo_exclusions.csv"
   ),
   tar_file(
     flu_data_substitutions,
-    command = "flu_data_substitutions.csv"
+    command = "scripts/flu_data_substitutions.csv"
   ),
   create_flu_data_targets(),
   tar_target(

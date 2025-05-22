@@ -40,10 +40,15 @@ source(here::here("R/load_all.R"))
 
 # Overall takeaways
 
-There is substantial under-reporting behavior that is fairly consistent for a single geo.
-We can probably improve our forecasts by including revision behavior.
-Further, flu and covid revision behavior is fairly strongly correlated; it is reported through the same channels by the same people, so this makes sense.
+There is substantial under-reporting behavior that is consistent for a single geo.
+For `nhsn`, this is mostly systematic, though there are some locations which have sudden corrections.
+We can probably improve our forecasts by including revision behavior for most locations, and including alerts for what seem like reporting errors.
+`nssp` has smaller, more regular corrections, and is a better predictor of the final value than the initial `nhsn` release.
+
+Flu and covid have similar levels of revision, and states with large sudden corrections do so in both states (specifically `az`, `mn` and `nh` all had unusual revisions, though `dc` has covid corrections that flu doesn't), and a list of the states with highest relative correction contains a similar set of states.
+We haven't checked the exact correlation between flu and covid, but this is likely high; it is reported through the same channels by the same people.
 We should look into the extra columns to see if it provides useful information for handling revision behavior.
+
 
 # Flu revision
 
@@ -58,11 +63,11 @@ nhsn_archive_flu <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_ar
 
 nhsn_archive_flu <- nhsn_archive_flu$DT %>% filter(time_value >= "2024-11-19", geo_value %nin% c("vi", "as", "gu")) %>% as_epi_archive()
 nhsn_archive_flu$time_type <- "day"
-revision_summary <- nhsn_archive_flu %>% epiprocess::revision_analysis(value, min_waiting_period = NULL)
+revision_sum <- nhsn_archive_flu %>% epiprocess::revision_analysis(value, min_waiting_period = NULL)
 ```
 
 ```{r}
-revision_summary %>% print(quick_revision = 7)
+revision_sum %>% print(quick_revision = 7)
 ```
 
 So around a fifth have no revisions, around a quarter resolve within a week, and around 2/3rds have a small number of revisions.
@@ -71,7 +76,7 @@ The "actual value" change isn't really worth thinking about because this is coun
 
 Here's a plot of the version changes for all locations.
 
-```{r, out.width = "120%"}
+```{r, fig.width = 20, fig.height = 15, fig.align = "center"}
 text_size <- 6
 nhsn_archive_flu %>% autoplot(value) + theme(strip.text.x = element_text(size = text_size, margin = margin(.1, 0, .1, 0, "cm")), axis.text = element_text(size =text_size, angle = 45), legend.title = element_text(size = text_size), legend.text = element_text(size = text_size), legend.key.size = unit(0.5, "cm")) + scale_size_manual(values = c(0.5))
 ```
@@ -80,7 +85,7 @@ Since this is probably too small to actually be legible, let's figure out the st
 Worst in this case meaning worst average relative spread
 
 ```{r}
-av_re_spread <- revision_summary$revision_behavior %>%
+av_re_spread <- revision_sum$revision_behavior %>%
   group_by(geo_value) %>%
   summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
   arrange(desc(rel_spread)) %>%
@@ -89,18 +94,15 @@ av_re_spread %>%
   print(n=20)
 ```
 
-The worst 9 excluding the geo's we don't actually forecast (so no `as` or `vi`, `gu`).
+The worst 18 excluding the geo's we don't actually forecast (so no `as` or `vi`, `gu`).
 
-```{r}
-nhsn_archive_flu %>% autoplot(.facet_filter = geo_value %in% av_re_spread$geo_value[1:9]) + theme(strip.text.x = element_text(size = 8))
+```{r, fig.width = 20, fig.height = 14, fig.align = "center"}
+nhsn_filtered <- nhsn_archive_flu %>%
+  filter(geo_value %in% av_re_spread$geo_value[1:18])
+nhsn_filtered$DT %<>%
+  mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value[1:18]))
+autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8))
 ```
-
-And the next 9 worse
-
-```{r}
-nhsn_archive_flu %>% autoplot(.facet_filter = geo_value %in% av_re_spread$geo_value[10:18]) + theme(strip.text.x = element_text(size = 8))
-```
-
 
 These cover a range of revision behaviors; some are off on a single `time_value` in a terrible way, such as `mn` or `nh`, while most have fairly constant revisioning.
 `az` is unusual in having two bad `version`s when they revised the entire history down by a factor of 2, and then reverted to what it had been previously.
@@ -110,9 +112,231 @@ These seem likely to be estimable beforehand.
 Exceptions that include at least one case of over-reporting: `mn`, `id`, `nh`
 These are not later backfilled; they seem more like bad estimates or entry error.
 
-### Data substitions
-And we actually need to compare this with the data revision estimates:
+## NSSP
+### Revision behavior
+
 ```{r}
+nssp_archive_flu <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nssp_archive_data"))
+
+nssp_archive_flu <- nssp_archive_flu$DT %>% filter(time_value >= "2024-11-19", geo_value %nin% c("vi", "as", "gu")) %>% as_epi_archive()
+nssp_archive_flu$time_type <- "day"
+revision_sum_nssp <- nssp_archive_flu %>% epiprocess::revision_analysis(nssp, min_waiting_period = NULL)
+```
+
+```{r}
+revision_sum_nssp %>% print(quick_revision = 7)
+```
+
+So very few weeks have no revision, but ~70% have only a small number of revisions.
+And most (87%) are very close to their final values
+
+```{r}
+av_re_spread <- revision_sum_nssp$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+```
+
+
+```{r, fig.width = 20, fig.height = 14, fig.align = "center"}
+nssp_archive_flu %>% autoplot(nssp, .facet_filter = geo_value %in% av_re_spread$geo_value[1:18]) + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8))
+```
+
+These corrections are *way* more regular than nhsn, so we can definitely do nowcasting to adjust the values.
+
+### Correlation with latest
+
+Does NSSP actually correlate better with the latest value than nhsn itself does?
+This was a property we were relying on through the season to generate our corrections.
+Comparing the correlation of `nssp` as it was on the forecast date with the value as it eventually is.
+```{r, fig.width=20}
+nssp_archive_flu
+nssp_diagonal <- nssp_archive_flu %>%
+  epix_slide(\(x, group, ref_time) x %>% filter(time_value == max(time_value))) %>%
+  select(time_value = version, geo_value, nssp)
+nhsn_diagonal <- nhsn_archive_flu %>%
+  epix_slide(\(x, group, ref_time) x %>% filter(time_value == max(time_value))) %>%
+  select(time_value = version, geo_value, value)
+nhsn_latest <- nhsn_archive_flu %>% epix_as_of_current() %>% filter(time_value %in% nhsn_diagonal$time_value)
+nssp_diagonal
+joined_dataset <- nhsn_latest %>%
+  left_join(
+    nhsn_diagonal,
+    by = c("geo_value", "time_value"),
+    suffix = c("_latest", "_diag")
+  ) %>%
+  left_join(
+    nssp_diagonal %>% mutate(time_value = time_value - 1),
+    by = c("geo_value", "time_value")
+  ) %>%
+  filter(geo_value %nin% c("vi", "as", "gu", "mp"))
+corrs <- joined_dataset %>%
+  epi_cor(value_latest, value_diag) %>%
+  left_join(
+    joined_dataset %>%
+    epi_cor(value_latest, nssp),
+    by = "geo_value", suffix = c("_release", "_nssp")
+  ) %>%
+  pivot_longer(names_to = "correlation_against", cols = c(cor_release, cor_nssp))
+corrs %>% drop_na() %>% group_by(geo_value) %>% filter(n()==2) %>%
+ggplot(aes(x = geo_value, y = value, fill = correlation_against)) +
+  geom_bar(position = "dodge", stat = "identity") + theme(legend.position = "bottom")
+```
+
+Red, which is on the left for each location, gives the correlation of the final value with `nssp` as it was at the time of the forecast, while blue on the right gives the correlation of the final value with `nhsn` as it was.
+Everywhere but Louisiana, `nssp` has a stronger correlation with the eventual value than `nhsn` itself does.
+
+# Covid revision
+And now for ~ the same idea, but for covid
+
+## NHSN
+First we get the archive and remove the data older than the first version so as not to clog up the revision behavior, and display the overall revision summary[^1].
+
+```{r}
+nhsn_archive_covid <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nhsn_archive_data"))
+
+nhsn_archive_covid <- nhsn_archive_covid$DT %>% filter(time_value >= "2024-11-19") %>%
+  filter(geo_value %nin% c("vi", "as", "gu")) %>% as_epi_archive()
+nhsn_archive_covid$time_type <- "day"
+revision_sum <- nhsn_archive_covid %>%
+  epiprocess::revision_analysis(value, min_waiting_period = NULL)
+revision_sum %>% print(quick_revision = 7)
+```
+
+Around a fifth have no revisions, around a third resolve within a week, and around 3/4ths have a small number of revisions.
+Around 60% of those with revisions have little relative change (10% of the max value).
+The "actual value" change isn't really worth thinking about because this is counts data (so there being only 6 doesn't tell us much).
+
+Here's a plot of the version changes for all locations.
+
+```{r, fig.width = 20, fig.height = 15, fig.align = "center"}
+nhsn_archive_covid %>% autoplot(value) + theme(strip.text.x = element_text(size = text_size, margin = margin(.1, 0, .1, 0, "cm")), axis.text = element_text(size =text_size, angle = 45), legend.title = element_text(size = text_size), legend.text = element_text(size = text_size), legend.key.size = unit(0.5, "cm")) + scale_size_manual(values = c(0.5))
+```
+
+Since this is probably too small to actually be legible, let's figure out the states with the worst revision behavior and plot those.
+Worst in this case meaning worst average relative spread
+
+```{r}
+av_re_spread <- revision_sum$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+av_re_spread %>%
+  print(n=20)
+```
+
+Which, if you compare with the average relative spread in the [Flu section](##NHSN) is remarkably similar.
+The worst 18 excluding the geo's we don't actually forecast (so no `as` or `vi`, `gu`).
+
+```{r, fig.width = 20, fig.height = 14, fig.align = "center"}
+nhsn_filtered <- nhsn_archive_covid %>%
+  filter(geo_value %in% av_re_spread$geo_value[1:18])
+nhsn_filtered$DT %<>%
+  mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value[1:18]))
+autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8))
+```
+
+Strictly visually, this seems to revise more than the flu data (this doesn't actually fit well with the numeric revision analysis so something odd is going on).
+Perhaps the revisions are more chaotic.
+
+-`mn` instead of having a single time point for a single version has it's entire trajectory wrong in the same way that `az` does, possibly on the same `version`.
+
+- `az` has similar revision behavior (a couple of weeks where they were wildly off).
+
+- `nh` has similar behavior in over-estimating a specific single time value quite badly, but otherwise having typical under-reporting problems.
+
+- `dc` has some new and wild behavior; this is likely as visually striking as it is because the values are so small.
+
+- `mo` has new revision behavior, primarily in the magnitude of the difference.
+
+- `ok` has more extreme under-reporting than in the case of flu, but again this seems to likely be a factor of the number of cases, suggesting their underreporting happens in absolute number of cases rather than relative[^2].
+
+Like flu, these seem mostly estimable beforehand, with some more drastic exceptions.
+
+## NSSP
+### Revision behavior
+
+```{r}
+nssp_archive_covid <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nssp_archive_data"))
+
+nssp_archive_covid <- nssp_archive_covid$DT %>% filter(time_value >= "2024-11-19", geo_value %nin% c("vi", "as", "gu")) %>% as_epi_archive()
+nssp_archive_covid$time_type <- "day"
+revision_sum_nssp <- nssp_archive_covid %>% epiprocess::revision_analysis(nssp, min_waiting_period = NULL)
+```
+
+```{r}
+revision_sum_nssp %>% print(quick_revision = 7)
+```
+
+So few weeks have no revision (only 14%), but ~87% have only a small number of revisions.
+And most (81%) are close to their final values
+
+```{r}
+av_re_spread <- revision_sum_nssp$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+```
+
+
+```{r, fig.width = 20, fig.height = 14, fig.align = "center"}
+nssp_archive_flu %>% autoplot(nssp, .facet_filter = geo_value %in% av_re_spread$geo_value[1:18]) + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8))
+```
+
+These corrections are *way* more regular than nhsn, so we can definitely do nowcasting to adjust the values.
+
+### Correlation with latest
+
+Does NSSP actually correlate better with the latest value than nhsn itself does?
+This was a property we were relying on through the season to generate our corrections.
+Comparing the correlation of `nssp` as it was on the forecast date with the value as it eventually is.
+```{r, fig.width=20}
+nssp_diagonal <- nssp_archive_covid %>%
+  epix_slide(\(x, group, ref_time) x %>% filter(time_value == max(time_value))) %>%
+  select(time_value = version, geo_value, nssp)
+nhsn_diagonal <- nhsn_archive_covid %>%
+  epix_slide(\(x, group, ref_time) x %>% filter(time_value == max(time_value))) %>%
+  select(time_value = version, geo_value, value)
+nhsn_latest <- nhsn_archive_covid %>% epix_as_of_current() %>% filter(time_value %in% nhsn_diagonal$time_value)
+nssp_diagonal
+joined_dataset <- nhsn_latest %>%
+  left_join(
+    nhsn_diagonal,
+    by = c("geo_value", "time_value"),
+    suffix = c("_latest", "_diag")
+  ) %>%
+  left_join(
+    nssp_diagonal %>% mutate(time_value = time_value - 1),
+    by = c("geo_value", "time_value")
+  ) %>%
+  filter(geo_value %nin% c("vi", "as", "gu", "mp"))
+corrs <- joined_dataset %>%
+  epi_cor(value_latest, value_diag) %>%
+  left_join(
+    joined_dataset %>%
+    epi_cor(value_latest, nssp),
+    by = "geo_value", suffix = c("_release", "_nssp")
+  ) %>%
+  pivot_longer(names_to = "correlation_against", cols = c(cor_release, cor_nssp))
+corrs %>% drop_na() %>% group_by(geo_value) %>% filter(n()==2) %>%
+ggplot(aes(x = geo_value, y = value, fill = correlation_against)) +
+  geom_bar(position = "dodge", stat = "identity") + theme(legend.position = "bottom")
+```
+
+Red, which is on the left for each location, gives the correlation of the final value with `nssp` as it was at the time of the forecast, while blue on the right gives the correlation of the final value with `nhsn` as it was.
+For most locations `nssp` correlates somewhat more strongly with the final value than the initial `nhsn` release does.
+`nv`, `dc`, `md`, and `mt` are all appreciably better.
+`hi` is notable in that the initial release has a *negative* correlation, while `nssp` is better, though at ~0.25 is still only weakly correlated with the final value.
+`al`, `ma`, and `sd` are all exceptions in having the initial release correlate better than `nssp`, though really they're around the same value.
+
+# Data substitions
+## Flu
+
+And we actually need to compare this with the data revision estimates:
+```{r, fig.width = 20, fig.height = 9, fig.align = "center"}
 data_substitutions <- readr::read_csv(
     here::here(glue::glue("flu_data_substitutions.csv")),
     comment = "#",
@@ -189,119 +413,10 @@ So we did marginally better when it was below, but much worse when it was above.
 
 Overall, it turns out our value substitutions did not actually help much for flu.
 
-## NSSP
+## Covid
 
-```{r}
-nssp_archive_flu <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nssp_archive_data"))
-
-nssp_archive_flu <- nssp_archive_flu$DT %>% filter(time_value >= "2024-11-19", geo_value %nin% c("vi", "as", "gu")) %>% as_epi_archive()
-nssp_archive_flu$time_type <- "day"
-revision_summary_nssp <- nssp_archive_flu %>% epiprocess::revision_analysis(nssp, min_waiting_period = NULL)
-```
-
-```{r}
-revision_summary_nssp %>% print(quick_revision = 7)
-```
-
-So very few weeks have no revision, but ~70% have only a small number of revisions.
-And most (87%) are very close to their final values
-
-```{r}
-av_re_spread <- revision_summary_nssp$revision_behavior %>%
-  group_by(geo_value) %>%
-  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
-  arrange(desc(rel_spread)) %>%
-  filter(geo_value %nin% c("vi", "as", "gu"))
-```
-
-
-```{r}
-nssp_archive_flu %>% autoplot(nssp, .facet_filter = geo_value %in% av_re_spread$geo_value[1:9]) + theme(strip.text.x = element_text(size = 8))
-```
-
-```{r}
-nssp_archive_flu %>% autoplot(nssp, .facet_filter = geo_value %in% av_re_spread$geo_value[10:18]) + theme(strip.text.x = element_text(size = 8))
-```
-
-These corrections are *way* more regular than nhsn, so we can definitely do backcasting to adjust the values.
-
-### Revision behavior
-### Correlation with latest
-
-Does NSSP actually correlate better with the latest value than nhsn itself does?
-This was a property we were relying on through the season to generate our corrections.
-
-# Covid revision
-And now for ~ the same idea, but for covid
-
-## NHSN
-First we get the archive and remove the data older than the first version so as not to clog up the revision behavior, and display the overall revision summary[^1].
-
-```{r}
-nhsn_archive_covid <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nhsn_archive_data"))
-
-nhsn_archive_covid <- nhsn_archive_covid$DT %>% filter(time_value >= "2024-11-19") %>%
-  filter(geo_value %nin% c("vi", "as", "gu")) %>% as_epi_archive()
-nhsn_archive_covid$time_type <- "day"
-revision_summary <- nhsn_archive_covid %>%
-  epiprocess::revision_analysis(value, min_waiting_period = NULL)
-revision_summary %>% print(quick_revision = 7)
-```
-
-Around a fifth have no revisions, around a third resolve within a week, and around 3/4ths have a small number of revisions.
-Around 60% of those with revisions have little relative change (10% of the max value).
-The "actual value" change isn't really worth thinking about because this is counts data (so there being only 6 doesn't tell us much).
-
-Here's a plot of the version changes for all locations.
-
-```{r}
-nhsn_archive_covid %>% autoplot(value) + theme(strip.text.x = element_text(size = text_size, margin = margin(.1, 0, .1, 0, "cm")), axis.text = element_text(size =text_size, angle = 45), legend.title = element_text(size = text_size), legend.text = element_text(size = text_size), legend.key.size = unit(0.5, "cm")) + scale_size_manual(values = c(0.5))
-```
-
-Since this is probably too small to actually be legible, let's figure out the states with the worst revision behavior and plot those.
-Worst in this case meaning worst average relative spread
-
-```{r}
-av_re_spread <- revision_summary$revision_behavior %>%
-  group_by(geo_value) %>%
-  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
-  arrange(desc(rel_spread)) %>%
-  filter(geo_value %nin% c("vi", "as", "gu"))
-av_re_spread %>%
-  print(n=20)
-```
-
-Which, if you compare with the average relative spread in the [Flu section](##NHSN) is remarkably similar.
-The worst 9 excluding the geo's we don't actually forecast (so no `as` or `vi`, `gu`).
-
-```{r}
-nhsn_archive_covid %>% autoplot(.facet_filter = geo_value %in% av_re_spread$geo_value[1:9]) + theme(strip.text.x = element_text(size = 8))
-```
-
-And the next 9 worse
-
-```{r}
-nhsn_archive_covid %>% autoplot(.facet_filter = geo_value %in% av_re_spread$geo_value[10:18]) + theme(strip.text.x = element_text(size = 8))
-```
-
-Strictly visually, this seems to revise more than the flu data (this doesn't actually fit well with the numeric revision analysis so something odd is going on).
-Perhaps the revisions are more chaotic.
-`mn` instead of having a single time point for a single version has it's entire trajectory wrong in the same way that `az` does, possibly on the same `version`.
-`az` has similar revision behavior (a couple of weeks where they were wildly off).
-
-`nh` has similar behavior in over-estimating a specific single time value quite badly, but otherwise having typical under-reporting problems.
-
-`dc` has some new and wild behavior; this is likely as visually striking as it is because the values are so small.
-
-`mo` has new revision behavior, primarily in the magnitude of the difference.
-
-`ok` has more extreme under-reporting than in the case of flu, but again this seems to likely be a factor of the number of cases, suggesting their underreporting happens in absolute number of cases rather than relative[^2].
-
-Like flu, these seem likely to be estimable beforehand.
-
-### Data substitutions
 And we actually need to compare revision behavior with our estimates of the correct values:
-```{r}
+```{r, fig.width = 20, fig.height = 9, fig.align = "center"}
 data_substitutions <- readr::read_csv(
     here::here(glue::glue("covid_data_substitutions.csv")),
     comment = "#",
@@ -377,48 +492,13 @@ When we were under, we always improved the situation. However when we were above
 
 
 
-## NSSP
-
-```{r}
-nssp_archive_covid <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nssp_archive_data"))
-
-nssp_archive_covid <- nssp_archive_covid$DT %>% filter(time_value >= "2024-11-19", geo_value %nin% c("vi", "as", "gu")) %>% as_epi_archive()
-nssp_archive_covid$time_type <- "day"
-revision_summary_nssp <- nssp_archive_covid %>% epiprocess::revision_analysis(nssp, min_waiting_period = NULL)
-```
-
-```{r}
-revision_summary_nssp %>% print(quick_revision = 7)
-```
-
-So few weeks have no revision (only 14%), but ~87% have only a small number of revisions.
-And most (81%) are close to their final values
-
-```{r}
-av_re_spread <- revision_summary_nssp$revision_behavior %>%
-  group_by(geo_value) %>%
-  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
-  arrange(desc(rel_spread)) %>%
-  filter(geo_value %nin% c("vi", "as", "gu"))
-```
-
-
-```{r}
-nssp_archive_covid %>% autoplot(nssp, .facet_filter = geo_value %in% av_re_spread$geo_value[1:9]) + theme(strip.text.x = element_text(size = 8))
-```
-
-```{r}
-nssp_archive_covid %>% autoplot(nssp, .facet_filter = geo_value %in% av_re_spread$geo_value[10:18]) + theme(strip.text.x = element_text(size = 8))
-```
-
-A similar story to flu, these corrections are *way* more regular than nhsn, so we can definitely do backcasting to adjust the values.
 
 # Correlations between the two archives
 
 Visually, the flu and covid nhsn datasets seem to have related revision behavior.
 We should probably study this more carefully, but the question is a somewhat difficult one.
 One potential way to go about this is for each `(time_value, geo_value)` pair, do a correlation of the time series across `version`.
-Alteratively, we could do the same, but for the differences between versions (so correlate the correction amount).
+Alternatively, we could do the same, but for the differences between versions (so correlate the correction amount).
 
 [^1]: `min_waiting_period` is `NULL` here since we're plotting mid-season, while `quick_revision = 7` because this is weekly data represented using days (because the versions are days).
 
