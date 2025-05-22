@@ -23,7 +23,7 @@
 
 ## 2023-2024 Season Backtesting
 
-- [Forecaster Exploration Summary](exploration_summary_2025.html)
+- [Forecaster Exploration Summary](#exploration-summary-2024-2025)
 - Flu
   - [Flu Overall](flu-overall-notebook.html)
   - [Flu AR](flu-notebook-scaled_pop_main.html)
@@ -51,16 +51,16 @@
 
 The main forecaster families were:
 
-- Autoregressive models (AR)
-  - with seasonal features
-  - with exogenous features
-  - with augmented data
+- [Autoregressive models (AR)](#autoregressive-models-ar)
+  - [with seasonal features](#autoregressive-models-with-seasonal-features)
+  - [with exogenous features](#autoregressive-models-with-exogenous-features)
+  - [with augmented data](#autoregressive-models-with-augmented-data)
 - "Ad-hoc" models
-  - Climatological
-  - Linear trend
-  - No recent outcome
+  - [Climatological](#climatological)
+  - [Linear trend](#linear-trend)
+  - [No recent outcome](#no-recent-outcome)
 - Baseline models
-  - Flatline
+  - [Flatline](#flatline)
 
 Notes:
 
@@ -162,7 +162,7 @@ We found that in some cases it made a reasonable baseline, though when the curre
 
 A simple linear trend model that predicts the median using linear extrapolation from the past 4 weeks of data and then uses residuals to create a distributional forecast.
 
-### Climate linear
+### Climate Linear
 
 An ensemble model that combines a climatological forecast with a linear trend forecast.
 It is a bilinear interpolation between the two forecasts across the ahead and quantile extremity; as the quantile moves away from the median, and the ahead moves further in the future, the ensemble interpolates between the linear and climate forecasts.
@@ -183,3 +183,45 @@ where $y$ here is any set of exogenous variables.
 ### Flatline
 
 A simple "LOCF" forecaster that simply forecasts the last observed value and uses residuals to create a distributional forecast. This is what the FluSight-baseline is based on, so they should be identical.
+
+## Exploration Summary 2024-2025
+
+Here we summarize our findings from backtesting a large variety of forecasters on the 2023-2024 season.
+
+### Best Performing Families
+
+#### Flu
+
+[The best performing families](https://delphi-forecasting-reports.netlify.app/flu-overall-notebook) were:
+
+- AR with seasonal windows and the NSSP exogenous feature
+  - This forecaster was about 10 mean WIS points behind UMass-flusion, but on par with the FluSight-ensemble.
+- AR with seasonal window (same as above, but without the NSSP exogenous feature)
+  - This forecaster was only 2 mean WIS points behind the above forecaster.
+  - We explored a wide variety of parameters for this family and found that the number of weeks to include in the training window was not particularly important, so we settled on 5 weeks prior and 3 weeks ahead.
+- An ensemble of climatological and the linear trend model (we used this at the start of the season when we didn't trust the data to support a more complex model)
+  - We were surprised to find that this was only 7 mean WIS points behind our best performing family.
+- For context, the gap between our best performing family and FluSight-baseline was only about 15 mean WIS points.
+- Surprisingly, AR forecasters with augmented data performed **worse** than those that did not.
+  However, AR forecasters with seasonal windows and augmented data performed better than AR forecasters with only seasonal windows.
+
+#### Covid
+
+[The best performing families](https://delphi-forecasting-reports.netlify.app/covid-overall-notebook) were:
+
+- AR with seasonal windows and the NSSP exogenous feature.
+  - This forecaster outperformed the CDC ensemble by about 15 mean WIS points.
+- Surprisingly, the `climate_linear` model was only about 4 mean WIS points behind our best performing family.
+  (`climate_linear` combines the `climate_*` models with the `linear` model using a special weighting scheme.
+  See the [season summary](season_summary_2025.html) for more details.)
+
+### Important Parameters
+
+- Forecasters that used a seasonal training window were substantially better than those that did not.
+- Forecasters that used the NSSP exogenous feature were substantially better than those that did not.
+
+### Important Notes
+
+One of the most concerning behaviors in our forecasters was the bias towards predicting a down-swing in the target.
+After a deeper analysis, we concluded that this is due to a downward bias in the data set, which our linear AR models were picking up and translating into coefficients that were less than 1, making declines almost certain.
+The complete analysis can be found [here](https://delphi-forecasting-reports.netlify.app/decreasing_forecasters).
