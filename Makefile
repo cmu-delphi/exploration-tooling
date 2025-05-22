@@ -19,13 +19,13 @@ prod-flu:
 
 prod: prod-covid prod-flu update-site netlify
 
-prod-backtest-covid:
+prod-covid-backtest:
 	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
 
-prod-backtest-flu:
+prod-flu-backtest:
 	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R
 
-prod-backtest: prod-backtest-covid prod-backtest-flu
+prod-backtest: prod-covid-backtest prod-flu-backtest
 
 explore-covid:
 	export TAR_RUN_PROJECT=covid_hosp_explore; Rscript scripts/run.R
@@ -34,6 +34,20 @@ explore-flu:
 	export TAR_RUN_PROJECT=flu_hosp_explore; Rscript scripts/run.R
 
 explore: explore-covid explore-flu update-site netlify
+
+prune: prune-covid-prod prune-flu-prod prune-covid-explore prune-flu-explore
+
+prune-covid-prod:
+	export TAR_PROJECT=covid_hosp_prod; export BACKTEST_MODE=TRUE; Rscript -e "targets::tar_prune()"
+
+prune-flu-prod:
+	export TAR_PROJECT=flu_hosp_prod; export BACKTEST_MODE=TRUE; Rscript -e "targets::tar_prune()"
+
+prune-covid-explore:
+	export TAR_PROJECT=covid_hosp_explore; Rscript -e "targets::tar_prune()"
+
+prune-flu-explore:
+	export TAR_PROJECT=flu_hosp_explore; Rscript -e "targets::tar_prune()"
 
 commit-covid:
 	cd ../covid19-forecast-hub; \
@@ -115,9 +129,11 @@ upload: push
 dashboard:
 	Rscript scripts/dashboard.R
 
-update-site:
+sync-reports:
 	aws s3 sync s3://forecasting-team-data/2024/reports/ reports/; \
-	aws s3 sync reports/ s3://forecasting-team-data/2024/reports/; \
+	aws s3 sync reports/ s3://forecasting-team-data/2024/reports/
+
+update-site: sync-reports
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()" > cache/update_site_log.txt
 
 netlify:

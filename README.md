@@ -37,7 +37,9 @@ Run the pipeline using:
 # Install renv and R dependencies
 make install
 
-# Pull various data used by the forecasters from the AWS bucket
+# Sync data and forecasts from the AWS bucket
+# - downloads the aux_data/ folder which contains non-public data used by some forecasters
+# - downloads previously generated forecasts, to save recomputing them
 # Requires the AWS CLI to be installed and configured
 # Reference: https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html
 # Installation instructions: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
@@ -61,7 +63,7 @@ make update_site && make netlify
 make submit-flu
 make submit-covid
 
-# Push the data to the AWS bucket (requires AWS CLI)
+# Push your forecasts to the AWS bucket (requires AWS CLI)
 make push
 ```
 
