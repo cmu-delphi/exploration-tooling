@@ -4,6 +4,7 @@ local_logs/
 .github
 .exploration_cache
 .netlify
+.git
 aux_data
 cache/
 covid_hosp_explore

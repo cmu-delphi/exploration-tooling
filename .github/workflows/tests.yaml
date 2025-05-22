@@ -38,7 +38,7 @@ jobs:
 
       - name: System dependencies
         run: |
-          sudo apt-get update && sudo apt-get -y install libglpk-dev libcurl4-openssl-dev libfontconfig1-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev
+          sudo apt-get update && sudo apt-get -y install libglpk-dev libcurl4-openssl-dev libfontconfig1-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev libharfbuzz-dev libfribidi-dev
 
       - uses: r-lib/actions/setup-renv@v2
 
