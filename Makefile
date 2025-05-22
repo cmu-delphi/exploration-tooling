@@ -152,7 +152,7 @@ summary-reports:
 	Rscript -e "rmarkdown::render('scripts/reports/first_day_wrong.Rmd', output_file = here::here('reports', 'first_day_wrong.html'))";
 
 season-summary-2025-talk:
-	quarto render scripts/reports/season_2025_talk/season_summary_2025_presentation.qmd --to html --output-dir "../../../reports"; \
+	quarto render scripts/reports/season_2025_talk/season_summary_2025_presentation.qmd --to revealjs --output-dir "../../../reports"; \
 	cp scripts/reports/season_2025_talk/tachyons-minimal.css reports/; \
 	cp -r scripts/reports/season_2025_talk/gfx reports/
 
