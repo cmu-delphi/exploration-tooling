@@ -19,6 +19,14 @@ prod-flu:
 
 prod: prod-covid prod-flu update-site netlify
 
+prod-backtest-covid:
+	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
+
+prod-backtest-flu:
+	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R
+
+prod-backtest: prod-backtest-covid prod-backtest-flu
+
 explore-covid:
 	export TAR_RUN_PROJECT=covid_hosp_explore; Rscript scripts/run.R
 
