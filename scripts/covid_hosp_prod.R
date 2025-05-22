@@ -125,11 +125,11 @@ parameters_and_date_targets <- rlang::list2(
   ),
   tar_file(
     covid_geo_exclusions,
-    command = "covid_geo_exclusions.csv"
+    command = "scripts/covid_geo_exclusions.csv"
   ),
   tar_file(
     covid_data_substitutions,
-    command = "covid_data_substitutions.csv"
+    command = "scripts/covid_data_substitutions.csv"
   ),
   tar_change(
     name = nhsn_archive_data,

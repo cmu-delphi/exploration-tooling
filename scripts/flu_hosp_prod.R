@@ -139,11 +139,11 @@ parameters_and_date_targets <- rlang::list2(
   ),
   tar_file(
     flu_geo_exclusions,
-    command = "flu_geo_exclusions.csv"
+    command = "scripts/flu_geo_exclusions.csv"
   ),
   tar_file(
     flu_data_substitutions,
-    command = "flu_data_substitutions.csv"
+    command = "scripts/flu_data_substitutions.csv"
   ),
   create_flu_data_targets(),
   tar_target(
