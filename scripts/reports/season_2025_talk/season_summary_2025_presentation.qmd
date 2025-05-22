@@ -167,10 +167,10 @@ forecast_weeks_to_plot %in% (covid_scores$forecast_date %>% unique())
 
 # Major Forecasting Challenges
 
-- **non-stationarity** - varying vaccination rates, strains, mobility, superspreader events, etc.
+- **non-stationarity** - varying vaccination rates, new strains, changing mobility patterns, superspreader events, etc.
 - **large seasonal variation (flu)** - season start, duration, and peak size vary
-- **lack of seasonal component (covid)** - seasonal pattern in the data is weak (post-pandemic)
-- **bad data quality** - initial observations are incomplete, regular reporting delays, errors, etc.
+- **lack of seasonal component (covid)** - seasonal pattern in the data is weak or inconsistent (post-pandemic)
+- **data quality issues** - initial observations are incomplete, regular reporting delays, reporting errors, etc.
 - **few seasons to train on** - NHSN data starts in 2020, the first two seasons are excluded because they were anomalous due to the pandemic, so effectively only 2 seasons of data are available for training
 
 # The Data
@@ -523,7 +523,7 @@ The decreasing phase is about the same for the compared models.
 :::
 
 ```{r flu_score_histogram, fig.height = 13, fig.width = 25, echo=FALSE}
-data <- flu_scores %>%
+flu_scores %>%
   filter(forecaster %in% c("PSI-PROF", "FluSight-ensemble", "climate_base", "CMU-TimeSeries", "UMass-flusion"))  %>%
   left_join(flu_within_max, by = "geo_value") %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
@@ -534,28 +534,26 @@ data <- flu_scores %>%
   mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, flu_flat_threshold)) %>%
   ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
   geom_histogram(bins = 70) +
-  scale_x_log10() +
   facet_grid(forecaster~phase) +
   labs(title = "Wis score histogram") +
   ylab("count") +
-  xlab("wis, population normalized, log10") +
-  theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
-  scale_color_viridis_d()
-```
-
-ggplot(data, aes(x = wis, y = forecaster, fill = forecaster)) +
-  geom_density_ridges(scale = 3, alpha = 0.7) +
-  scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
-  scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
-  scale_fill_brewer(palette = 4) +
-  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
-  theme_ridges() +
-  facet_wrap(~phase) +
-  labs(title = "Wis score histogram") +
-  ylab("phase") +
   xlab("wis, population normalized") +
   theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
-  theme(legend.position = "none")
+  scale_color_viridis_d()
+
+# ggplot(data, aes(x = wis, y = forecaster, fill = forecaster)) +
+#   geom_density_ridges(scale = 3, alpha = 0.7) +
+#   scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
+#   scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
+#   scale_fill_brewer(palette = 4) +
+#   coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
+#   theme_ridges() +
+#   facet_wrap(~phase) +
+#   labs(title = "Wis score histogram") +
+#   ylab("phase") +
+#   xlab("wis, population normalized") +
+#   theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
+#   theme(legend.position = "none")
 ```
 
 ## Flu Scores: Phase
@@ -1113,7 +1111,7 @@ named `seasonal_nssp_latest` compare with `windowed_seasonal_nssp`. Generally ou
 
 ```{r covid_phase_two}
 phase_scores <-
-  covid_scores %>% 
+  covid_scores %>%
   left_join(covid_within_max, by = "geo_value") %>%
   mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
   group_by(forecaster, phase) %>%
