@@ -105,11 +105,12 @@ snapshots_all |>
 <!-- The above is _titleslide.qmd from before -->
 
 ```{r data_setup, include=FALSE}
+library(aws.s3)
+library(qs2)
 library(tidyverse)
 library(epidatr)
 library(epipredict)
 library(epidatasets)
-library(ggridges)
 theme_set(theme_bw())
 knitr::opts_chunk$set(
   fig.align = "center",
@@ -124,8 +125,7 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 Mean <- function(x) mean(x, na.rm = TRUE)
 GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
 our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "seasonal_nssp_latest", "ensemble_mix")
-flu_scores <-
-  qs2::qs_read(here::here("flu_hosp_prod", "objects", "scores")) %>%
+flu_scores <- aws.s3::s3read_using(qs2::qs_read, object = "2024/flu_hosp_prod/objects/scores", bucket = "forecasting-team-data") %>%
   mutate(forecaster = case_match(
            forecaster,
     "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
@@ -134,15 +134,15 @@ flu_scores <-
     .default = forecaster
     )) %>%
   mutate(our_forecaster = forecaster %in% our_forecasters)
-flu_forecasts <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "joined_forecasts_and_ensembles"))
+flu_forecasts <- aws.s3::s3read_using(qs2::qs_read, object = "2024/flu_hosp_prod/objects/joined_forecasts_and_ensembles", bucket = "forecasting-team-data")
 flu_forecasts$forecaster %<>% case_match(
     "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
     "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
     "ens_ar_only" ~ "ensemble_windowed",
     .default = flu_forecasts$forecaster
     )
-forecast_dates <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "forecast_dates"))
-covid_scores <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "scores")) %>%
+forecast_dates <- aws.s3::s3read_using(qs2::qs_read, object = "2024/flu_hosp_prod/objects/forecast_dates", bucket = "forecasting-team-data")
+covid_scores <- aws.s3::s3read_using(qs2::qs_read, object = "2024/covid_hosp_prod/objects/scores", bucket = "forecasting-team-data") %>%
   mutate(forecaster = case_match(
            forecaster,
     "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
@@ -151,7 +151,7 @@ covid_scores <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "scores"))
     .default = forecaster
     )) %>%
   mutate(our_forecaster = forecaster %in% our_forecasters)
-covid_forecasts <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "joined_forecasts_and_ensembles")) %>% ungroup()
+covid_forecasts <- aws.s3::s3read_using(qs2::qs_read, object = "2024/covid_hosp_prod/objects/joined_forecasts_and_ensembles", bucket = "forecasting-team-data") %>% ungroup()
 covid_forecasts$forecaster %<>% case_match(
     "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
     "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
@@ -178,7 +178,7 @@ forecast_weeks_to_plot %in% (covid_scores$forecast_date %>% unique())
 ## Recent Seasons Data: Flu
 
 ```{r flu_archive, fig.width = 20, fig.height = 10, fig.align = "center"}
-nhsn_archive_flu <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
+nhsn_archive_flu <- aws.s3::s3read_using(qs2::qs_read, object = "2024/flu_hosp_prod/objects/nhsn_archive_data", bucket = "forecasting-team-data")
 nhsn_latest <- nhsn_archive_flu %>%
   epix_as_of_current() %>%
   # Cut out the tiny fraction of 2019/20 data (there's like 58 data points)
@@ -209,7 +209,7 @@ This bears out somewhat in NSSP, but it is not as extreme an increase, so it may
 ## Recent Seasons Data: Covid
 
 ```{r covid_archive, fig.width = 20, fig.height = 10, fig.align = "center"}
-nhsn_archive_covid <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nhsn_archive_data"))
+nhsn_archive_covid <- aws.s3::s3read_using(qs2::qs_read, object = "2024/covid_hosp_prod/objects/nhsn_archive_data", bucket = "forecasting-team-data")
 nhsn_latest_covid <- nhsn_archive_covid %>%
   epix_as_of_current() %>%
   add_season_info() %>%
@@ -365,7 +365,7 @@ The takeaway here is mostly that we changed the model a lot as the season progre
 ## Flu Scores: WIS {.smaller}
 
 ```{r computing_phase}
-flu_archive <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
+flu_archive <- aws.s3::s3read_using(qs2::qs_read, object = "2024/flu_hosp_prod/objects/nhsn_archive_data", bucket = "forecasting-team-data")
 flu_current <- flu_archive %>%
   epix_as_of_current() %>%
   filter(geo_value %nin% c("as", "gu", "mp", "vi"))
@@ -536,6 +536,29 @@ flu_scores %>%
   ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
   geom_histogram(bins = 70) +
   facet_grid(forecaster~phase) +
+  labs(title = "Wis score histogram") +
+  ylab("count") +
+  xlab("wis, population normalized") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
+  scale_color_viridis_d()
+```
+
+## Flu Scores: WIS Rate Histogram log10
+
+```{r flu_score_histogram_log10, fig.height = 13, fig.width = 25, echo=FALSE}
+flu_scores %>%
+  filter(forecaster %in% c("PSI-PROF", "FluSight-ensemble", "climate_base", "CMU-TimeSeries", "UMass-flusion"))  %>%
+  left_join(flu_within_max, by = "geo_value") %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(wis = wis * 1e5/pop) %>%
+  mutate(pop = factor(pop)) %>%
+  mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
+  group_by(forecaster) %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, flu_flat_threshold)) %>%
+  ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
+  geom_histogram(bins = 70) +
+  facet_grid(forecaster~phase) +
+  scale_x_log10() +
   labs(title = "Wis score histogram") +
   ylab("count") +
   xlab("wis, population normalized, log10") +
@@ -767,7 +790,7 @@ phase_scores_wider %>%
 `CMU-TimeSeries` did significantly worse; a large part of this is poor performance on literally the first week
 :::
 ```{r computing_phase_covid}
-covid_archive <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nhsn_archive_data"))
+covid_archive <- aws.s3::s3read_using(qs2::qs_read, object = "2024/covid_hosp_prod/objects/nhsn_archive_data", bucket = "forecasting-team-data")
 covid_current <- covid_archive %>%
   epix_as_of_current() %>%
   filter(geo_value %nin% c("as", "gu", "mp", "vi"))
@@ -929,20 +952,39 @@ data <- covid_scores %>%
   mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
   group_by(forecaster) %>%
   mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold))
-
-ggplot(data, aes(x = wis, y = forecaster, fill = forecaster)) +
-  geom_density_ridges(scale = 3, alpha = 0.7) +
-  scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
-  scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
-  scale_fill_brewer(palette = 4) +
-  coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
-  theme_ridges() +
-  facet_wrap(~phase) +
+data %>%
+  ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
+  geom_histogram(bins = 70) +
+  facet_grid(forecaster~phase) +
   labs(title = "Wis score histogram") +
-  ylab("phase") +
+  ylab("count") +
   xlab("wis, population normalized") +
   theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
-  theme(legend.position = "none")
+  scale_color_viridis_d()
+```
+
+## Covid Scores: WIS Rate Histogram log10
+
+```{r covid_score_histogram_log10, fig.height = 13, fig.width = 25, echo=FALSE}
+data <- covid_scores %>%
+  filter(forecaster %in% c("PSI-PROF", "CovidHub-ensemble", "climate_base", "CMU-TimeSeries", "UMass-ar6_pooled", "windowed_seasonal_nssp"))  %>%
+  left_join(covid_within_max, by = "geo_value") %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(wis = wis * 1e5/pop) %>%
+  mutate(pop = factor(pop)) %>%
+  mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
+  group_by(forecaster) %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold))
+data %>%
+  ggplot(aes(x = wis, color = pop,  y = ifelse(after_stat(count) > 0, after_stat(count), NA))) +
+  geom_histogram(bins = 70) +
+  facet_grid(forecaster~phase) +
+  labs(title = "Wis score histogram") +
+  ylab("count") +
+  xlab("wis, population normalized, log10") +
+  scale_x_log10() +
+  theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
+  scale_color_viridis_d()
 ```
 
 
