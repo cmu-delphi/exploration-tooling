@@ -243,7 +243,7 @@ nhsn_filtered$DT %<>%
   mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value[1:18]))
 ```
 
-```{r flu_revision_plot, fig.width = 20, fig.height = 8, fig.align = "center"}
+```{r flu_revision_plot, fig.width = 20, fig.height = 10, fig.align = "center"}
 autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8)) +
   labs(title = "States with the largest mean revision")
 ```
@@ -270,7 +270,7 @@ nhsn_filtered$DT %<>%
   mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value[1:18]))
 ```
 
-```{r Covid_revision_plot, fig.width = 20, fig.height = 8, fig.align = "center"}
+```{r covid_revision_plot, fig.width = 20, fig.height = 10, fig.align = "center"}
 autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8)) +
   labs(title = "States with the largest mean revision")
 ```
@@ -301,10 +301,11 @@ weights <-
     relationship = "many-to-many"
   ) %>%
   mutate(weight = weight.x * weight.y) %>%
-  select(forecast_family, quantile, ahead, weight)
+  select(forecast_family, quantile, ahead, weight) %>%
+  mutate(ahead = factor(ahead), quantile = factor(quantile))
 weights %>%
   filter(forecast_family == "climate") %>%
-  ggplot(aes(y = factor(ahead), x = factor(quantile), fill = weight)) +
+  ggplot(aes(y = ahead, x = quantile, fill = weight)) +
   geom_tile() +
   scale_fill_viridis_c(limits = c(0,1))
 ```
@@ -537,23 +538,9 @@ flu_scores %>%
   facet_grid(forecaster~phase) +
   labs(title = "Wis score histogram") +
   ylab("count") +
-  xlab("wis, population normalized") +
+  xlab("wis, population normalized, log10") +
   theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
   scale_color_viridis_d()
-
-# ggplot(data, aes(x = wis, y = forecaster, fill = forecaster)) +
-#   geom_density_ridges(scale = 3, alpha = 0.7) +
-#   scale_y_discrete(expand = c(0, 0)) +     # will generally have to set the `expand` option
-#   scale_x_continuous(expand = c(0, 0)) +   # for both axes to remove unneeded padding
-#   scale_fill_brewer(palette = 4) +
-#   coord_cartesian(clip = "off") + # to avoid clipping of the very top of the top ridgeline
-#   theme_ridges() +
-#   facet_wrap(~phase) +
-#   labs(title = "Wis score histogram") +
-#   ylab("phase") +
-#   xlab("wis, population normalized") +
-#   theme(plot.title = element_text(hjust = 0.5), legend.position = "none") +
-#   theme(legend.position = "none")
 ```
 
 ## Flu Scores: Phase
