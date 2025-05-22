@@ -38,6 +38,9 @@ Run the pipeline using:
 make install
 
 # Pull various data used by the forecasters from the AWS bucket
+# Requires the AWS CLI to be installed and configured
+# Reference: https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html
+# Installation instructions: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
 make pull
 
 # Make forecasts
@@ -57,6 +60,9 @@ make update_site && make netlify
 # and the gh CLI to be installed and configured, talk to Dmitry about this)
 make submit-flu
 make submit-covid
+
+# Push the data to the AWS bucket (requires AWS CLI)
+make push
 ```
 
 ## Exploration Usage

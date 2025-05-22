@@ -77,16 +77,38 @@ get-nwss:
 	python nwss_covid_export.py; \
 	python nwss_influenza_export.py
 
-sync:
-	Rscript -e "source('R/sync_aws.R'); sync_aws()"
+pull-aux-data:
+	aws s3 sync s3://forecasting-team-data/2024/aux_data/ aux_data/ --delete
 
-pull:
-	Rscript -e "source('R/sync_aws.R'); sync_aws(direction = 'download')"
+pull-covid-prod:
+	aws s3 sync s3://forecasting-team-data/2024/covid_hosp_prod/ covid_hosp_prod/ --delete
 
-download:pull
+pull-flu-prod:
+	aws s3 sync s3://forecasting-team-data/2024/flu_hosp_prod/ flu_hosp_prod/ --delete
 
-push:
-	Rscript -e "source('R/sync_aws.R'); sync_aws(direction = 'upload')"
+pull-covid-explore:
+	aws s3 sync s3://forecasting-team-data/2024/covid_hosp_explore/ covid_hosp_explore/ --delete
+
+pull-flu-explore:
+	aws s3 sync s3://forecasting-team-data/2024/flu_hosp_explore/ flu_hosp_explore/ --delete
+
+pull: pull-aux-data pull-covid-prod pull-flu-prod pull-covid-explore pull-flu-explore
+
+download: pull
+
+push-covid-prod:
+	aws s3 sync covid_hosp_prod/ s3://forecasting-team-data/2024/covid_hosp_prod/ --delete
+
+push-flu-prod:
+	aws s3 sync flu_hosp_prod/ s3://forecasting-team-data/2024/flu_hosp_prod/ --delete
+
+push-covid-explore:
+	aws s3 sync covid_hosp_explore/ s3://forecasting-team-data/2024/covid_hosp_explore/ --delete
+
+push-flu-explore:
+	aws s3 sync flu_hosp_explore/ s3://forecasting-team-data/2024/flu_hosp_explore/ --delete
+
+push: push-covid-prod push-flu-prod push-covid-explore push-flu-explore
 
 upload: push
 
@@ -94,6 +116,8 @@ dashboard:
 	Rscript scripts/dashboard.R
 
 update-site:
+	aws s3 sync s3://forecasting-team-data/2024/reports/ reports/; \
+	aws s3 sync reports/ s3://forecasting-team-data/2024/reports/; \
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()" > cache/update_site_log.txt
 
 netlify:

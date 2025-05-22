@@ -1,7 +1,6 @@
-# this is adding the data downloaded from the forecast eval dashboard, as stored here:
-# https://forecast-eval.s3.us-east-2.amazonaws.com/score_cards_state_hospitalizations.rds
+# this is adding the data downloaded from the forecast eval dashboard
 
-data_to_add <- read_rds("scripts/one_offs/score_cards_state_hospitalizations.rds")
+data_to_add <- aws.s3::s3readRDS(object = "score_cards_state_hospitalizations.rds", bucket = "forecast-eval")
 names(data_to_add)
 data_to_add %>% glimpse()
 data_to_add$forecaster %>% unique()

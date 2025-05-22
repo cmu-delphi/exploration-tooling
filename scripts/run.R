@@ -10,7 +10,7 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 # runs this script.
 tar_project <- Sys.getenv("TAR_RUN_PROJECT", "flu_hosp_prod")
 # Where to place files in S3 (mostly unused)
-aws_s3_prefix <- Sys.getenv("AWS_S3_PREFIX", "exploration") %>% paste0("/", tar_project)
+aws_s3_prefix <- Sys.getenv("AWS_S3_PREFIX", "2024") %>% paste0("/", tar_project)
 # Where to place flu forecasts
 flu_submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
 # Where to place covid forecasts

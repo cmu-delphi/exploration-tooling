@@ -15,7 +15,7 @@ g_insufficient_data_geos <- c("as", "mp", "vi", "gu")
 g_time_value_adjust <- 3
 g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
 g_disease <- "covid"
-g_external_object_name <- glue::glue("exploration/2024-2025_{g_disease}_hosp_forecasts.parquet")
+g_external_object_name <- glue::glue("2024/2024-2025_{g_disease}_hosp_forecasts.parquet")
 # date to cut the truth data off at, so we don't have too much of the past
 g_truth_data_date <- "2023-09-01"
 # Whether we're running in backtest mode.

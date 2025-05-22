@@ -280,7 +280,7 @@ drop_non_seasons <- function(epi_data, min_window = 12) {
 
 get_nwss_coarse_data <- function(disease = c("covid", "flu")) {
   disease <- arg_match(disease)
-  aws.s3::get_bucket_df(prefix = glue::glue("exploration/aux_data/nwss_{disease}_data"), bucket = "forecasting-team-data") %>%
+  aws.s3::get_bucket_df(prefix = glue::glue("2024/aux_data/nwss_{disease}_data"), bucket = "forecasting-team-data") %>%
     slice_max(LastModified) %>%
     pull(Key) %>%
     aws.s3::s3read_using(FUN = readr::read_csv, object = ., bucket = "forecasting-team-data")
