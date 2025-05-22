@@ -33,6 +33,7 @@ AUX_DATA_PATH=aux_data
 Run the pipeline using:
 
 ```sh
+# Install R 4.4.1 (we recommend https://github.com/r-lib/rig)
 # Install renv and R dependencies
 make install
 
@@ -43,7 +44,6 @@ make pull
 make prod-flu
 make prod-covid
 
-# The job output can be found in nohup.out
 # If there are errors, you can view the top n with the following command (replace with appropriate project)
 source("scripts/targets-common.R");
 get_targets_errors("covid_hosp_prod", top_n = 10)
@@ -72,6 +72,11 @@ make install
 # Run the pipeline
 make explore-flu
 make explore-covid
+
+# If you anticipate running the pipeline for a long time and possibly logging off, you can run the pipeline with nohup
+# The job output can be found in nohup.out
+nohup make explore-flu &
+nohup make explore-covid &
 ```
 
 ## Development Overview
@@ -214,7 +219,7 @@ We have a few utility functions that are useful for developing new forecasters.
 forecaster_lookup("forecast_surprised.tarantula")
 forecaster_lookup("surprised.tarantula")
 
-# Get the errors from the targets pipeline
+# Get the errors from a targets pipeline
 get_targets_errors("covid_hosp_explore", top_n = 10)
 
 # Look a tibble of the files we have on S3. Requires access to the Delphi
