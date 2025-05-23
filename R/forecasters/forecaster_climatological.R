@@ -1,22 +1,24 @@
 #' @params model_used the model used. "climate" means just climatological_model, "climate_linear" means the weighted ensemble with a linear model, "climatological_forecaster" means using the model from epipredict
 #'
-climate_linear_ensembled <- function(epi_data,
-                                     outcome,
-                                     extra_sources = character(),
-                                     ahead = 7,
-                                     trainer = parsnip::linear_reg(),
-                                     quantile_levels = covidhub_probs(),
-                                     model_used = "climate_linear",
-                                     filter_source = "",
-                                     filter_agg_level = "",
-                                     scale_method = c("quantile", "std", "none"),
-                                     center_method = c("median", "mean", "none"),
-                                     nonlin_method = c("quart_root", "none"),
-                                     quantiles_by_geo = TRUE,
-                                     drop_non_season = FALSE,
-                                     residual_tail = 0.99,
-                                     residual_center = 0.35,
-                                     ...) {
+climate_linear_ensembled <- function(
+  epi_data,
+  outcome,
+  extra_sources = character(),
+  ahead = 7,
+  trainer = parsnip::linear_reg(),
+  quantile_levels = covidhub_probs(),
+  model_used = "climate_linear",
+  filter_source = "",
+  filter_agg_level = "",
+  scale_method = c("quantile", "std", "none"),
+  center_method = c("median", "mean", "none"),
+  nonlin_method = c("quart_root", "none"),
+  quantiles_by_geo = TRUE,
+  drop_non_season = FALSE,
+  residual_tail = 0.99,
+  residual_center = 0.35,
+  ...
+) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
@@ -66,7 +68,14 @@ climate_linear_ensembled <- function(epi_data,
 
   # either climate or climate linear needs the climate prediction
   if (model_used == "climate" || model_used == "climate_linear") {
-    pred_climate <- climatological_model(season_data, ahead, geo_agg = quantiles_by_geo, floor_value = min(season_data$value, na.rm = TRUE), pop_scale = FALSE) %>% mutate(forecaster = "climate")
+    pred_climate <- climatological_model(
+      season_data,
+      ahead,
+      geo_agg = quantiles_by_geo,
+      floor_value = min(season_data$value, na.rm = TRUE),
+      pop_scale = FALSE
+    ) %>%
+      mutate(forecaster = "climate")
     pred <- pred_climate %>% select(-forecaster)
   }
 
@@ -111,7 +120,13 @@ climate_linear_ensembled <- function(epi_data,
       pred <- clim_res$predictions %>%
         filter(source %in% c("nhsn", "none")) %>%
         pivot_quantiles_longer(.pred_distn) %>%
-        select(geo_value, forecast_date, target_end_date = target_date, value = .pred_distn_value, quantile = .pred_distn_quantile_level) %>%
+        select(
+          geo_value,
+          forecast_date,
+          target_end_date = target_date,
+          value = .pred_distn_value,
+          quantile = .pred_distn_quantile_level
+        ) %>%
         mutate(target_end_date = ceiling_date(target_end_date, unit = "weeks", week_start = 6))
     } else {
       # we're fitting everything all at once in the first ahead for the
@@ -138,7 +153,12 @@ climate_linear_ensembled <- function(epi_data,
       mutate(source = "nhsn")
   }
   pred_final <- pred %>%
-    data_coloring(outcome, learned_params, join_cols = key_colnames(season_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
+    data_coloring(
+      outcome,
+      learned_params,
+      join_cols = key_colnames(season_data, exclude = "time_value"),
+      nonlin_method = nonlin_method
+    ) %>%
     rename(value = {{ outcome }}) %>%
     mutate(value = pmax(0, value)) %>%
     select(-source)

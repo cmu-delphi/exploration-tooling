@@ -8,10 +8,7 @@ convert_epiweek_to_season <- function(epiyear, epiweek) {
 }
 
 epiweeks_in_year <- function(year) {
-  last_week_of_year <- seq.Date(as.Date(paste0(year, "-12-24")),
-    as.Date(paste0(year, "-12-31")),
-    by = 1
-  )
+  last_week_of_year <- seq.Date(as.Date(paste0(year, "-12-24")), as.Date(paste0(year, "-12-31")), by = 1)
   return(max(as.numeric(MMWRweek::MMWRweek(last_week_of_year)$MMWRweek)))
 }
 
@@ -73,17 +70,20 @@ step_season_week_sine <- function(preproc, season = 35) {
 #' but for now it's not worth the time
 #' @param original_dataset tibble or epi_df, should have states as 2 letter lower case
 add_pop_and_density <-
-  function(original_dataset,
-           apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
-           state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
-           hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")) {
+  function(
+    original_dataset,
+    apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
+    state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
+    hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")
+  ) {
     pops_by_state_hhs <- gen_pop_and_density_data(apportion_filename, state_code_filename, hhs_code_filename)
     # if the dataset uses "usa" instead of "us", substitute that
     if ("usa" %in% unique(original_dataset)$geo_value) {
       pops_by_state_hhs %<>%
         mutate(
           geo_value = ifelse(geo_value == "us", "usa", geo_value),
-          agg_level = ifelse(grepl("[0-9]{2}", geo_value),
+          agg_level = ifelse(
+            grepl("[0-9]{2}", geo_value),
             "hhs_region",
             ifelse(("us" == geo_value) | ("usa" == geo_value), "nation", "state")
           )
@@ -107,17 +107,21 @@ add_pop_and_density <-
 
 add_agg_level <- function(data) {
   data %>%
-    mutate(agg_level = case_when(
-      grepl("[0-9]{2}", geo_value) ~ "hhs_region",
-      geo_value %in% c("us", "usa") ~ "nation",
-      .default = "state"
-    ))
+    mutate(
+      agg_level = case_when(
+        grepl("[0-9]{2}", geo_value) ~ "hhs_region",
+        geo_value %in% c("us", "usa") ~ "nation",
+        .default = "state"
+      )
+    )
 }
 
 gen_pop_and_density_data <-
-  function(apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
-           state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
-           hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")) {
+  function(
+    apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
+    state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
+    hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")
+  ) {
     apportionment_data <- readr::read_csv(apportion_filename, show_col_types = FALSE) %>% as_tibble()
     imputed_pop_data <- apportionment_data %>%
       filter(`Geography Type` %in% c("State", "Nation")) %>%
@@ -217,11 +221,13 @@ daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), keys = "geo_v
 #'   Note that this is 1-indexed, so 1 = Sunday, 2 = Monday, ..., 7 = Saturday.
 #' @param week_start the day of the week to use as the start of the week (Sunday is default).
 #'   Note that this is 1-indexed, so 1 = Sunday, 2 = Monday, ..., 7 = Saturday.
-daily_to_weekly_archive <- function(epi_arch,
-                                    agg_columns,
-                                    agg_method = c("sum", "mean"),
-                                    week_reference = 4L,
-                                    week_start = 7L) {
+daily_to_weekly_archive <- function(
+  epi_arch,
+  agg_columns,
+  agg_method = c("sum", "mean"),
+  week_reference = 4L,
+  week_start = 7L
+) {
   # How to aggregate the windowed data.
   agg_method <- arg_match(agg_method)
   # The columns we will later group by when aggregating.
@@ -246,7 +252,7 @@ daily_to_weekly_archive <- function(epi_arch,
     function(x, group_keys, ref_time) {
       # Slide over the days and aggregate.
       x %>%
-        mutate(week_start = ceiling_date(time_value, "week", week_start = week_start)-1) %>%
+        mutate(week_start = ceiling_date(time_value, "week", week_start = week_start) - 1) %>%
         summarize(across(all_of(agg_columns), agg_fun), .by = all_of(c(keys, "week_start"))) %>%
         mutate(time_value = round_date(week_start, "week", week_reference - 1)) %>%
         select(-week_start) %>%
@@ -326,7 +332,10 @@ get_health_data <- function(as_of, disease = c("covid", "flu")) {
 
   metadata_path <- here::here(cache_path, "metadata.csv")
   if (!file.exists(metadata_path)) {
-    meta_data <- readr::read_csv("https://healthdata.gov/resource/qqte-vkut.csv?$query=SELECT%20update_date%2C%20days_since_update%2C%20user%2C%20rows%2C%20row_change%2C%20columns%2C%20column_change%2C%20metadata_published%2C%20metadata_updates%2C%20column_level_metadata%2C%20column_level_metadata_updates%2C%20archive_link%20ORDER%20BY%20update_date%20DESC%20LIMIT%2010000", show_col_types = FALSE)
+    meta_data <- readr::read_csv(
+      "https://healthdata.gov/resource/qqte-vkut.csv?$query=SELECT%20update_date%2C%20days_since_update%2C%20user%2C%20rows%2C%20row_change%2C%20columns%2C%20column_change%2C%20metadata_published%2C%20metadata_updates%2C%20column_level_metadata%2C%20column_level_metadata_updates%2C%20archive_link%20ORDER%20BY%20update_date%20DESC%20LIMIT%2010000",
+      show_col_types = FALSE
+    )
     readr::write_csv(meta_data, metadata_path)
   } else {
     meta_data <- readr::read_csv(metadata_path, show_col_types = FALSE)
@@ -349,10 +358,11 @@ get_health_data <- function(as_of, disease = c("covid", "flu")) {
     data <- readr::read_csv(data_filepath, show_col_types = FALSE)
   }
   if (disease == "covid") {
-    data %<>% mutate(
-      hhs = previous_day_admission_adult_covid_confirmed +
-        previous_day_admission_pediatric_covid_confirmed
-    )
+    data %<>%
+      mutate(
+        hhs = previous_day_admission_adult_covid_confirmed +
+          previous_day_admission_pediatric_covid_confirmed
+      )
   } else if (disease == "flu") {
     data %<>% mutate(hhs = previous_day_admission_influenza_confirmed)
   }
@@ -403,9 +413,13 @@ calculate_burden_adjustment <- function(flusurv_latest) {
     separate(Season, into = c("StartYear", "season"), sep = "-") %>%
     select(season, contains("Estimate")) %>%
     mutate(season = as.double(season)) %>%
-    mutate(season = paste0(
-      as.character(season - 1), "/", substr(season, 3, 4)
-    ))
+    mutate(
+      season = paste0(
+        as.character(season - 1),
+        "/",
+        substr(season, 3, 4)
+      )
+    )
   # get population data
   us_population <- readr::read_csv(here::here("aux_data", "flusion_data", "us_pop.csv"), show_col_types = FALSE) %>%
     rename(us_pop = POPTOTUSA647NWDB) %>%
@@ -434,15 +448,14 @@ generate_flusurv_adjusted <- function(day_of_week = 1) {
   ) %>%
     select(geo_value = location, time_value = epiweek, hosp_rate = rate_overall, version = issue) %>%
     drop_na() %>%
-    mutate(agg_level = case_when(
-      geo_value == "network_all" ~ "nation",
-      TRUE ~ "state"
-    )) %>%
     mutate(
-      geo_value = if_else(agg_level == "nation",
-        str_replace_all(geo_value, "network_all", "us"),
-        tolower(geo_value)
+      agg_level = case_when(
+        geo_value == "network_all" ~ "nation",
+        TRUE ~ "state"
       )
+    ) %>%
+    mutate(
+      geo_value = if_else(agg_level == "nation", str_replace_all(geo_value, "network_all", "us"), tolower(geo_value))
     ) %>%
     mutate(
       geo_value = if_else(
@@ -494,10 +507,7 @@ generate_flusurv_adjusted <- function(day_of_week = 1) {
     mutate(adj_hosp_rate = hosp_rate * adj_factor, source = "flusurv")
   flusurv_lat %>%
     mutate(
-      geo_value = if_else(geo_value %in% c("ny_rochester", "ny_albany"),
-        "ny",
-        geo_value
-      )
+      geo_value = if_else(geo_value %in% c("ny_rochester", "ny_albany"), "ny", geo_value)
     ) %>%
     group_by(geo_value, time_value, version, agg_level) %>%
     summarise(
@@ -517,18 +527,21 @@ generate_flusurv_adjusted <- function(day_of_week = 1) {
 process_who_nrevss <- function(filename1, filename2, filename3) {
   clinical_lab_pos <- readr::read_csv(
     here::here("aux_data", "flusion_data", filename1),
-    skip = 1, show_col_types = FALSE
+    skip = 1,
+    show_col_types = FALSE
   ) %>%
     select("REGION TYPE", "REGION", "YEAR", "WEEK", "PERCENT POSITIVE")
   combined_pos <- readr::read_csv(
     here::here("aux_data", "flusion_data", filename2),
-    skip = 1, show_col_types = FALSE
+    skip = 1,
+    show_col_types = FALSE
   ) %>%
     select("REGION TYPE", "REGION", "YEAR", "WEEK", "PERCENT POSITIVE")
   pos_state <- bind_rows(clinical_lab_pos, combined_pos)
   ili_state <- readr::read_csv(
     here::here("aux_data", "flusion_data", filename3),
-    skip = 1, show_col_types = FALSE
+    skip = 1,
+    show_col_types = FALSE
   ) %>%
     select("REGION TYPE", "REGION", "YEAR", "WEEK", "% WEIGHTED ILI", "%UNWEIGHTED ILI")
   merge(pos_state, ili_state, by = c("REGION TYPE", "REGION", "YEAR", "WEEK")) %>%
@@ -565,14 +578,10 @@ gen_ili_data <- function(default_day_of_week = 1) {
     mutate(agg_level = str_replace_all(agg_level, "HHS Regions", "hhs_region")) %>%
     mutate(agg_level = str_replace_all(agg_level, "National", "nation")) %>%
     mutate(agg_level = str_replace_all(agg_level, "States", "state")) %>%
-    mutate(geo_value = if_else(agg_level == "hhs_region",
-      str_replace_all(geo_value, "Region (\\d+)", "\\1"),
-      geo_value
-    )) %>%
-    mutate(geo_value = if_else(agg_level == "nation",
-      str_replace_all(geo_value, "X", "us"),
-      geo_value
-    )) %>%
+    mutate(
+      geo_value = if_else(agg_level == "hhs_region", str_replace_all(geo_value, "Region (\\d+)", "\\1"), geo_value)
+    ) %>%
+    mutate(geo_value = if_else(agg_level == "nation", str_replace_all(geo_value, "X", "us"), geo_value)) %>%
     rename(epiyear = YEAR, epiweek = WEEK) %>%
     left_join(
       (.) %>%
@@ -587,6 +596,7 @@ gen_ili_data <- function(default_day_of_week = 1) {
   # map names to lower case
   name_map <- tibble(abb = state.abb, name = state.name) %>%
     bind_rows(
+      # fmt: skip
       tribble(
         ~name, ~abb,
         "District of Columbia", "DC",
@@ -605,8 +615,18 @@ gen_ili_data <- function(default_day_of_week = 1) {
     filter(agg_level == "state") %>%
     left_join(name_map, by = join_by(geo_value == name)) %>%
     select(
-      geo_value = abb, time_value, version, agg_level, value, season,
-      season_week, `PERCENT POSITIVE`, `% WEIGHTED ILI`, source, epiyear, epiweek
+      geo_value = abb,
+      time_value,
+      version,
+      agg_level,
+      value,
+      season,
+      season_week,
+      `PERCENT POSITIVE`,
+      `% WEIGHTED ILI`,
+      source,
+      epiyear,
+      epiweek
     )
 
   # aggregate NYC and NY state
@@ -642,7 +662,11 @@ gen_ili_data <- function(default_day_of_week = 1) {
 #' @param disease_name The name of the disease ("nhsn_covid" or "nhsn_flu")
 #' @return An epi_archive of the NHSN data.
 get_nhsn_data_archive <- function(disease_name) {
-  aws.s3::s3read_using(nanoparquet::read_parquet, object = "nhsn_data_archive.parquet", bucket = "forecasting-team-data") %>%
+  aws.s3::s3read_using(
+    nanoparquet::read_parquet,
+    object = "nhsn_data_archive.parquet",
+    bucket = "forecasting-team-data"
+  ) %>%
     filter(disease == disease_name) %>%
     filter(!grepl("region.*", geo_value)) %>%
     select(-version_timestamp, -disease) %>%

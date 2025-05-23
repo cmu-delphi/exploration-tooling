@@ -33,7 +33,15 @@ run_time_local <- with_tz(run_time)
 # Configuration
 covid_config <- list(
   base_url = "https://raw.githubusercontent.com/cdcgov/covid19-forecast-hub/main/model-output",
-  forecasters = c("CMU-TimeSeries", "CovidHub-baseline", "CovidHub-ensemble", "UMass-ar6_pooled", "UMass-gbqr", "CEPH-Rtrend_covid", "Metaculus-cp"),
+  forecasters = c(
+    "CMU-TimeSeries",
+    "CovidHub-baseline",
+    "CovidHub-ensemble",
+    "UMass-ar6_pooled",
+    "UMass-gbqr",
+    "CEPH-Rtrend_covid",
+    "Metaculus-cp"
+  ),
   s3_bucket = "forecasting-team-data",
   s3_key = "exploration/2024-2025_covid_hosp_forecasts.parquet",
   disease = "covid"
@@ -41,7 +49,16 @@ covid_config <- list(
 # same but for flu
 flu_config <- list(
   base_url = "https://raw.githubusercontent.com/cdcepi/FluSight-forecast-hub/main/model-output",
-  forecasters = c("FluSight-baseline", "FluSight-ensemble", "CMU-TimeSeries", "PSI-PROF", "FluSight-lop_norm", "UMass-flusion", "NIH-Flu_ARIMA", "Metaculus-cp"),
+  forecasters = c(
+    "FluSight-baseline",
+    "FluSight-ensemble",
+    "CMU-TimeSeries",
+    "PSI-PROF",
+    "FluSight-lop_norm",
+    "UMass-flusion",
+    "NIH-Flu_ARIMA",
+    "Metaculus-cp"
+  ),
   s3_bucket = "forecasting-team-data",
   s3_key = "exploration/2024-2025_flu_hosp_forecasts.parquet",
   disease = "flu"

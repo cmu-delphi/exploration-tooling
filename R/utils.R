@@ -677,7 +677,10 @@ get_s3_object_last_modified <- function(key, bucket, missing_value = MIN_TIMESTA
 get_socrata_updated_at <- function(dataset_url, missing_value = MAX_TIMESTAMP) {
   tryCatch(
     {
-      httr::with_config(httr::config(timeout = 5), httr::RETRY("GET", dataset_url, times = 5, pause_min = 5, pause_cap = 5)) %>%
+      httr::with_config(
+        httr::config(timeout = 5),
+        httr::RETRY("GET", dataset_url, times = 5, pause_min = 5, pause_cap = 5)
+      ) %>%
         httr::content() %>%
         # This field comes in as integer seconds since epoch, so we need to convert it.
         pluck("rowsUpdatedAt") %>%
@@ -690,7 +693,6 @@ get_socrata_updated_at <- function(dataset_url, missing_value = MAX_TIMESTAMP) {
 }
 
 
-
 #' get the unique shared (geo_value, forecast_date, target_end_date) tuples present for each forecaster in `forecasts`
 get_unique <- function(forecasts) {
   forecasters <- forecasts %>%
@@ -698,12 +700,16 @@ get_unique <- function(forecasts) {
     unique()
   distinct <- map(
     forecasters,
-    \(x) forecasts %>%
-      filter(forecaster == x) %>%
-      select(geo_value, forecast_date, target_end_date) %>%
-      distinct()
+    \(x)
+      forecasts %>%
+        filter(forecaster == x) %>%
+        select(geo_value, forecast_date, target_end_date) %>%
+        distinct()
   )
-  distinct_dates <- reduce(distinct, \(x, y) x %>% inner_join(y, by = c("geo_value", "forecast_date", "target_end_date")))
+  distinct_dates <- reduce(
+    distinct,
+    \(x, y) x %>% inner_join(y, by = c("geo_value", "forecast_date", "target_end_date"))
+  )
   mutate(
     distinct_dates,
     forecast_date = round_date(forecast_date, unit = "week", week_start = 6)
@@ -715,7 +721,12 @@ get_unique <- function(forecasts) {
 #' anyways, they are `tructated_forecasters`, while the external_forecasts may
 #' have previous years forecasts that we definitely want to exclude via
 #' `season_start`.
-filter_shared_geo_dates <- function(local_forecasts, external_forecasts, season_start = "2024-11-01", trucated_forecasters = "windowed_seasonal_extra_sources") {
+filter_shared_geo_dates <- function(
+  local_forecasts,
+  external_forecasts,
+  season_start = "2024-11-01",
+  trucated_forecasters = "windowed_seasonal_extra_sources"
+) {
   viable_dates <- inner_join(
     local_forecasts %>%
       filter(forecaster %nin% trucated_forecasters) %>%

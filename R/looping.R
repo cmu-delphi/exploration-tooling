@@ -28,19 +28,21 @@
 #' @importFrom cli cli_abort
 #' @importFrom rlang !!
 #' @export
-slide_forecaster <- function(epi_archive,
-                             outcome,
-                             ahead,
-                             forecaster = scaled_pop,
-                             slide_training = 0,
-                             n_training_pad = 5,
-                             forecaster_args = list(),
-                             forecaster_args_names = list(),
-                             ref_time_values = NULL,
-                             start_date = NULL,
-                             end_date = NULL,
-                             date_range_step_size = 1L,
-                             cache_key = NULL) {
+slide_forecaster <- function(
+  epi_archive,
+  outcome,
+  ahead,
+  forecaster = scaled_pop,
+  slide_training = 0,
+  n_training_pad = 5,
+  forecaster_args = list(),
+  forecaster_args_names = list(),
+  ref_time_values = NULL,
+  start_date = NULL,
+  end_date = NULL,
+  date_range_step_size = 1L,
+  cache_key = NULL
+) {
   if (length(forecaster_args) > 0) {
     names(forecaster_args) <- forecaster_args_names
   }
@@ -104,7 +106,8 @@ epix_slide_simple <- function(epi_archive, forecaster, ref_time_values, before =
       }
     }
     epi_df %>% forecaster()
-  }) %>% bind_rows()
+  }) %>%
+    bind_rows()
   gc()
   return(out)
 }

@@ -1,5 +1,6 @@
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
+# fmt: skip
 data <- tribble(
   ~geo_value, ~time_value, ~version, ~value,
   "ak", "2024-11-08", "2024-11-13", 1,

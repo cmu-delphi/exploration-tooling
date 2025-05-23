@@ -7,7 +7,11 @@ test_that("sanitize_args_predictors_trainer", {
   ex_args <- default_args_list()
   expect_error(sanitize_args_predictors_trainer(epi_data, "case_rate", c("case_rate"), 5, ex_args))
   argsPredictors <- sanitize_args_predictors_trainer(
-    epi_data, "case_rate", c("case_rate", ""), parsnip::linear_reg(), ex_args
+    epi_data,
+    "case_rate",
+    c("case_rate", ""),
+    parsnip::linear_reg(),
+    ex_args
   )
   args_list <- argsPredictors[[1]]
   predictors <- argsPredictors[[2]]
@@ -16,6 +20,7 @@ test_that("sanitize_args_predictors_trainer", {
 
 test_that("id generation works", {
   # Same arguments but scrambled.
+  # fmt: skip
   simple_ex <- list(
     dplyr::tribble(
       ~forecaster, ~trainer, ~pop_scaling, ~lags,
@@ -47,10 +52,12 @@ test_that("forecaster lookup selects the right rows", {
     lags = list(NULL, c(0, 7, 14)),
     pop_scale = c(FALSE, TRUE),
   )
+  # fmt: skip
   expect_equal(forecaster_lookup("monarchist", param_grid_ex), tribble(
     ~id, ~forecaster, ~lags, ~pop_scale,
     "monarchist.thrip", "scaled_pop", c(0, 7, 14), TRUE,
   ))
+  # fmt: skip
   expect_equal(forecaster_lookup("irish", param_grid_ex), tribble(
     ~id, ~forecaster, ~lags, ~pop_scale,
     "simian.irishsetter", "scaled_pop", NULL, FALSE,

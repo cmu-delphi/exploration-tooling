@@ -1,23 +1,25 @@
-flusion <- function(epi_data,
-                    outcome,
-                    extra_sources = character(),
-                    ahead = 7,
-                    pop_scaling = FALSE,
-                    trainer = rand_forest(
-                      engine = "grf_quantiles",
-                      mode = "regression"
-                    ),
-                    quantile_levels = covidhub_probs(),
-                    drop_non_seasons = FALSE,
-                    scale_method = c("quantile", "std", "none"),
-                    center_method = c("median", "mean", "none"),
-                    nonlin_method = c("quart_root", "none"),
-                    dummy_states = TRUE,
-                    dummy_source = TRUE,
-                    sources_to_pop_scale = c(),
-                    derivative_estimator = c("growth_rate", "quadratic_regression", "none"),
-                    difference = FALSE,
-                    ...) {
+flusion <- function(
+  epi_data,
+  outcome,
+  extra_sources = character(),
+  ahead = 7,
+  pop_scaling = FALSE,
+  trainer = rand_forest(
+    engine = "grf_quantiles",
+    mode = "regression"
+  ),
+  quantile_levels = covidhub_probs(),
+  drop_non_seasons = FALSE,
+  scale_method = c("quantile", "std", "none"),
+  center_method = c("median", "mean", "none"),
+  nonlin_method = c("quart_root", "none"),
+  dummy_states = TRUE,
+  dummy_source = TRUE,
+  sources_to_pop_scale = c(),
+  derivative_estimator = c("growth_rate", "quadratic_regression", "none"),
+  difference = FALSE,
+  ...
+) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
@@ -63,7 +65,8 @@ flusion <- function(epi_data,
   args_list <- do.call(default_args_list, args_input)
   # if you want to hardcode particular predictors in a particular forecaster
   predictors <- c(outcome, extra_sources)
-  c(args_list, predictors, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
+  c(args_list, predictors, trainer) %<-%
+    sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
@@ -131,14 +134,15 @@ flusion <- function(epi_data,
   # preprocessing supported by epipredict
   preproc <- epi_recipe(full_data)
   if (pop_scaling && !is.null(sources_to_pop_scale)) {
-    preproc %<>% step_population_scaling(
-      sources_to_pop_scale,
-      df = epidatasets::state_census,
-      df_pop_col = "pop",
-      create_new = FALSE,
-      rate_rescaling = 1e5,
-      by = c("geo_value" = "abbr")
-    )
+    preproc %<>%
+      step_population_scaling(
+        sources_to_pop_scale,
+        df = epidatasets::state_census,
+        df_pop_col = "pop",
+        create_new = FALSE,
+        rate_rescaling = 1e5,
+        by = c("geo_value" = "abbr")
+      )
   }
   # slide is currently done before for efficiency reasons, added as predictors here
   if (derivative_estimator == "quadratic_regression") {
@@ -158,7 +162,8 @@ flusion <- function(epi_data,
   }
   # one-hot encoding of scale (probably redundant with geo_value)
   # population and density
-  preproc %<>% add_role(population, density, new_role = "pre-predictor") %>%
+  preproc %<>%
+    add_role(population, density, new_role = "pre-predictor") %>%
     # week of the year
     step_date(time_value, features = "week") %>%
     # week of the season
@@ -173,19 +178,24 @@ flusion <- function(epi_data,
   postproc <- frosting()
   postproc %<>% arx_postprocess(trainer, args_list)
   if (pop_scaling) {
-    postproc %<>% layer_population_scaling(
-      .pred, .pred_distn,
-      df = epidatasets::state_census,
-      df_pop_col = "pop",
-      create_new = FALSE,
-      rate_rescaling = 1e5,
-      by = c("geo_value" = "abbr")
-    )
+    postproc %<>%
+      layer_population_scaling(
+        .pred,
+        .pred_distn,
+        df = epidatasets::state_census,
+        df_pop_col = "pop",
+        create_new = FALSE,
+        rate_rescaling = 1e5,
+        by = c("geo_value" = "abbr")
+      )
   }
   # with all the setup done, we execute and format
   pred <- run_workflow_and_format(
-    preproc, postproc,
-    trainer, season_data, full_data
+    preproc,
+    postproc,
+    trainer,
+    season_data,
+    full_data
   )
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
@@ -193,7 +203,12 @@ flusion <- function(epi_data,
   # reintroduce color into the value
   pred_final <- pred %>%
     rename({{ outcome }} := value) %>%
-    data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
+    data_coloring(
+      outcome,
+      learned_params,
+      join_cols = key_colnames(epi_data, exclude = "time_value"),
+      nonlin_method = nonlin_method
+    ) %>%
     rename(value = {{ outcome }}) %>%
     mutate(value = pmax(0, value))
   if (adding_source) {

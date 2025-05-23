@@ -21,7 +21,16 @@ get_default_truth_data <- function(exclued_geos, geo_type) {
     mutate(data_source = "hhs", forecaster = "hhs hosp truth")
 }
 
-plot_forecasts <- function(predictions_cards, forecast_date, truth_data, exclude_geos = c(), geo_type = c("state", "nation"), quantiles = c(0.8, 0.95), alphas = c(0.4, 0.2), relevant_period = NULL) {
+plot_forecasts <- function(
+  predictions_cards,
+  forecast_date,
+  truth_data,
+  exclude_geos = c(),
+  geo_type = c("state", "nation"),
+  quantiles = c(0.8, 0.95),
+  alphas = c(0.4, 0.2),
+  relevant_period = NULL
+) {
   if (is.null(truth_data)) {
     truth_data <- get_default_truth_data(exclude_geos, geo_type)
   }
@@ -29,7 +38,8 @@ plot_forecasts <- function(predictions_cards, forecast_date, truth_data, exclude
   geo_type <- rlang::arg_match(geo_type)
   # Setup plot
   if ("source" %in% names(truth_data)) {
-    g <- ggplot(truth_data,
+    g <- ggplot(
+      truth_data,
       mapping = aes(
         x = .data$target_end_date,
         color = .data$source
@@ -37,9 +47,12 @@ plot_forecasts <- function(predictions_cards, forecast_date, truth_data, exclude
     ) +
       geom_line(mapping = aes(y = .data$value))
   } else {
-    g <- ggplot(truth_data, mapping = aes(
-      x = .data$target_end_date
-    )) +
+    g <- ggplot(
+      truth_data,
+      mapping = aes(
+        x = .data$target_end_date
+      )
+    ) +
       geom_line(mapping = aes(y = .data$value), color = "red")
   }
 
@@ -91,7 +104,15 @@ plot_forecasts <- function(predictions_cards, forecast_date, truth_data, exclude
 
   # add highlights for the training regions
   if (!is.null(relevant_period)) {
-    g <- g + geom_rect(data = relevant_period, inherit.aes = FALSE, aes(xmin = start, xmax = stop, ymin = -Inf, ymax = Inf), color = "transparent", fill = "orange", alpha = 0.3)
+    g <- g +
+      geom_rect(
+        data = relevant_period,
+        inherit.aes = FALSE,
+        aes(xmin = start, xmax = stop, ymin = -Inf, ymax = Inf),
+        color = "transparent",
+        fill = "orange",
+        alpha = 0.3
+      )
   }
   return(g)
 }

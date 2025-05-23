@@ -17,7 +17,10 @@ get_health_data <- function(as_of, disease = c("covid", "flu")) {
 
   metadata_path <- here::here(cache_path, "metadata.csv")
   if (!file.exists(metadata_path)) {
-    meta_data <- readr::read_csv("https://healthdata.gov/resource/qqte-vkut.csv?$query=SELECT%20update_date%2C%20days_since_update%2C%20user%2C%20rows%2C%20row_change%2C%20columns%2C%20column_change%2C%20metadata_published%2C%20metadata_updates%2C%20column_level_metadata%2C%20column_level_metadata_updates%2C%20archive_link%20ORDER%20BY%20update_date%20DESC%20LIMIT%2010000", show_col_types = FALSE)
+    meta_data <- readr::read_csv(
+      "https://healthdata.gov/resource/qqte-vkut.csv?$query=SELECT%20update_date%2C%20days_since_update%2C%20user%2C%20rows%2C%20row_change%2C%20columns%2C%20column_change%2C%20metadata_published%2C%20metadata_updates%2C%20column_level_metadata%2C%20column_level_metadata_updates%2C%20archive_link%20ORDER%20BY%20update_date%20DESC%20LIMIT%2010000",
+      show_col_types = FALSE
+    )
     readr::write_csv(meta_data, metadata_path)
   } else {
     meta_data <- readr::read_csv(metadata_path, show_col_types = FALSE)
@@ -41,12 +44,13 @@ get_health_data <- function(as_of, disease = c("covid", "flu")) {
     data <- readr::read_csv(data_filepath, show_col_types = FALSE)
   }
   if (disease == "covid") {
-    data %<>% mutate(
-      hhs = previous_day_admission_adult_covid_confirmed +
-        previous_day_admission_adult_covid_suspected +
-        previous_day_admission_pediatric_covid_confirmed +
-        previous_day_admission_pediatric_covid_suspected
-    )
+    data %<>%
+      mutate(
+        hhs = previous_day_admission_adult_covid_confirmed +
+          previous_day_admission_adult_covid_suspected +
+          previous_day_admission_pediatric_covid_confirmed +
+          previous_day_admission_pediatric_covid_suspected
+      )
   } else if (disease == "flu") {
     data %<>% mutate(hhs = previous_day_admission_influenza_confirmed)
   }
@@ -69,11 +73,13 @@ get_health_data <- function(as_of, disease = c("covid", "flu")) {
         summarize(geo_value = "us", hhs = sum(hhs, na.rm = TRUE))
     )
 }
-daily_to_weekly_archive <- function(epi_arch,
-                                    agg_columns,
-                                    agg_method = c("sum", "mean"),
-                                    day_of_week = 4L,
-                                    day_of_week_end = 7L) {
+daily_to_weekly_archive <- function(
+  epi_arch,
+  agg_columns,
+  agg_method = c("sum", "mean"),
+  day_of_week = 4L,
+  day_of_week_end = 7L
+) {
   agg_method <- arg_match(agg_method)
   keys <- key_colnames(epi_arch, exclude = "time_value")
   ref_time_values <- epi_arch$DT$version %>%
@@ -126,7 +132,8 @@ daily_to_weekly_archive <- function(epi_arch,
 }
 
 health_data_covid <- map(forecast_dates, get_health_data)
-compactified_health_data_covid <- mapply(\(x, y) mutate(x, version = y),
+compactified_health_data_covid <- mapply(
+  \(x, y) mutate(x, version = y),
   health_data_covid,
   forecast_dates,
   SIMPLIFY = FALSE
@@ -138,10 +145,9 @@ weekly_archive_covid <- compactified_health_data_covid %>%
   daily_to_weekly_archive(agg_columns = "hhs")
 
 
-
-
 health_data_flu <- map(forecast_dates, \(x) get_health_data(x, "flu"))
-compactified_health_data_flu <- mapply(\(x, y) mutate(x, version = y),
+compactified_health_data_flu <- mapply(
+  \(x, y) mutate(x, version = y),
   health_data_flu,
   forecast_dates,
   SIMPLIFY = FALSE

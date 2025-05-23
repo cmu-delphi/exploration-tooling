@@ -49,25 +49,27 @@
 #' @importFrom recipes all_numeric
 #' @importFrom zeallot %<-%
 #' @export
-smoothed_scaled <- function(epi_data,
-                            outcome,
-                            extra_sources = character(),
-                            ahead = 1,
-                            pop_scaling = TRUE,
-                            trainer = parsnip::linear_reg(),
-                            quantile_levels = covidhub_probs(),
-                            smooth_width = 7,
-                            smooth_cols = NULL,
-                            sd_width = 28,
-                            sd_mean_width = 14,
-                            sd_cols = NULL,
-                            drop_non_seasons = FALSE,
-                            scale_method = c("none", "quantile", "std"),
-                            center_method = c("median", "mean", "none"),
-                            nonlin_method = c("quart_root", "none"),
-                            filter_source = "",
-                            filter_agg_level = "",
-                            ...) {
+smoothed_scaled <- function(
+  epi_data,
+  outcome,
+  extra_sources = character(),
+  ahead = 1,
+  pop_scaling = TRUE,
+  trainer = parsnip::linear_reg(),
+  quantile_levels = covidhub_probs(),
+  smooth_width = 7,
+  smooth_cols = NULL,
+  sd_width = 28,
+  sd_mean_width = 14,
+  sd_cols = NULL,
+  drop_non_seasons = FALSE,
+  scale_method = c("none", "quantile", "std"),
+  center_method = c("median", "mean", "none"),
+  nonlin_method = c("quart_root", "none"),
+  filter_source = "",
+  filter_agg_level = "",
+  ...
+) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
@@ -112,7 +114,6 @@ smoothed_scaled <- function(epi_data,
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
 
-
   #######################
   # robust whitening
   #######################
@@ -128,7 +129,10 @@ smoothed_scaled <- function(epi_data,
   ###############
   # smoothing
   ###############
-  keep_mean <- !is.na(smooth_width) && !is.na(sd_width) && !is.na(sd_width) && !is.null(sd_mean_width) &&
+  keep_mean <- !is.na(smooth_width) &&
+    !is.na(sd_width) &&
+    !is.na(sd_width) &&
+    !is.null(sd_mean_width) &&
     smooth_width == sd_mean_width # do we (not) need to do the mean separately?
   # since we're adding columns, we need to figure out which to exclude
   all_names <- get_nonkey_names(epi_data)
@@ -147,7 +151,6 @@ smoothed_scaled <- function(epi_data,
     unused_columns <- c(unused_columns, sd_cols[!(sd_cols %in% unused_columns)])
   }
 
-
   # make sure that sd_width etc have the right units; the process of going through targets strips the type
   time_type <- attributes(epi_data)$metadata$time_type
   if (time_type != "day") {
@@ -158,20 +161,22 @@ smoothed_scaled <- function(epi_data,
 
   # TODO: Remove? We don't use these anymore.
   if (!is.null(smooth_width) && !is.na(smooth_width) && !keep_mean) {
-    epi_data %<>% rolling_mean(
-      width = smooth_width,
-      cols_to_mean = smooth_cols
-    )
+    epi_data %<>%
+      rolling_mean(
+        width = smooth_width,
+        cols_to_mean = smooth_cols
+      )
   }
 
   # measuring standard deviation
   if (!is.null(sd_width) && !is.na(sd_width)) {
-    epi_data %<>% rolling_sd(
-      sd_width = sd_width,
-      mean_width = sd_mean_width,
-      cols_to_sd = sd_cols,
-      keep_mean = keep_mean
-    )
+    epi_data %<>%
+      rolling_sd(
+        sd_width = sd_width,
+        mean_width = sd_mean_width,
+        cols_to_sd = sd_cols,
+        keep_mean = keep_mean
+      )
   }
 
   # need to make a version with the non seasonal and problematic flu seasons removed
@@ -184,18 +189,20 @@ smoothed_scaled <- function(epi_data,
   # and need to make sure we exclude the original variables as predictors
   all_names <- get_nonkey_names(epi_data)
   predictors <- all_names[!(all_names %in% unused_columns)]
-  c(args_list, predictors, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
+  c(args_list, predictors, trainer) %<-%
+    sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {
-    preproc %<>% step_population_scaling(
-      all_numeric(),
-      df = epidatasets::state_census,
-      df_pop_col = "pop",
-      create_new = FALSE,
-      rate_rescaling = 1e5,
-      by = c("geo_value" = "abbr")
-    )
+    preproc %<>%
+      step_population_scaling(
+        all_numeric(),
+        df = epidatasets::state_census,
+        df_pop_col = "pop",
+        create_new = FALSE,
+        rate_rescaling = 1e5,
+        by = c("geo_value" = "abbr")
+      )
   }
   preproc %<>% arx_preprocess(outcome, predictors, args_list)
 
@@ -203,19 +210,24 @@ smoothed_scaled <- function(epi_data,
   postproc <- frosting()
   postproc %<>% arx_postprocess(trainer, args_list)
   if (pop_scaling) {
-    postproc %<>% layer_population_scaling(
-      .pred, .pred_distn,
-      df = epidatasets::state_census,
-      df_pop_col = "pop",
-      create_new = FALSE,
-      rate_rescaling = 1e5,
-      by = c("geo_value" = "abbr")
-    )
+    postproc %<>%
+      layer_population_scaling(
+        .pred,
+        .pred_distn,
+        df = epidatasets::state_census,
+        df_pop_col = "pop",
+        create_new = FALSE,
+        rate_rescaling = 1e5,
+        by = c("geo_value" = "abbr")
+      )
   }
   # with all the setup done, we execute and format
   pred <- run_workflow_and_format(
-    preproc, postproc, trainer,
-    season_data, epi_data
+    preproc,
+    postproc,
+    trainer,
+    season_data,
+    epi_data
   )
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
@@ -223,7 +235,12 @@ smoothed_scaled <- function(epi_data,
   # reintroduce color into the value
   pred_final <- pred %>%
     rename({{ outcome }} := value) %>%
-    data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
+    data_coloring(
+      outcome,
+      learned_params,
+      join_cols = key_colnames(epi_data, exclude = "time_value"),
+      nonlin_method = nonlin_method
+    ) %>%
     rename(value = {{ outcome }}) %>%
     mutate(value = pmax(0, value))
   if (adding_source) {

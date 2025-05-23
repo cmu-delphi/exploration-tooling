@@ -3,7 +3,6 @@
 #' This file contains utility functions that can be used by both COVID and flu
 #' forecasting pipelines.
 
-
 #' Get partially applied forecaster function
 #'
 #' params and param_names are defined by the values of the
@@ -68,7 +67,8 @@ create_forecast_targets <- function() {
           # TODO: Hack fix because whitening has edge cases. Remove when fixed.
           out %<>% sort_by_quantile()
         }
-        out %<>% rename(prediction = value) %>%
+        out %<>%
+          rename(prediction = value) %>%
           mutate(ahead = as.numeric(target_end_date - forecast_date)) %>%
           mutate(id = id)
         out
@@ -94,7 +94,10 @@ create_forecast_targets <- function() {
         }
         forecast_scaled <- forecast_scaled %>%
           # Push the Wednesday markers to Saturday, to match targets with truth data.
-          mutate(forecast_date = forecast_date + g_time_value_adjust, target_end_date = target_end_date + g_time_value_adjust) %>%
+          mutate(
+            forecast_date = forecast_date + g_time_value_adjust,
+            target_end_date = target_end_date + g_time_value_adjust
+          ) %>%
           rename("model" = "id")
         evaluate_predictions(forecasts = forecast_scaled, truth_data = hhs_evaluation_data) %>%
           rename("id" = "model")

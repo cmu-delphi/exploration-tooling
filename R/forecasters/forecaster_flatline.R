@@ -8,15 +8,17 @@
 #' @importFrom rlang sym
 #' @importFrom epipredict flatline_forecaster flatline_args_list
 #' @export
-flatline_fc <- function(epi_data,
-                        outcome,
-                        extra_sources = character(),
-                        ahead = 1,
-                        trainer = parsnip::linear_reg(),
-                        quantile_levels = covidhub_probs(),
-                        filter_source = "",
-                        filter_agg_level = "",
-                        ...) {
+flatline_fc <- function(
+  epi_data,
+  outcome,
+  extra_sources = character(),
+  ahead = 1,
+  trainer = parsnip::linear_reg(),
+  quantile_levels = covidhub_probs(),
+  filter_source = "",
+  filter_agg_level = "",
+  ...
+) {
   epi_data <- validate_epi_data(epi_data)
   extra_sources <- unlist(extra_sources)
 
@@ -45,10 +47,12 @@ flatline_fc <- function(epi_data,
   args_input[["quantile_levels"]] <- quantile_levels
   args_list <- do.call(default_flatline_args, args_input)
   # since this is a flatline forecaster, it can't use other predictors, so we remove them
-  epi_data <- epi_data %>% select(all_of(c("geo_value", "time_value", outcome, attributes(epi_data)$metadata$other_keys)))
+  epi_data <- epi_data %>%
+    select(all_of(c("geo_value", "time_value", outcome, attributes(epi_data)$metadata$other_keys)))
   # fixing any weirdness in the args_list and trainer
   predictors <- c(outcome)
-  c(args_list, predictors, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, NULL, args_list)
+  c(args_list, predictors, trainer) %<-%
+    sanitize_args_predictors_trainer(epi_data, outcome, predictors, NULL, args_list)
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict

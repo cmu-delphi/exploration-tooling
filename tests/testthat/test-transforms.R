@@ -9,15 +9,18 @@ rand_vals <- rnorm(n_days - 1)
 # Two states, with 2 variables. a is linear, going up in one state and down in the other
 # b is just random
 # note that day 10 is missing
-epi_data <- epiprocess::as_epi_df(rbind(tibble(
-  geo_value = "al",
-  time_value = simple_dates,
-  a = 1:(n_days - 1),
-), tibble(
-  geo_value = "ca",
-  time_value = simple_dates,
-  a = (n_days - 1):1,
-)))
+epi_data <- epiprocess::as_epi_df(rbind(
+  tibble(
+    geo_value = "al",
+    time_value = simple_dates,
+    a = 1:(n_days - 1),
+  ),
+  tibble(
+    geo_value = "ca",
+    time_value = simple_dates,
+    a = (n_days - 1):1,
+  )
+))
 
 test_that("rolling_mean generates correct mean", {
   rolled <- rolling_mean(epi_data)
@@ -25,8 +28,14 @@ test_that("rolling_mean generates correct mean", {
 
   # hand specified rolling mean with a rear window of 7
   expected_mean <- c(
-    rep(NA, 6), 4:6, rep(NA, 6), 13:16,
-    rep(NA, 6), 16:14, rep(NA, 6), 7:4
+    rep(NA, 6),
+    4:6,
+    rep(NA, 6),
+    13:16,
+    rep(NA, 6),
+    16:14,
+    rep(NA, 6),
+    7:4
   )
   expect_equal(rolled %>% pull(slide_a_m7), expected_mean)
 
@@ -39,8 +48,14 @@ test_that("rolling_sd generates correct standard deviation", {
   expect_equal(names(rolled), c("geo_value", "time_value", "a", "slide_a_sd4"))
   # hand specified rolling mean with a rear window of 7, noting that mean(1:14) = 7.5
   expected_sd <- c(
-    rep(NA, 4), rep(0.5, 5), rep(NA, 4), rep(0.5, 6),
-    rep(NA, 4), rep(0.5, 5), rep(NA, 4), rep(0.5, 6)
+    rep(NA, 4),
+    rep(0.5, 5),
+    rep(NA, 4),
+    rep(0.5, 6),
+    rep(NA, 4),
+    rep(0.5, 5),
+    rep(NA, 4),
+    rep(0.5, 6)
   )
   expect_equal(rolled %>% pull(slide_a_sd4), expected_sd)
 

@@ -38,7 +38,8 @@ assertthat::assert_that(
   c(
     length(old_forecasts) == length(new_forecasts),
     basename(old_forecasts) == basename(new_forecasts)
-  ) %>% all()
+  ) %>%
+    all()
 )
 
 tib <- tibble::tibble(

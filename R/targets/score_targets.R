@@ -4,7 +4,8 @@ get_external_forecasts <- function(external_object_name) {
     filter(state_id != "usa")
   s3read_using(
     nanoparquet::read_parquet,
-    object = external_object_name, bucket = "forecasting-team-data"
+    object = external_object_name,
+    bucket = "forecasting-team-data"
   ) %>%
     filter(output_type == "quantile") %>%
     select(forecaster, geo_value = location, forecast_date, target_end_date, quantile = output_type_id, value) %>%
@@ -33,7 +34,7 @@ score_forecasts <- function(nhsn_latest_data, joined_forecasts_and_ensembles, di
     pull(max_forecast) %>%
     min()
   forecasts_formatted <-
-    joined_forecasts_and_ensembles[joined_forecasts_and_ensembles$forecast_date <= max_forecast_date,] %>%
+    joined_forecasts_and_ensembles[joined_forecasts_and_ensembles$forecast_date <= max_forecast_date, ] %>%
     format_scoring_utils(disease = disease)
   scores <- forecasts_formatted %>%
     filter(location %nin% c("US", "60", "66", "78")) %>%

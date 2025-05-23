@@ -3,6 +3,7 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 # Works correctly if you have exactly one version where the previous Friday data
 # is the latest so it is ignored and the week before THAT is summed (10-27 to
 # 11-02), but is then dated to the Wednesday of the week (10-30).
+# fmt: skip
 tribble(
   ~geo_value, ~time_value, ~version, ~value,
   "us", "2024-11-08", "2024-11-13", 1,
@@ -24,6 +25,7 @@ tribble(
   daily_to_weekly_archive("value")
 
 # Same thing as above, but the versions go backwards, constant lag of 5 days
+# fmt: skip
 tribble(
   ~geo_value, ~time_value, ~version, ~value,
   "us", "2024-11-08", "2024-11-13", 1,
@@ -46,6 +48,7 @@ tribble(
 
 # Now add the Friday
 # Same thing as above, but the versions go backwards, constant lag of 5 days
+# fmt: skip
 tribble(
   ~geo_value, ~time_value, ~version, ~value,
   "us", "2024-11-09", "2024-11-13", 0.5,
@@ -68,6 +71,7 @@ tribble(
   daily_to_weekly_archive("value")
 
 # NA
+# fmt: skip
 tribble(
   ~geo_value, ~time_value, ~version, ~value,
   "us", "2024-11-16", "2024-11-16", 1,
