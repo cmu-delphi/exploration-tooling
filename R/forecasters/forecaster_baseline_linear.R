@@ -1,14 +1,24 @@
 #' epi_data is expected to have: geo_value, time_value, and value columns.
-forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALSE, residual_tail = 0.85, residual_center = 0.085, no_intercept = TRUE, floor_value = 0, population_scale = TRUE) {
+forecaster_baseline_linear <- function(
+  epi_data,
+  ahead,
+  log = FALSE,
+  sort = FALSE,
+  residual_tail = 0.85,
+  residual_center = 0.085,
+  no_intercept = TRUE,
+  floor_value = 0,
+  population_scale = TRUE
+) {
   epi_data <- validate_epi_data(epi_data)
   forecast_date <- attributes(epi_data)$metadata$as_of
   population_data <- get_population_data() %>%
     rename(geo_value = state_id) %>%
     distinct(geo_value, population)
   if (population_scale) {
-  df_processed <- epi_data %>%
-    left_join(population_data, by = "geo_value") %>%
-    mutate(value = value / population * 10**5)
+    df_processed <- epi_data %>%
+      left_join(population_data, by = "geo_value") %>%
+      mutate(value = value / population * 10**5)
   } else {
     df_processed <- epi_data
   }
@@ -50,16 +60,20 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
       left_join(intercept_values, by = join_by(geo_value))
     point_forecast <- tibble(
       geo_value = train_data$geo_value %>% unique(),
-      model = purrr::map(geo_value, ~ lm(value ~ weeks_back + 0, data = train_data %>% filter(geo_value == .x), offset = intercept)),
+      model = purrr::map(
+        geo_value,
+        ~ lm(value ~ weeks_back + 0, data = train_data %>% filter(geo_value == .x), offset = intercept)
+      ),
       season_week = target_season_week
     ) %>%
       left_join(intercept_values, by = join_by(geo_value)) %>%
       mutate(
         value = map2_vec(
-          model, intercept,
+          model,
+          intercept,
           \(model_x, intercept_y)
-          # need to add the latency
-          predict(model_x, newdata = data.frame(weeks_back = ahead + latency, intercept = intercept_y))
+            # need to add the latency
+            predict(model_x, newdata = data.frame(weeks_back = ahead + latency, intercept = intercept_y))
         )
       ) %>%
       select(-intercept)
@@ -96,7 +110,9 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
   # Jank attempt to get saner residuals
   if (!log) {
     abs_residuals <- abs(residuals)
-    abs_residuals <- abs_residuals[abs_residuals < quantile(abs_residuals, residual_tail) & abs_residuals > quantile(abs_residuals, residual_center)]
+    abs_residuals <- abs_residuals[
+      abs_residuals < quantile(abs_residuals, residual_tail) & abs_residuals > quantile(abs_residuals, residual_center)
+    ]
     residuals <- c(abs_residuals, -abs_residuals)
   }
 
@@ -106,7 +122,15 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
   }
 
   get_quantile <- function(point, ahead) {
-    epipredict:::propagate_samples(residuals, point, quantile_levels = covidhub_probs(), aheads = ahead + 2, nsim = 1e4, symmetrize = TRUE, nonneg = FALSE)[[1]] %>%
+    epipredict:::propagate_samples(
+      residuals,
+      point,
+      quantile_levels = covidhub_probs(),
+      aheads = ahead + 2,
+      nsim = 1e4,
+      symmetrize = TRUE,
+      nonneg = FALSE
+    )[[1]] %>%
       pull(.pred_distn)
   }
   quantile_forecast <-
@@ -132,7 +156,8 @@ forecaster_baseline_linear <- function(epi_data, ahead, log = FALSE, sort = FALS
       ) %>%
       select(-population)
   }
-  quantile_forecast %<>% mutate(
+  quantile_forecast %<>%
+    mutate(
       target_end_date = reference_date + ahead * 7,
       forecast_date = forecast_date,
     ) %>%

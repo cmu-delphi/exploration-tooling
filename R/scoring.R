@@ -31,7 +31,16 @@ evaluate_predictions <- function(forecasts, truth_data) {
     scoringutils::score(metrics = get_metrics(.)) %>%
     as_tibble()
   missing_metrics <- setdiff(
-    c("model", "geo_value", "forecast_date", "target_end_date", "wis", "ae_median", "interval_coverage_50", "interval_coverage_90"),
+    c(
+      "model",
+      "geo_value",
+      "forecast_date",
+      "target_end_date",
+      "wis",
+      "ae_median",
+      "interval_coverage_50",
+      "interval_coverage_90"
+    ),
     names(scores)
   )
   if (length(missing_metrics) > 0) {

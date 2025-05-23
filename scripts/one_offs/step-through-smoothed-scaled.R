@@ -19,7 +19,8 @@ cce <- covidcast_epidata()
 
 hhs_snapshot <-
   cce$signals$`hhs:confirmed_admissions_covid_1d`$call(
-    "state", target_geo_values,
+    "state",
+    target_geo_values,
     epirange(data_start_date, 34560101),
     as_of = as.character(forecast_as_of)
   )
@@ -35,7 +36,8 @@ hhs_snapshot_edf <- hhs_snapshot %>%
 # get the real data
 hhs_up_to_date <-
   cce$signals$`hhs:confirmed_admissions_covid_1d`$call(
-    "state", target_geo_values,
+    "state",
+    target_geo_values,
     epirange(data_start_date, forecast_as_of + max(aheads)),
   )
 
@@ -66,21 +68,24 @@ hhs_up_to_date %<>%
 system.time({
   fcst <-
     aheads %>%
-    mclapply(function(ahead) {
-      smoothed_scaled(
-        hhs_snapshot_edf,
-        outcome = "hhs_confirmed_admissions_covid_1d",
-        trainer = epipredict::quantile_reg(),
-        ahead = ahead,
-        lags = list(
-          # smoothed
-          7L * (0:4),
-          # sd
-          0L
-        ),
-        pop_scaling = TRUE
-      )
-    }, mc.cores = 6L) %>%
+    mclapply(
+      function(ahead) {
+        smoothed_scaled(
+          hhs_snapshot_edf,
+          outcome = "hhs_confirmed_admissions_covid_1d",
+          trainer = epipredict::quantile_reg(),
+          ahead = ahead,
+          lags = list(
+            # smoothed
+            7L * (0:4),
+            # sd
+            0L
+          ),
+          pop_scaling = TRUE
+        )
+      },
+      mc.cores = 6L
+    ) %>%
     bind_rows()
 })
 
@@ -108,15 +113,14 @@ fcst %>%
   )
 
 
-
-
 ####################################################
 # the same, but only using the more recent training data
 ####################################################
 short_start_date <- as.Date("2021-01-01")
 hhs_snapshot_short <-
   cce$signals$`hhs:confirmed_admissions_covid_1d`$call(
-    "state", target_geo_values,
+    "state",
+    target_geo_values,
     epirange(short_start_date, 34560101),
     as_of = as.character(forecast_as_of)
   )
@@ -132,21 +136,24 @@ hhs_snapshot_short_edf <- hhs_snapshot_short %>%
 system.time({
   fcst_short <-
     aheads %>%
-    mclapply(function(ahead) {
-      smoothed_scaled(
-        hhs_snapshot_short_edf,
-        outcome = "hhs_confirmed_admissions_covid_1d",
-        trainer = epipredict::quantile_reg(),
-        ahead = ahead,
-        lags = list(
-          # smoothed
-          7L * (0:4),
-          # sd
-          0L
-        ),
-        pop_scaling = TRUE
-      )
-    }, mc.cores = 6L) %>%
+    mclapply(
+      function(ahead) {
+        smoothed_scaled(
+          hhs_snapshot_short_edf,
+          outcome = "hhs_confirmed_admissions_covid_1d",
+          trainer = epipredict::quantile_reg(),
+          ahead = ahead,
+          lags = list(
+            # smoothed
+            7L * (0:4),
+            # sd
+            0L
+          ),
+          pop_scaling = TRUE
+        )
+      },
+      mc.cores = 6L
+    ) %>%
     bind_rows()
 })
 

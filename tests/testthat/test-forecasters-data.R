@@ -4,11 +4,41 @@ testthat::skip("Optional, long-running tests skipped.")
 
 # A list of forecasters to be tested. Add here to test new forecasters.
 forecasters <- tibble::tribble(
-  ~forecaster, ~forecaster_args, ~forecaster_args_names, ~fc_name, ~outcome, ~extra_sources, ~ahead,
-  scaled_pop, list(TRUE), list("pop_scaling"), "scaled_pop", "a", "", 1,
-  scaled_pop, list(FALSE), list("pop_scaling"), "scaled_pop", "a", "", 1,
-  flatline_fc, list(), list(), "flatline_fc", "a", "", 1,
-  smoothed_scaled, list(list(c(0, 7, 14), c(0)), 14, 7), list("lags", "sd_width", "sd_mean_width"), "smoothed_scaled", "a", "", 1,
+  ~forecaster,
+  ~forecaster_args,
+  ~forecaster_args_names,
+  ~fc_name,
+  ~outcome,
+  ~extra_sources,
+  ~ahead,
+  scaled_pop,
+  list(TRUE),
+  list("pop_scaling"),
+  "scaled_pop",
+  "a",
+  "",
+  1,
+  scaled_pop,
+  list(FALSE),
+  list("pop_scaling"),
+  "scaled_pop",
+  "a",
+  "",
+  1,
+  flatline_fc,
+  list(),
+  list(),
+  "flatline_fc",
+  "a",
+  "",
+  1,
+  smoothed_scaled,
+  list(list(c(0, 7, 14), c(0)), 14, 7),
+  list("lags", "sd_width", "sd_mean_width"),
+  "smoothed_scaled",
+  "a",
+  "",
+  1,
 )
 # Which forecasters expect the data to be non-identical?
 expects_nonequal <- c("scaled_pop", "smoothed_scaled")
@@ -57,7 +87,8 @@ constant <- tibble(
   time_value = simple_dates,
   version = simple_dates,
   a = synth_mean
-) %>% epiprocess::as_epi_archive()
+) %>%
+  epiprocess::as_epi_archive()
 
 ################################################################################
 ################################ Constant data #################################
@@ -81,38 +112,41 @@ different_constants_truth <- different_constants$DT %>%
   rename("true_value" = "a", "target_end_date" = "time_value") %>%
   select(-version)
 for (ii in seq_len(nrow(forecasters))) {
-  test_that(paste(
-    forecasters$fc_name[[ii]],
-    " predicts a constant median for constant data"
-  ), {
-    res <- default_slide_forecaster(different_constants, ii)
+  test_that(
+    paste(
+      forecasters$fc_name[[ii]],
+      " predicts a constant median for constant data"
+    ),
+    {
+      res <- default_slide_forecaster(different_constants, ii)
 
-    # Here we compare only the median, because the rest of the quantiles are
-    # going to be pretty weird on a constant input.
-    rel_values <- res %>%
-      group_by(geo_value) %>%
-      filter(quantile == .5)
+      # Here we compare only the median, because the rest of the quantiles are
+      # going to be pretty weird on a constant input.
+      rel_values <- res %>%
+        group_by(geo_value) %>%
+        filter(quantile == .5)
 
-    # We expect the forecaster median to be equal to the actual median plus
-    # small noise noise
-    actual_value <- rel_values %>%
-      inner_join(
-        different_constants_truth,
-        by = c("geo_value", "target_end_date")
-      ) %>%
-      mutate(is_right = near(value, true_value)) %>%
-      pull(is_right) %>%
-      all()
-    expect_true(actual_value)
+      # We expect the forecaster median to be equal to the actual median plus
+      # small noise noise
+      actual_value <- rel_values %>%
+        inner_join(
+          different_constants_truth,
+          by = c("geo_value", "target_end_date")
+        ) %>%
+        mutate(is_right = near(value, true_value)) %>%
+        pull(is_right) %>%
+        all()
+      expect_true(actual_value)
 
-    # We expect the forecasted standard deviation of the medians to be zero up
-    # to numerical error
-    sd_values <- rel_values %>%
-      summarise(is_const = near(sd(value), 0)) %>%
-      pull(is_const) %>%
-      all()
-    expect_true(sd_values)
-  })
+      # We expect the forecasted standard deviation of the medians to be zero up
+      # to numerical error
+      sd_values <- rel_values %>%
+        summarise(is_const = near(sd(value), 0)) %>%
+        pull(is_const) %>%
+        all()
+      expect_true(sd_values)
+    }
+  )
 }
 
 
@@ -129,32 +163,37 @@ white_noise <- epiprocess::as_epi_archive(tibble(
   a = rnorm(length(simple_dates), mean = synth_mean, sd = synth_sd)
 ))
 for (ii in seq_len(nrow(forecasters))) {
-  test_that(paste(
-    forecasters$fc_name[[ii]],
-    " predicts the median and the right quantiles for Gaussian data"
-  ), {
-    expect_no_error(res <- default_slide_forecaster(white_noise, ii, expect_linreg_warnings = FALSE))
+  test_that(
+    paste(
+      forecasters$fc_name[[ii]],
+      " predicts the median and the right quantiles for Gaussian data"
+    ),
+    {
+      expect_no_error(res <- default_slide_forecaster(white_noise, ii, expect_linreg_warnings = FALSE))
 
-    # We expect the standard deviation of the forecasted median values to be
-    # within two true standard deviations of the true data mean.
-    expect_true(
-      (res %>%
-        filter(quantile == .5) %>%
-        pull(value) %>% sd()) < 2 * synth_sd
-    )
+      # We expect the standard deviation of the forecasted median values to be
+      # within two true standard deviations of the true data mean.
+      expect_true(
+        (res %>%
+          filter(quantile == .5) %>%
+          pull(value) %>%
+          sd()) <
+          2 * synth_sd
+      )
 
-    # Make sure that each quantile doesn't deviate too much from the value that
-    # would be predicted by the generating Gaussian. Dmitry: this bound seems
-    # loose, is it worth improving?
-    quantile_deviation <- res %>%
-      mutate(
-        diff_from_expected = value - qnorm(quantile, mean = synth_mean, sd = synth_sd)
-      ) %>%
-      select(-any_of(c("true_value", "value"))) %>%
-      group_by(quantile) %>%
-      summarize(err = abs(mean(diff_from_expected)))
-    expect_true(all(quantile_deviation$err < 4 * synth_sd))
-  })
+      # Make sure that each quantile doesn't deviate too much from the value that
+      # would be predicted by the generating Gaussian. Dmitry: this bound seems
+      # loose, is it worth improving?
+      quantile_deviation <- res %>%
+        mutate(
+          diff_from_expected = value - qnorm(quantile, mean = synth_mean, sd = synth_sd)
+        ) %>%
+        select(-any_of(c("true_value", "value"))) %>%
+        group_by(quantile) %>%
+        summarize(err = abs(mean(diff_from_expected)))
+      expect_true(all(quantile_deviation$err < 4 * synth_sd))
+    }
+  )
 }
 
 
@@ -179,39 +218,42 @@ missing_state <- epiprocess::as_epi_archive(rbind(
   )
 ))
 for (ii in seq_len(nrow(forecasters))) {
-  test_that(paste(
-    forecasters$fc_name[[ii]],
-    "predicts well in the presence of only one state with variably delayed data"
-  ), {
-    res <- default_slide_forecaster(missing_state, ii)
+  test_that(
+    paste(
+      forecasters$fc_name[[ii]],
+      "predicts well in the presence of only one state with variably delayed data"
+    ),
+    {
+      res <- default_slide_forecaster(missing_state, ii)
 
-    # some predictions exist for both states
-    expect_equal(length(unique(res$geo_value)), 2)
-    # get the number of predictions by state
-    counts <- res %>%
-      filter(quantile == 0.5 & !is.na(value)) %>%
-      group_by(geo_value) %>%
-      count()
-    counts_ca <- counts %>%
-      filter(geo_value == "ca") %>%
-      pull(n)
-    counts_al <- counts %>%
-      filter(geo_value == "al") %>%
-      pull(n)
-    # flatline is more aggressive about forecasting, so it will always have a
-    # prediction if there's past data at all
-    if (forecasters$fc_name[[ii]] == "flatline_fc") {
-      expect_true(counts_al == counts_ca)
-    } else {
-      expect_true(counts_al > counts_ca)
+      # some predictions exist for both states
+      expect_equal(length(unique(res$geo_value)), 2)
+      # get the number of predictions by state
+      counts <- res %>%
+        filter(quantile == 0.5 & !is.na(value)) %>%
+        group_by(geo_value) %>%
+        count()
+      counts_ca <- counts %>%
+        filter(geo_value == "ca") %>%
+        pull(n)
+      counts_al <- counts %>%
+        filter(geo_value == "al") %>%
+        pull(n)
+      # flatline is more aggressive about forecasting, so it will always have a
+      # prediction if there's past data at all
+      if (forecasters$fc_name[[ii]] == "flatline_fc") {
+        expect_true(counts_al == counts_ca)
+      } else {
+        expect_true(counts_al > counts_ca)
+      }
+      # the number of days which have data on the day of is an upper bound
+      expect_true(sum(state_delay == 0) > counts_ca)
+      # at least one day could be predicted
+      expect_true(counts_ca > 0)
+      # ideally we would figure out which days actually have data available at
+      # exactly the given lag
     }
-    # the number of days which have data on the day of is an upper bound
-    expect_true(sum(state_delay == 0) > counts_ca)
-    # at least one day could be predicted
-    expect_true(counts_ca > 0)
-    # ideally we would figure out which days actually have data available at
-    # exactly the given lag
-  })
+  )
 }
 
 ################################################################################
@@ -228,23 +270,26 @@ linear <- epiprocess::as_epi_archive(
   )
 )
 for (ii in seq_len(nrow(forecasters))) {
-  test_that(paste(
-    forecasters$fc_name[[ii]],
-    " predicts a linear increasing slope correctly"
-  ), {
-    # flatline will definitely fail this, so it's exempt
-    if (forecasters$fc_name[[ii]] == "flatline_fc") {
-      # flatline gets a cookie for existing
-      expect_true(TRUE)
-    } else {
-      res <- default_slide_forecaster(linear, ii)
+  test_that(
+    paste(
+      forecasters$fc_name[[ii]],
+      " predicts a linear increasing slope correctly"
+    ),
+    {
+      # flatline will definitely fail this, so it's exempt
+      if (forecasters$fc_name[[ii]] == "flatline_fc") {
+        # flatline gets a cookie for existing
+        expect_true(TRUE)
+      } else {
+        res <- default_slide_forecaster(linear, ii)
 
-      # make sure that the median is on the line
-      median_err <- res %>%
-        filter(quantile == .5) %>%
-        mutate(err = value - as.integer(target_end_date - start_date + 1), .keep = "none") %>%
-        mutate(is_right = near(err, 0), .keep = "none")
-      expect_true(all(median_err))
+        # make sure that the median is on the line
+        median_err <- res %>%
+          filter(quantile == .5) %>%
+          mutate(err = value - as.integer(target_end_date - start_date + 1), .keep = "none") %>%
+          mutate(is_right = near(err, 0), .keep = "none")
+        expect_true(all(median_err))
+      }
     }
-  })
+  )
 }

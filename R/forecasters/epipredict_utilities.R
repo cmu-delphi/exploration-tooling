@@ -11,10 +11,11 @@
 arx_preprocess <- function(preproc, outcome, predictors, args_list) {
   # input already validated
   if (args_list$adjust_latency != "none") {
-    preproc %<>% step_adjust_latency(
-      method = args_list$adjust_latency,
-      keys_to_ignore = args_list$keys_to_ignore
-    )
+    preproc %<>%
+      step_adjust_latency(
+        method = args_list$adjust_latency,
+        keys_to_ignore = args_list$keys_to_ignore
+      )
     if (args_list$adjust_latency == "extend_lags") {
       # this is a bit of a hack to make sure that *all* predictors are present at the correct lag
       preproc %<>% step_epi_lag(has_role("pre-predictor"), lag = 0, role = "predictor")
@@ -57,21 +58,19 @@ arx_preprocess <- function(preproc, outcome, predictors, args_list) {
 #' layer_point_from_distn layer_residual_quantiles layer_threshold layer_naomit
 #' layer_add_target_date
 #' @export
-arx_postprocess <- function(postproc,
-                            trainer,
-                            args_list,
-                            forecast_date = NULL,
-                            target_date = NULL) {
+arx_postprocess <- function(postproc, trainer, args_list, forecast_date = NULL, target_date = NULL) {
   postproc %<>% layer_predict()
   if (inherits(trainer, "quantile_reg") || trainer$engine == "grf_quantiles") {
     postproc %<>%
       layer_quantile_distn(quantile_levels = args_list$quantile_levels) %>%
       layer_point_from_distn()
   } else {
-    postproc %<>% layer_residual_quantiles(
-      quantile_levels = args_list$quantile_levels, symmetrize = args_list$symmetrize,
-      by_key = args_list$quantile_by_key
-    )
+    postproc %<>%
+      layer_residual_quantiles(
+        quantile_levels = args_list$quantile_levels,
+        symmetrize = args_list$symmetrize,
+        by_key = args_list$quantile_by_key
+      )
   }
   if (args_list$nonneg) {
     postproc %<>% layer_threshold(dplyr::starts_with(".pred"))
@@ -102,14 +101,16 @@ arx_postprocess <- function(postproc,
 #'
 #' @importFrom epipredict epi_workflow fit add_frosting get_test_data
 #' @export
-run_workflow_and_format <- function(preproc,
-                                    postproc,
-                                    trainer,
-                                    train_data,
-                                    full_data = NULL,
-                                    test_data_interval = as.difftime(52, units = "weeks"),
-                                    return_model = FALSE,
-                                    source_value = "nhsn") {
+run_workflow_and_format <- function(
+  preproc,
+  postproc,
+  trainer,
+  train_data,
+  full_data = NULL,
+  test_data_interval = as.difftime(52, units = "weeks"),
+  return_model = FALSE,
+  source_value = "nhsn"
+) {
   as_of <- attributes(train_data)$metadata$as_of
   if (is.null(as_of)) {
     as_of <- max(train_data$time_value)
@@ -123,7 +124,12 @@ run_workflow_and_format <- function(preproc,
     fit(train_data) %>%
     add_frosting(postproc)
   # filter full_data to less than full but more than we need
-  test_data <- get_oversized_test_data(full_data %||% train_data, test_data_interval, preproc, source_value = source_value)
+  test_data <- get_oversized_test_data(
+    full_data %||% train_data,
+    test_data_interval,
+    preproc,
+    source_value = source_value
+  )
   # predict, and filter out those forecasts for less recent days (predict
   # predicts for every day that has enough data)
   pred <- predict(workflow, test_data)

@@ -1,23 +1,25 @@
 #' predict the value using only the week in the season, maybe the population, and any extra sources
 #' it may whiten any old data as the outcome
-no_recent_outcome <- function(epi_data,
-                              outcome,
-                              extra_sources = character(),
-                              ahead = 7,
-                              pop_scaling = FALSE,
-                              trainer = epipredict::quantile_reg(),
-                              quantile_levels = covidhub_probs(),
-                              use_population = FALSE,
-                              use_density = FALSE,
-                              drop_non_seasons = FALSE,
-                              scale_method = c("quantile", "std", "none"),
-                              center_method = c("median", "mean", "none"),
-                              nonlin_method = c("quart_root", "none"),
-                              week_method = c("linear", "sine"),
-                              filter_source = "",
-                              filter_agg_level = "",
-                              sources_to_pop_scale = c(),
-                              ...) {
+no_recent_outcome <- function(
+  epi_data,
+  outcome,
+  extra_sources = character(),
+  ahead = 7,
+  pop_scaling = FALSE,
+  trainer = epipredict::quantile_reg(),
+  quantile_levels = covidhub_probs(),
+  use_population = FALSE,
+  use_density = FALSE,
+  drop_non_seasons = FALSE,
+  scale_method = c("quantile", "std", "none"),
+  center_method = c("median", "mean", "none"),
+  nonlin_method = c("quart_root", "none"),
+  week_method = c("linear", "sine"),
+  filter_source = "",
+  filter_agg_level = "",
+  sources_to_pop_scale = c(),
+  ...
+) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
@@ -68,7 +70,8 @@ no_recent_outcome <- function(epi_data,
   } else {
     predictors <- extra_sources
   }
-  c(args_list, tmp_pred, trainer) %<-% sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
+  c(args_list, tmp_pred, trainer) %<-%
+    sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
 
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
@@ -113,19 +116,23 @@ no_recent_outcome <- function(epi_data,
   postproc <- frosting()
   postproc %<>% arx_postprocess(trainer, args_list)
   if (pop_scaling) {
-    postproc %<>% layer_population_scaling(
-      .pred, .pred_distn,
-      df = epidatasets::state_census,
-      df_pop_col = "pop",
-      create_new = FALSE,
-      rate_rescaling = 1e5,
-      by = c("geo_value" = "abbr")
-    )
+    postproc %<>%
+      layer_population_scaling(
+        .pred,
+        .pred_distn,
+        df = epidatasets::state_census,
+        df_pop_col = "pop",
+        create_new = FALSE,
+        rate_rescaling = 1e5,
+        by = c("geo_value" = "abbr")
+      )
   }
   # with all the setup done, we execute and format
   pred <- run_workflow_and_format(
-    preproc, postproc,
-    trainer, season_data,
+    preproc,
+    postproc,
+    trainer,
+    season_data,
     full_data
   )
 
@@ -136,7 +143,12 @@ no_recent_outcome <- function(epi_data,
   if (scale_method != "none") {
     pred <- pred %>%
       rename({{ outcome }} := value) %>%
-      data_coloring(outcome, learned_params, join_cols = key_colnames(epi_data, exclude = "time_value"), nonlin_method = nonlin_method) %>%
+      data_coloring(
+        outcome,
+        learned_params,
+        join_cols = key_colnames(epi_data, exclude = "time_value"),
+        nonlin_method = nonlin_method
+      ) %>%
       rename(value = {{ outcome }}) %>%
       mutate(value = pmax(0, value))
   }

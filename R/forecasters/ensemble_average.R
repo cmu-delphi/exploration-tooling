@@ -22,12 +22,14 @@
 #'
 #' @importFrom rlang %||%
 #' @export
-ensemble_average <- function(epi_data,
-                             forecasts,
-                             outcome,
-                             extra_sources = character(),
-                             ensemble_args = list(),
-                             ensemble_args_names = NULL) {
+ensemble_average <- function(
+  epi_data,
+  forecasts,
+  outcome,
+  extra_sources = character(),
+  ensemble_args = list(),
+  ensemble_args_names = NULL
+) {
   # unique parameters must be buried in ensemble_args so that the generic function signature is stable
   # their names are separated for obscure target related reasons
   names(ensemble_args) <- ensemble_args_names %||% names(ensemble_args)

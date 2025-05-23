@@ -22,7 +22,31 @@ best_15_forecasters <- data_to_add %>%
   pull(forecaster)
 best_15_forecasters
 internal_scores <- qs::qread("covid_hosp_explore/legacy-exploration-scorecards.qs")
-new_data <- internal_scores %>% add_row(data_to_add %>% filter(forecaster %in% best_15_forecasters) %>% select(-c("cov_10", "cov_20", "cov_30", "cov_40", "cov_50", "cov_60", "cov_70", "cov_90", "cov_95", "cov_98", "value_20", "value_50", "value_80", "sharpness", "overprediction", "underprediction")))
+new_data <- internal_scores %>%
+  add_row(
+    data_to_add %>%
+      filter(forecaster %in% best_15_forecasters) %>%
+      select(
+        -c(
+          "cov_10",
+          "cov_20",
+          "cov_30",
+          "cov_40",
+          "cov_50",
+          "cov_60",
+          "cov_70",
+          "cov_90",
+          "cov_95",
+          "cov_98",
+          "value_20",
+          "value_50",
+          "value_80",
+          "sharpness",
+          "overprediction",
+          "underprediction"
+        )
+      )
+  )
 new_data$forecaster %>% unique()
 new_data
 qs::qsave(new_data, "covid_hosp_explore/legacy-exploration-scorecards.qs")

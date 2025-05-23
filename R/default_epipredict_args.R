@@ -4,24 +4,25 @@
 #'   list is the columns used, and then it moves on to normal vectors for the
 #'   rest
 default_args_list <- function(
-    lags = c(0L, 7L, 14L),
-    ahead = 7L,
-    n_training = Inf,
-    forecast_date = NULL,
-    target_date = NULL,
-    adjust_latency = c("extend_lags", "locf", "none", "extend_ahead"),
-    warn_latency = TRUE,
-    quantile_levels = covidhub_probs(),
-    symmetrize = TRUE,
-    nonneg = TRUE,
-    quantile_by_key = character(0L),
-    check_enough_data_n = NULL,
-    check_enough_data_epi_keys = NULL,
-    keys_to_ignore = list(),
-    seasonal_window = FALSE,
-    seasonal_backward_window = 5 * 7,
-    seasonal_forward_window = 3 * 7,
-    ...) {
+  lags = c(0L, 7L, 14L),
+  ahead = 7L,
+  n_training = Inf,
+  forecast_date = NULL,
+  target_date = NULL,
+  adjust_latency = c("extend_lags", "locf", "none", "extend_ahead"),
+  warn_latency = TRUE,
+  quantile_levels = covidhub_probs(),
+  symmetrize = TRUE,
+  nonneg = TRUE,
+  quantile_by_key = character(0L),
+  check_enough_data_n = NULL,
+  check_enough_data_epi_keys = NULL,
+  keys_to_ignore = list(),
+  seasonal_window = FALSE,
+  seasonal_backward_window = 5 * 7,
+  seasonal_forward_window = 3 * 7,
+  ...
+) {
   # error checking if lags is a list
   rlang::check_dots_empty()
   .lags <- lags
@@ -42,7 +43,8 @@ default_args_list <- function(
 
   if (!is.null(forecast_date) && !is.null(target_date)) {
     if (forecast_date + ahead != target_date) {
-      cli_abort("`forecast_date` {.val {forecast_date}} + `ahead` {.val {ahead}} must equal `target_date` {.val {target_date}}.",
+      cli_abort(
+        "`forecast_date` {.val {forecast_date}} + `ahead` {.val {ahead}} must equal `target_date` {.val {target_date}}.",
         class = "epipredict__arx_args__inconsistent_target_ahead_forecaste_date"
       )
     }
@@ -82,9 +84,16 @@ default_args_list <- function(
 
 # Generated from function body. Editing this file has no effect.
 default_flatline_args <- function(
-    ahead = 7L, n_training = Inf, forecast_date = NULL,
-    target_date = NULL, quantile_levels = covidhub_probs(), symmetrize = TRUE,
-    nonneg = TRUE, quantile_by_key = character(0L), ...) {
+  ahead = 7L,
+  n_training = Inf,
+  forecast_date = NULL,
+  target_date = NULL,
+  quantile_levels = covidhub_probs(),
+  symmetrize = TRUE,
+  nonneg = TRUE,
+  quantile_by_key = character(0L),
+  ...
+) {
   rlang::check_dots_empty()
   epipredict:::arg_is_scalar(ahead, n_training)
   epipredict:::arg_is_chr(quantile_by_key, allow_empty = TRUE)
@@ -98,15 +107,22 @@ default_flatline_args <- function(
   }
   if (!is.null(forecast_date) && !is.null(target_date)) {
     if (forecast_date + ahead != target_date) {
-      cli_warn(c("`forecast_date` + `ahead` must equal `target_date`.",
+      cli_warn(c(
+        "`forecast_date` + `ahead` must equal `target_date`.",
         i = "{.val {forecast_date}} + {.val {ahead}} != {.val {target_date}}."
       ))
     }
   }
   structure(
     epipredict:::enlist(
-      ahead, n_training, forecast_date, target_date,
-      quantile_levels, symmetrize, nonneg, quantile_by_key
+      ahead,
+      n_training,
+      forecast_date,
+      target_date,
+      quantile_levels,
+      symmetrize,
+      nonneg,
+      quantile_by_key
     ),
     class = c("flat_fcast", "alist")
   )

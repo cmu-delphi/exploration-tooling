@@ -42,7 +42,10 @@ if (!g_backtest_mode) {
   # override this. It should be a Wednesday.
   g_forecast_dates <- round_date(g_forecast_generation_dates, "weeks", week_start = 3)
 } else {
-  g_forecast_generation_dates <- c(as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")), seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L))
+  g_forecast_generation_dates <- c(
+    as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")),
+    seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L)
+  )
   g_forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 }
 
@@ -51,7 +54,8 @@ g_linear <- function(epi_data, ahead, extra_data, ...) {
   epi_data %>%
     filter(source == "nhsn") %>%
     forecaster_baseline_linear(
-      ahead, ...,
+      ahead,
+      ...,
       residual_tail = 0.99,
       residual_center = 0.35,
       no_intercept = TRUE
@@ -103,8 +107,22 @@ g_windowed_seasonal_extra_sources <- function(epi_data, ahead, extra_data, ...) 
   fcst
 }
 g_forecaster_params_grid <- tibble(
-  id = c("linear", "windowed_seasonal", "windowed_seasonal_extra_sources", "climate_base", "climate_geo_agged", "seasonal_nssp_latest"),
-  forecaster = rlang::syms(c("g_linear", "g_windowed_seasonal", "g_windowed_seasonal_extra_sources", "g_climate_base", "g_climate_geo_agged", "g_windowed_seasonal_extra_sources")),
+  id = c(
+    "linear",
+    "windowed_seasonal",
+    "windowed_seasonal_extra_sources",
+    "climate_base",
+    "climate_geo_agged",
+    "seasonal_nssp_latest"
+  ),
+  forecaster = rlang::syms(c(
+    "g_linear",
+    "g_windowed_seasonal",
+    "g_windowed_seasonal_extra_sources",
+    "g_climate_base",
+    "g_climate_geo_agged",
+    "g_windowed_seasonal_extra_sources"
+  )),
   params = list(
     list(),
     list(),
@@ -207,25 +225,27 @@ forecast_targets <- tar_map(
       # Train data
       if (grepl("latest", id)) {
         train_data <- nhsn_archive_data %>%
-          epix_as_of(nhsn_archive_data$versions_end) %>% filter(time_value < as.Date(forecast_date_int))
+          epix_as_of(nhsn_archive_data$versions_end) %>%
+          filter(time_value < as.Date(forecast_date_int))
       } else {
-      train_data <- nhsn_archive_data %>%
-        epix_as_of(min(as.Date(forecast_date_int), nhsn_archive_data$versions_end))
+        train_data <- nhsn_archive_data %>%
+          epix_as_of(min(as.Date(forecast_date_int), nhsn_archive_data$versions_end))
       }
-    train_data %<>%
+      train_data %<>%
         add_season_info() %>%
         mutate(
           geo_value = ifelse(geo_value == "usa", "us", geo_value),
           time_value = time_value - 3,
           source = "nhsn"
         )
-    if (!grepl("latest", id)) {
-    train_data %<>% data_substitutions(
-                      flu_data_substitutions,
-                      as.Date(forecast_generation_date_int)
-                    )
-    }
-     train_data %<>%
+      if (!grepl("latest", id)) {
+        train_data %<>%
+          data_substitutions(
+            flu_data_substitutions,
+            as.Date(forecast_generation_date_int)
+          )
+      }
+      train_data %<>%
         filter(geo_value %nin% g_insufficient_data_geos)
       attributes(train_data)$metadata$as_of <- as.Date(forecast_date_int)
 
@@ -379,7 +399,9 @@ ensemble_targets <- tar_map(
             file_name = "CMU-climate_baseline"
           )
       } else {
-        cli_alert_info("Not making climate submission csv because we're in backtest mode or submission directory is cache")
+        cli_alert_info(
+          "Not making climate submission csv because we're in backtest mode or submission directory is cache"
+        )
       }
     }
   ),
@@ -407,7 +429,10 @@ ensemble_targets <- tar_map(
       if (!g_backtest_mode && g_submission_directory != "cache") {
         validation <- validate_submission(
           g_submission_directory,
-          file_path = sprintf("CMU-climate_baseline/%s-CMU-climate_baseline.csv", get_forecast_reference_date(forecast_date_int))
+          file_path = sprintf(
+            "CMU-climate_baseline/%s-CMU-climate_baseline.csv",
+            get_forecast_reference_date(forecast_date_int)
+          )
         )
       } else {
         validation <- "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
@@ -461,7 +486,7 @@ ensemble_targets <- tar_map(
           ),
           params = list(
             disease = "flu",
-            forecast_res = forecasts_and_ensembles%>% ungroup() %>% filter(forecaster != "climate_geo_agged"),
+            forecast_res = forecasts_and_ensembles %>% ungroup() %>% filter(forecaster != "climate_geo_agged"),
             forecast_date = as.Date(forecast_date_int),
             truth_data = truth_data
           )

@@ -26,9 +26,11 @@ test_that("whitening small specific example", {
   center_small <- median((linear_small + 0.01)^0.25)
   center_large <- median((linear_large + 0.01)^0.25)
   scale_small <- quantile((linear_small + 0.01)^0.25, 0.95) -
-    quantile((linear_small + 0.01)^0.25, 0.05) + 0.01
+    quantile((linear_small + 0.01)^0.25, 0.05) +
+    0.01
   scale_large <- quantile((linear_large + 0.01)^0.25, 0.95) -
-    quantile((linear_large + 0.01)^0.25, 0.05) + 0.01
+    quantile((linear_large + 0.01)^0.25, 0.05) +
+    0.01
   params <- calculate_whitening_params(ex_data, "value")
   expect_equal(params$value_center, c(center_small, center_large))
   expect_equal(params$value_scale, c(scale_small, scale_large) %>% unname())

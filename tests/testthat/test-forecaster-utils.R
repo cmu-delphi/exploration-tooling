@@ -7,7 +7,11 @@ test_that("sanitize_args_predictors_trainer", {
   ex_args <- default_args_list()
   expect_error(sanitize_args_predictors_trainer(epi_data, "case_rate", c("case_rate"), 5, ex_args))
   argsPredictors <- sanitize_args_predictors_trainer(
-    epi_data, "case_rate", c("case_rate", ""), parsnip::linear_reg(), ex_args
+    epi_data,
+    "case_rate",
+    c("case_rate", ""),
+    parsnip::linear_reg(),
+    ex_args
   )
   args_list <- argsPredictors[[1]]
   predictors <- argsPredictors[[2]]
@@ -18,17 +22,40 @@ test_that("id generation works", {
   # Same arguments but scrambled.
   simple_ex <- list(
     dplyr::tribble(
-      ~forecaster, ~trainer, ~pop_scaling, ~lags,
-      "scaled_pop", "linreg", TRUE, c(1, 2)
-    ), dplyr::tribble(
-      ~forecaster, ~pop_scaling, ~trainer, ~lags,
-      "scaled_pop", TRUE, "linreg", c(1, 2)
-    ), dplyr::tribble(
-      ~trainer, ~forecaster, ~pop_scaling,
-      "linreg", "scaled_pop", TRUE,
-    ), dplyr::tribble(
-      ~trainer, ~pop_scaling, ~forecaster,
-      "linreg", TRUE, "scaled_pop",
+      ~forecaster,
+      ~trainer,
+      ~pop_scaling,
+      ~lags,
+      "scaled_pop",
+      "linreg",
+      TRUE,
+      c(1, 2)
+    ),
+    dplyr::tribble(
+      ~forecaster,
+      ~pop_scaling,
+      ~trainer,
+      ~lags,
+      "scaled_pop",
+      TRUE,
+      "linreg",
+      c(1, 2)
+    ),
+    dplyr::tribble(
+      ~trainer,
+      ~forecaster,
+      ~pop_scaling,
+      "linreg",
+      "scaled_pop",
+      TRUE,
+    ),
+    dplyr::tribble(
+      ~trainer,
+      ~pop_scaling,
+      ~forecaster,
+      "linreg",
+      TRUE,
+      "scaled_pop",
     )
   )
   same_ids <- map(simple_ex, add_id)
@@ -47,12 +74,30 @@ test_that("forecaster lookup selects the right rows", {
     lags = list(NULL, c(0, 7, 14)),
     pop_scale = c(FALSE, TRUE),
   )
-  expect_equal(forecaster_lookup("monarchist", param_grid_ex), tribble(
-    ~id, ~forecaster, ~lags, ~pop_scale,
-    "monarchist.thrip", "scaled_pop", c(0, 7, 14), TRUE,
-  ))
-  expect_equal(forecaster_lookup("irish", param_grid_ex), tribble(
-    ~id, ~forecaster, ~lags, ~pop_scale,
-    "simian.irishsetter", "scaled_pop", NULL, FALSE,
-  ))
+  expect_equal(
+    forecaster_lookup("monarchist", param_grid_ex),
+    tribble(
+      ~id,
+      ~forecaster,
+      ~lags,
+      ~pop_scale,
+      "monarchist.thrip",
+      "scaled_pop",
+      c(0, 7, 14),
+      TRUE,
+    )
+  )
+  expect_equal(
+    forecaster_lookup("irish", param_grid_ex),
+    tribble(
+      ~id,
+      ~forecaster,
+      ~lags,
+      ~pop_scale,
+      "simian.irishsetter",
+      "scaled_pop",
+      NULL,
+      FALSE,
+    )
+  )
 })

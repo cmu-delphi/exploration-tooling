@@ -42,7 +42,11 @@ rolling_mean <- function(epi_data, width = 7L, cols_to_mean = NULL) {
   cols_to_mean <- get_trainable_names(epi_data, cols_to_mean)
   epi_data %>%
     group_by(across(key_colnames(epi_data, exclude = "time_value"))) %>%
-    epi_slide_mean(all_of(cols_to_mean), .window_size = width, .new_col_names = paste0("slide_", cols_to_mean, "_m", width)) %>%
+    epi_slide_mean(
+      all_of(cols_to_mean),
+      .window_size = width,
+      .new_col_names = paste0("slide_", cols_to_mean, "_m", width)
+    ) %>%
     ungroup()
 }
 
@@ -171,11 +175,12 @@ get_poly_coefs <- function(values, degree, n_points) {
 #' get the mean and median used to whiten epi_data on a per source-geo_value basis
 #' note that we can't just use step_boxcox or step yeo-johnson because it doesn't allow for grouping
 calculate_whitening_params <- function(
-    epi_data,
-    colname,
-    scale_method = c("quantile", "quantile_upper", "std", "none"),
-    center_method = c("median", "mean", "none"),
-    nonlin_method = c("quart_root", "none")) {
+  epi_data,
+  colname,
+  scale_method = c("quantile", "quantile_upper", "std", "none"),
+  center_method = c("median", "mean", "none"),
+  nonlin_method = c("quart_root", "none")
+) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
@@ -213,19 +218,26 @@ calculate_whitening_params <- function(
     # scale so that one standard deviation is 1
     scale_fn <- function(x) (sd(x, 0.95, na.rm = TRUE) + 0.01)
   }
-  learned_params %<>% full_join(
-    summarize(
-      scaled_data,
-      across(all_of(colname), ~ scale_fn(.x), .names = "{.col}_scale"),
-      .groups = "drop"
-    ),
-    by = join_by(source, geo_value)
-  )
+  learned_params %<>%
+    full_join(
+      summarize(
+        scaled_data,
+        across(all_of(colname), ~ scale_fn(.x), .names = "{.col}_scale"),
+        .groups = "drop"
+      ),
+      by = join_by(source, geo_value)
+    )
   return(learned_params)
 }
 
 #' scale so that every data source has the same 95th quantile
-data_whitening <- function(epi_data, colname, learned_params, nonlin_method = c("quart_root", "none"), join_cols = NULL) {
+data_whitening <- function(
+  epi_data,
+  colname,
+  learned_params,
+  nonlin_method = c("quart_root", "none"),
+  join_cols = NULL
+) {
   if (is.null(learned_params)) {
     return(epi_data)
   }
@@ -244,7 +256,13 @@ data_whitening <- function(epi_data, colname, learned_params, nonlin_method = c(
 }
 
 #' undo data whitening by multiplying by the scaling and adding the center
-data_coloring <- function(epi_data, colname, learned_params, nonlin_method = c("quart_root", "none"), join_cols = NULL) {
+data_coloring <- function(
+  epi_data,
+  colname,
+  learned_params,
+  nonlin_method = c("quart_root", "none"),
+  join_cols = NULL
+) {
   if (is.null(learned_params)) {
     return(epi_data)
   }
@@ -271,7 +289,17 @@ mod_dist <- function(a, b, m) {
 #' time, and around the time `ahead` days ahead of it
 #' @param ahead measured in days, regardless of whether we're forecasting weekly or daily data
 #' @param epi_data expected columns include
-climate_median <- function(epi_data, target, ahead, window_size = 3, recent_window = 3, probs = covidhub_probs(), geo_agg = TRUE, scale_rate = TRUE, normalize = FALSE) {
+climate_median <- function(
+  epi_data,
+  target,
+  ahead,
+  window_size = 3,
+  recent_window = 3,
+  probs = covidhub_probs(),
+  geo_agg = TRUE,
+  scale_rate = TRUE,
+  normalize = FALSE
+) {
   # epi_data <- tar_read(joined_archive_data) %>% epix_as_of(as.Date("2023-11-29"))
   as_of <- attributes(epi_data)$metadata$as_of
   last_date_data <- epi_data %>%
@@ -349,7 +377,16 @@ climate_median <- function(epi_data, target, ahead, window_size = 3, recent_wind
 #' @param epi_data it is expected to have seasons, season_weeks and hhs as a target
 #' @param ahead is measured in days
 #' @param filter_time the last day of data to include in the pca computation
-compute_pca <- function(epi_data, disease = "flu", ahead = 0, scale_method = "quantile", center_method = "median", nonlin_method = "quart_root", filter_time = "2320-07-01", normalize = FALSE) {
+compute_pca <- function(
+  epi_data,
+  disease = "flu",
+  ahead = 0,
+  scale_method = "quantile",
+  center_method = "median",
+  nonlin_method = "quart_root",
+  filter_time = "2320-07-01",
+  normalize = FALSE
+) {
   used_data <- epi_data %>%
     filter(time_value < filter_time) %>%
     select(geo_value, season, source, season_week, hhs)
