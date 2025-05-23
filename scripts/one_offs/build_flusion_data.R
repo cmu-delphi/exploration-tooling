@@ -281,27 +281,18 @@ ili_plus <- bind_rows(ili_plus_HHS, ili_plus_nation, ili_plus_state) %>%
 # map names to lower case
 name_map <- tibble(abb = state.abb, name = state.name) %>%
   bind_rows(
+    # fmt: skip
     tribble(
-      ~name,
-      ~abb,
-      "District of Columbia",
-      "DC",
-      "American Samoa",
-      "AS",
-      "Guam",
-      "GU",
-      "Northern Mariana Islands",
-      "MP",
-      "Puerto Rico",
-      "PR",
-      "Virgin Islands",
-      "VI",
-      "Trust Territories",
-      "TT",
-      "us",
-      "US",
-      "New York City",
-      "ny"
+      ~name, ~abb,
+      "District of Columbia", "DC",
+      "American Samoa", "AS",
+      "Guam", "GU",
+      "Northern Mariana Islands", "MP",
+      "Puerto Rico", "PR",
+      "Virgin Islands", "VI",
+      "Trust Territories", "TT",
+      "us", "US",
+      "New York City", "ny"
     )
   ) %>%
   mutate(abb = tolower(abb))

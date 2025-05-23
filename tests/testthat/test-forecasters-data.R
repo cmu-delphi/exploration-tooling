@@ -3,42 +3,13 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 testthat::skip("Optional, long-running tests skipped.")
 
 # A list of forecasters to be tested. Add here to test new forecasters.
+# fmt: skip
 forecasters <- tibble::tribble(
-  ~forecaster,
-  ~forecaster_args,
-  ~forecaster_args_names,
-  ~fc_name,
-  ~outcome,
-  ~extra_sources,
-  ~ahead,
-  scaled_pop,
-  list(TRUE),
-  list("pop_scaling"),
-  "scaled_pop",
-  "a",
-  "",
-  1,
-  scaled_pop,
-  list(FALSE),
-  list("pop_scaling"),
-  "scaled_pop",
-  "a",
-  "",
-  1,
-  flatline_fc,
-  list(),
-  list(),
-  "flatline_fc",
-  "a",
-  "",
-  1,
-  smoothed_scaled,
-  list(list(c(0, 7, 14), c(0)), 14, 7),
-  list("lags", "sd_width", "sd_mean_width"),
-  "smoothed_scaled",
-  "a",
-  "",
-  1,
+  ~forecaster, ~forecaster_args, ~forecaster_args_names, ~fc_name, ~outcome, ~extra_sources, ~ahead,
+  scaled_pop, list(TRUE), list("pop_scaling"), "scaled_pop", "a", "", 1,
+  scaled_pop, list(FALSE), list("pop_scaling"), "scaled_pop", "a", "", 1,
+  flatline_fc, list(), list(), "flatline_fc", "a", "", 1,
+  smoothed_scaled, list(list(c(0, 7, 14), c(0)), 14, 7), list("lags", "sd_width", "sd_mean_width"), "smoothed_scaled", "a", "", 1,
 )
 # Which forecasters expect the data to be non-identical?
 expects_nonequal <- c("scaled_pop", "smoothed_scaled")

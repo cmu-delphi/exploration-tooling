@@ -596,27 +596,18 @@ gen_ili_data <- function(default_day_of_week = 1) {
   # map names to lower case
   name_map <- tibble(abb = state.abb, name = state.name) %>%
     bind_rows(
+      # fmt: skip
       tribble(
-        ~name,
-        ~abb,
-        "District of Columbia",
-        "DC",
-        "American Samoa",
-        "AS",
-        "Guam",
-        "GU",
-        "Northern Mariana Islands",
-        "MP",
-        "Puerto Rico",
-        "PR",
-        "Virgin Islands",
-        "VI",
-        "Trust Territories",
-        "TT",
-        "us",
-        "US",
-        "New York City",
-        "ny"
+        ~name, ~abb,
+        "District of Columbia", "DC",
+        "American Samoa", "AS",
+        "Guam", "GU",
+        "Northern Mariana Islands", "MP",
+        "Puerto Rico", "PR",
+        "Virgin Islands", "VI",
+        "Trust Territories", "TT",
+        "us", "US",
+        "New York City", "ny"
       )
     ) %>%
     mutate(abb = tolower(abb))

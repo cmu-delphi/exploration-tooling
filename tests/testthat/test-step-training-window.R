@@ -1,26 +1,12 @@
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
+# fmt: skip
 data <- tribble(
-  ~geo_value,
-  ~time_value,
-  ~version,
-  ~value,
-  "ak",
-  "2024-11-08",
-  "2024-11-13",
-  1,
-  "ak",
-  "2024-11-07",
-  "2024-11-13",
-  2,
-  "ak",
-  "2024-10-08",
-  "2024-11-13",
-  2,
-  "ak",
-  "2024-10-07",
-  "2024-11-13",
-  2,
+  ~geo_value, ~time_value, ~version, ~value,
+  "ak", "2024-11-08", "2024-11-13", 1,
+  "ak", "2024-11-07", "2024-11-13", 2,
+  "ak", "2024-10-08", "2024-11-13", 2,
+  "ak", "2024-10-07", "2024-11-13", 2,
 ) %>%
   mutate(time_value = as.Date(time_value), version = as.Date(version)) %>%
   bind_rows((.) %>% mutate(geo_value = "ca", value = value * 3 + 1)) %>%

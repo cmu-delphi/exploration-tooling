@@ -20,42 +20,20 @@ test_that("sanitize_args_predictors_trainer", {
 
 test_that("id generation works", {
   # Same arguments but scrambled.
+  # fmt: skip
   simple_ex <- list(
     dplyr::tribble(
-      ~forecaster,
-      ~trainer,
-      ~pop_scaling,
-      ~lags,
-      "scaled_pop",
-      "linreg",
-      TRUE,
-      c(1, 2)
-    ),
-    dplyr::tribble(
-      ~forecaster,
-      ~pop_scaling,
-      ~trainer,
-      ~lags,
-      "scaled_pop",
-      TRUE,
-      "linreg",
-      c(1, 2)
-    ),
-    dplyr::tribble(
-      ~trainer,
-      ~forecaster,
-      ~pop_scaling,
-      "linreg",
-      "scaled_pop",
-      TRUE,
-    ),
-    dplyr::tribble(
-      ~trainer,
-      ~pop_scaling,
-      ~forecaster,
-      "linreg",
-      TRUE,
-      "scaled_pop",
+      ~forecaster, ~trainer, ~pop_scaling, ~lags,
+      "scaled_pop", "linreg", TRUE, c(1, 2)
+    ), dplyr::tribble(
+      ~forecaster, ~pop_scaling, ~trainer, ~lags,
+      "scaled_pop", TRUE, "linreg", c(1, 2)
+    ), dplyr::tribble(
+      ~trainer, ~forecaster, ~pop_scaling,
+      "linreg", "scaled_pop", TRUE,
+    ), dplyr::tribble(
+      ~trainer, ~pop_scaling, ~forecaster,
+      "linreg", TRUE, "scaled_pop",
     )
   )
   same_ids <- map(simple_ex, add_id)
@@ -74,30 +52,14 @@ test_that("forecaster lookup selects the right rows", {
     lags = list(NULL, c(0, 7, 14)),
     pop_scale = c(FALSE, TRUE),
   )
-  expect_equal(
-    forecaster_lookup("monarchist", param_grid_ex),
-    tribble(
-      ~id,
-      ~forecaster,
-      ~lags,
-      ~pop_scale,
-      "monarchist.thrip",
-      "scaled_pop",
-      c(0, 7, 14),
-      TRUE,
-    )
-  )
-  expect_equal(
-    forecaster_lookup("irish", param_grid_ex),
-    tribble(
-      ~id,
-      ~forecaster,
-      ~lags,
-      ~pop_scale,
-      "simian.irishsetter",
-      "scaled_pop",
-      NULL,
-      FALSE,
-    )
-  )
+  # fmt: skip
+  expect_equal(forecaster_lookup("monarchist", param_grid_ex), tribble(
+    ~id, ~forecaster, ~lags, ~pop_scale,
+    "monarchist.thrip", "scaled_pop", c(0, 7, 14), TRUE,
+  ))
+  # fmt: skip
+  expect_equal(forecaster_lookup("irish", param_grid_ex), tribble(
+    ~id, ~forecaster, ~lags, ~pop_scale,
+    "simian.irishsetter", "scaled_pop", NULL, FALSE,
+  ))
 })
