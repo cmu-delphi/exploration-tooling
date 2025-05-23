@@ -130,8 +130,8 @@ dashboard:
 	Rscript scripts/dashboard.R
 
 sync-reports:
-	aws s3 sync s3://forecasting-team-data/2024/reports/ reports/; \
-	aws s3 sync reports/ s3://forecasting-team-data/2024/reports/
+	aws s3 sync reports/ s3://forecasting-team-data/2024/reports/; \
+	aws s3 sync s3://forecasting-team-data/2024/reports/ reports/
 
 update-site: sync-reports
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()" > cache/update_site_log.txt
