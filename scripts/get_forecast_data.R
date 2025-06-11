@@ -160,7 +160,7 @@ fetch_forecast_files <- function(sync_to_s3 = TRUE, disease) {
   combined_forecasts <- bind_rows(all_forecasts)
 
   if (sync_to_s3) {
-    combined_forecasts %>% s3write_using(nanoparquet::write_parquet, object = config$s3_key, bucket = config$s3_bucket)
+    combined_forecasts %>% aws.s3::s3write_using(nanoparquet::write_parquet, object = config$s3_key, bucket = config$s3_bucket)
   }
 
   return(combined_forecasts)
