@@ -1,7 +1,7 @@
 ---
 title: "`r params$forecast_date`: `r params$disease` forecaster predictions"
 author: Delphi Forecast Team
-date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`, Forecast date: `r params$forecast_date`, Last day of data: `r max(params$truth_data$target_end_date)`"
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`, Forecast date: `r params$forecast_date`, Last day of data: `r max(params$truth_data_nhsn$target_end_date)`"
 output:
   html_document:
     code_folding: hide
@@ -10,9 +10,11 @@ output:
     # lib_dir: libs
 params:
   disease: "covid"
-  forecast_res: !r ""
+  forecast_nhsn: !r ""
+  forecast_nssp: !r ""
   forecast_date: !r ""
-  truth_data: !r ""
+  truth_data_nhsn: !r ""
+  truth_data_nssp: !r ""
 ---
 
 ```{css, echo=FALSE}
@@ -51,9 +53,9 @@ Fan displays 20-80 quantiles for coverage.
 
 ```{r, fig.height = 60, fig.width = 12, echo=FALSE}
 the_plot <- plot_forecasts(
-  params$forecast_res,
+  params$forecast_nhsn,
   params$forecast_date,
-  params$truth_data,
+  params$truth_data_nhsn,
   quantiles = c(0.8),
   alphas = c(0.7)
 ) %>%
@@ -70,9 +72,9 @@ Fan displays 20-80, 5-95, and 1-99 quantiles.
 
 ```{r, fig.height = 60, fig.width = 12, echo=FALSE}
 the_plot <- plot_forecasts(
-  params$forecast_res,
+  params$forecast_nhsn,
   params$forecast_date,
-  params$truth_data,
+  params$truth_data_nhsn,
   quantiles = c(0.8, 0.95, 0.99),
   alphas = c(0.9, 0.6, 0.2)
 ) %>%
@@ -83,23 +85,39 @@ ggplotly(the_plot, tooltip = "text", height = 9000, width = 2000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
 ```
 
-<!-- ## epipredict national -->
+## Main quantile NSSP
+Fan displays 20-80 quantiles for coverage.
 
-<!-- ```{r, fig.width = 12, echo=FALSE} -->
-<!-- the_plot <- plot_forecasts( -->
-<!--   params$forecast_res %>% -->
-<!--   filter(geo_value != "usa") %>% -->
-<!--   summarise( -->
-<!--     value = sum(value), -->
-<!--     .by = c("forecaster", "forecast_date", "target_end_date", "quantile") -->
-<!--   ), -->
-<!--   params$forecast_date, -->
-<!--   "nation", -->
-<!--   params$truth_data %>% mutate(target_end_date = time_value) %>% filter(geo_value == "usa") %>% filter(time_value > "2023-09-01") -->
-<!-- ) %>% -->
-<!--   suppressMessages() %>% -->
-<!--   suppressWarnings() -->
+```{r, fig.height = 60, fig.width = 12, echo=FALSE}
+the_plot <- plot_forecasts(
+  params$forecast_nssp,
+  params$forecast_date,
+  params$truth_data_nssp,
+  quantiles = c(0.8),
+  alphas = c(0.7)
+) %>%
+  suppressMessages() %>%
+  suppressWarnings()
 
-<!-- ggplotly(the_plot, tooltip = "text", height = 400, width = 1200) %>% -->
-<!--   layout(hoverlabel = list(bgcolor = "white")) -->
-<!-- ``` -->
+ggplotly(the_plot, tooltip = "text", height = 9000, width = 2000) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+```
+
+## Extreme quantiles NSSP
+
+Fan displays 20-80, 5-95, and 1-99 quantiles.
+
+```{r, fig.height = 60, fig.width = 12, echo=FALSE}
+the_plot <- plot_forecasts(
+  params$forecast_nssp,
+  params$forecast_date,
+  params$truth_data_nssp,
+  quantiles = c(0.8, 0.95, 0.99),
+  alphas = c(0.9, 0.6, 0.2)
+) %>%
+  suppressMessages() %>%
+  suppressWarnings()
+
+ggplotly(the_plot, tooltip = "text", height = 9000, width = 2000) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+```
