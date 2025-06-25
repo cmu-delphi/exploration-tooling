@@ -47,7 +47,9 @@ config <- list(
   prelim_metadata_url = "https://data.cdc.gov/api/views/mpgq-jmmr",
   raw_file_name_prefix = "nhsn_data_raw",
   s3_bucket = "forecasting-team-data",
-  archive_s3_key = "nhsn_data_archive.parquet"
+  archive_s3_key = "nhsn_data_archive.parquet",
+  local_raw_cache_path = "cache/nhsn_raw_cache",
+  hash_archive_file = "nhsn_hash_archive.parquet"
 )
 
 
@@ -79,6 +81,7 @@ get_last_raw_update_at <- function(type = c("raw", "prelim"), missing_value = MI
   )
 }
 
+
 #' Download the latest NHSN data from Socrata
 #'
 #' This function downloads the latest NHSN data from Socrata, if it has been
@@ -87,44 +90,81 @@ get_last_raw_update_at <- function(type = c("raw", "prelim"), missing_value = MI
 #'
 #' @param verbose Whether to print verbose output.
 update_nhsn_data_raw <- function() {
-  # If this request fails (which occurs surprisingly often, eyeroll), we
-  # will just return a future date (2040-01-01) and download anyway.
-  raw_update_at <- get_socrata_updated_at(config$raw_metadata_url)
-  # Same here.
-  prelim_update_at <- get_socrata_updated_at(config$prelim_metadata_url)
+  current_time <- with_tz(Sys.time(), tzone = "UTC")
+  # WARNING: These Socrata metadata fields have been unreliable. If they fail, they
+  # default to current time, which will trigger a download and then we compare
+  # with hash archive.
+  raw_update_at <- get_socrata_updated_at(config$raw_metadata_url, missing_value = current_time)
+  prelim_update_at <- get_socrata_updated_at(config$prelim_metadata_url, missing_value = current_time)
+  # Get the last time the raw data was updated from S3.
   last_raw_file_update_at <- get_last_raw_update_at("raw")
   last_prelim_file_update_at <- get_last_raw_update_at("prelim")
 
+  # Some derived values for logging and file naming.
+  raw_update_at_local <- with_tz(raw_update_at)
+  raw_update_at_formatted <- format(raw_update_at, "%Y-%m-%d_%H-%M-%OS5")
+  raw_file <- glue("{config$raw_file_name_prefix}_{raw_update_at_formatted}.parquet")
+  local_file_path <- here::here(config$local_raw_cache_path, raw_file)
+  prelim_update_at_local <- with_tz(prelim_update_at)
+  prelim_update_at_formatted <- format(prelim_update_at, "%Y-%m-%d_%H-%M-%OS5")
+  prelim_file <- glue("{config$raw_file_name_prefix}_{prelim_update_at_formatted}_prelim.parquet")
+  local_prelim_file_path <- here::here(config$local_raw_cache_path, prelim_file)
+  hash_archive_path <- here::here(config$local_raw_cache_path, config$hash_archive_file)
+
+  # Open the hash archive file.
+  hash_archive <- nanoparquet::read_parquet(hash_archive_path)
+
+  # If the raw data has been updated or there was a failure getting metadata,
+  # download it.
   if (raw_update_at > last_raw_file_update_at) {
-    raw_update_at_local <- with_tz(raw_update_at)
     cli_inform("The raw data has been updated at {raw_update_at_local} (UTC: {raw_update_at}).")
-    raw_update_at_formatted <- format(raw_update_at, "%Y-%m-%d_%H-%M-%OS5")
-    raw_file <- glue("{config$raw_file_name_prefix}_{raw_update_at_formatted}.parquet")
     cli_inform("Downloading the raw data... {raw_file}")
-    read_csv(config$raw_query_url) %>% s3write_using(write_parquet, object = raw_file, bucket = config$s3_bucket)
+    read_csv(config$raw_query_url) %>% write_parquet(local_file_path)
+
+    # Get the hash of the raw file.
+    raw_file_hash <- get_file_hash(local_file_path)
+
+    # If the raw file hash is not in the archive, add it to S3 and local file.
+    if (!raw_file_hash %in% hash_archive$hash) {
+      hash_archive <- bind_rows(hash_archive, tibble(file = raw_file, hash = raw_file_hash))
+      cli_inform("Adding raw file to S3 and local cache.")
+
+      # Back up the raw file to S3.
+      # s3write_using(write_parquet, object = raw_file, bucket = config$s3_bucket)
+
+      # Write the hash archive back to the file.
+      write_parquet(hash_archive, hash_archive_path)
+    } else {
+      cli_inform("New raw file is a duplicate, removing from local cache.")
+      unlink(local_file_path)
+    }
   }
 
+  # If the prelim data has been updated or there was a failure getting metadata,
+  # download it.
   if (prelim_update_at > last_prelim_file_update_at) {
-    prelim_update_at_local <- with_tz(prelim_update_at)
     cli_inform("The prelim data has been updated at {prelim_update_at_local} (UTC: {prelim_update_at}).")
-    prelim_update_at_formatted <- format(prelim_update_at, "%Y-%m-%d_%H-%M-%OS5")
-    prelim_file <- glue("{config$raw_file_name_prefix}_{prelim_update_at_formatted}_prelim.parquet")
     cli_inform("Downloading the prelim data... {prelim_file}")
-    read_csv(config$prelim_query_url) %>% s3write_using(write_parquet, object = prelim_file, bucket = config$s3_bucket)
-  }
+    read_csv(config$prelim_query_url) %>% write_parquet(local_prelim_file_path)
 
-  # Since we may have downloaded a duplicate file above, filter out the ones
-  # that have the same ETag. (I don't feel like rederiving AWS S3's ETag field
-  # and computing ahead of time.)
-  delete_df <- delete_duplicates_from_s3_by_etag(config$s3_bucket, config$raw_file_name_prefix, dry_run = FALSE)
-  if (nrow(delete_df) > 0) {
-    cli_inform("Deleted {nrow(delete_df)} duplicate files from S3.")
-    cli_inform("Deleted files:")
-    cli_inform(paste0(" - ", delete_df$Key))
-  } else {
-    cli_inform("No duplicate files to delete.")
+    # Get the hash of the prelim file.
+    prelim_file_hash <- get_file_hash(local_prelim_file_path)
+
+    # If the prelim file hash is not in the archive, add it to S3 and local file.
+    if (!prelim_file_hash %in% hash_archive$hash) {
+      hash_archive <- bind_rows(hash_archive, tibble(file = prelim_file, hash = prelim_file_hash))
+      cli_inform("Adding prelim file to S3 and local cache.")
+
+      # Back up the prelim file to S3.
+      # s3write_using(write_parquet, object = prelim_file, bucket = config$s3_bucket)
+
+      # Write the hash archive back to the file.
+      write_parquet(hash_archive, hash_archive_path)
+    } else {
+      cli_inform("New prelim file is a duplicate, removing from local cache.")
+      unlink(local_prelim_file_path)
+    }
   }
-  cli_inform("Finished fetching NHSN data.")
 }
 
 #' Process Raw NHSN Data File
