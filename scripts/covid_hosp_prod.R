@@ -273,7 +273,8 @@ forecast_targets <- tar_map(
       }
 
       # jank renaming to avoid hard-coded variable name problems
-      nhsn_data %<>% rename(nssp = value) %>%
+      nhsn_data %<>%
+        rename(nssp = value) %>%
         mutate(
           time_value = floor_date(time_value, "week", week_start = 7) + 3
         )
@@ -553,21 +554,17 @@ ensemble_targets <- tar_map(
     command = {
       nhsn_data <- truth_data_pre_process[[1]]
       nssp_data <- truth_data_pre_process[[2]]
-      nssp_max_state_value <-  nssp_data %>%
-            rename(nssp = value) %>%
-            full_join(
-              nhsn_data %>%
-                select(geo_value, target_end_date, value),
-              by = join_by(geo_value, target_end_date)
-            ) %>%
-            group_by(geo_value) %>%
-            summarise(rel_max_value = max(value, na.rm = TRUE) / max(nssp, na.rm = TRUE)),
-      nssp_renormalized <-
-        nssp_data %>%
-        left_join(
-          nssp_max_state_value,
-          by = join_by(geo_value)
+      nssp_max_state_value <- nssp_data %>%
+        rename(nssp = value) %>%
+        full_join(
+          nhsn_data %>%
+            select(geo_value, target_end_date, value),
+          by = join_by(geo_value, target_end_date)
         ) %>%
+        group_by(geo_value) %>%
+        summarise(rel_max_value = max(value, na.rm = TRUE) / max(nssp, na.rm = TRUE))
+      nssp_renormalized <- nssp_data %>%
+        left_join(nssp_max_state_value, by = join_by(geo_value)) %>%
         mutate(value = value * rel_max_value) %>%
         select(-rel_max_value)
       nhsn_data %>% bind_rows(nssp_renormalized)
@@ -604,7 +601,9 @@ ensemble_targets <- tar_map(
       # Only render the report if there is only one forecast date
       # i.e. we're running this in prod on schedule
       if (!g_backtest_mode) {
-        if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
+        if (!dir.exists(here::here("reports"))) {
+          dir.create(here::here("reports"))
+        }
         rmarkdown::render(
           forecast_report_rmd,
           output_file = here::here(
