@@ -226,7 +226,7 @@ forecast_targets <- tar_map(
         add_season_info() %>%
         mutate(
           geo_value = ifelse(geo_value == "usa", "us", geo_value),
-          time_value = floor_date(time_value, "week", week_start = 4) - 1
+          time_value = floor_date(time_value, "week", week_start = 7) + 3
         ) %>%
         filter(geo_value %nin% g_insufficient_data_geos)
       if (!grepl("latest", id)) {
@@ -268,7 +268,7 @@ forecast_targets <- tar_map(
         add_season_info() %>%
         mutate(
           geo_value = ifelse(geo_value == "usa", "us", geo_value),
-          time_value = floor_date(time_value, "week", week_start = 4) - 1
+          time_value = floor_date(time_value, "week", week_start = 7) + 3
         ) %>%
         filter(geo_value %nin% g_insufficient_data_geos)
 
@@ -278,7 +278,10 @@ forecast_targets <- tar_map(
       }
 
       # jank renaming to avoid hard-coded variable name problems
-      nhsn_data %<>% rename(nssp = value)
+      nhsn_data %<>% rename(nssp = value) %>%
+        mutate(
+          time_value = floor_date(time_value, "week", week_start = 7) + 3
+        )
       attributes(nssp_data)$metadata$as_of <- as.Date(forecast_date_int)
 
       forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
@@ -403,9 +406,25 @@ ensemble_targets <- tar_map(
     },
   ),
   tar_target(
+    name = ensemble_nssp_clim_lin,
+    command = {
+      forecast_nssp_full_filtered %>%
+        ensemble_climate_linear(
+          aheads,
+          other_weights = geo_nssp_forecasters_weights,
+          max_climate_ahead_weight = 0.6,
+          max_climate_quantile_weight = 0.6
+        ) %>%
+        filter(geo_value %nin% geo_exclusions) %>%
+        ungroup() %>%
+        sort_by_quantile() %>%
+        mutate(forecaster = "climate_linear")
+    },
+  ),
+  tar_target(
     name = ensemble_nssp_mixture_res,
     command = {
-      ensemble_clim_lin %>%
+      ensemble_nssp_clim_lin %>%
         bind_rows(
           forecast_nssp_full_filtered %>%
             filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources")) %>%
@@ -431,6 +450,7 @@ ensemble_targets <- tar_map(
     command = {
       bind_rows(
         forecast_nssp_full_filtered,
+        ensemble_nssp_clim_lin,
         ensemble_nssp_mixture_res,
       )
     }
@@ -440,25 +460,19 @@ ensemble_targets <- tar_map(
     command = {
       if (!g_backtest_mode && g_submission_directory != "cache") {
         forecast_reference_date <- get_forecast_reference_date(forecast_date_int)
-        ensemble_mixture_res %>%
+        nhsn_submission <- ensemble_mixture_res %>%
+          format_flusight(disease = "covid")
+        nssp_submission <- ensemble_nssp_mixture_res %>%
           format_flusight(disease = "covid") %>%
+          mutate(
+            target = "wk inc covid prop ed visits",
+            value = value / 100
+          )
+        bind_rows(nhsn_submission, nssp_submission) %>%
           write_submission_file(
             forecast_reference_date,
             file.path(g_submission_directory, "model-output/CMU-TimeSeries")
           )
-      } else {
-        cli_alert_info("Not making submission csv because we're in backtest mode or submission directory is cache")
-      }
-    },
-  ),
-  tar_target(
-    name = make_nssp_submission_csv,
-    command = {
-      if (!g_backtest_mode && g_submission_directory != "cache") {
-        forecast_reference_date <- get_forecast_reference_date(forecast_date_int)
-        ensemble_nssp_mixture_res %>%
-          format_flusight(disease = "covid") %>%
-          write_submission_file(forecast_reference_date, file.path(g_submission_directory, "model-output/CMU-TimeSeries"))
       } else {
         cli_alert_info("Not making submission csv because we're in backtest mode or submission directory is cache")
       }

@@ -56,7 +56,6 @@ scaled_pop_seasonal <- function(
   clip_lower = TRUE,
   ...
 ) {
-  browser()
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)

@@ -692,7 +692,7 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     as_epi_archive(compactify = TRUE) %>%
     extract2("DT") %>%
     # End of week to midweek correction.
-    mutate(time_value = floor_date(time_value, "week", week_start = 4)-1) %>%
+    mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
     as_epi_archive(compactify = TRUE)
 }
 
@@ -703,6 +703,6 @@ get_nssp_github <- function() {
     filter(county == "All") %>%
     left_join(state_map, by = join_by(geography == state_name)) %>%
     select(geo_value = state_id, time_value = week_end, nssp = percent_visits_covid) %>%
-    mutate(time_value = floor_date(time_value, "week", week_start = 4)-1) %>%
+    mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
     mutate(version = Sys.Date())
 }
