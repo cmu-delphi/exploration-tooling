@@ -62,10 +62,6 @@ g_climate_geo_agged <- function(epi_data, ahead, extra_data, ...) {
   )
 }
 g_windowed_seasonal <- function(epi_data, ahead, extra_data, ...) {
-  epi_data %>%
-    mutate(wkday = wday(time_value)) %>%
-    distinct(wkday, .keep_all = TRUE) %>%
-    select(time_value, wkday)
   fcst <-
     epi_data %>%
     scaled_pop_seasonal(
@@ -186,8 +182,7 @@ parameters_and_date_targets <- rlang::list2(
     nssp_latest_data,
     command = {
       nssp_archive_data %>%
-        epix_as_of(min(Sys.Date(), nssp_archive_data$versions_end)) %>%
-        arrange(desc(time_value))
+        epix_as_of(min(Sys.Date(), nssp_archive_data$versions_end))
     }
   )
 )
@@ -558,10 +553,7 @@ ensemble_targets <- tar_map(
     command = {
       nhsn_data <- truth_data_pre_process[[1]]
       nssp_data <- truth_data_pre_process[[2]]
-      nssp_renormalized <-
-        nssp_data %>%
-        left_join(
-          nssp_data %>%
+      nssp_max_state_value <-  nssp_data %>%
             rename(nssp = value) %>%
             full_join(
               nhsn_data %>%
@@ -570,6 +562,10 @@ ensemble_targets <- tar_map(
             ) %>%
             group_by(geo_value) %>%
             summarise(rel_max_value = max(value, na.rm = TRUE) / max(nssp, na.rm = TRUE)),
+      nssp_renormalized <-
+        nssp_data %>%
+        left_join(
+          nssp_max_state_value,
           by = join_by(geo_value)
         ) %>%
         mutate(value = value * rel_max_value) %>%
@@ -582,18 +578,19 @@ ensemble_targets <- tar_map(
     command = {
       nhsn_data <- truth_data_pre_process[[1]]
       nssp_data <- truth_data_pre_process[[2]]
+      nhsn_max_state_value <- nhsn_data %>%
+        rename(nssp = value) %>%
+        full_join(
+          nssp_data %>%
+            select(geo_value, target_end_date, value),
+          by = join_by(geo_value, target_end_date)
+        ) %>%
+        group_by(geo_value) %>%
+        summarise(rel_max_value = max(value, na.rm = TRUE) / max(nssp, na.rm = TRUE))
       nhsn_renormalized <-
         nhsn_data %>%
         left_join(
-          nhsn_data %>%
-            rename(nssp = value) %>%
-            full_join(
-              nssp_data %>%
-                select(geo_value, target_end_date, value),
-              by = join_by(geo_value, target_end_date)
-            ) %>%
-            group_by(geo_value) %>%
-            summarise(rel_max_value = max(value, na.rm = TRUE) / max(nssp, na.rm = TRUE)),
+          nhsn_max_state_value,
           by = join_by(geo_value)
         ) %>%
         mutate(value = value * rel_max_value) %>%
@@ -604,7 +601,6 @@ ensemble_targets <- tar_map(
   tar_target(
     notebook,
     command = {
-      browser()
       # Only render the report if there is only one forecast date
       # i.e. we're running this in prod on schedule
       if (!g_backtest_mode) {
