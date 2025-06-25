@@ -626,7 +626,6 @@ delete_files_from_s3 <- function(keys, bucket, batch_size = 500, .progress = TRU
 
 
 MIN_TIMESTAMP <- as.POSIXct("2000-01-01 00:00:00S", tz = "UTC")
-MAX_TIMESTAMP <- as.POSIXct("2040-01-01 00:00:00S", tz = "UTC")
 
 #' Get the last time a covidcast signal was updated.
 #'
@@ -674,24 +673,26 @@ get_s3_object_last_modified <- function(key, bucket, missing_value = MIN_TIMESTA
 #' @param dataset_url The URL of the Socrata dataset.
 #'
 #' @return The last updated date of the Socrata dataset in POSIXct format.
-get_socrata_updated_at <- function(dataset_url, missing_value = MAX_TIMESTAMP) {
+get_socrata_updated_at <- function(dataset_url, missing_value) {
   tryCatch(
     {
-      httr::with_config(
+      rowsUpdatedAt <- httr::with_config(
         httr::config(timeout = 5),
         httr::RETRY("GET", dataset_url, times = 5, pause_min = 5, pause_cap = 5)
       ) %>%
         httr::content() %>%
         # This field comes in as integer seconds since epoch, so we need to convert it.
-        pluck("rowsUpdatedAt") %>%
-        as.POSIXct(origin = "1970-01-01", tz = "UTC")
+        pluck("rowsUpdatedAt")
+      if (is.null(rowsUpdatedAt)) {
+        return(missing_value)
+      }
+      rowsUpdatedAt %>% as.POSIXct(origin = "1970-01-01", tz = "UTC")
     },
     error = function(cond) {
       return(missing_value)
     }
   )
 }
-
 
 #' get the unique shared (geo_value, forecast_date, target_end_date) tuples present for each forecaster in `forecasts`
 get_unique <- function(forecasts) {
@@ -700,11 +701,12 @@ get_unique <- function(forecasts) {
     unique()
   distinct <- map(
     forecasters,
-    \(x)
+    \(x) {
       forecasts %>%
         filter(forecaster == x) %>%
         select(geo_value, forecast_date, target_end_date) %>%
         distinct()
+    }
   )
   distinct_dates <- reduce(
     distinct,
@@ -745,4 +747,99 @@ filter_shared_geo_dates <- function(
     external_forecasts %>%
       inner_join(viable_dates, by = c("geo_value", "forecast_date", "target_end_date"))
   )
+}
+
+
+#' Calculate MD5 hash of a file
+#'
+#' This function reads a file into memory, calculates an MD5 hash of the
+#' binary data, and returns the hash as a character string.
+#'
+#' @param file The path to the file to hash
+#' @param algorithm The hash algorithm to use. Defaults to "md5".
+get_file_hash <- function(file, algorithm = "md5") {
+  readBin(file, what = "raw", n = file.size(file)) %>%
+    digest::digest(algo = algorithm, serialize = FALSE)
+}
+
+#' Calculate MD5 hash of a tibble as Parquet data
+#'
+#' This function takes a tibble, writes it to a Parquet file in memory,
+#' and calculates an MD5 hash of the resulting binary data. This is useful
+#' for creating content-based hashes of data that can be used for caching
+#' or detecting changes in data.
+#'
+#' @param df A tibble or data frame to hash
+#' @param algorithm The hash algorithm to use. Defaults to "md5".
+#'   Other options include "sha1", "sha256", "crc32", etc.
+#'
+#' @return A character string containing the MD5 hash
+#'
+#' @examples
+#' \dontrun{
+#' library(dplyr)
+#' data <- tibble(x = 1:5, y = letters[1:5])
+#' hash <- get_parquet_hash(data)
+#' print(hash)
+#' }
+#'
+#' @export
+get_tibble_hash <- function(df, algorithm = "md5") {
+  temp_file <- tempfile(fileext = ".parquet")
+  on.exit(unlink(temp_file), add = TRUE)
+  nanoparquet::write_parquet(df, temp_file)
+  get_file_hash(temp_file, algorithm = algorithm)
+}
+
+#' Compare an S3 ETag with local hashes
+#'
+#' This function downloads a file from S3, calculates various hashes of the
+#' binary data, and compares them to the ETag of the S3 object. A test to verify
+#' that I understand how S3 ETags are computed.
+#'
+#' @param bucket The name of the S3 bucket.
+#' @param key The key of the S3 object.
+compare_s3_etag <- function(bucket, key, region = "us-east-1") {
+  # Download file to temp location
+  temp_file <- tempfile()
+  on.exit(unlink(temp_file), add = TRUE)
+
+  # Download from S3
+  aws.s3::save_object(object = key, bucket = bucket, file = temp_file, region = region)
+
+  # Get S3 metadata to extract ETag
+  s3_meta <- aws.s3::head_object(object = key, bucket = bucket, region = region)
+
+  # Extract ETag (remove quotes if present)
+  s3_etag <- gsub('"', '', attr(s3_meta, "etag"))
+
+  # Calculate various hashes of the local file
+  raw_data <- readBin(temp_file, "raw", file.info(temp_file)$size)
+
+  hashes <- list(
+    md5 = digest::digest(raw_data, algo = "md5", serialize = FALSE),
+    sha1 = digest::digest(raw_data, algo = "sha1", serialize = FALSE),
+    sha256 = digest::digest(raw_data, algo = "sha256", serialize = FALSE),
+    crc32 = digest::digest(raw_data, algo = "crc32", serialize = FALSE)
+  )
+
+  # Compare results
+  cat("S3 ETag:", s3_etag, "\n")
+  cat("Local hashes:\n")
+  for (name in names(hashes)) {
+    match_indicator <- if (hashes[[name]] == s3_etag) " ✓ MATCH" else ""
+    cat(sprintf("  %s: %s%s\n", name, hashes[[name]], match_indicator))
+  }
+
+  # Check if it's a multipart upload (contains hyphen)
+  if (grepl("-", s3_etag)) {
+    cat("\nNote: ETag contains hyphen - this was likely a multipart upload\n")
+    cat("Multipart ETags are MD5 of concatenated part MD5s, plus part count\n")
+  }
+
+  invisible(list(
+    s3_etag = s3_etag,
+    local_hashes = hashes,
+    file_size = file.info(temp_file)$size
+  ))
 }
