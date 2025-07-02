@@ -90,33 +90,27 @@ get_last_raw_update_at <- function(type = c("raw", "prelim"), missing_value = MI
 #'
 #' @param verbose Whether to print verbose output.
 update_nhsn_data_raw <- function() {
-  current_time <- with_tz(Sys.time(), tzone = "UTC")
-  # WARNING: These Socrata metadata fields have been unreliable. If they fail, they
+  # WARNING: Socrata metadata fields have been unreliable. If they fail, they
   # default to current time, which will trigger a download and then we compare
   # with hash archive.
-  raw_update_at <- get_socrata_updated_at(config$raw_metadata_url, missing_value = current_time)
-  prelim_update_at <- get_socrata_updated_at(config$prelim_metadata_url, missing_value = current_time)
-  # Get the last time the raw data was updated from S3.
-  last_raw_file_update_at <- get_last_raw_update_at("raw")
-  last_prelim_file_update_at <- get_last_raw_update_at("prelim")
 
-  # Some derived values for logging and file naming.
-  raw_update_at_local <- with_tz(raw_update_at)
-  raw_update_at_formatted <- format(raw_update_at, "%Y-%m-%d_%H-%M-%OS5")
-  raw_file <- glue("{config$raw_file_name_prefix}_{raw_update_at_formatted}.parquet")
-  local_file_path <- here::here(config$local_raw_cache_path, raw_file)
-  prelim_update_at_local <- with_tz(prelim_update_at)
-  prelim_update_at_formatted <- format(prelim_update_at, "%Y-%m-%d_%H-%M-%OS5")
-  prelim_file <- glue("{config$raw_file_name_prefix}_{prelim_update_at_formatted}_prelim.parquet")
-  local_prelim_file_path <- here::here(config$local_raw_cache_path, prelim_file)
-  hash_archive_path <- here::here(config$local_raw_cache_path, config$hash_archive_file)
+  # Get the current time in UTC for logging.
+  current_time <- with_tz(Sys.time(), tzone = "UTC")
 
   # Open the hash archive file.
+  hash_archive_path <- here::here(config$local_raw_cache_path, config$hash_archive_file)
   hash_archive <- nanoparquet::read_parquet(hash_archive_path)
 
+  # Get the last time the raw data was updated from Socrata.
+  raw_update_at <- get_socrata_updated_at(config$raw_metadata_url, missing_value = current_time)
+  last_raw_file_update_at <- get_last_raw_update_at("raw")
   # If the raw data has been updated or there was a failure getting metadata,
   # download it.
   if (raw_update_at > last_raw_file_update_at) {
+    raw_update_at_local <- with_tz(raw_update_at)
+    raw_update_at_formatted <- format(raw_update_at, "%Y-%m-%d_%H-%M-%OS5")
+    raw_file <- glue("{config$raw_file_name_prefix}_{raw_update_at_formatted}.parquet")
+    local_file_path <- here::here(config$local_raw_cache_path, raw_file)
     cli_inform("The raw data has been updated at {raw_update_at_local} (UTC: {raw_update_at}).")
     cli_inform("Downloading the raw data... {raw_file}")
     read_csv(config$raw_query_url) %>% write_parquet(local_file_path)
@@ -126,11 +120,11 @@ update_nhsn_data_raw <- function() {
 
     # If the raw file hash is not in the archive, add it to S3 and local file.
     if (!raw_file_hash %in% hash_archive$hash) {
-      hash_archive <- bind_rows(hash_archive, tibble(file = raw_file, hash = raw_file_hash))
+      hash_archive <- bind_rows(hash_archive, tibble(files = raw_file, hash = raw_file_hash))
       cli_inform("Adding raw file to S3 and local cache.")
 
       # Back up the raw file to S3.
-      # s3write_using(write_parquet, object = raw_file, bucket = config$s3_bucket)
+      put_object(file = local_file_path, object = raw_file, bucket = config$s3_bucket)
 
       # Write the hash archive back to the file.
       write_parquet(hash_archive, hash_archive_path)
@@ -140,9 +134,16 @@ update_nhsn_data_raw <- function() {
     }
   }
 
+  # Get the last time the prelim data was updated from Socrata.
+  prelim_update_at <- get_socrata_updated_at(config$prelim_metadata_url, missing_value = current_time)
+  last_prelim_file_update_at <- get_last_raw_update_at("prelim")
   # If the prelim data has been updated or there was a failure getting metadata,
   # download it.
   if (prelim_update_at > last_prelim_file_update_at) {
+    prelim_update_at_local <- with_tz(prelim_update_at)
+    prelim_update_at_formatted <- format(prelim_update_at, "%Y-%m-%d_%H-%M-%OS5")
+    prelim_file <- glue("{config$raw_file_name_prefix}_{prelim_update_at_formatted}_prelim.parquet")
+    local_prelim_file_path <- here::here(config$local_raw_cache_path, prelim_file)
     cli_inform("The prelim data has been updated at {prelim_update_at_local} (UTC: {prelim_update_at}).")
     cli_inform("Downloading the prelim data... {prelim_file}")
     read_csv(config$prelim_query_url) %>% write_parquet(local_prelim_file_path)
@@ -152,11 +153,11 @@ update_nhsn_data_raw <- function() {
 
     # If the prelim file hash is not in the archive, add it to S3 and local file.
     if (!prelim_file_hash %in% hash_archive$hash) {
-      hash_archive <- bind_rows(hash_archive, tibble(file = prelim_file, hash = prelim_file_hash))
+      hash_archive <- bind_rows(hash_archive, tibble(files = prelim_file, hash = prelim_file_hash))
       cli_inform("Adding prelim file to S3 and local cache.")
 
       # Back up the prelim file to S3.
-      # s3write_using(write_parquet, object = prelim_file, bucket = config$s3_bucket)
+      put_object(file = local_prelim_file_path, object = prelim_file, bucket = config$s3_bucket)
 
       # Write the hash archive back to the file.
       write_parquet(hash_archive, hash_archive_path)
