@@ -46,6 +46,9 @@ if (!g_backtest_mode) {
 g_linear <- function(epi_data, ahead, extra_data, ...) {
   forecaster_baseline_linear(epi_data, ahead, ..., residual_tail = 0.97, residual_center = 0.097, no_intercept = TRUE)
 }
+g_linear_no_population_scale <- function(epi_data, ahead, extra_data, ...) {
+  forecaster_baseline_linear(epi_data, ahead, ..., residual_tail = 0.97, residual_center = 0.097, no_intercept = TRUE, population_scale = FALSE)
+}
 g_climate_base <- function(epi_data, ahead, extra_data, ...) {
   climatological_model(
     epi_data,
@@ -100,6 +103,7 @@ g_windowed_seasonal_extra_sources <- function(epi_data, ahead, extra_data, ...) 
 g_forecaster_params_grid <- tibble(
   id = c(
     "linear",
+    "linear_no_population_scale",
     "windowed_seasonal",
     "windowed_seasonal_extra_sources",
     "climate_base",
@@ -108,6 +112,7 @@ g_forecaster_params_grid <- tibble(
   ),
   forecaster = rlang::syms(c(
     "g_linear",
+    "g_linear_no_population_scale",
     "g_windowed_seasonal",
     "g_windowed_seasonal_extra_sources",
     "g_climate_base",
@@ -120,9 +125,11 @@ g_forecaster_params_grid <- tibble(
     list(),
     list(),
     list(),
+    list(),
     list()
   ),
   param_names = list(
+    list(),
     list(),
     list(),
     list(),
@@ -320,7 +327,8 @@ ensemble_targets <- tar_map(
     name = forecast_nhsn_full_filtered,
     command = {
       forecast_nhsn_full %>%
-        filter(forecast_date == as.Date(forecast_date_int))
+        filter(forecast_date == as.Date(forecast_date_int)) %>%
+        filter(forecaster %nin% c("linear"))
     }
   ),
   tar_target(
