@@ -328,14 +328,17 @@ ensemble_targets <- tar_map(
     command = {
       forecast_nhsn_full %>%
         filter(forecast_date == as.Date(forecast_date_int)) %>%
-        filter(forecaster %nin% c("linear"))
+        # Remove `linear_no_population_scale`
+        filter(forecaster %nin% c("linear_no_population_scale"))
     }
   ),
   tar_target(
     name = forecast_nssp_full_filtered,
     command = {
       forecast_nssp_full %>%
-        filter(forecast_date == as.Date(forecast_date_int))
+        filter(forecast_date == as.Date(forecast_date_int)) %>%
+        # Renove `linear`
+        filter(forecaster %nin% c("linear"))
     }
   ),
   tar_target(
