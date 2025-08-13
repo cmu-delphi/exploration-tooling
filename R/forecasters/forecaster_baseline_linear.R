@@ -155,6 +155,11 @@ forecaster_baseline_linear <- function(
         value = values * population / 10**5
       ) %>%
       select(-population)
+  } else {
+    quantile_forecast %<>%
+      mutate(
+        value = values
+      )
   }
   quantile_forecast %<>%
     mutate(
