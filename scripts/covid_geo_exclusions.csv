@@ -12,6 +12,36 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, climate_geo_agged, all, 0
 2024-10-01, climate_quantile_extrapolated, all, 0
 ##################
+# August 6
+##################
+2025-08-06, all, mp, 0
+2025-08-06, windowed_seasonal, all, 0.0001
+2025-08-06, windowed_seasonal_extra_sources, all, 3
+2025-08-06, climate_linear, all, 0.0001
+2025-08-06, linear, all, 3
+2025-08-06, linearlog, all, 0
+2025-08-06, climate_base, all, 2
+2025-08-06, climate_geo_agged, all, 0
+2025-08-06, climate_quantile_extrapolated, all, 0
+2025-08-06, windowed_seasonal, fl, 8
+2025-08-06, windowed_seasonal_extra_sources, fl, 2
+2025-08-06, climate_linear, fl, 8
+##################
+# July 30
+##################
+2025-07-30, all, mp, 0
+2025-07-30, windowed_seasonal, all, 0.0001
+2025-07-30, windowed_seasonal_extra_sources, all, 3
+2025-07-30, climate_linear, all, 0.0001
+2025-07-30, linear, all, 3
+2025-07-30, linearlog, all, 0
+2025-07-30, climate_base, all, 2
+2025-07-30, climate_geo_agged, all, 0
+2025-07-30, climate_quantile_extrapolated, all, 0
+2025-07-30, windowed_seasonal, fl, 8
+2025-07-30, windowed_seasonal_extra_sources, fl, 2
+2025-07-30, climate_linear, fl, 8
+##################
 # July 02
 ##################
 2025-07-02, all, mp, 0

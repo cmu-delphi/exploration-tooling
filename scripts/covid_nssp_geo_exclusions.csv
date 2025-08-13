@@ -12,6 +12,73 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, climate_geo_agged, all, 0
 2024-10-01, climate_quantile_extrapolated, all, 0
 ##################
+# August 6th
+##################
+2025-08-06, all, mp, 0
+2025-08-06, windowed_seasonal, all, 3
+2025-08-06, windowed_seasonal_extra_sources, all, 1
+2025-08-06, climate_linear, all, 2
+2025-08-06, linear, all, 3
+2025-08-06, linearlog, all, 0
+2025-08-06, climate_base, all, 2
+2025-08-06, climate_geo_agged, all, 0
+2025-08-06, climate_quantile_extrapolated, all, 0
+2025-08-06, windowed_seasonal, al, 3
+2025-08-06, windowed_seasonal_extra_sources, al, 0.0001
+2025-08-06, climate_linear, al, 3
+##################
+# July 30rd
+##################
+2025-07-30, all, mp, 0
+2025-07-30, windowed_seasonal, all, 3
+2025-07-30, windowed_seasonal_extra_sources, all, 0.1
+2025-07-30, climate_linear, all, 1
+2025-07-30, linear, all, 3
+2025-07-30, linearlog, all, 0
+2025-07-30, climate_base, all, 2
+2025-07-30, climate_geo_agged, all, 0
+2025-07-30, climate_quantile_extrapolated, all, 0
+2025-07-30, windowed_seasonal, al, 3
+2025-07-30, windowed_seasonal_extra_sources, al, 0.0001
+2025-07-30, climate_linear, al, 3
+2025-07-30, windowed_seasonal, ca, 2
+2025-07-30, windowed_seasonal_extra_sources, ca, 3
+2025-07-30, windowed_seasonal, dc, 3
+2025-07-30, windowed_seasonal_extra_sources, dc, 2
+2025-07-30, climate_linear, all, 1
+2025-07-30, windowed_seasonal, fl, 0.0001
+2025-07-30, windowed_seasonal_extra_sources, fl, 3
+2025-07-30, windowed_seasonal, ms, 3
+2025-07-30, windowed_seasonal_extra_sources, ms, 0.1
+2025-07-30, climate_linear, ms, 10
+2025-07-30, windowed_seasonal, hi, 0.0001
+2025-07-30, windowed_seasonal_extra_sources, hi, 3
+2025-07-30, windowed_seasonal, us, 3
+2025-07-30, windowed_seasonal_extra_sources, us, 0.1
+2025-07-30, climate_linear, us, 0.0
+2025-07-30, windowed_seasonal, tx, 0.0001
+2025-07-30, windowed_seasonal_extra_sources, tx, 3
+##################
+# July 23rd
+##################
+2025-07-23, all, mp, 0
+2025-07-23, windowed_seasonal, all, 3
+2025-07-23, windowed_seasonal_extra_sources, all, 0.0001
+2025-07-23, climate_linear, all, 0.0001
+2025-07-23, linear, all, 3
+2025-07-23, linearlog, all, 0
+2025-07-23, climate_base, all, 2
+2025-07-23, climate_geo_agged, all, 0
+2025-07-23, climate_quantile_extrapolated, all, 0
+2025-07-23, windowed_seasonal, ca, 0.0001
+2025-07-23, windowed_seasonal_extra_sources, ca, 3
+2025-07-23, windowed_seasonal, fl, 0.0001
+2025-07-23, windowed_seasonal_extra_sources, fl, 3
+2025-07-23, windowed_seasonal, hi, 0.0001
+2025-07-23, windowed_seasonal_extra_sources, hi, 3
+2025-07-23, windowed_seasonal, tx, 0.0001
+2025-07-23, windowed_seasonal_extra_sources, tx, 3
+##################
 # Jun 25
 ##################
 2025-06-25, all, mp, 0
