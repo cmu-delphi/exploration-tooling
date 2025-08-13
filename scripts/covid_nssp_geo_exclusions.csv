@@ -6,7 +6,7 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, windowed_seasonal, all, 3
 2024-10-01, windowed_seasonal_extra_sources, all, 0.0001
 2024-10-01, climate_linear, all, 0.0001
-2024-10-01, linear, all, 3
+2024-10-01, linear_no_population_scale, all, 3
 2024-10-01, linearlog, all, 0
 2024-10-01, climate_base, all, 2
 2024-10-01, climate_geo_agged, all, 0
@@ -18,7 +18,7 @@ forecast_date,forecaster,geo_value,weight
 2025-06-25, windowed_seasonal, all, 3
 2025-06-25, windowed_seasonal_extra_sources, all, 0.0001
 2025-06-25, climate_linear, all, 0.0001
-2025-06-25, linear, all, 3
+2025-06-25, linear_no_population_scale, all, 3
 2025-06-25, linearlog, all, 0
 2025-06-25, climate_base, all, 2
 2025-06-25, climate_geo_agged, all, 0
@@ -30,7 +30,7 @@ forecast_date,forecaster,geo_value,weight
 2025-04-30, windowed_seasonal, all, 0.0001
 2025-04-30, windowed_seasonal_extra_sources, all, 3
 2025-04-30, climate_linear, all, 0.0001
-2025-04-30, linear, all, 3
+2025-04-30, linear_no_population_scale, all, 3
 2025-04-30, linearlog, all, 0
 2025-04-30, climate_base, all, 2
 2025-04-30, climate_geo_agged, all, 0
@@ -42,7 +42,7 @@ forecast_date,forecaster,geo_value,weight
 2025-04-23, windowed_seasonal, all, 0.0001
 2025-04-23, windowed_seasonal_extra_sources, all, 3
 2025-04-23, climate_linear, all, 0.0001
-2025-04-23, linear, all, 3
+2025-04-23, linear_no_population_scale, all, 3
 2025-04-23, linearlog, all, 0
 2025-04-23, climate_base, all, 2
 2025-04-23, climate_geo_agged, all, 0
@@ -54,7 +54,7 @@ forecast_date,forecaster,geo_value,weight
 2025-04-02, windowed_seasonal, all, 0.0001
 2025-04-02, windowed_seasonal_extra_sources, all, 3
 2025-04-02, climate_linear, all, 0.0001
-2025-04-02, linear, all, 3
+2025-04-02, linear_no_population_scale, all, 3
 2025-04-02, linearlog, all, 0
 2025-04-02, climate_base, all, 2
 2025-04-02, climate_geo_agged, all, 0.5
@@ -66,7 +66,7 @@ forecast_date,forecaster,geo_value,weight
 2025-04-02, windowed_seasonal, all, 0.0001
 2025-04-02, windowed_seasonal_extra_sources, all, 3
 2025-04-02, climate_linear, all, 0.0001
-2025-04-02, linear, all, 3
+2025-04-02, linear_no_population_scale, all, 3
 2025-04-02, linearlog, all, 0
 2025-04-02, climate_base, all, 2
 2025-04-02, climate_geo_agged, all, 0.5
@@ -81,7 +81,7 @@ forecast_date,forecaster,geo_value,weight
 2025-03-26, windowed_seasonal, all, 0.0001
 2025-03-26, windowed_seasonal_extra_sources, all, 3
 2025-03-26, climate_linear, all, 0.0001
-2025-03-26, linear, all, 3
+2025-03-26, linear_no_population_scale, all, 3
 2025-03-26, linearlog, all, 0
 2025-03-26, climate_base, all, 2
 2025-03-26, climate_geo_agged, all, 0.5
@@ -98,7 +98,7 @@ forecast_date,forecaster,geo_value,weight
 2025-03-19, windowed_seasonal, all, 0.0001
 2025-03-19, windowed_seasonal_extra_sources, all, 3
 2025-03-19, climate_linear, all, 0.0001
-2025-03-19, linear, all, 3
+2025-03-19, linear_no_population_scale, all, 3
 2025-03-19, linearlog, all, 0
 2025-03-19, climate_base, all, 2
 2025-03-19, climate_geo_agged, all, 0.5
@@ -110,7 +110,7 @@ forecast_date,forecaster,geo_value,weight
 2025-03-12, windowed_seasonal, all, 0.0001
 2025-03-12, windowed_seasonal_extra_sources, all, 3
 2025-03-12, climate_linear, all, 0.0001
-2025-03-12, linear, all, 3
+2025-03-12, linear_no_population_scale, all, 3
 2025-03-12, linearlog, all, 0
 2025-03-12, climate_base, all, 2
 2025-03-12, climate_geo_agged, all, 0.5
@@ -124,7 +124,7 @@ forecast_date,forecaster,geo_value,weight
 2025-03-05, windowed_seasonal, all,  0.0001
 2025-03-05, windowed_seasonal_extra_sources, all, 3
 2025-03-05, climate_linear, all, 0.0001
-2025-03-05, linear, all, 3
+2025-03-05, linear_no_population_scale, all, 3
 2025-03-05, linearlog, all, 0
 2025-03-05, climate_base, all, 2
 2025-03-05, climate_geo_agged, all, 0.5
@@ -136,7 +136,7 @@ forecast_date,forecaster,geo_value,weight
 2025-02-26, windowed_seasonal, all, 0.0001
 2025-02-26, windowed_seasonal_extra_sources, all, 3
 2025-02-26, climate_linear, all, 0.0001
-2025-02-26, linear, all, 3
+2025-02-26, linear_no_population_scale, all, 3
 2025-02-26, linearlog, all, 0
 2025-02-26, climate_base, all, 2
 2025-02-26, climate_geo_agged, all, 0.5
@@ -157,7 +157,7 @@ forecast_date,forecaster,geo_value,weight
 2025-02-19, windowed_seasonal, wy, 3
 2025-02-19, windowed_seasonal, usa, 3
 # creating linear climate
-2025-02-19, linear, all, 3
+2025-02-19, linear_no_population_scale, all, 3
 2025-02-19, linearlog, all, 0
 2025-02-19, climate_base, all, 2
 2025-02-19, climate_geo_agged, all, 0.5
@@ -169,7 +169,7 @@ forecast_date,forecaster,geo_value,weight
 2025-02-12, windowed_seasonal, all, 3
 2025-02-12, windowed_seasonal_extra_sources, all, 0.0
 2025-02-12, climate_linear, all, 3
-2025-02-12, linear, all, 0.5
+2025-02-12, linear_no_population_scale, all, 0.5
 2025-02-12, linearlog, all, 0
 2025-02-12, climate_base, all, 0
 2025-02-12, climate_geo_agged, all, 0.0
@@ -180,7 +180,7 @@ forecast_date,forecaster,geo_value,weight
 2025-02-05, windowed_seasonal, all, 3
 2025-02-05, windowed_seasonal_extra_sources, all, 3
 2025-02-05, climate_linear, all, 3
-2025-02-05, linear, all, 0.5
+2025-02-05, linear_no_population_scale, all, 0.5
 2025-02-05, linearlog, all, 0
 2025-02-05, climate_base, all, 0
 2025-02-05, climate_geo_agged, all, 0.0
@@ -191,7 +191,7 @@ forecast_date,forecaster,geo_value,weight
 2025-01-29, windowed_seasonal, all, 0
 2025-01-29, windowed_seasonal_extra_sources, all, 3
 2025-01-29, climate_linear, all, 3
-2025-01-29, linear, all, 3
+2025-01-29, linear_no_population_scale, all, 3
 2025-01-29, linearlog, all, 0
 2025-01-29, climate_base, all, 2
 2025-01-29, climate_geo_agged, all, 0.5
@@ -203,7 +203,7 @@ forecast_date,forecaster,geo_value,weight
 2025-01-22, windowed_seasonal, all, 0
 2025-01-22, windowed_seasonal_extra_sources, all, 3
 2025-01-22, climate_linear, all, 3
-2025-01-22, linear, all, 3
+2025-01-22, linear_no_population_scale, all, 3
 2025-01-22, linearlog, all, 0
 2025-01-22, climate_base, all, 2
 2025-01-22, climate_geo_agged, all, 0.5
@@ -215,7 +215,7 @@ forecast_date,forecaster,geo_value,weight
 2025-01-15, windowed_seasonal, all, 0
 2025-01-15, windowed_seasonal_extra_sources, all, 0
 2025-01-15, climate_linear, all, 3
-2025-01-15, linear, all, 3
+2025-01-15, linear_no_population_scale, all, 3
 2025-01-15, linearlog, all, 0
 2025-01-15, climate_base, all, 2
 2025-01-15, climate_geo_agged, all, 0.5
@@ -227,7 +227,7 @@ forecast_date,forecaster,geo_value,weight
 2025-01-08, windowed_seasonal, all, 0
 2025-01-08, windowed_seasonal_extra_sources, all, 0
 2025-01-08, climate_linear, all, 3
-2025-01-08, linear, all, 3
+2025-01-08, linear_no_population_scale, all, 3
 2025-01-08, linearlog, all, 0
 2025-01-08, climate_base, all, 2
 2025-01-08, climate_geo_agged, all, 0.5
@@ -239,7 +239,7 @@ forecast_date,forecaster,geo_value,weight
 2025-01-01, windowed_seasonal, all, 0
 2025-01-01, windowed_seasonal_extra_sources, all, 0
 2025-01-01, climate_linear, all, 3
-2025-01-01, linear, all, 3
+2025-01-01, linear_no_population_scale, all, 3
 2025-01-01, linearlog, all, 0
 2025-01-01, climate_base, all, 2
 2025-01-01, climate_geo_agged, all, 0.5
@@ -251,7 +251,7 @@ forecast_date,forecaster,geo_value,weight
 2024-12-25, windowed_seasonal, all, 0
 2024-12-25, windowed_seasonal_extra_sources, all, 0
 2024-12-25, climate_linear, all, 3
-2024-12-25, linear, all, 3
+2024-12-25, linear_no_population_scale, all, 3
 2024-12-25, linearlog, all, 0
 2024-12-25, climate_base, all, 2
 2024-12-25, climate_geo_agged, all, 0.5
@@ -263,7 +263,7 @@ forecast_date,forecaster,geo_value,weight
 2024-12-11, windowed_seasonal, all, 0
 2024-12-11, windowed_seasonal_extra_sources, all, 0
 2024-12-11, climate_linear, all, 3
-2024-12-11, linear, all, 3
+2024-12-11, linear_no_population_scale, all, 3
 2024-12-11, linearlog, all, 0
 2024-12-11, climate_base, all, 2
 2024-12-11, climate_geo_agged, all, 0.5
@@ -275,7 +275,7 @@ forecast_date,forecaster,geo_value,weight
 2024-12-04, windowed_seasonal, all, 0
 2024-12-04, windowed_seasonal_extra_sources, all, 0
 2024-12-04, climate_linear, all, 3
-2024-12-04, linear, all, 3
+2024-12-04, linear_no_population_scale, all, 3
 2024-12-04, linearlog, all, 0
 2024-12-04, climate_base, all, 2
 2024-12-04, climate_geo_agged, all, 0.5
@@ -287,7 +287,7 @@ forecast_date,forecaster,geo_value,weight
 2024-11-27, windowed_seasonal, all, 0
 2024-11-27, windowed_seasonal_extra_sources, all, 0
 2024-11-27, climate_linear, all, 3
-2024-11-27, linear, all, 3
+2024-11-27, linear_no_population_scale, all, 3
 2024-11-27, linearlog, all, 0
 2024-11-27, climate_base, all, 2
 2024-11-27, climate_geo_agged, all, 0.5
@@ -295,8 +295,8 @@ forecast_date,forecaster,geo_value,weight
 2024-11-27, climate_base, fl, 1
 2024-11-27, climate_base, de, 0.5
 2024-11-27, climate_base, mi, 0.5
-2024-11-27, linear, az, 0
-2024-11-27, linear, ma, 0
+2024-11-27, linear_no_population_scale, az, 0
+2024-11-27, linear_no_population_scale, ma, 0
 ################################################
 # minor blip, the uploaded data was wildly wrong
 # this does mean the forecasts will probably be more accurate
@@ -305,7 +305,7 @@ forecast_date,forecaster,geo_value,weight
 2024-11-20, windowed_seasonal, all, 0
 2024-11-20, windowed_seasonal_extra_sources, all, 0
 2024-11-20, climate_linear, all, 3
-2024-11-20, linear, all, 9
+2024-11-20, linear_no_population_scale, all, 9
 2024-11-20, linearlog, all, 0
 2024-11-20, climate_base, all, 2
 2024-11-20, climate_geo_agged, all, 1
@@ -331,7 +331,7 @@ forecast_date,forecaster,geo_value,weight
 2024-11-20, climate_base, md, 0.5
 2024-11-20, climate_geo_agged, md, 0.5
 # mi needs a stronger climate part
-2024-11-20, linear, mi, 0.5
+2024-11-20, linear_no_population_scale, mi, 0.5
 2024-11-20, climate_base, mi, 0.5
 # nd needs a stronger linear part
 2024-11-20, climate_base, nd, 0.25
@@ -346,23 +346,23 @@ forecast_date,forecaster,geo_value,weight
 2024-11-20, climate_base, or, 0.5
 2024-11-20, climate_geo_agged, or, 0.5
 # pa needs a weaker linear part (data is *very* steep)
-2024-11-20, linear, pa, 0.5
+2024-11-20, linear_no_population_scale, pa, 0.5
 ################################################
 #first forecast
 ################################################
-# 2024-11-20, linear, all, 2
+# 2024-11-20, linear_no_population_scale, all, 2
 # 2024-11-20, linearlog, all, 0
 # 2024-11-20, climate_base, all, 2
 # 2024-11-20, climate_geo_agged, all, 0.5
 # 2024-11-20, climate_quantile_extrapolated, all, 0.5
-# 2024-11-20, linear, az, 0
-# 2024-11-20, linear, mi, 0
-# 2024-11-20, linear, ma, 0
+# 2024-11-20, linear_no_population_scale, az, 0
+# 2024-11-20, linear_no_population_scale, mi, 0
+# 2024-11-20, linear_no_population_scale, ma, 0
 # 2024-11-20, climate_geo_agged, ma, 0
 # 2024-11-20, climate_quantile_extrapolated, ma, 0
-# 2024-11-20, linear, mn, 0
-# 2024-11-20, linear, mt, 0
-# 2024-11-20, linear, nm, 0
-# 2024-11-20, linear, pa, 0
-# 2024-11-20, linear, vt, 0
-# 2024-11-20, linear, wy, 0
+# 2024-11-20, linear_no_population_scale, mn, 0
+# 2024-11-20, linear_no_population_scale, mt, 0
+# 2024-11-20, linear_no_population_scale, nm, 0
+# 2024-11-20, linear_no_population_scale, pa, 0
+# 2024-11-20, linear_no_population_scale, vt, 0
+# 2024-11-20, linear_no_population_scale, wy, 0
