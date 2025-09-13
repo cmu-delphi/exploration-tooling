@@ -696,8 +696,13 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     as_epi_archive(compactify = TRUE)
 }
 
-get_nssp_github <- function() {
-  raw_file <- read_csv("https://raw.githubusercontent.com/CDCgov/covid19-forecast-hub/refs/heads/main/auxiliary-data/nssp-raw-data/latest.csv")
+get_nssp_github <- function(source=c("github", "socrata")) {
+  source <- arg_match(source)
+  if (source == "github") {
+    raw_file <- read_csv("https://raw.githubusercontent.com/CDCgov/covid19-forecast-hub/refs/heads/main/auxiliary-data/nssp-raw-data/latest.csv")
+  } else if (source == "socrata") {
+    raw_file <- read_csv("https://data.cdc.gov/resource/rdmq-nq56.csv?$limit=1000000&$select=geography,week_end,county,percent_visits_covid")
+  }
   state_map <- get_population_data() %>% filter(state_id !="usa")
   raw_file %>%
     filter(county == "All") %>%
@@ -705,4 +710,11 @@ get_nssp_github <- function() {
     select(geo_value = state_id, time_value = week_end, nssp = percent_visits_covid) %>%
     mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
     mutate(version = Sys.Date())
+}
+
+check_nssp_socrata_github_diff <- function() {
+  df1 <- get_nssp_github("github")
+  df2 <- get_nssp_github("socrata")
+  out <- full_join(df1, df2, by = c("geo_value", "time_value", "version"))
+  out %>% mutate(diff = nssp.x - nssp.y) %>% filter(abs(diff) > 0.0001)
 }

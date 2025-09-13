@@ -158,3 +158,15 @@ season-summary-2025-talk:
 
 season-summary-2025-talk-preview:
 	quarto preview scripts/reports/season_2025_talk/season_summary_2025_presentation.qmd
+
+check-socrata-updates:
+	echo "NHSN Regular Update:"
+	@curl -s https://data.cdc.gov/api/views/ua7e-t2fy | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['rowsUpdatedAt'])" | xargs -I {} date -d "@{}"
+	echo "NHSN Prelim Update:"
+	@curl -s https://data.cdc.gov/api/views/mpgq-jmmr | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['rowsUpdatedAt'])" | xargs -I {} date -d "@{}"
+	echo "NSSP Update:"
+	@curl -s https://data.cdc.gov/api/views/rdmq-nq56 | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['rowsUpdatedAt'])" | xargs -I {} date -d "@{}"
+
+check-nssp-socrata-github-diff:
+	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); check_nssp_socrata_github_diff()"
+
