@@ -4,13 +4,49 @@ forecast_date,forecaster,geo_value,weight
 ##################
 2024-10-01, all, mp, 0
 2024-10-01, windowed_seasonal, all, 3
-2024-10-01, windowed_seasonal_extra_sources, all, 0.0001
-2024-10-01, climate_linear, all, 0.0001
+2024-10-01, windowed_seasonal_extra_sources, all, 1
+2024-10-01, climate_linear, all, 2
 2024-10-01, linear_no_population_scale, all, 3
 2024-10-01, linearlog, all, 0
 2024-10-01, climate_base, all, 2
 2024-10-01, climate_geo_agged, all, 0
 2024-10-01, climate_quantile_extrapolated, all, 0
+##################
+# Sept 10th
+##################
+2025-09-10, all, mp, 0
+2025-09-10, windowed_seasonal, all, 3
+2025-09-10, windowed_seasonal_extra_sources, all, 2
+2025-09-10, climate_linear, all, 2
+2025-09-10, linear_no_population_scale, all, 3
+2025-09-10, linearlog, all, 0
+2025-09-10, climate_base, all, 2
+2025-09-10, climate_geo_agged, all, 0
+2025-09-10, climate_quantile_extrapolated, all, 0
+##################
+# August 20th
+##################
+2025-08-20, all, mp, 0
+2025-08-20, windowed_seasonal, all, 3
+2025-08-20, windowed_seasonal_extra_sources, all, 1
+2025-08-20, climate_linear, all, 2
+2025-08-20, linear_no_population_scale, all, 3
+2025-08-20, linearlog, all, 0
+2025-08-20, climate_base, all, 2
+2025-08-20, climate_geo_agged, all, 0
+2025-08-20, climate_quantile_extrapolated, all, 0
+##################
+# August 13th
+##################
+2025-08-13, all, mp, 0
+2025-08-13, windowed_seasonal, all, 3
+2025-08-13, windowed_seasonal_extra_sources, all, 1
+2025-08-13, climate_linear, all, 2
+2025-08-13, linear_no_population_scale, all, 3
+2025-08-13, linearlog, all, 0
+2025-08-13, climate_base, all, 2
+2025-08-13, climate_geo_agged, all, 0
+2025-08-13, climate_quantile_extrapolated, all, 0
 ##################
 # August 6th
 ##################
