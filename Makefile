@@ -170,3 +170,16 @@ check-socrata-updates:
 check-nssp-socrata-github-diff:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); check_nssp_socrata_github_diff()"
 
+update-only-nssp-submission:
+	@if [ -z "$$date" ]; then \
+		echo "Usage: make update-only-nssp-submission date=2025-09-13"; \
+		exit 1; \
+	fi; \
+	cd ../covid19-forecast-hub; \
+	git pull --rebase --autostash origin main; \
+	head -n 1 model-output/CMU-TimeSeries/$$date-CMU-TimeSeries.csv > temp1.csv; \
+	git show HEAD:model-output/CMU-TimeSeries/$$date-CMU-TimeSeries.csv | grep "wk inc covid hosp" > temp2.csv; \
+	cat model-output/CMU-TimeSeries/$$date-CMU-TimeSeries.csv | grep "wk inc covid prop ed visits" > temp3.csv; \
+	cat temp1.csv temp2.csv temp3.csv > model-output/CMU-TimeSeries/$$date-CMU-TimeSeries.csv; \
+	rm temp1.csv temp2.csv temp3.csv; \
+	cd -
