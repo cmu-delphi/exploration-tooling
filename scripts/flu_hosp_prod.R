@@ -379,7 +379,8 @@ ensemble_targets <- tar_map(
       } else {
         cli_alert_info("Not making submission csv because we're in backtest mode or submission directory is cache")
       }
-    }
+    },
+    cue = tar_cue("always")
   ),
   tar_target(
     name = make_climate_submission_csv,
@@ -403,7 +404,8 @@ ensemble_targets <- tar_map(
           "Not making climate submission csv because we're in backtest mode or submission directory is cache"
         )
       }
-    }
+    },
+    cue = tar_cue("always")
   ),
   tar_target(
     name = validate_result,
