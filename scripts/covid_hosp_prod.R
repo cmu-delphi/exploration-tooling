@@ -180,7 +180,10 @@ parameters_and_date_targets <- rlang::list2(
   ),
   tar_change(
     nssp_archive_data,
-    change = get_covidcast_signal_last_update("nssp", "pct_ed_visits_covid", "state"),
+    change = max(
+      get_covidcast_signal_last_update("nssp", "pct_ed_visits_covid", "state"),
+      get_socrata_updated_at("https://data.cdc.gov/api/views/mpgq-jmmr", lubridate::now(tz = "UTC"))
+    ),
     command = {
       up_to_date_nssp_state_archive("covid")
     }

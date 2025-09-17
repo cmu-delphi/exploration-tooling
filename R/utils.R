@@ -635,7 +635,7 @@ MIN_TIMESTAMP <- as.POSIXct("2000-01-01 00:00:00S", tz = "UTC")
 #' @param missing_value The value to return if the signal is not found.
 #'
 #' @return The last time the signal was updated in POSIXct format.
-get_covidcast_signal_last_update <- function(source, signal, geo_type, missing_value = MAX_TIMESTAMP) {
+get_covidcast_signal_last_update <- function(source, signal, geo_type, missing_value = lubridate::now(tz = "UTC")) {
   tryCatch(
     {
       pub_covidcast_meta() %>%
