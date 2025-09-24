@@ -688,7 +688,7 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
   )
   nssp_state %>%
     select(geo_value, time_value, version = issue, nssp = value) %>%
-    bind_rows(get_nssp_github()) %>%
+    bind_rows(get_nssp_github(disease)) %>%
     as_epi_archive(compactify = TRUE) %>%
     extract2("DT") %>%
     # End of week to midweek correction.
@@ -696,18 +696,18 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     as_epi_archive(compactify = TRUE)
 }
 
-get_nssp_github <- function(source=c("github", "socrata")) {
+get_nssp_github <- function(disease = c("covid", "influenza"), source=c("github", "socrata")) {
   source <- arg_match(source)
   if (source == "github") {
     raw_file <- read_csv("https://raw.githubusercontent.com/CDCgov/covid19-forecast-hub/refs/heads/main/auxiliary-data/nssp-raw-data/latest.csv")
   } else if (source == "socrata") {
-    raw_file <- read_csv("https://data.cdc.gov/resource/rdmq-nq56.csv?$limit=1000000&$select=geography,week_end,county,percent_visits_covid")
+    raw_file <- read_csv(glue::glue("https://data.cdc.gov/resource/rdmq-nq56.csv?$limit=1000000&$select=geography,week_end,county,percent_visits_{disease}"))
   }
   state_map <- get_population_data() %>% filter(state_id !="usa")
   raw_file %>%
     filter(county == "All") %>%
     left_join(state_map, by = join_by(geography == state_name)) %>%
-    select(geo_value = state_id, time_value = week_end, nssp = percent_visits_covid) %>%
+    select(geo_value = state_id, time_value = week_end, nssp = starts_with(glue::glue("percent_visits_{disease}"))) %>%
     mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
     mutate(version = Sys.Date())
 }
