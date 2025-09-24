@@ -11,13 +11,13 @@ test:
 run:
 	Rscript scripts/run.R
 
-prod-covid-logged:
+prod-covid-log:
 	export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R >> cache/logs/prod_covid 2>&1
 
 prod-covid:
 	export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
 
-prod-flu-logged:
+prod-flu-log:
 	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R >> cache/logs/prod_flu 2>&1
 
 prod-flu:
@@ -147,7 +147,7 @@ update-site: sync-reports
 update-site-log: sync-reports
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()" >> cache/logs/update_site_log.txt 2>&1
 
-netlify-logged:
+netlify-log:
 	netlify deploy --dir=reports --prod >> cache/prod_netlify 2>&1
 
 netlify:
