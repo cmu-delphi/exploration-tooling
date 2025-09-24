@@ -11,6 +11,7 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, climate_base, all, 2
 2024-10-01, climate_geo_agged, all, 0
 2024-10-01, climate_quantile_extrapolated, all, 0
+2024-10-01, climate_linear, hi, 0.0001
 ##################
 # Sept 17
 ##################
