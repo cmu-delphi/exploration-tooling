@@ -11,13 +11,21 @@ test:
 run:
 	Rscript scripts/run.R
 
+prod-covid-logged:
+	export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R >> cache/logs/prod_covid 2>&1
+
 prod-covid:
 	export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
+
+prod-flu-logged:
+	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R >> cache/logs/prod_flu 2>&1
 
 prod-flu:
 	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R
 
 prod: prod-covid prod-flu update-site netlify
+
+prod-log: prod-covid-log prod-flu-log update-site-log netlify-log
 
 prod-covid-backtest:
 	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
@@ -134,10 +142,16 @@ sync-reports:
 	aws s3 sync s3://forecasting-team-data/2024/reports/ reports/
 
 update-site: sync-reports
-	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()" > cache/update_site_log.txt
+	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()"
+
+update-site-log: sync-reports
+	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()" >> cache/logs/update_site_log.txt 2>&1
+
+netlify-logged:
+	netlify deploy --dir=reports --prod >> cache/prod_netlify 2>&1
 
 netlify:
-	netlify deploy --dir=reports --prod
+	netlify deploy --dir=reports --prod 
 
 get-flu-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'flu_hosp_prod')"
