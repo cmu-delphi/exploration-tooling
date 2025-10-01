@@ -704,12 +704,11 @@ if (g_backtest_mode) {
     cue = tar_cue("always")
   )
 } else {
-  score_notebook <- list()
+  # Only render the report if there is only one forecast date
+  # i.e. we're running this in prod on schedule
   score_notebook <- tar_target(
     ongoing_score_notebook,
     command = {
-      # Only render the report if there is only one forecast date
-      # i.e. we're running this in prod on schedule
         if (!dir.exists(here::here("reports"))) {
           dir.create(here::here("reports"))
         }

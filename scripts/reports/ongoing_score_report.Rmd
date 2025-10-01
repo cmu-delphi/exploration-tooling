@@ -38,11 +38,11 @@ library(ggnewscale)
 # Recent scores {.tabset}
 
 ```{r adjusting data, echo=FALSE, message=FALSE}
-forecasts <- external_forecasts %>%
+forecasts <- params$external_forecasts %>%
   filter(target == "wk inc covid hosp") %>%
   select(-target)
 our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "seasonal_nssp_latest")
-scores_nhsn <- scores_nhsn %>%
+scores_nhsn <- params$scores_nhsn %>%
   mutate(
     forecaster =
       case_match(
@@ -238,7 +238,7 @@ sliding_ordered %>%
 # Large recent data revisions {.tabset}
 
 ```{r revisions, echo=FALSE, message=FALSE, out.width="100%"}
-nhsn_recent_archive <- nhsn_archive %>%
+nhsn_recent_archive <- params$nhsn_archive %>%
   filter(Sys.Date() - time_value < 10*7)
 nhsn_recent_archive$time_type <- "day"
 revision_sum <- nhsn_recent_archive %>%
@@ -283,7 +283,7 @@ plotting_forecasts <- function(plotting_window, score_window, n_plotting) {
     filter(forecast_date > Sys.Date() - score_window * 7) %>%
     scores_by_state() %>% filter(forecaster == "CMU-TimeSeries") %>%  arrange(desc(mean_wis_rate)) %>% pull(geo_value)
   geo_score_order <- geo_score_order[1:n_plotting]
-  plotting_archive <- nhsn_archive
+  plotting_archive <- params$nhsn_archive
   plotting_archive$DT %<>%
     filter(geo_value %in% geo_score_order, time_value > plotting_window) %>% 
     mutate(geo_value = factor(geo_value, levels = geo_score_order)) %>%
