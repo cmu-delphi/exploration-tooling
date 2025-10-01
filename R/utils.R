@@ -388,6 +388,35 @@ update_site <- function() {
     prod_reports_index <- which(grepl("## Weekly Fanplots 2024-2025 Season", report_md_content)) + 1
     report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
   }
+  score_files <- dir_ls(reports_dir, regex = ".*_scoring.html")
+  score_table <- tibble(
+    filename = score_files,
+    dates = str_match_all(filename, "[0-9]{4}-..-..")
+  ) %>%
+    unnest_wider(dates, names_sep = "_") %>%
+    rename(generation_date = dates_1) %>%
+    mutate(
+      generation_date = ymd(generation_date),
+      disease = str_match(filename, "flu|covid")[1]
+    ) %>%
+    arrange(generation_date)
+  for (score_file in score_table$filename) {
+    file_name <- path_file(score_file)
+    file_parts <- str_split(fs::path_ext_remove(file_name), "_", simplify = TRUE)
+    generation_date <- file_parts[1]
+    disease <- file_parts[2]
+
+    report_link <- sprintf(
+      "- [%s Scores, rendered %s](%s)",
+      str_to_title(disease),
+      generation_date,
+      file_name
+    )
+
+    # Insert into Production Reports section, skipping a line
+    prod_reports_index <- which(grepl("## Current score notebooks", report_md_content)) + 1
+    report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
+  }
 
   # Write the updated content to report.md
   report_md_path <- path(reports_dir, "report.md")
@@ -437,7 +466,7 @@ delete_extra_s3_files <- function(dry_run = TRUE) {
 }
 
 #' Find unused report files in index.html.
-find_unused_report_files <- function() {
+find_unused_score_files <- function() {
   library(rvest)
   library(fs)
   library(stringr)
@@ -694,8 +723,10 @@ get_socrata_updated_at <- function(dataset_url, missing_value) {
   )
 }
 
-#' get the unique shared (geo_value, forecast_date, target_end_date) tuples present for each forecaster in `forecasts`
-get_unique <- function(forecasts) {
+#' create a list of valid locations x forecast_dates shared among forecasters
+#' which have at least `min_locations` and `min_dates`, and create a list of
+#' these for each forecaster
+get_unique <- function(forecasts, min_locations = 50, min_dates = 12) {
   forecasters <- forecasts %>%
     pull(forecaster) %>%
     unique()
@@ -704,18 +735,42 @@ get_unique <- function(forecasts) {
     \(x) {
       forecasts %>%
         filter(forecaster == x) %>%
-        select(geo_value, forecast_date, target_end_date) %>%
-        distinct()
+        distinct(geo_value, forecast_date, target_end_date)
     }
   )
+  # decide which of the forecasters has enough locations
+  to_keep <- distinct %>%
+    map_lgl( \(x) {
+      (nrow(distinct(x,geo_value)) >= min_locations) & 
+        (nrow(distinct(x,forecast_date)) >= min_dates)
+    }
+    )
+  if (all(!to_keep)) {
+    max_geos <- distinct %>%
+      map_int( \(x) {
+        nrow(distinct(x,geo_value))
+      }) %>%
+      max()
+    max_dates <- distinct %>%
+      map_int( \(x) {
+        nrow(distinct(x,forecast_date))
+      }) %>%
+      max()
+    cli::cli_abort("there are at most {max_geos} locations and {max_dates} dates. Adjust `min_locations` and/or `min_dates`.")
+  }
+  forecasters <- forecasters[to_keep]
+  distinct <- distinct[to_keep]
   distinct_dates <- reduce(
     distinct,
     \(x, y) x %>% inner_join(y, by = c("geo_value", "forecast_date", "target_end_date"))
   )
-  mutate(
-    distinct_dates,
-    forecast_date = round_date(forecast_date, unit = "week", week_start = 6)
-  )
+  distinct_dates %>%
+    mutate(
+      forecast_date = round_date(forecast_date, unit = "week", week_start = 6)
+    ) %>%
+    cross_join(
+      tibble(forecaster = forecasters), .
+    )
 }
 
 #' filter the external and local forecasts to just the shared dates/geos
@@ -724,28 +779,36 @@ get_unique <- function(forecasts) {
 #' have previous years forecasts that we definitely want to exclude via
 #' `season_start`.
 filter_shared_geo_dates <- function(
-  local_forecasts,
-  external_forecasts,
-  season_start = "2024-11-01",
-  trucated_forecasters = "windowed_seasonal_extra_sources"
-) {
-  viable_dates <- inner_join(
-    local_forecasts %>%
-      filter(forecaster %nin% trucated_forecasters) %>%
-      get_unique(),
-    external_forecasts %>%
-      filter(forecast_date > season_start) %>%
-      get_unique(),
-    by = c("geo_value", "forecast_date", "target_end_date")
-  )
+    local_forecasts,
+    external_forecasts,
+    season_start = "2024-11-01",
+    trucated_forecasters = "windowed_seasonal_extra_sources",
+    min_locations = 52,
+    min_dates = 12) {
+  # the length is one if we're forecasting this week, in which case we only want the last 12 weeks of forecasts
+  if (local_forecasts %>% distinct(forecast_date) %>% length() == 1) {
+    viable_dates <-
+      external_forecasts %>%
+      get_unique()
+  } else {
+    viable_dates <- inner_join(
+      local_forecasts %>%
+        filter(forecaster %nin% trucated_forecasters) %>%
+        get_unique(),
+      external_forecasts %>%
+        filter(forecast_date > season_start) %>%
+        get_unique(),
+      by = c("geo_value", "forecast_date", "target_end_date")
+    )
+  }
   dplyr::bind_rows(
     local_forecasts %>%
       mutate(
         forecast_date = round_date(forecast_date, unit = "week", week_start = 6)
       ) %>%
-      inner_join(viable_dates, by = c("geo_value", "forecast_date", "target_end_date")),
+      inner_join(viable_dates, by = c("forecaster", "geo_value", "forecast_date", "target_end_date")),
     external_forecasts %>%
-      inner_join(viable_dates, by = c("geo_value", "forecast_date", "target_end_date"))
+      inner_join(viable_dates, by = c("forecaster", "geo_value", "forecast_date", "target_end_date"))
   )
 }
 
@@ -811,7 +874,7 @@ compare_s3_etag <- function(bucket, key, region = "us-east-1") {
   s3_meta <- aws.s3::head_object(object = key, bucket = bucket, region = region)
 
   # Extract ETag (remove quotes if present)
-  s3_etag <- gsub('"', '', attr(s3_meta, "etag"))
+  s3_etag <- gsub('"', "", attr(s3_meta, "etag"))
 
   # Calculate various hashes of the local file
   raw_data <- readBin(temp_file, "raw", file.info(temp_file)$size)

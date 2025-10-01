@@ -701,7 +701,7 @@ if (g_backtest_mode) {
           mutate(
             time_value = round_date(time_value, unit = "week", week_start = 6)
           )
-        score_forecasts(nhsn_latest_end_of_week, joined_forecasts_and_ensembles, "flu")
+        score_forecasts(nhsn_latest_end_of_week, joined_forecasts_and_ensembles, "wk inc flu hosp")
       }
     ),
     tar_target(

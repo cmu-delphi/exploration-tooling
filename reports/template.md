@@ -9,6 +9,9 @@
 - The backtesting reports were pre-season tests of a variety of forecasters on the 2023-2024 season's data.
 - A description of the forecaster families explored is provided at the bottom of the page.
 
+## Current score notebooks
+
+
 ## Weekly Fanplots 2024-2025 Season
 
 

@@ -59,17 +59,21 @@ prune-flu-explore:
 
 commit-covid:
 	cd ../covid19-forecast-hub; \
-	git pull --rebase --autostash origin main; \
+	git fetch; \
+	git stash --include-untracked; \
+	git reset --hard origin main; \
+	git stash pop; \
 	git add model-output/CMU-TimeSeries/*; \
-	git add model-output/CMU-climate_baseline/*; \
 	git commit -am "CMU-Delphi submission $(current_date)"; \
 	git push --force delphi main
 
 commit-flu:
 	cd ../FluSight-forecast-hub; \
-	git pull --rebase --autostash origin main; \
+	git fetch; \
+	git stash --include-untracked; \
+	git reset --hard origin main; \
+	git stash pop; \
 	git add model-output/CMU-TimeSeries/*; \
-	git add model-output/CMU-climate_baseline/*; \
 	git commit -am "CMU-Delphi submission $(current_date)"; \
 	git push --force delphi main
 

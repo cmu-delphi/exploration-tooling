@@ -109,7 +109,7 @@ download_forecast_file <- function(forecaster, filename, disease) {
 }
 
 # Main function to fetch and combine forecast files
-fetch_forecast_files <- function(sync_to_s3 = TRUE, disease) {
+fetch_forecast_files <- function(sync_to_s3 = TRUE, disease, redownload = FALSE) {
   if (disease == "covid") {
     config <- covid_config
   } else if (disease == "flu") {

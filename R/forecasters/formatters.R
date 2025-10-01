@@ -71,12 +71,12 @@ format_flusight <- function(pred, disease = c("flu", "covid")) {
     select(reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value)
 }
 
-format_scoring_utils <- function(forecasts_and_ensembles, disease = c("flu", "covid")) {
+format_scoring_utils <- function(forecasts_and_ensembles, target) {
   # dplyr here was unreasonably slow on 1m+ rows, so replacing with direct access
   fc_ens <- forecasts_and_ensembles
   fc_ens <- fc_ens[!grepl("region.*", forecasts_and_ensembles$geo_value), ]
   fc_ens[, "reference_date"] <- get_forecast_reference_date(fc_ens$forecast_date)
-  fc_ens[, "target"] <- glue::glue("wk inc {disease} hosp")
+  fc_ens[, "target"] <- target
   fc_ens[, "horizon"] <- as.integer(floor((fc_ens$target_end_date - fc_ens$reference_date) / 7))
   fc_ens[, "output_type"] <- "quantile"
   fc_ens[, "output_type_id"] <- fc_ens$quantile

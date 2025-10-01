@@ -149,6 +149,10 @@ parameters_and_date_targets <- rlang::list2(
     command = "scripts/reports/forecast_report.Rmd"
   ),
   tar_file(
+    ongoing_score_report_rmd,
+    command = "scripts/reports/ongoing_score_report.Rmd"
+  ),
+  tar_file(
     score_report_rmd,
     command = "scripts/reports/score_report.Rmd"
   ),
@@ -643,41 +647,88 @@ ensemble_targets <- tar_map(
 
 
 # ================================ SCORE TARGETS ================================
+score_targets <- list2(
+  tar_change(
+    external_forecasts,
+    change = get_s3_object_last_modified(g_external_object_name, "forecasting-team-data"),
+    command = {
+      get_external_forecasts(g_external_object_name)
+    }
+  ),
+  tar_combine(
+    name = joined_forecasts_and_ensembles_nhsn,
+    ensemble_targets[["forecasts_and_ensembles"]],
+    command = {
+      filter_shared_geo_dates(
+        dplyr::bind_rows(!!!.x),
+        external_forecasts %>%
+          filter(target == "wk inc covid hosp") %>%
+          select(-target)
+      )
+    }
+  ),
+  tar_combine(
+    name = joined_forecasts_and_ensembles_nssp,
+    ensemble_targets[["forecasts_and_ensembles_nssp"]],
+    command = {
+      filter_shared_geo_dates(
+        dplyr::bind_rows(!!!.x),
+        external_forecasts %>%
+          filter(target == "wk inc covid prop ed visits") %>%
+          select(-target)
+      )
+    }
+  ),
+  tar_target(
+    name = scores_nhsn,
+    command = {
+      score_forecasts(nhsn_latest_data, joined_forecasts_and_ensembles_nhsn, "wk inc covid hosp")
+    }
+  ),
+  tar_target(
+    name = scores_nssp,
+    command = {
+      nssp_latest_data %>%
+        rename(value = nssp) %>%
+        mutate(time_value = ceiling_date(time_value, unit = "week") - 1) %>%
+        score_forecasts(joined_forecasts_and_ensembles_nssp, "wk inc covid prop ed visits")
+    }
+  )
+)
 if (g_backtest_mode) {
-  score_targets <- list2(
-    tar_change(
-      external_forecasts,
-      change = get_s3_object_last_modified(g_external_object_name, "forecasting-team-data"),
-      command = {
-        get_external_forecasts(g_external_object_name)
-      }
-    ),
-    tar_combine(
-      name = joined_forecasts_and_ensembles,
-      ensemble_targets[["forecasts_and_ensembles"]],
-      command = {
-        filter_shared_geo_dates(
-          dplyr::bind_rows(!!!.x),
-          external_forecasts
-        )
-      }
-    ),
-    tar_target(
-      name = scores,
-      command = {
-        score_forecasts(nhsn_latest_data, joined_forecasts_and_ensembles, "covid")
-      }
-    ),
-    tar_target(
-      name = score_plot,
-      command = {
-        render_score_plot(score_report_rmd, scores, g_forecast_dates, "covid")
-      },
-      cue = tar_cue("always")
-    )
+  score_notebook <- tar_target(
+    name = score_plot,
+    command = {
+      render_score_plot(score_report_rmd, scores_nhsn, g_forecast_dates, "covid")
+    },
+    cue = tar_cue("always")
   )
 } else {
-  score_targets <- list()
+  score_notebook <- list()
+  score_notebook <- tar_target(
+    ongoing_score_notebook,
+    command = {
+      # Only render the report if there is only one forecast date
+      # i.e. we're running this in prod on schedule
+        if (!dir.exists(here::here("reports"))) {
+          dir.create(here::here("reports"))
+        }
+        rmarkdown::render(
+          ongoing_score_report_rmd,
+          output_file = here::here(
+            "reports",
+            sprintf("%s_covid_scoring.html", as.Date(Sys.Date()))
+          ),
+          params = list(
+            disease = "covid",
+            target = "nhsn",
+            external_forecasts = external_forecasts,
+            nhsn_archive = nhsn_archive_data,
+            scores_nhsn = scores_nhsn
+          )
+        )
+    }
+  )
 }
 
 list2(
@@ -686,5 +737,6 @@ list2(
   ensemble_targets,
   combined_nhsn_forecasts,
   combined_nssp_forecasts,
-  score_targets
+  score_targets,
+  score_notebook
 )
