@@ -366,26 +366,43 @@ update_site <- function() {
     slice_max(generation_date) %>%
     ungroup() %>%
     arrange(forecast_date)
+  seasons <- tibble(
+    season_name = c("2024-2025", "2025-2026"),
+    season_start = as.Date(c("2024-11-20", "2025-06-04")),
+    season_end = as.Date(c("2025-06-03", "2026-06-05"))
+  )
+  for (iSeason in 1:nrow(seasons)) {
+    season_name <- seasons[[iSeason, "season_name"]]
+    season_start <- seasons[[iSeason, "season_start"]]
+    season_end <- seasons[[iSeason, "season_end"]]
+    # Process each report file
+    files_this_season <- used_reports %>%
+      filter(season_start <= forecast_date, forecast_date < season_end) %>%
+      pull(filename)
+    for (report_file in files_this_season) {
+      file_name <- path_file(report_file)
+      file_parts <- str_split(fs::path_ext_remove(file_name), "_", simplify = TRUE)
+      date <- file_parts[1]
+      disease <- file_parts[2]
+      generation_date <- file_parts[5]
 
-  # Process each report file
-  for (report_file in used_reports$filename) {
-    file_name <- path_file(report_file)
-    file_parts <- str_split(fs::path_ext_remove(file_name), "_", simplify = TRUE)
-    date <- file_parts[1]
-    disease <- file_parts[2]
-    generation_date <- file_parts[5]
+      report_link <- sprintf(
+        "- [%s Forecasts %s, Rendered %s](%s)",
+        str_to_title(disease),
+        date,
+        generation_date,
+        file_name
+      )
 
-    report_link <- sprintf(
-      "- [%s Forecasts %s, Rendered %s](%s)",
-      str_to_title(disease),
-      date,
-      generation_date,
-      file_name
-    )
-
-    # Insert into Production Reports section, skipping a line
-    prod_reports_index <- which(grepl("## Weekly Fanplots 2024-2025 Season", report_md_content)) + 1
-    report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
+      # Insert into Production Reports section, skipping a line
+      prod_reports_index <- which(grepl(glue("## Weekly Fanplots {season_name} Season"), report_md_content)) + 1
+      report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
+      # insert into This week if it's actually from within the past week
+      if (as.Date(generation_date) > Sys.Date() - 7) {
+        prod_reports_index <- which(grepl(glue("## Most recent week"), report_md_content)) + 1
+        report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
+      }
+    }
   }
   score_files <- dir_ls(reports_dir, regex = ".*_scoring.html")
   score_table <- tibble(
@@ -404,17 +421,25 @@ update_site <- function() {
     file_parts <- str_split(fs::path_ext_remove(file_name), "_", simplify = TRUE)
     generation_date <- file_parts[1]
     disease <- file_parts[2]
+    dataset <- file_parts[3]
 
     report_link <- sprintf(
-      "- [%s Scores, rendered %s](%s)",
+      "- [%s %s Scores, rendered %s](%s)",
       str_to_title(disease),
+      str_to_title(dataset),
       generation_date,
       file_name
     )
 
     # Insert into Production Reports section, skipping a line
-    prod_reports_index <- which(grepl("## Current score notebooks", report_md_content)) + 1
+    prod_reports_index <- which(grepl("## Score notebooks", report_md_content)) + 1
     report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
+    # insert into This week if it's actually from within the past week
+    if (as.Date(generation_date) > Sys.Date() - 7) {
+      browser()
+      prod_reports_index <- which(grepl(glue("## Most recent week"), report_md_content)) + 1
+      report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
+    }
   }
 
   # Write the updated content to report.md
