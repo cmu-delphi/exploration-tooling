@@ -13,6 +13,19 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, climate_quantile_extrapolated, all, 0
 2024-10-01, climate_linear, hi, 0.0001
 ##################
+# Oct 8: no data, default to climate linear
+##################
+2025-10-08, all, mp, 0
+2025-10-08, windowed_seasonal, all, 0.001
+2025-10-08, windowed_seasonal_extra_sources, all, 0.1
+2025-10-08, climate_linear, all, 2
+2025-10-08, linear, all, 3
+2025-10-08, linearlog, all, 0
+2025-10-08, climate_base, all, 2
+2025-10-08, climate_geo_agged, all, 0
+2025-10-08, climate_quantile_extrapolated, all, 0
+2025-10-08, climate_linear, hi, 0.0001
+##################
 # Sept 17
 ##################
 2025-09-17, all, mp, 0
