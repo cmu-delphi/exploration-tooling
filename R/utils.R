@@ -149,10 +149,9 @@ make_ensemble_grid <- function(tib) {
 #'
 #' @export
 get_exclusions <- function(
-  date,
-  forecaster,
-  exclusions_json = here::here("scripts", "geo_exclusions.json")
-) {
+    date,
+    forecaster,
+    exclusions_json = here::here("scripts", "geo_exclusions.json")) {
   if (!file.exists(exclusions_json)) {
     return("")
   }
@@ -740,20 +739,19 @@ get_unique <- function(forecasts, min_locations = 50, min_dates = 40) {
   )
   # decide which of the forecasters has enough locations
   to_keep <- distinct %>%
-    map_lgl( \(x) {
-      (nrow(distinct(x,geo_value)) >= min_locations) & 
-        (nrow(distinct(x,forecast_date)) >= min_dates)
-    }
-    )
+    map_lgl(\(x) {
+      (nrow(distinct(x, geo_value)) >= min_locations) &
+        (nrow(distinct(x, forecast_date)) >= min_dates)
+    })
   if (all(!to_keep)) {
     max_geos <- distinct %>%
-      map_int( \(x) {
-        nrow(distinct(x,geo_value))
+      map_int(\(x) {
+        nrow(distinct(x, geo_value))
       }) %>%
       max()
     max_dates <- distinct %>%
-      map_int( \(x) {
-        nrow(distinct(x,forecast_date))
+      map_int(\(x) {
+        nrow(distinct(x, forecast_date))
       }) %>%
       max()
     cli::cli_abort("there are at most {max_geos} locations and {max_dates} dates. Adjust `min_locations` and/or `min_dates`.")
