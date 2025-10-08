@@ -436,7 +436,6 @@ update_site <- function() {
     report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
     # insert into This week if it's actually from within the past week
     if (as.Date(generation_date) > Sys.Date() - 7) {
-      browser()
       prod_reports_index <- which(grepl(glue("## Most recent week"), report_md_content)) + 1
       report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
     }
