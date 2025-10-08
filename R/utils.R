@@ -726,7 +726,7 @@ get_socrata_updated_at <- function(dataset_url, missing_value) {
 #' create a list of valid locations x forecast_dates shared among forecasters
 #' which have at least `min_locations` and `min_dates`, and create a list of
 #' these for each forecaster
-get_unique <- function(forecasts, min_locations = 50, min_dates = 12) {
+get_unique <- function(forecasts, min_locations = 50, min_dates = 40) {
   forecasters <- forecasts %>%
     pull(forecaster) %>%
     unique()
@@ -789,7 +789,7 @@ filter_shared_geo_dates <- function(
   if (local_forecasts %>% distinct(forecast_date) %>% length() == 1) {
     viable_dates <-
       external_forecasts %>%
-      get_unique()
+      get_unique(min_locations = min_locations, min_dates = min_dates)
   } else {
     viable_dates <- inner_join(
       local_forecasts %>%

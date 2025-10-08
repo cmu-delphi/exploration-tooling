@@ -16,6 +16,7 @@ g_excluded_geos <- c("as", "gu", "mh")
 g_time_value_adjust <- 3
 g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
 g_disease <- "flu"
+g_s3_prefix <- "exploration"
 g_external_object_name <- glue::glue("2024/2024-2025_{g_disease}_hosp_forecasts.parquet")
 # needed for windowed_seasonal
 g_very_latent_locations <- list(list(
@@ -171,7 +172,11 @@ parameters_and_date_targets <- rlang::list2(
     command = "scripts/reports/forecast_report.Rmd"
   ),
   tar_file(
-    score_report_rmd,
+    ongoing_score_report_rmd,
+    command = "scripts/reports/ongoing_score_report.Rmd"
+  ),
+  tar_file(
+    name = score_report_rmd,
     command = "scripts/reports/score_report.Rmd"
   ),
   tar_file(
@@ -207,7 +212,7 @@ parameters_and_date_targets <- rlang::list2(
     }
   ),
   tar_target(
-    nhsn_latest_data,
+    name = nhsn_latest_data,
     command = {
       nhsn_archive_data %>%
         epix_as_of(min(Sys.Date(), nhsn_archive_data$versions_end)) %>%
@@ -215,7 +220,7 @@ parameters_and_date_targets <- rlang::list2(
     }
   ),
   tar_change(
-    nssp_archive_data,
+    name = nssp_archive_data,
     change = max(
       get_covidcast_signal_last_update("nssp", "pct_ed_visits_influenza", "state"),
       get_socrata_updated_at("https://data.cdc.gov/api/views/mpgq-jmmr", lubridate::now(tz = "UTC"))
@@ -225,7 +230,7 @@ parameters_and_date_targets <- rlang::list2(
     }
   ),
   tar_target(
-    nssp_latest_data,
+    name = nssp_latest_data,
     command = {
       nssp_archive_data %>%
         epix_as_of(min(Sys.Date(), nssp_archive_data$versions_end))
@@ -246,7 +251,7 @@ forecast_targets <- tar_map(
   ),
   names = c("id", "forecast_date_chr"),
   tar_target(
-    full_data,
+    name = full_data,
     command = {
       # Train data
       if (grepl("latest", id)) {
@@ -674,46 +679,190 @@ ensemble_targets <- tar_map(
 
 
 # ================================ SCORE TARGETS ================================
-if (g_backtest_mode) {
-  score_targets <- list2(
-    tar_change(
-      external_forecasts,
-      change = get_s3_object_last_modified(g_external_object_name, "forecasting-team-data"),
-      command = {
-        get_external_forecasts(g_external_object_name)
-      }
+external_forecast_targets <- tar_map(
+  values = tibble(
+    forecast_date_int = seq(as.Date("2024-11-23"), round_date(Sys.Date() - 3, "week", 6), by = "week")
+  ) %>%
+    mutate(
+      forecast_date_chr = as.character(as.Date(forecast_date_int)),
+      filename = paste0(g_s3_prefix, "/", forecast_date_chr, "/", g_disease, "_forecasts.parquet"),
     ),
-    tar_combine(
-      name = joined_forecasts_and_ensembles,
-      ensemble_targets[["forecasts_and_ensembles"]],
+  names = "forecast_date_chr",
+  tar_change(
+    name = external_forecasts,
+    change = get_s3_object_last_modified(filename, "forecasting-team-data"),
+    command = {
+      get_external_forecasts(filename)
+    }
+  ),
+  tar_target(
+    name = score_external_nhsn_forecasts,
+    command = {
+      score_forecasts(nhsn_latest_data, external_forecasts, "wk inc flu hosp")
+    }
+  ),
+  tar_target(
+    name = score_external_nssp_forecasts,
+    command = {
+      score_forecasts(
+        nssp_latest_data %>% mutate(value = nssp),
+        external_forecasts,
+        "wk inc flu prop ed visits")
+    }
+  )
+)
+
+combined_targets <- list2(
+  tar_combine(
+    name = external_forecasts_full,
+    external_forecast_targets[["external_forecasts"]],
+    command = {
+      dplyr::bind_rows(!!!.x)
+    }
+  ),
+  tar_combine(
+    name = external_scores_nhsn_full,
+    external_forecast_targets[["score_external_nhsn_forecasts"]],
+    command = {
+      dplyr::bind_rows(!!!.x)
+    }
+  ),
+  tar_combine(
+    name = external_scores_nssp_full,
+    external_forecast_targets[["score_external_nssp_forecasts"]],
+    command = {
+      dplyr::bind_rows(!!!.x)
+    }
+  )
+)
+
+list2(
+  tar_change(
+    external_forecasts,
+    change = get_s3_object_last_modified(g_external_object_name, "forecasting-team-data"),
+    command = {
+      get_external_forecasts(g_external_object_name)
+    }
+  ),
+  tar_combine(
+    name = joined_forecasts_and_ensembles_nhsn,
+    ensemble_targets[["forecasts_and_ensembles"]],
+    command = {
+      filter_shared_geo_dates(
+        dplyr::bind_rows(!!!.x),
+        external_forecasts %>%
+          filter(target == "wk inc flu hosp") %>%
+          select(-target),
+        min_locations = 52,
+        min_dates = 40
+      )
+    }
+  ),
+  tar_combine(
+    name = joined_forecasts_and_ensembles_nssp,
+    ensemble_targets[["forecasts_and_ensembles_nssp"]],
+    command = {
+      filter_shared_geo_dates(
+        dplyr::bind_rows(!!!.x),
+        external_forecasts %>%
+          filter(target == "wk inc flu prop ed visits") %>%
+          select(-target) %>%
+          mutate(value = value * 100),
+        min_locations = 50,
+        min_dates = 14
+      )
+    }
+  ),
+  tar_target(
+    name = scores_nhsn,
+    command = {
+      score_forecasts(nhsn_latest_data, joined_forecasts_and_ensembles_nhsn, "wk inc flu hosp")
+    }
+  ),
+  tar_target(
+    name = scores_nssp,
+    command = {
+      nssp_latest_data %>%
+        rename(value = nssp) %>%
+        mutate(time_value = ceiling_date(time_value, unit = "week") - 1) %>%
+        score_forecasts(joined_forecasts_and_ensembles_nssp, "wk inc flu prop ed visits")
+    }
+  )
+)
+if (g_backtest_mode) {
+  score_notebook <- tar_target(
+    name = score_plot,
+    command = {
+      render_score_plot(score_report_rmd, scores_nhsn, g_forecast_dates, "flu")
+    },
+    cue = tar_cue("always")
+  )
+} else {
+  # Only render the report if there is only one forecast date
+  # i.e. we're running this in prod on schedule
+  score_notebook <- list2(
+    tar_target(
+      ongoing_nhsn_score_notebook,
       command = {
-        filter_shared_geo_dates(
-          dplyr::bind_rows(!!!.x),
-          external_forecasts
+        if (!dir.exists(here::here("reports"))) {
+          dir.create(here::here("reports"))
+        }
+        # Don't run if there aren't forecasts in the past 4 weeks to evaluate
+        if (external_forecasts_full %>%
+            filter(
+              forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4*7,
+              target == "wk inc flu hosp"
+            ) %>%
+            distinct(forecast_date) %>%
+            nrow() == 0) {
+          return()
+        }
+        rmarkdown::render(
+          ongoing_score_report_rmd,
+          output_file = here::here(
+            "reports",
+            sprintf("%s_flu_nhsn_scoring.html", as.Date(Sys.Date()))
+          ),
+          params = list(
+            disease = "flu",
+            target = "nhsn",
+            external_forecasts = external_forecasts_full %>% filter(target == "wk inc flu hosp") %>% select(-target),
+            archive = nhsn_archive_data,
+            scores = external_scores_nhsn_full
+          )
         )
       }
     ),
     tar_target(
-      name = scores,
+      ongoing_nssp_score_notebook,
       command = {
-        nhsn_latest_end_of_week <-
-          nhsn_latest_data %>%
-          mutate(
-            time_value = round_date(time_value, unit = "week", week_start = 6)
+        if (!dir.exists(here::here("reports"))) {
+          dir.create(here::here("reports"))
+        }
+        if (external_forecasts_full %>%
+            filter(
+              forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4*7,
+              target == "wk inc flu prop ed visits"
+            ) %>% distinct(forecast_date) %>% nrow() == 0) {
+          return()
+        }
+        rmarkdown::render(
+          ongoing_score_report_rmd,
+          output_file = here::here(
+            "reports",
+            sprintf("%s_flu_nssp_scoring.html", as.Date(Sys.Date()))
+          ),
+          params = list(
+            disease = "flu",
+            target = "nssp",
+            external_forecasts = external_nssp_forecasts,
+            archive = nssp_archive_data,
+            scores = external_scores_nssp_full
           )
-        score_forecasts(nhsn_latest_end_of_week, joined_forecasts_and_ensembles, "wk inc flu hosp")
+        )
       }
     ),
-    tar_target(
-      name = score_plot,
-      command = {
-        render_score_plot(score_report_rmd, scores, g_forecast_dates, "flu")
-      },
-      cue = tar_cue("always")
-    )
   )
-} else {
-  score_targets <- list()
 }
 
 list2(
@@ -722,5 +871,7 @@ list2(
   ensemble_targets,
   combined_nhsn_forecasts,
   combined_nssp_forecasts,
-  score_targets
+  external_forecast_targets,
+  combined_targets,
+  score_notebook
 )

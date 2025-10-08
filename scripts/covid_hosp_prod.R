@@ -16,6 +16,7 @@ g_insufficient_data_geos_nssp <- c(g_insufficient_data_geos, "wy")
 g_time_value_adjust <- 3
 g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
 g_disease <- "covid"
+g_s3_prefix <- "exploration"
 g_external_object_name <- glue::glue("exploration/2024-2025_{g_disease}_hosp_forecasts.parquet")
 # date to cut the truth data off at, so we don't have too much of the past
 g_truth_data_date <- "2023-09-01"
@@ -153,19 +154,19 @@ parameters_and_date_targets <- rlang::list2(
     command = "scripts/reports/ongoing_score_report.Rmd"
   ),
   tar_file(
-    score_report_rmd,
+    name = score_report_rmd,
     command = "scripts/reports/score_report.Rmd"
   ),
   tar_file(
-    covid_geo_exclusions,
+    name = covid_geo_exclusions,
     command = "scripts/covid_geo_exclusions.csv"
   ),
   tar_file(
-    covid_nssp_geo_exclusions,
+    name = covid_nssp_geo_exclusions,
     command = "scripts/covid_nssp_geo_exclusions.csv"
   ),
   tar_file(
-    covid_data_substitutions,
+    name = covid_data_substitutions,
     command = "scripts/covid_data_substitutions.csv"
   ),
   tar_change(
@@ -176,7 +177,7 @@ parameters_and_date_targets <- rlang::list2(
     }
   ),
   tar_target(
-    nhsn_latest_data,
+    name = nhsn_latest_data,
     command = {
       nhsn_archive_data %>%
         epix_as_of(min(Sys.Date(), nhsn_archive_data$versions_end)) %>%
@@ -184,7 +185,7 @@ parameters_and_date_targets <- rlang::list2(
     }
   ),
   tar_change(
-    nssp_archive_data,
+    name = nssp_archive_data,
     change = max(
       get_covidcast_signal_last_update("nssp", "pct_ed_visits_covid", "state"),
       get_socrata_updated_at("https://data.cdc.gov/api/views/mpgq-jmmr", lubridate::now(tz = "UTC"))
@@ -194,7 +195,7 @@ parameters_and_date_targets <- rlang::list2(
     }
   ),
   tar_target(
-    nssp_latest_data,
+    name = nssp_latest_data,
     command = {
       nssp_archive_data %>%
         epix_as_of(min(Sys.Date(), nssp_archive_data$versions_end))
@@ -647,7 +648,64 @@ ensemble_targets <- tar_map(
 
 
 # ================================ SCORE TARGETS ================================
-score_targets <- list2(
+external_forecast_targets <- tar_map(
+  values = tibble(
+    forecast_date_int = seq(as.Date("2024-11-23"), round_date(Sys.Date() - 3, "week", 6), by = "week")
+  ) %>%
+    mutate(
+      forecast_date_chr = as.character(as.Date(forecast_date_int)),
+      filename = paste0(g_s3_prefix, "/", forecast_date_chr, "/", g_disease, "_forecasts.parquet"),
+    ),
+  names = "forecast_date_chr",
+  tar_change(
+    name = external_forecasts,
+    change = get_s3_object_last_modified(filename, "forecasting-team-data"),
+    command = {
+      get_external_forecasts(filename)
+    }
+  ),
+  tar_target(
+    name = score_external_nhsn_forecasts,
+    command = {
+      score_forecasts(nhsn_latest_data, external_forecasts, "wk inc covid hosp")
+    }
+  ),
+  tar_target(
+    name = score_external_nssp_forecasts,
+    command = {
+      score_forecasts(
+        nssp_latest_data %>% mutate(value = nssp),
+        external_forecasts,
+        "wk inc covid prop ed visits")
+    }
+  )
+)
+
+combined_targets <- list2(
+  tar_combine(
+    name = external_forecasts_full,
+    external_forecast_targets[["external_forecasts"]],
+    command = {
+      dplyr::bind_rows(!!!.x)
+    }
+  ),
+  tar_combine(
+    name = external_scores_nhsn_full,
+    external_forecast_targets[["score_external_nhsn_forecasts"]],
+    command = {
+      dplyr::bind_rows(!!!.x)
+    }
+  ),
+  tar_combine(
+    name = external_scores_nssp_full,
+    external_forecast_targets[["score_external_nssp_forecasts"]],
+    command = {
+      dplyr::bind_rows(!!!.x)
+    }
+  )
+)
+
+list2(
   tar_change(
     external_forecasts,
     change = get_s3_object_last_modified(g_external_object_name, "forecasting-team-data"),
@@ -663,7 +721,9 @@ score_targets <- list2(
         dplyr::bind_rows(!!!.x),
         external_forecasts %>%
           filter(target == "wk inc covid hosp") %>%
-          select(-target)
+          select(-target),
+        min_locations = 52,
+        min_dates = 40
       )
     }
   ),
@@ -675,7 +735,10 @@ score_targets <- list2(
         dplyr::bind_rows(!!!.x),
         external_forecasts %>%
           filter(target == "wk inc covid prop ed visits") %>%
-          select(-target)
+          select(-target) %>%
+          mutate(value = value * 100),
+        min_locations = 50,
+        min_dates = 14
       )
     }
   ),
@@ -706,27 +769,66 @@ if (g_backtest_mode) {
 } else {
   # Only render the report if there is only one forecast date
   # i.e. we're running this in prod on schedule
-  score_notebook <- tar_target(
-    ongoing_score_notebook,
-    command = {
+  score_notebook <- list2(
+    tar_target(
+      ongoing_nhsn_score_notebook,
+      command = {
         if (!dir.exists(here::here("reports"))) {
           dir.create(here::here("reports"))
+        }
+        # Don't run if there aren't forecasts in the past 4 weeks to evaluate
+        if (external_forecasts_full %>%
+            filter(
+              forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4*7,
+              target == "wk inc covid hosp") %>% distinct(forecast_date) %>% nrow() == 0) {
+          return()
         }
         rmarkdown::render(
           ongoing_score_report_rmd,
           output_file = here::here(
             "reports",
-            sprintf("%s_covid_scoring.html", as.Date(Sys.Date()))
+            sprintf("%s_covid_nhsn_scoring.html", as.Date(Sys.Date()))
           ),
           params = list(
             disease = "covid",
             target = "nhsn",
-            external_forecasts = external_forecasts,
-            nhsn_archive = nhsn_archive_data,
-            scores_nhsn = scores_nhsn
+            external_forecasts = external_forecasts_full %>% filter(target == "wk inc covid hosp") %>% select(-target),
+            archive = nhsn_archive_data,
+            scores = external_scores_nhsn_full
           )
         )
-    }
+      }
+    ),
+    tar_target(
+      ongoing_nssp_score_notebook,
+      command = {
+        if (!dir.exists(here::here("reports"))) {
+          dir.create(here::here("reports"))
+        }
+        # Don't run if there aren't forecasts in the past 4 weeks to evaluate
+        if (external_forecasts_full %>%
+            filter(
+              forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4*7,
+              target == "wk inc covid prop ed visits"
+            ) %>% distinct(forecast_date) %>% nrow() == 0) {
+          return()
+        }
+        rmarkdown::render(
+          ongoing_score_report_rmd,
+          output_file = here::here(
+            "reports",
+            sprintf("%s_covid_nssp_scoring.html", as.Date(Sys.Date()))
+          ),
+          params = list(
+            disease = "covid",
+            target = "nssp",
+            external_forecasts = external_forecasts_full %>% filter(target == "wk inc covid prop ed visits") %>% select(-target),
+            archive = nssp_archive_data,
+            scores = external_scores_nssp_full
+          )
+        )
+      }
+    ),
   )
 }
 
@@ -736,6 +838,7 @@ list2(
   ensemble_targets,
   combined_nhsn_forecasts,
   combined_nssp_forecasts,
-  score_targets,
+  external_forecast_targets,
+  combined_targets,
   score_notebook
 )

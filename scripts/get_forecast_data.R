@@ -33,37 +33,37 @@ run_time_local <- with_tz(run_time)
 # Configuration
 covid_config <- list(
   base_url = "https://raw.githubusercontent.com/cdcgov/covid19-forecast-hub/main/model-output",
-  forecasters = c(
-    "CMU-TimeSeries",
-    "CovidHub-baseline",
-    "CovidHub-ensemble",
-    "UMass-ar6_pooled",
-    "UMass-gbqr",
-    "CEPH-Rtrend_covid",
-    "Metaculus-cp"
-  ),
+  git_root_url = "https://api.github.com/repos/cdcgov/covid19-forecast-hub/git/trees/main?recursive=1",
+  forecasters = NULL, # pulled from API
   s3_bucket = "forecasting-team-data",
   s3_key = "exploration/2024-2025_covid_hosp_forecasts.parquet",
-  disease = "covid"
+  s3_prefix = "exploration",
+  disease = "covid",
+  start_date = as.Date("2024-11-23")
 )
 # same but for flu
 flu_config <- list(
   base_url = "https://raw.githubusercontent.com/cdcepi/FluSight-forecast-hub/main/model-output",
-  forecasters = c(
-    "FluSight-baseline",
-    "FluSight-ensemble",
-    "CMU-TimeSeries",
-    "PSI-PROF",
-    "FluSight-lop_norm",
-    "UMass-flusion",
-    "NIH-Flu_ARIMA",
-    "Metaculus-cp"
-  ),
+  git_root_url = "https://api.github.com/repos/cdcepi/FluSight-forecast-hub/git/trees/main?recursive=1",
+  forecasters = NULL, # pulled from API
   s3_bucket = "forecasting-team-data",
   s3_key = "exploration/2024-2025_flu_hosp_forecasts.parquet",
-  disease = "flu"
+  s3_prefix = "exploration",
+  disease = "flu",
+  start_date = as.Date("2023-10-14")
 )
+get_all_forecasters <- function(git_url) {
+  all_files <- GET(paste0(git_url))
+  flat_file_list <- unlist(lapply(content(all_files)$tree, "[", "path"), use.names = FALSE)
+  all_models <-
+    grep("model-metadata", flat_file_list, value = TRUE, fixed = TRUE) %>%
+    str_split_i("/", 2) %>%
+    str_split_i(stringr::fixed("."), 1) %>%
+    `[`(-(1:2))
+}
 
+covid_config$forecasters <- get_all_forecasters(covid_config$git_root_url)
+flu_config$forecasters <- get_all_forecasters(flu_config$git_root_url)
 
 # Function to check if file exists on GitHub
 check_github_file <- function(forecaster, filename, disease) {
@@ -96,7 +96,8 @@ download_forecast_file <- function(forecaster, filename, disease) {
         mutate(
           forecaster = forecaster,
           forecast_date = as.Date(str_extract(filename, "\\d{4}-\\d{2}-\\d{2}")),
-          output_type_id = as.numeric(output_type_id)
+          output_type_id = as.numeric(output_type_id),
+          location = as.character(location)
         ) %>%
         filter(output_type == "quantile")
       return(df)
@@ -119,51 +120,69 @@ fetch_forecast_files <- function(sync_to_s3 = TRUE, disease, redownload = FALSE)
   }
 
   # Generate date range
-  # First get the nearest Saturday
-  dates <- seq(as.Date("2023-10-14"), round_date(Sys.Date(), "week", 6), by = "week")
+  # First get the nearest Saturday, and exclude this week if it's Wednesday or earlier
+  dates <- seq(config$start_date, round_date(Sys.Date() - 3, "week", 6), by = "week")
+  # filter out dates we've already downloaded
+  if (!redownload) {
+    file_date_present <- map_lgl(
+      dates,
+      \(forecast_date) {
+        suppressMessages( # because verbose doesn't supress the 404 error.
+          aws.s3::object_exists(
+            paste0(config$s3_prefix, "/", forecast_date, "/", config$disease, "_forecasts.parquet"),
+            config$s3_bucket,
+            verbose = FALSE
+          )
+        )
+      }
+    )
+    dates <- dates[!file_date_present]
+  }
+
+  pb_forecast_date <- progress_bar$new(
+    format = "Downloading forecasts from :date [:bar] :percent :elapsedfull eta :eta",
+    total = length(dates),
+    clear = FALSE,
+    width = 80
+  )
 
   # Initialize list to store all forecasts
   all_forecasts <- list()
-
-  pb_forecasters <- progress_bar$new(
-    format = "Downloading forecasts from :forecaster [:bar] :percent :eta",
-    total = length(config$forecasters),
-    clear = FALSE,
-    width = 60
-  )
-
-  for (forecaster in config$forecasters) {
-    pb_forecasters$tick(tokens = list(forecaster = forecaster))
-
-    # Generate filenames for date range
-    filenames <- paste0(format(dates, "%Y-%m-%d"), "-", forecaster, ".csv")
-
-    # Create nested progress bar for files
-    pb_files <- progress_bar$new(
-      format = "  Downloading files [:bar] :current/:total :filename",
-      total = length(filenames)
+  for (forecast_date in dates) {
+    forecast_date <- as.Date(forecast_date)
+    pb_forecast_date$tick(
+      tokens = list(date = forecast_date),
     )
-
-    for (filename in filenames) {
-      pb_files$tick(tokens = list(filename = filename))
-
+    # Initialize list to store all forecasts
+    date_forecasts <- list()
+    for (forecaster in config$forecasters) {
+      filename <- paste0(format(as.Date(forecast_date), "%Y-%m-%d"), "-", forecaster, ".csv")
       if (check_github_file(forecaster, filename, disease)) {
+        # check if we even need to download
         forecast_data <- download_forecast_file(forecaster, filename, disease)
         if (!is.null(forecast_data)) {
-          all_forecasts[[length(all_forecasts) + 1]] <- forecast_data
+          date_forecasts[[length(date_forecasts) + 1]] <- forecast_data
         }
       }
     }
+    combined_forecasts <- bind_rows(date_forecasts)
+    if (sync_to_s3 && length(combined_forecasts) > 0) {
+      combined_forecasts %>%
+        aws.s3::s3write_using(
+          nanoparquet::write_parquet,
+          object = paste0(config$s3_prefix, "/", forecast_date, "/", config$disease, "_forecasts.parquet"),
+          bucket = config$s3_bucket
+        )
+    } else {
+      aws.s3::s3save(
+        combined_forecasts,
+        object = paste0(config$s3_prefix, "/", forecast_date, "/", config$disease, "_forecasts.parquet"),
+        bucket = config$s3_bucket
+      )
+    }
+    all_forecasts[[length(all_forecasts) + 1]] <- combined_forecasts
   }
-
-  # Combine all forecasts
-  combined_forecasts <- bind_rows(all_forecasts)
-
-  if (sync_to_s3) {
-    combined_forecasts %>% aws.s3::s3write_using(nanoparquet::write_parquet, object = config$s3_key, bucket = config$s3_bucket)
-  }
-
-  return(combined_forecasts)
+  return(bind_rows(all_forecasts))
 }
 
 cli::cli_alert_info("Fetching COVID forecasts {run_time_local} (UTC: {run_time})")

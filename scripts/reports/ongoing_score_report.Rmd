@@ -12,8 +12,8 @@ output:
 params:
   disease: "covid"
   target: ""
-  nhsn_archive: ""
-  scores_nhsn: ""
+  archive: ""
+  scores: ""
   external_forecasts: ""
 ---
 
@@ -29,20 +29,24 @@ knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 ggplot2::theme_set(ggplot2::theme_bw())
 options(width=500)
 library(ggnewscale)
-#suppressPackageStartupMessages(source("R/load_all.R"))
-## external_forecasts <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "external_forecasts"))
-## nhsn_archive <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "nhsn_archive_data"))
-## scores_nhsn <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "scores_nhsn"))
+recent_archive <- params$archive
+if (params$target == "nssp") {
+  recent_archive$DT <- rename(recent_archive$DT, value = nssp)
+}
+this_week <- round_date(Sys.Date() - 3, "week", 6)
+## suppressPackageStartupMessages(source("R/load_all.R"))
+## params <- list()
+## params$external_forecasts <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "external_forecasts_full")) %>% select(-target)
+## params$archive <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
+## params$scores <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "external_scores_nhsn_full"))
 ```
 
 # Recent scores {.tabset}
 
 ```{r adjusting data, echo=FALSE, message=FALSE}
-forecasts <- params$external_forecasts %>%
-  filter(target == "wk inc covid hosp") %>%
-  select(-target)
+forecasts <- params$external_forecasts
 our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "seasonal_nssp_latest")
-scores_nhsn <- params$scores_nhsn %>%
+scores <- params$scores %>%
   mutate(
     forecaster =
       case_match(
@@ -59,6 +63,7 @@ scores_nhsn <- params$scores_nhsn %>%
 Mean <- function(x) mean(x, na.rm = TRUE)
 GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
 ```
+
 ```{r score_summary_functions, echo=FALSE, message=FALSE}
 scores_by_state <- function(scores) {
   scores %>%
@@ -76,18 +81,39 @@ scores_by_state <- function(scores) {
     ) %>%
     arrange(forecaster, mean_wis_rate)
 }
+scores_by_ahead <- function(scores) {
+  forecast_date <- scores %>%
+    distinct(forecast_date) %>%
+    pull() %>%
+    max()
+  scores %>%
+    group_by(forecaster, ahead) %>%
+    summarize(
+      mean_wis = Mean(wis),
+      geo_mean_wis = GeoMean(wis),
+      mean_ae = Mean(ae_median),
+      geomean_ae = GeoMean(ae_median),
+      mean_wis_rate = Mean(wis_rate),
+      geo_mean_wis_rate = GeoMean(wis_rate),
+      mean_ae_rate = Mean(ae_rate),
+      geomean_ae_rate = GeoMean(ae_rate),
+      .groups = "drop"
+    ) %>%
+    arrange(ahead, forecaster, mean_wis_rate) %>%
+    mutate(forecast_date = .env$forecast_date)
+}
 se_mean_states <- function(scores) {
   scores_by_state(scores) %>%
     group_by(forecaster) %>%
     summarize(
-      se_mean_wis = sd(mean_wis) / sqrt(n()),
-      se_geomean_wis = sd(geo_mean_wis) / sqrt(n()),
-      se_mean_ae = sd(mean_ae) / sqrt(n()),
-      se_geomean_ae = sd(geomean_ae) / sqrt(n()),
-      se_mean_wis_rate = sd(mean_wis_rate) / sqrt(n()),
-      se_geomean_wis_rate = sd(geo_mean_wis_rate) / sqrt(n()),
-      se_mean_ae_rate = sd(mean_ae_rate) / sqrt(n()),
-      se_geomean_ae_rate = sd(geomean_ae_rate) / sqrt(n()),
+      se_mean_wis = sd(mean_wis, na.rm = TRUE) / sqrt(n()),
+      se_geomean_wis = sd(geo_mean_wis, na.rm = TRUE) / sqrt(n()),
+      se_mean_ae = sd(mean_ae, na.rm = TRUE) / sqrt(n()),
+      se_geomean_ae = sd(geomean_ae, na.rm = TRUE) / sqrt(n()),
+      se_mean_wis_rate = sd(mean_wis_rate, na.rm = TRUE) / sqrt(n()),
+      se_geomean_wis_rate = sd(geo_mean_wis_rate, na.rm = TRUE) / sqrt(n()),
+      se_mean_ae_rate = sd(mean_ae_rate, na.rm = TRUE) / sqrt(n()),
+      se_geomean_ae_rate = sd(geomean_ae_rate, na.rm = TRUE) / sqrt(n()),
       .groups = "drop"
     ) %>%
     mutate(across(starts_with("se"), \(x) round(x, 2)))
@@ -157,19 +183,29 @@ datatable_function <- function(score_summary) {
     )
 }
 ```
+
 ## Last 8 weeks
 
 ```{r datatable_short, out.width= "100%", fig.height = 60, fig.width = 12, echo=FALSE, message=FALSE}
-score_summary_short <- scores_nhsn %>%
-  filter(forecast_date > Sys.Date() - 8 * 7) %>%
+score_summary_8 <- scores %>%
+  filter(forecast_date >= this_week - 8 * 7) %>%
+  score_summary()
+datatable_function(score_summary_8)
+```
+
+## Last 4 weeks
+
+```{r datatable_shortest, out.width= "100%", fig.height = 60, fig.width = 12, echo=FALSE, message=FALSE}
+score_summary_short <- scores %>%
+  filter(forecast_date > this_week - 4 * 7) %>%
   score_summary()
 datatable_function(score_summary_short)
 ```
 
 ## Last 52 weeks
 ```{r datatable_long, fig.height = 60, fig.width = 12, echo=FALSE, message=FALSE}
-score_summary_long <- scores_nhsn %>%
-  filter(forecast_date > Sys.Date() - 52 * 7) %>%
+score_summary_long <- scores %>%
+  filter(forecast_date > this_week - 52 * 7) %>%
   score_summary()
 datatable_function(score_summary_long)
 ```
@@ -177,71 +213,147 @@ datatable_function(score_summary_long)
 # Moving 8 week average of scores{.tabset}
 
 ```{r moving_average, echo=FALSE, message=FALSE, include=FALSE}
-ordered_scores <- scores_nhsn %>%
+date_range <- scores %>% distinct(forecast_date) %>% pull() %>% range()
+all_forecasters_dates <- crossing(
+  forecaster = scores %>% distinct(forecaster) %>% pull(),
+  forecast_date = seq.Date(date_range[1], date_range[2], by = 7)
+  )
+ordered_scores <- scores %>%
+  full_join(
+    all_forecasters_dates,
+    by = join_by(forecaster, forecast_date), 
+  ) %>%
   arrange(forecast_date)
 sliding_ordered <- ordered_scores %>%
   slide_index_dfr(
     .i = ordered_scores$forecast_date,
     .f = score_summary,
-    .before = lubridate::weeks(8),
+    .before = lubridate::weeks(7),
     .complete = TRUE
   ) %>%
   group_by(forecaster, forecast_date) %>%
   slice(1)
-sliding_ordered %>%
-  ggplot(aes(x=forecast_date, y = mean_wis, color = forecaster)) +
-  geom_line() + 
-  ylim(0, NA) +
-  scale_color_viridis_d()
+baseline_only <- sliding_ordered %>% filter(forecaster == "CovidHub-baseline")
+sliding_ordered <- sliding_ordered %>%
+  group_by(forecast_date) %>%
+  left_join(baseline_only, by = "forecast_date", suffix = c("", ".baseline")) %>%
+  mutate(
+    rel_mean_wis = mean_wis / mean_wis.baseline,
+    rel_mean_wis_rate = mean_wis_rate / mean_wis_rate.baseline,
+  )
+
+plotted_forecasters <- sliding_ordered %>% ungroup() %>% distinct(forecaster) %>% pull(forecaster) %>% sort()
+top_5_and_CMU <- score_summary_short %>%
+  pull(forecaster) %>%
+  `[`(1:5) %>%
+  append("CMU-TimeSeries") %>%
+  unique()
+start_hidden <- setdiff(plotted_forecasters, top_5_and_CMU)
+
+plotting_score <- function(sliding_plot, score_to_plot) {
+  resulting_plot <- sliding_plot %>%
+    ggplot(aes(x = forecast_date, y = {{ score_to_plot }}, color = forecaster, linewidth = ifelse(forecaster == "CMU-TimeSeries", 1, 0.5))) +
+    geom_line() +
+    scale_color_viridis_d(option = "turbo") +
+    scale_y_continuous(breaks = breaks_pretty(n = 20), limits = c(0, NA)) +
+    scale_x_date(breaks = "1 month", date_labels = "%b\n%Y") +
+    scale_linewidth(range = c(.5, 1.5)) +
+    guides(linewidth = "none")
+  resulting_plot
+}
+gplot <- function(resulting_plot, height = 600, width = 1000) {
+  plotly_plot <- ggplotly(resulting_plot, tooltip = "text", height = height, width = width) 
+  for (i in seq_along(plotly_plot$x$data)) {
+    data_row <- plotly_plot$x$data[i]
+    if (data_row[[1]]$name %in% start_hidden) {
+      plotly_plot$x$data[[i]]$visible <- "legendonly"
+    }
+  }
+  plotly_plot %>%
+    layout(hoverlabel = list(bgcolor = "white"), yaxis = list(rangemode = "tozero", autorange = TRUE), xaxis = list(autorange = TRUE))
+}
 ```
 
 ## Mean WIS
 
 ```{r moving_average_wis, echo=FALSE, message=FALSE, out.width="100%"}
-sliding_ordered %>%
-  ggplot(aes(x=forecast_date, y = mean_wis, color = forecaster)) +
-  ylim(0, NA) +
-  geom_line() + 
-  scale_color_viridis_d()
+plotting_score(sliding_ordered, mean_wis) %>% gplot()
+```
+## Relative Mean WIS
+
+```{r moving_average_rel_wis, echo=FALSE, message=FALSE, out.width="100%"}
+plotting_score(sliding_ordered, rel_mean_wis) %>% gplot()
 ```
 
-## Mean WIS rate
+<!-- only including the per capita WIS for nhsn -->
 
-```{r moving_average_wis_rate, echo=FALSE, message=FALSE, out.width="100%"}
-sliding_ordered %>%
-  ggplot(aes(x=forecast_date, y = mean_wis_rate, color = forecaster)) +
-  ylim(0, NA) +
-  geom_line() + 
-  scale_color_viridis_d()
+```{r} 
+if (params$target == "nhsn") {
+  scaled_WIS_plot <- knitr::knit_expand(
+                    text = c(
+                      "## Mean WIS per capita\n",
+                      "\n",
+                      "```{r moving_average_wis_rate, echo=FALSE, message=FALSE, out.width='100%'}\n",
+                      "plotting_score(sliding_ordered, mean_wis_rate) %>% gplot()\n",
+                      "```\n",
+                      "\n")
+                  )
+ plot2 <- knitr::knit_expand(
+                 text = c(
+                   "## All by WIS per capita\n",
+                   "```{r plotting_all_recent_forecasts, out.width='300%', fig.dim=c(12,60), fig.align = 'center', message=FALSE, eval = params$target == 'nhsn'}\n",
+                   "plotting_forecasts(plotting_window = this_week - 12 * 7, score_window = 8, geo_score_rate_order, n_plotting = 60)\n",
+                   "```\n",
+                   "\n"
+                 )) 
+}
 ```
-
+`r if (params$target == "nhsn") {knitr::knit(text = scaled_WIS_plot)}`
 ## Mean Coverage 90
 
 ```{r moving_average_cov90, echo=FALSE, message=FALSE, out.width="100%"}
-sliding_ordered %>%
-  ggplot(aes(x=forecast_date, y = mean_cov_90, color = forecaster)) +
-  ylim(0, 1) +
-  geom_line() + 
-  scale_color_viridis_d()
+cov_plot <- plotting_score(sliding_ordered, mean_cov_90) +
+  scale_y_continuous(breaks = breaks_pretty(n = 20), limits = c(0, 1)) +
+  geom_hline(aes(yintercept = 0.90), color="black", linetype = "dashed") 
+gplot(cov_plot)
 ```
 
 ## Mean Coverage 50
 
 ```{r moving_average_cov50, echo=FALSE, message=FALSE, out.width="100%"}
-sliding_ordered %>%
-  ggplot(aes(x=forecast_date, y = mean_cov_50, color = forecaster)) +
-  ylim(0, 1) +
-  geom_line() + 
-  scale_color_viridis_d()
+cov_plot <- plotting_score(sliding_ordered, mean_cov_50) + 
+  scale_y_continuous(breaks = breaks_pretty(n = 20), limits = c(0, 1)) +
+  geom_hline(aes(yintercept = 0.50), color="black", linetype = "dashed")
+gplot(cov_plot)
 ```
 
+## 8 week moving average scores by ahead
+
+```{r calculate_scores_by_ahead, echo=FALSE, message=FALSE, include = FALSE}
+scores %>% scores_by_ahead()
+sliding_ahead_ordered <- ordered_scores %>%
+  slide_index_dfr(
+    .i = ordered_scores$forecast_date,
+    .f = scores_by_ahead,
+    .before = lubridate::weeks(8),
+    .complete = TRUE
+  ) %>%
+  group_by(forecaster, forecast_date, ahead) %>%
+  slice(1)
+```
+
+```{r ahead_plot_wis, echo=FALSE, message=FALSE, out.width="100%"}
+ahead_wis_plot <- plotting_score(sliding_ahead_ordered, mean_wis) +
+    facet_grid(rows = "ahead")
+ahead_wis_plot %>% gplot(height = 1200)
+```
 # Large recent data revisions {.tabset}
 
 ```{r revisions, echo=FALSE, message=FALSE, out.width="100%"}
-nhsn_recent_archive <- params$nhsn_archive %>%
-  filter(Sys.Date() - time_value < 10*7)
-nhsn_recent_archive$time_type <- "day"
-revision_sum <- nhsn_recent_archive %>%
+recent_archive <- recent_archive %>%
+  filter(this_week - time_value < 10*7)
+recent_archive$time_type <- "day"
+revision_sum <- recent_archive %>%
   epiprocess::revision_analysis(value, min_waiting_period = NULL)
 av_re_spread <- revision_sum$revision_behavior %>%
   group_by(geo_value) %>%
@@ -250,10 +362,10 @@ av_re_spread <- revision_sum$revision_behavior %>%
   filter(geo_value %nin% c("vi", "as", "gu"))
 worst_geos <- av_re_spread %>% filter((rel_spread > 0.10)) %>% pull(geo_value)
 worst_geos <- worst_geos[1:9]
-nhsn_filtered <- nhsn_recent_archive %>%
+filtered_archive <- recent_archive %>%
   filter(geo_value %in% worst_geos) %>%
   filter(time_value >= "2024-11-19")
-nhsn_filtered$DT %<>%
+filtered_archive$DT %<>%
   mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value[1:18]))
 ```
 
@@ -261,8 +373,9 @@ nhsn_filtered$DT %<>%
 The states most likely to be subject to total revisions requiring substitution.
 
 ```{r revision_plots, fig.width = 15, fig.height = 10, fig.align = "center", echo=FALSE}
-autoplot(nhsn_filtered, "value") +
-  facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8)) +
+autoplot(filtered_archive, "value") +
+  facet_wrap(~geo_value, ncol = 3, scales = "free") +
+  theme(strip.text.x = element_text(size = 8)) +
   ylim(0, NA) +
   labs(title = "States with the largest mean revision")
 ```
@@ -270,41 +383,54 @@ autoplot(nhsn_filtered, "value") +
 
 ## All revisions
 ```{r all_revision_plots, out.width="120%", fig.width = 15, fig.height = 60, fig.align = "center"}
-nhsn_recent_archive$DT %<>% mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value))
-nhsn_recent_archive %>%
-  autoplot("value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8)) +
+recent_archive$DT %<>% mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value))
+recent_archive %>%
+  autoplot("value") +
+  facet_wrap(~geo_value, ncol = 3, scales = "free") +
+  theme(strip.text.x = element_text(size = 8)) +
+  ylim(0, NA) +
   labs(title = "States with the largest mean revision")
 ```
 
 # Forecasts from 8 weeks ago, sorted by decreasing recent WIS {.tabset}
+Plotting the forecasts from 8 weeks ago until 3 weeks ago for each geography, sorted by WIS or population scaled WIS.
 ```{r plotting_recent_forecasts_function, echo=FALSE, message=FALSE}
-plotting_forecasts <- function(plotting_window, score_window, n_plotting) {
-  geo_score_order <- scores_nhsn %>%
-    filter(forecast_date > Sys.Date() - score_window * 7) %>%
-    scores_by_state() %>% filter(forecaster == "CMU-TimeSeries") %>%  arrange(desc(mean_wis_rate)) %>% pull(geo_value)
+plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n_plotting) {
   geo_score_order <- geo_score_order[1:n_plotting]
-  plotting_archive <- params$nhsn_archive
+  plotting_archive <- recent_archive
   plotting_archive$DT %<>%
-    filter(geo_value %in% geo_score_order, time_value > plotting_window) %>% 
-    mutate(geo_value = factor(geo_value, levels = geo_score_order)) %>%
+    filter(geo_value %in% geo_score_order, time_value > plotting_window) %>%
+    mutate(geo_value = factor(geo_value, levels = geo_score_order))
+  if (params$target == "nhsn") {
+    plotting_archive$DT %<>%
     left_join(state_census, by = join_by(geo_value == abbr)) %>%
     mutate(value = value * 1e5/ pop) %>%
     select(-pop)
+  } else {
+    forecasts %<>%
+      mutate(
+        value = value * 100
+      )
+  }
   latest_data_date <- plotting_archive$DT %>% pull(time_value) %>% max()
   forecasts_to_plot <- forecasts %>%
     filter(
       forecaster == "CMU-TimeSeries",
       geo_value %in% geo_score_order,
-      forecast_date > Sys.Date() - score_window * 7,
+      forecast_date > this_week - score_window * 7,
       forecast_date < latest_data_date - 1 * 7
     ) %>%
     mutate(
       geo_value = factor(geo_value, levels = geo_score_order),
       forecast_date = factor(forecast_date)
     ) %>%
-    ungroup() %>% 
-    left_join(state_census, by = join_by(geo_value == abbr)) %>%
-    mutate(value = value * 1e5/ pop) %>%
+    ungroup()
+  if (params$target == "nhsn") {
+    forecasts_to_plot %<>%
+      left_join(state_census, by = join_by(geo_value == abbr)) %>%
+      mutate(value = value * 1e5/ pop)
+  }
+  forecasts_to_plot %<>%
     pivot_wider(names_from = quantile, values_from = value) %>%
     mutate(time_value = target_end_date)
   plotting_archive %>%
@@ -317,17 +443,61 @@ plotting_forecasts <- function(plotting_window, score_window, n_plotting) {
     scale_color_brewer(palette = "Set3") +
     scale_fill_brewer(palette = "Set3") +
     facet_grid(factor(geo_value, levels = geo_score_order) ~ forecast_date, scale = if(n_plotting>20) "free" else "fixed") +
-    labs(title=glue::glue("Worst WIS scoring forecasts over the past {score_window} weeks"))
+    scale_y_continuous(breaks = breaks_pretty(n = 5), limits = c(0, NA)) +
+    scale_x_date(breaks = "14 days", date_labels = "%d\n%b", sec.axis = sec_axis(~ ., name = "Forecast Date", breaks = NULL, labels = NULL))
+}
+score_window <- 8
+geo_score_rate_order <- scores %>%
+  filter(forecast_date > this_week - score_window * 7) %>%
+  scores_by_state() %>%
+  filter(forecaster == "CMU-TimeSeries") %>%
+  arrange(desc(mean_wis_rate)) %>% pull(geo_value)
+```
+<!-- include rates if we're plotting nhsn only -->
+```{r} 
+if (params$target == "nhsn") {
+  plot1 <- knitr::knit_expand(
+                    text = c(
+                      "## Worst 5 by WIS per capita\n",
+                      "```{r plotting_recent_forecasts, out.width='300%', fig.dim=c(10,5), fig.align = 'center', echo=FALSE, message=FALSE, eval = params$target == 'nhsn'}\n",
+                      "plotting_forecasts(plotting_window = this_week - 12 * 7, score_window = 8, geo_score_rate_order, n_plotting = 5)\n",
+                      "```\n",
+                      "\n")
+                  )
+ plot2 <- knitr::knit_expand(
+                 text = c(
+                   "## All by WIS per capita\n",
+                   "```{r plotting_all_recent_forecasts, out.width='300%', fig.dim=c(12,60), fig.align = 'center', message=FALSE, eval = params$target == 'nhsn'}\n",
+                   "plotting_forecasts(plotting_window = this_week - 12 * 7, score_window = 8, geo_score_rate_order, n_plotting = 60)\n",
+                   "```\n",
+                   "\n"
+                 )) 
 }
 ```
+`r if (params$target == "nhsn") {knitr::knit(text = plot1)}`
 
-## Worst 5
-```{r plotting_recent_forecasts, out.width="300%", fig.dim=c(10,5), fig.align = "center", echo=FALSE, message=FALSE}
-plotting_forecasts(plotting_window = Sys.Date() - 12 * 7, score_window = 8, n_plotting = 5)
+`r if (params$target == "nhsn") {knitr::knit(text = plot2)}`
+
+
+## Worst 5 by WIS
+```{r plotting_raw_wis_recent_forecasts, out.width="300%", fig.dim=c(10,5), fig.align = "center", echo=FALSE, message=FALSE}
+score_window <- 8
+geo_score_order <- scores %>%
+  filter(forecast_date > this_week - score_window * 7) %>%
+  scores_by_state() %>%
+  filter(forecaster == "CMU-TimeSeries") %>%
+  arrange(desc(mean_wis)) %>% pull(geo_value)
+plotting_forecasts(plotting_window = this_week - 12 * 7, score_window = 8, geo_score_order, n_plotting = 5)
 ```
 
-## All
-```{r plotting_all_recent_forecasts, out.width="300%", fig.dim=c(12,60), fig.align = "center", message=FALSE}
-plotting_forecasts(plotting_window = Sys.Date() - 12 * 7, score_window = 8, n_plotting = 60)
-```
 
+
+## All by WIS
+```{r plotting_all_raw_wis_recent_forecasts, out.width="300%", fig.dim=c(12,60), fig.align = "center", message=FALSE}
+geo_score_order <- scores %>%
+  filter(forecast_date > this_week - score_window * 7) %>%
+  scores_by_state() %>%
+  filter(forecaster == "CMU-TimeSeries") %>%
+  arrange(desc(mean_wis)) %>% pull(geo_value)
+plotting_forecasts(plotting_window = this_week - 12 * 7, score_window = 8, geo_score_order, n_plotting = 60)
+```
