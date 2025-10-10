@@ -102,43 +102,68 @@ g_windowed_seasonal_extra_sources <- function(epi_data, ahead, extra_data, ...) 
     filter(geo_value %nin% c("mo", "usa", "wy"))
   fcst
 }
+g_baseline_forecaster <- function(epi_data, ahead, extra_data, ...) {
+  # all of the forecasts are made in the last ahead
+  if (ahead < 3) {
+    return(tibble(geo_value = character(), forecast_date = Date(), target_end_date = Date(), quantile_value = numeric(), value = numeric()))
+  }
+  real_forecast_date <- attributes(epi_data)$metadata$as_of
+  last_data <- epi_data$time_value %>% max()
+  latency_weeks <- as.integer(real_forecast_date - last_data) / 7
+  fcst <- epi_data %>%
+    cdc_baseline_forecaster(
+      "value",
+      args_list = cdc_baseline_args_list(aheads = 1:(3 + latency_weeks))
+    ) %>%
+    `$`(predictions) %>%
+    pivot_quantiles_longer(.pred_distn) %>%
+    select(
+      geo_value, forecast_date,
+      target_end_date = target_date,
+      value = .pred_distn_value,
+      quantile = .pred_distn_quantile_level
+    ) %>%
+    mutate(
+      forecast_date = floor_date(forecast_date, "weeks", week_start = 7) + 3,
+      target_end_date = floor_date(target_end_date, "weeks", week_start = 7) + 3
+    ) %>%
+    mutate(
+      ahead = as.integer(target_end_date - forecast_date),
+      forecast_date = real_forecast_date
+    )
+  ## fcst %>%
+  ##   group_by(geo_value, forecast_date, target_end_date, quantile) %>%
+  ##   count() %>%
+  ##   arrange(desc(n))
+  fcst
+}
+ids <- c(
+  "cdc_baseline",
+  "linear",
+  "linear_no_population_scale",
+  "windowed_seasonal",
+  "windowed_seasonal_extra_sources",
+  "climate_base",
+  "climate_geo_agged",
+  "windowed_seasonal_latest",
+  "seasonal_nssp_latest"
+)
+list_of_empty_lists <- lapply(1:length(ids), \(x) list())
 g_forecaster_params_grid <- tibble(
-  id = c(
-    "linear",
-    "linear_no_population_scale",
-    "windowed_seasonal",
-    "windowed_seasonal_extra_sources",
-    "climate_base",
-    "climate_geo_agged",
-    "seasonal_nssp_latest"
-  ),
+  id = ids,
   forecaster = rlang::syms(c(
+    "g_baseline_forecaster",
     "g_linear",
     "g_linear_no_population_scale",
     "g_windowed_seasonal",
     "g_windowed_seasonal_extra_sources",
     "g_climate_base",
     "g_climate_geo_agged",
+    "g_windowed_seasonal",
     "g_windowed_seasonal_extra_sources"
   )),
-  params = list(
-    list(),
-    list(),
-    list(),
-    list(),
-    list(),
-    list(),
-    list()
-  ),
-  param_names = list(
-    list(),
-    list(),
-    list(),
-    list(),
-    list(),
-    list(),
-    list()
-  )
+  params = list_of_empty_lists,
+  param_names = list_of_empty_lists
 )
 
 
@@ -346,7 +371,7 @@ ensemble_targets <- tar_map(
     command = {
       forecast_nssp_full %>%
         filter(forecast_date == as.Date(forecast_date_int)) %>%
-        # Renove `linear`
+        # Remove `linear`
         filter(forecaster %nin% c("linear"))
     }
   ),
@@ -451,7 +476,7 @@ ensemble_targets <- tar_map(
     },
   ),
   tar_target(
-    name = forecasts_and_ensembles,
+    name = forecasts_and_ensembles_nhsn,
     command = {
       bind_rows(
         forecast_nhsn_full_filtered,
@@ -634,7 +659,7 @@ ensemble_targets <- tar_map(
           ),
           params = list(
             disease = "covid",
-            forecast_nhsn = forecasts_and_ensembles %>% ungroup() %>% filter(forecaster != "climate_geo_agged"),
+            forecast_nhsn = forecasts_and_ensembles_nhsn %>% ungroup() %>% filter(forecaster != "climate_geo_agged"),
             forecast_nssp = forecasts_and_ensembles_nssp,
             forecast_date = as.Date(forecast_date_int),
             truth_data_nhsn = truth_data_nhsn,
@@ -676,7 +701,40 @@ external_forecast_targets <- tar_map(
       score_forecasts(
         nssp_latest_data %>% mutate(value = nssp),
         external_forecasts,
-        "wk inc covid prop ed visits")
+        "wk inc covid prop ed visits"
+      )
+    }
+  )
+)
+
+joined_targets <- list2(
+  tar_combine(
+    name = local_forecasts_and_ensembles_nhsn,
+    ensemble_targets[["forecasts_and_ensembles_nhsn"]],
+    command = {
+      dplyr::bind_rows(!!!.x)
+    }
+  ),
+  tar_combine(
+    name = local_forecasts_and_ensembles_nssp,
+    ensemble_targets[["forecasts_and_ensembles_nssp"]],
+    command = {
+      dplyr::bind_rows(!!!.x)
+    }
+  ),
+  tar_target(
+    name = local_scores_nhsn,
+    command = {
+      score_forecasts(nhsn_latest_data, local_forecasts_and_ensembles_nhsn, "wk inc covid hosp")
+    }
+  ),
+  tar_target(
+    name = local_scores_nssp,
+    command = {
+      nssp_latest_data %>%
+        rename(value = nssp) %>%
+        mutate(time_value = ceiling_date(time_value, unit = "week") - 1) %>%
+        score_forecasts(local_forecasts_and_ensembles_nssp %>% mutate(value = value / 100), "wk inc covid prop ed visits")
     }
   )
 )
@@ -702,67 +760,51 @@ combined_targets <- list2(
     command = {
       dplyr::bind_rows(!!!.x)
     }
-  )
-)
-
-list2(
-  tar_change(
-    external_forecasts,
-    change = get_s3_object_last_modified(g_external_object_name, "forecasting-team-data"),
-    command = {
-      get_external_forecasts(g_external_object_name)
-    }
-  ),
-  tar_combine(
-    name = joined_forecasts_and_ensembles_nhsn,
-    ensemble_targets[["forecasts_and_ensembles"]],
-    command = {
-      filter_shared_geo_dates(
-        dplyr::bind_rows(!!!.x),
-        external_forecasts %>%
-          filter(target == "wk inc covid hosp") %>%
-          select(-target),
-        min_locations = 52,
-        min_dates = 40
-      )
-    }
-  ),
-  tar_combine(
-    name = joined_forecasts_and_ensembles_nssp,
-    ensemble_targets[["forecasts_and_ensembles_nssp"]],
-    command = {
-      filter_shared_geo_dates(
-        dplyr::bind_rows(!!!.x),
-        external_forecasts %>%
-          filter(target == "wk inc covid prop ed visits") %>%
-          select(-target) %>%
-          mutate(value = value * 100),
-        min_locations = 50,
-        min_dates = 14
-      )
-    }
   ),
   tar_target(
     name = scores_nhsn,
     command = {
-      score_forecasts(nhsn_latest_data, joined_forecasts_and_ensembles_nhsn, "wk inc covid hosp")
+      bind_rows(
+        external_scores_nhsn_full,
+        local_scores_nhsn
+      )
     }
   ),
   tar_target(
     name = scores_nssp,
     command = {
-      nssp_latest_data %>%
-        rename(value = nssp) %>%
-        mutate(time_value = ceiling_date(time_value, unit = "week") - 1) %>%
-        score_forecasts(joined_forecasts_and_ensembles_nssp, "wk inc covid prop ed visits")
+      bind_rows(
+        external_scores_nssp_full,
+        local_scores_nssp
+      )
     }
-  )
+  ),
 )
+
 if (g_backtest_mode) {
   score_notebook <- tar_target(
-    name = score_plot,
+    name = score_nhsn_plot,
     command = {
-      render_score_plot(score_report_rmd, scores_nhsn, g_forecast_dates, "covid")
+      render_score_plot(
+        score_report_rmd,
+        scores_nhsn,
+        g_forecast_dates,
+        "covid",
+        "nhsn"
+      )
+    },
+    cue = tar_cue("always")
+  )
+  score_notebook <- tar_target(
+    name = score_nssp_plot,
+    command = {
+      render_score_plot(
+        score_report_rmd,
+        scores_nssp,
+        g_forecast_dates,
+        "covid",
+        "nssp"
+      )
     },
     cue = tar_cue("always")
   )
@@ -778,9 +820,10 @@ if (g_backtest_mode) {
         }
         # Don't run if there aren't forecasts in the past 4 weeks to evaluate
         if (external_forecasts_full %>%
-            filter(
-              forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4*7,
-              target == "wk inc covid hosp") %>% distinct(forecast_date) %>% nrow() == 0) {
+          filter(
+            forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4 * 7,
+            target == "wk inc covid hosp"
+          ) %>% distinct(forecast_date) %>% nrow() == 0) {
           return()
         }
         rmarkdown::render(
@@ -807,10 +850,10 @@ if (g_backtest_mode) {
         }
         # Don't run if there aren't forecasts in the past 4 weeks to evaluate
         if (external_forecasts_full %>%
-            filter(
-              forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4*7,
-              target == "wk inc covid prop ed visits"
-            ) %>% distinct(forecast_date) %>% nrow() == 0) {
+          filter(
+            forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4 * 7,
+            target == "wk inc covid prop ed visits"
+          ) %>% distinct(forecast_date) %>% nrow() == 0) {
           return()
         }
         rmarkdown::render(
@@ -840,5 +883,6 @@ list2(
   combined_nssp_forecasts,
   external_forecast_targets,
   combined_targets,
+  joined_targets,
   score_notebook
 )

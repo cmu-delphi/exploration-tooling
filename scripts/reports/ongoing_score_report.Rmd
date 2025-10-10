@@ -282,12 +282,14 @@ plotting_score(sliding_ordered, mean_wis) %>% gplot()
 ## Relative Mean WIS
 
 ```{r moving_average_rel_wis, echo=FALSE, message=FALSE, out.width="100%"}
-plotting_score(sliding_ordered, rel_mean_wis) %>% gplot()
+plot_rel_mean <- plotting_score(sliding_ordered, rel_mean_wis) +
+  geom_hline(aes(yintercept = 1), color="black", linetype = "dashed")
+plot_rel_mean %>% gplot()
 ```
 
 <!-- only including the per capita WIS for nhsn -->
 
-```{r} 
+```{r}
 if (params$target == "nhsn") {
   scaled_WIS_plot <- knitr::knit_expand(
                     text = c(

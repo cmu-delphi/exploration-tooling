@@ -25,7 +25,6 @@ get_external_forecasts <- function(external_object_name) {
 }
 
 score_forecasts <- function(latest_data, forecasts, target) {
-  browser()
   if (length(forecasts) == 0) {
     return(tibble())
   }
@@ -52,8 +51,10 @@ score_forecasts <- function(latest_data, forecasts, target) {
     min()
   forecasts_formatted <-
     forecasts[forecasts$forecast_date <= max_forecast_date, ]
-  forecasts_formatted <-
-    forecasts_formatted[forecasts_formatted$target == target, ]
+  if ("target" %in% names(forecasts_formatted)) {
+    forecasts_formatted <-
+      forecasts_formatted[forecasts_formatted$target == target, ]
+  }
   # no forecasts for that target for these forecast dates
   if (nrow(forecasts_formatted) == 0) {
     return(tibble())
@@ -88,17 +89,18 @@ score_forecasts <- function(latest_data, forecasts, target) {
     select(-location)
 }
 
-render_score_plot <- function(score_report_rmd, scores, forecast_dates, disease) {
+render_score_plot <- function(score_report_rmd, scores, forecast_dates, disease, target) {
   rmarkdown::render(
     score_report_rmd,
     params = list(
       scores = scores,
       forecast_dates = forecast_dates,
-      disease = disease
+      disease = disease,
+      target = target
     ),
     output_file = here::here(
       "reports",
-      glue::glue("{disease}_backtesting_2024_2025_on_{as.Date(Sys.Date())}")
+      glue::glue("{disease}_{target}_backtesting_2024_2025_on_{as.Date(Sys.Date())}")
     )
   )
 }
