@@ -64,29 +64,40 @@ score_forecasts <- function(latest_data, forecasts, target) {
   if (target == "wk inc covid prop ed visits") {
     forecasts_formatted %<>% mutate(value = value * 100)
   }
-  scores <-
-    forecasts_formatted %>%
-    filter(output_type == "quantile") %>%
-    filter(location %nin% c("US", "60", "66", "78")) %>%
-    hubEvals::score_model_out(
-      truth_data,
-      metrics = c("wis", "ae_median", "interval_coverage_50", "interval_coverage_90"),
-      summarize = TRUE,
-      by = c("model_id", "target", "reference_date", "location", "horizon")
-    )
-  scores %>%
-    left_join(
-      get_population_data() %>%
-        select(state_id, state_code),
-      by = c("location" = "state_code")
-    ) %>%
-    rename(
-      forecaster = model_id,
-      forecast_date = reference_date,
-      ahead = horizon,
-      geo_value = state_id
-    ) %>%
-    select(-location)
+  tryCatch(
+    {
+      scores <-
+        forecasts_formatted %>%
+        filter(output_type == "quantile") %>%
+        filter(location %nin% c("US", "60", "66", "78")) %>%
+        hubEvals::score_model_out(
+          truth_data,
+          metrics = c("wis", "ae_median", "interval_coverage_50", "interval_coverage_90"),
+          summarize = TRUE,
+          by = c("model_id", "target", "reference_date", "location", "horizon")
+        )
+      scores %>%
+        left_join(
+          get_population_data() %>%
+            select(state_id, state_code),
+          by = c("location" = "state_code")
+        ) %>%
+        rename(
+          forecaster = model_id,
+          forecast_date = reference_date,
+          ahead = horizon,
+          geo_value = state_id
+        ) %>%
+        select(-location)
+    },
+    error = function(e) {
+      if (rlang::cnd_message(e) == "\033[1m\033[22m\033[33m!\033[39m After removing rows with NA values in the data, no forecasts are left.") {
+        return(tibble())
+      } else {
+        rlang::abort(e)
+      }
+    }
+  )
 }
 
 render_score_plot <- function(score_report_rmd, scores, forecast_dates, disease, target) {
