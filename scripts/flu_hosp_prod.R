@@ -122,17 +122,56 @@ g_windowed_seasonal_extra_sources <- function(epi_data, ahead, extra_data, ...) 
     filter(geo_value %nin% c("mo", "us", "wy"))
   fcst
 }
+g_baseline_forecaster <- function(epi_data, ahead, extra_data, ...) {
+  # all of the forecasts are made in the last ahead
+  if (ahead < 3) {
+    return(tibble(geo_value = character(), forecast_date = Date(), target_end_date = Date(), quantile_value = numeric(), value = numeric()))
+  }
+  real_forecast_date <- attributes(epi_data)$metadata$as_of
+  last_data <- epi_data$time_value %>% max()
+  latency_weeks <- as.integer(real_forecast_date - last_data) / 7
+  fcst <- epi_data %>%
+    cdc_baseline_forecaster(
+      "value",
+      args_list = cdc_baseline_args_list(aheads = 1:(3 + latency_weeks))
+    ) %>%
+    `$`(predictions) %>%
+    pivot_quantiles_longer(.pred_distn) %>%
+    select(
+      geo_value, forecast_date,
+      target_end_date = target_date,
+      value = .pred_distn_value,
+      quantile = .pred_distn_quantile_level
+    ) %>%
+    mutate(
+      forecast_date = floor_date(forecast_date, "weeks", week_start = 7) + 3,
+      target_end_date = floor_date(target_end_date, "weeks", week_start = 7) + 3
+    ) %>%
+    mutate(
+      ahead = as.integer(target_end_date - forecast_date),
+      forecast_date = real_forecast_date
+    )
+  ## fcst %>%
+  ##   group_by(geo_value, forecast_date, target_end_date, quantile) %>%
+  ##   count() %>%
+  ##   arrange(desc(n))
+  fcst
+}
+ids <- c(
+  "cdc_baseline",
+  "linear",
+  "linear_no_population_scale",
+  "windowed_seasonal",
+  "windowed_seasonal_extra_sources",
+  "climate_base",
+  "climate_geo_agged",
+  "seasonal_nssp_latest"
+)
+list_of_empty_lists <- lapply(1:length(ids), \(x) list())
 g_forecaster_params_grid <- tibble(
-  id = c(
-    "linear",
-    "linear_no_population_scale",
-    "windowed_seasonal",
-    "windowed_seasonal_extra_sources",
-    "climate_base",
-    "climate_geo_agged",
-    "seasonal_nssp_latest"
-  ),
+  id = ids,
   forecaster = rlang::syms(c(
+    "g_baseline_forecaster",
     "g_linear",
     "g_linear_no_population_scale",
     "g_windowed_seasonal",
@@ -141,24 +180,8 @@ g_forecaster_params_grid <- tibble(
     "g_climate_geo_agged",
     "g_windowed_seasonal_extra_sources"
   )),
-  params = list(
-    list(),
-    list(),
-    list(),
-    list(),
-    list(),
-    list(),
-    list()
-  ),
-  param_names = list(
-    list(),
-    list(),
-    list(),
-    list(),
-    list(),
-    list(),
-    list()
-  )
+  params = list_of_empty_lists,
+  param_names = list_of_empty_lists
 )
 
 

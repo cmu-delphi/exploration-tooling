@@ -21,11 +21,10 @@ ensemble_climate_linear <- function(
     max_climate_ahead_weight = 0.90,
     min_climate_quantile_weight = 0.1,
     max_climate_quantile_weight = 1) {
-  browser()
   last_data <- min(forecasts$target_end_date)
   forecast_date <- min(forecasts$forecast_date)
-  latency <- as.integer(forecast_date - last_data) / 7
-  aheads <- aheads + latency
+  latency <- ceiling(as.integer(forecast_date - last_data) / 7)
+  aheads <- seq(min(aheads), max(aheads) + latency)
   forecasts %<>% filter(grepl("climate|linear", forecaster)) %>% mutate(forecast_date = last_data)
   weights <-
     make_ahead_weights(aheads, min_climate_ahead_weight, max_climate_ahead_weight) %>%
