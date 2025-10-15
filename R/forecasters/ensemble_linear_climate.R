@@ -13,15 +13,20 @@
 #' @importFrom rlang %||%
 #' @export
 ensemble_climate_linear <- function(
-  forecasts,
-  aheads,
-  other_weights = NULL,
-  probs = covidhub_probs(),
-  min_climate_ahead_weight = 0.05,
-  max_climate_ahead_weight = 0.90,
-  min_climate_quantile_weight = 0.1,
-  max_climate_quantile_weight = 1
-) {
+    forecasts,
+    aheads,
+    other_weights = NULL,
+    probs = covidhub_probs(),
+    min_climate_ahead_weight = 0.05,
+    max_climate_ahead_weight = 0.90,
+    min_climate_quantile_weight = 0.1,
+    max_climate_quantile_weight = 1) {
+  browser()
+  last_data <- min(forecasts$target_end_date)
+  forecast_date <- min(forecasts$forecast_date)
+  latency <- as.integer(forecast_date - last_data) / 7
+  aheads <- aheads + latency
+  forecasts %<>% filter(grepl("climate|linear", forecaster)) %>% mutate(forecast_date = last_data)
   weights <-
     make_ahead_weights(aheads, min_climate_ahead_weight, max_climate_ahead_weight) %>%
     left_join(
@@ -83,7 +88,8 @@ ensemble_climate_linear <- function(
     mutate(value = weight * value) %>%
     group_by(geo_value, forecast_date, target_end_date, quantile) %>%
     summarize(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
-    sort_by_quantile()
+    sort_by_quantile() %>%
+    mutate(forecast_date = .env$forecast_date)
   return(weighted_forecasts)
 }
 
