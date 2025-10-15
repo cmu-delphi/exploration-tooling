@@ -91,7 +91,7 @@ score_forecasts <- function(latest_data, forecasts, target) {
         select(-location)
     },
     error = function(e) {
-      if (rlang::cnd_message(e) == "\033[1m\033[22m\033[33m!\033[39m After removing rows with NA values in the data, no forecasts are left.") {
+      if (grepl("no forecasts", rlang::cnd_message(e))) {
         return(tibble())
       } else {
         e
