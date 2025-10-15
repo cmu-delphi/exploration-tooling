@@ -94,7 +94,7 @@ score_forecasts <- function(latest_data, forecasts, target) {
       if (rlang::cnd_message(e) == "\033[1m\033[22m\033[33m!\033[39m After removing rows with NA values in the data, no forecasts are left.") {
         return(tibble())
       } else {
-        rlang::abort(e)
+        e
       }
     }
   )
