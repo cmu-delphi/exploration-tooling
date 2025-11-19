@@ -71,11 +71,10 @@ step_season_week_sine <- function(preproc, season = 35) {
 #' @param original_dataset tibble or epi_df, should have states as 2 letter lower case
 add_pop_and_density <-
   function(
-    original_dataset,
-    apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
-    state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
-    hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")
-  ) {
+      original_dataset,
+      apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
+      state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
+      hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")) {
     pops_by_state_hhs <- gen_pop_and_density_data(apportion_filename, state_code_filename, hhs_code_filename)
     # if the dataset uses "usa" instead of "us", substitute that
     if ("usa" %in% unique(original_dataset)$geo_value) {
@@ -117,11 +116,9 @@ add_agg_level <- function(data) {
 }
 
 gen_pop_and_density_data <-
-  function(
-    apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
-    state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
-    hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")
-  ) {
+  function(apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
+           state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
+           hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")) {
     apportionment_data <- readr::read_csv(apportion_filename, show_col_types = FALSE) %>% as_tibble()
     imputed_pop_data <- apportionment_data %>%
       filter(`Geography Type` %in% c("State", "Nation")) %>%
@@ -222,12 +219,11 @@ daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), keys = "geo_v
 #' @param week_start the day of the week to use as the start of the week (Sunday is default).
 #'   Note that this is 1-indexed, so 1 = Sunday, 2 = Monday, ..., 7 = Saturday.
 daily_to_weekly_archive <- function(
-  epi_arch,
-  agg_columns,
-  agg_method = c("sum", "mean"),
-  week_reference = 4L,
-  week_start = 7L
-) {
+    epi_arch,
+    agg_columns,
+    agg_method = c("sum", "mean"),
+    week_reference = 4L,
+    week_start = 7L) {
   # How to aggregate the windowed data.
   agg_method <- arg_match(agg_method)
   # The columns we will later group by when aggregating.
@@ -679,16 +675,25 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     max_attempts = 10,
     wait_seconds = 1,
     fn = pub_covidcast,
-    source = "nssp",
+    source = "beta_nssp",
     signals = glue::glue("pct_ed_visits_{disease}"),
     time_type = "week",
     geo_type = "state",
     geo_values = "*",
     issues = "*"
   )
+  nssp_state <- nssp_state %>%
+    select(geo_value, time_value, version = issue, nssp = value)
+  github_data <- get_nssp_github(disease)
+  # github is newer
+  if (github_data %>% pull(time_value) %>% max() >
+    nssp_state %>%
+      pull(time_value) %>%
+      max()) {
+    nssp_state <- nssp_state %>%
+      bind_rows(get_nssp_github(disease))
+  }
   nssp_state %>%
-    select(geo_value, time_value, version = issue, nssp = value) %>%
-    bind_rows(get_nssp_github(disease)) %>%
     as_epi_archive(compactify = TRUE) %>%
     extract2("DT") %>%
     # End of week to midweek correction.
@@ -696,14 +701,14 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     as_epi_archive(compactify = TRUE)
 }
 
-get_nssp_github <- function(disease = c("covid", "influenza"), source=c("github", "socrata")) {
+get_nssp_github <- function(disease = c("covid", "influenza"), source = c("github", "socrata")) {
   source <- arg_match(source)
   if (source == "github") {
     raw_file <- read_csv("https://raw.githubusercontent.com/CDCgov/covid19-forecast-hub/refs/heads/main/auxiliary-data/nssp-raw-data/latest.csv")
   } else if (source == "socrata") {
     raw_file <- read_csv(glue::glue("https://data.cdc.gov/resource/rdmq-nq56.csv?$limit=1000000&$select=geography,week_end,county,percent_visits_{disease}"))
   }
-  state_map <- get_population_data() %>% filter(state_id !="usa")
+  state_map <- get_population_data() %>% filter(state_id != "usa")
   raw_file %>%
     filter(county == "All") %>%
     left_join(state_map, by = join_by(geography == state_name)) %>%
@@ -716,5 +721,7 @@ check_nssp_socrata_github_diff <- function() {
   df1 <- get_nssp_github("github")
   df2 <- get_nssp_github("socrata")
   out <- full_join(df1, df2, by = c("geo_value", "time_value", "version"))
-  out %>% mutate(diff = nssp.x - nssp.y) %>% filter(abs(diff) > 0.0001)
+  out %>%
+    mutate(diff = nssp.x - nssp.y) %>%
+    filter(abs(diff) > 0.0001)
 }
