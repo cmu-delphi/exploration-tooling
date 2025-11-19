@@ -723,15 +723,6 @@ external_forecast_targets <- tar_map(
     command = {
       score_forecasts(nhsn_latest_data, external_forecasts, "wk inc flu hosp")
     }
-  ),
-  tar_target(
-    name = score_external_nssp_forecasts,
-    command = {
-      score_forecasts(
-        nssp_latest_data %>% mutate(value = nssp),
-        external_forecasts,
-        "wk inc flu prop ed visits")
-    }
   )
 )
 
@@ -746,13 +737,6 @@ combined_targets <- list2(
   tar_combine(
     name = external_scores_nhsn_full,
     external_forecast_targets[["score_external_nhsn_forecasts"]],
-    command = {
-      dplyr::bind_rows(!!!.x)
-    }
-  ),
-  tar_combine(
-    name = external_scores_nssp_full,
-    external_forecast_targets[["score_external_nssp_forecasts"]],
     command = {
       dplyr::bind_rows(!!!.x)
     }
@@ -832,12 +816,12 @@ if (g_backtest_mode) {
         }
         # Don't run if there aren't forecasts in the past 4 weeks to evaluate
         if (external_forecasts_full %>%
-            filter(
-              forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4*7,
-              target == "wk inc flu hosp"
-            ) %>%
-            distinct(forecast_date) %>%
-            nrow() == 0) {
+          filter(
+            forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4 * 7,
+            target == "wk inc flu hosp"
+          ) %>%
+          distinct(forecast_date) %>%
+          nrow() == 0) {
           return()
         }
         rmarkdown::render(
@@ -855,36 +839,7 @@ if (g_backtest_mode) {
           )
         )
       }
-    ),
-    tar_target(
-      ongoing_nssp_score_notebook,
-      command = {
-        if (!dir.exists(here::here("reports"))) {
-          dir.create(here::here("reports"))
-        }
-        if (external_forecasts_full %>%
-            filter(
-              forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4*7,
-              target == "wk inc flu prop ed visits"
-            ) %>% distinct(forecast_date) %>% nrow() == 0) {
-          return()
-        }
-        rmarkdown::render(
-          ongoing_score_report_rmd,
-          output_file = here::here(
-            "reports",
-            sprintf("%s_flu_nssp_scoring.html", as.Date(Sys.Date()))
-          ),
-          params = list(
-            disease = "flu",
-            target = "nssp",
-            external_forecasts = external_nssp_forecasts,
-            archive = nssp_archive_data,
-            scores = external_scores_nssp_full
-          )
-        )
-      }
-    ),
+    )
   )
 }
 
