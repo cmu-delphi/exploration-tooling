@@ -694,6 +694,7 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
       bind_rows(get_nssp_github(disease))
   }
   nssp_state %>%
+    filter(geo_value != "wy") %>%
     as_epi_archive(compactify = TRUE) %>%
     extract2("DT") %>%
     # End of week to midweek correction.

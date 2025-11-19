@@ -12,6 +12,7 @@ set_targets_config()
 g_aheads <- -1:3
 g_submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
 g_insufficient_data_geos <- c("as", "mp", "vi", "gu")
+g_insufficient_data_geos_nssp <- c(g_insufficient_data_geos, "wy")
 g_excluded_geos <- c("as", "gu", "mh")
 g_time_value_adjust <- 3
 g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
