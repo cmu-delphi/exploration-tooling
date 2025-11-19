@@ -44,7 +44,7 @@ create_parameter_targets <- function() {
 #' - g_time_value_adjust
 #' implicit target dependencies:
 #' - joined_archive_data
-#' - hhs_evaluation_data
+#' - evaluation_data
 #' - aheads
 #' - state_geo_values
 #' @return A list of targets for forecasts and scores
@@ -80,26 +80,33 @@ create_forecast_targets <- function() {
       command = {
         # If the data has already been scaled, hhs needs to include the
         # population and undo scaling.
-        if ("population" %in% colnames(hhs_evaluation_data)) {
-          actual_eval_data <- hhs_evaluation_data %>% select(-population)
+        if ("population" %in% colnames(evaluation_data)) {
+          actual_eval_data <- evaluation_data %>% select(-population)
           forecast_scaled <- forecast %>%
             left_join(
-              hhs_evaluation_data %>% distinct(geo_value, population),
+              evaluation_data %>% distinct(geo_value, population),
               by = "geo_value"
             ) %>%
             mutate(prediction = prediction * population / 10L**5)
         } else {
           forecast_scaled <- forecast
-          actual_eval_data <- hhs_evaluation_data
+          actual_eval_data <- evaluation_data
         }
+        actual_eval_data %<>%
+          mutate(
+            target_end_date = round_date(target_end_date, "week", week_start = 6)
+          )
         forecast_scaled <- forecast_scaled %>%
           # Push the Wednesday markers to Saturday, to match targets with truth data.
           mutate(
-            forecast_date = forecast_date + g_time_value_adjust,
-            target_end_date = target_end_date + g_time_value_adjust
+            forecast_date = round_date(forecast_date, "week", week_start = 6),
+            target_end_date = round_date(target_end_date, "week", week_start = 6)
           ) %>%
           rename("model" = "id")
-        evaluate_predictions(forecasts = forecast_scaled, truth_data = hhs_evaluation_data) %>%
+        evaluation_data %>%
+          distinct(target_end_date) %>%
+          filter(target_end_date > "2024-11-01")
+        evaluate_predictions(forecasts = forecast_scaled, truth_data = actual_eval_data) %>%
           rename("id" = "model")
       }
     )
@@ -141,7 +148,7 @@ create_forecast_targets <- function() {
 #' Target dependencies:
 #' - delphi_forecasts
 #' - external_forecasts
-#' - hhs_evaluation_data
+#' - evaluation_data
 #'
 #' @param disease Disease name (e.g., "covid" or "flu")
 #' @return A list of targets for joined forecasts and scores
@@ -150,23 +157,26 @@ create_joined_targets <- function() {
   rlang::list2(
     tar_target(joined_forecasts, command = {
       if (g_disease == "flu") {
-        rescaled_delphi_forecasts %>% bind_rows(external_forecasts)
+        rescaled_delphi_forecasts %>% bind_rows(external_forecasts_nhsn)
       } else {
-        delphi_forecasts %>% bind_rows(external_forecasts)
+        delphi_forecasts %>% bind_rows(external_forecasts_nhsn)
       }
     }),
-    tar_target(joined_scores, command = delphi_scores %>% bind_rows(external_scores)),
+    tar_target(joined_scores, command = delphi_scores %>% bind_rows(external_scores_nhsn)),
     tar_map(
-      values = list(forecaster_family = unique(g_forecaster_params_grid$family)),
+      values = list(forecaster_family = setdiff(unique(g_forecaster_params_grid$family), "cdc_baseline")),
       tar_target(
         name = notebook,
         command = {
           params_subset <- g_forecaster_parameter_combinations[[forecaster_family]]
+          baseline_forecaster_id <- g_forecaster_parameter_combinations$cdc_baseline$id
           filtered_forecasts <- joined_forecasts %>%
-            filter(forecaster %in% c(params_subset$id, outside_forecaster_subset))
+            filter(forecaster %in% c(params_subset$id, baseline_forecaster_id))
           filtered_scores <- joined_scores %>%
-            filter(forecaster %in% c(params_subset$id, outside_forecaster_subset))
-
+            filter(
+              forecaster %in% c(params_subset$id, baseline_forecaster_id),
+              (ahead == 0) | (ahead >= 7),
+            )
           rmarkdown::render(
             "scripts/reports/comparison-notebook.Rmd",
             params = list(
@@ -174,8 +184,10 @@ create_joined_targets <- function() {
               forecaster_family = forecaster_family,
               forecasts = filtered_forecasts,
               scores = filtered_scores,
-              truth_data = hhs_evaluation_data,
-              disease = g_disease
+              truth_data = evaluation_data,
+              disease = g_disease,
+              outside_forecaster_subset = outside_forecaster_subset,
+              baseline_forecaster = baseline_forecaster_id
             ),
             output_file = here::here(g_reports_dir, paste0(g_disease, "-notebook-", forecaster_family, ".html"))
           )
@@ -185,14 +197,18 @@ create_joined_targets <- function() {
     tar_target(
       overall_notebook,
       command = {
+        baseline_forecaster_id <- g_forecaster_parameter_combinations$cdc_baseline$id
         rmarkdown::render(
           "scripts/reports/overall-comparison-notebook.Rmd",
           params = list(
             forecaster_parameters = g_forecaster_parameter_combinations,
             forecasts = joined_forecasts,
             scores = joined_scores,
-            truth_data = hhs_evaluation_data,
-            disease = g_disease
+            truth_data = evaluation_data,
+            disease = g_disease,
+            dataset = g_dataset,
+            outside_forecaster_subset = outside_forecaster_subset,
+            baseline_forecaster = baseline_forecaster_id
           ),
           output_file = here::here(g_reports_dir, paste0(g_disease, "-overall-notebook.html"))
         )

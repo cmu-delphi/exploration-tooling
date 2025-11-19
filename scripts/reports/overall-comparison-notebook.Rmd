@@ -10,6 +10,9 @@ params:
   scores: ""
   truth_data: ""
   disease: ""
+  dataset: ""
+  outside_forecaster_subset: ""
+  baseline_forecaster: ""
 editor_options:
   chunk_output_type: console
 ---
@@ -36,7 +39,14 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 #   disease = "flu"
 # )
 
-if (params$disease == "flu") {
+# set the baseline and ensemble names
+if (all(params$outside_forecaster_subset != "")) {
+  base_forecaster_name <- params$outside_forecaster_subset[[1]]
+  if (params$baseline_forecaster != "") {
+    base_forecaster_name <- params$baseline_forecaster
+  }
+  ensemble_forecaster_name <- params$outside_forecaster_subset[[2]]
+} else if (params$disease == "flu") {
   base_forecaster_name <- "FluSight-baseline"
   ensemble_forecaster_name <- "FluSight-ensemble"
 } else {
@@ -55,10 +65,16 @@ id_to_forecaster <- params$forecaster_parameters %>%
   bind_rows() %>%
   rename(forecaster_function = forecaster)
 
+if (params$dataset == "nhsn") {
+  min_score <- 20
+} else {
+  min_score <- 0
+}
+
 overall_rating <- params$scores %>%
   summarize(mean_score = mean(wis), .by = forecaster) %>%
   arrange(mean_score) %>%
-  filter(mean_score > 20) %>%
+  filter(mean_score > min_score) %>%
   left_join(id_to_forecaster, by = join_by(forecaster == id)) %>%
   mutate(
     family_name = if_else(is.na(family_name), "external", family_name),
@@ -125,7 +141,7 @@ param_table <- params$forecaster_parameters %>%
       ) %>%
       rename(id = forecaster)
   ) %>%
-  arrange(mean_ae) %>%
+  arrange(mean_wis) %>%
   relocate(family = family_name, id, mean_ae, geomean_ae, mean_wis, geomean_wis, mean_coverage_90)
 datatable(param_table)
 ```
@@ -184,6 +200,7 @@ p <- ggplot(
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   facet_grid(rows = vars(ahead)) +
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
+  scale_x_date(breaks = "1 month", date_labels = "%b\n%y") +
   scale_y_log10(n.breaks = 10) +
   scale_color_discrete() +
   guides(color = guide_legend(ncol = 2)) +
@@ -231,6 +248,7 @@ p <- ggplot(
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
+  scale_x_date(breaks = "1 month", date_labels = "%b\n%y") +
   scale_y_log10(n.breaks = 20) +
   scale_color_discrete() +
   guides(color = guide_legend(ncol = 2)) +
@@ -285,6 +303,7 @@ p <- ggplot(
   geom_point(aes(color = forecaster, group = forecaster)) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   facet_grid(rows = vars(ahead)) +
+  scale_x_date(breaks = "1 month", date_labels = "%b\n%y") +
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
   scale_y_log10(n.breaks = 10) +
   scale_color_discrete() +
@@ -334,6 +353,7 @@ p <- ggplot(
   geom_point(aes(color = forecaster, group = forecaster)) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   scale_y_log10(n.breaks = 25) +
+  scale_x_date(breaks = "1 month", date_labels = "%b\n%y") +
   scale_color_discrete() +
   guides(color = guide_legend(ncol = 2)) +
   labs(title = subtitle, x = "Days ahead", y = "Arithmetic Mean Absolute Error")
@@ -371,6 +391,7 @@ p <- ggplot(
   facet_grid(rows = vars(ahead)) +
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
   scale_color_discrete() +
+  scale_x_date(breaks = "1 month", date_labels = "%b\n%y") +
   guides(color = guide_legend(ncol = 2)) +
   labs(title = subtitle, x = "Forecast Dates", y = "Arithmetic Mean 90% Coverage")
 
@@ -411,136 +432,68 @@ ggplotly(p, tooltip = "text", height = 800, width = 1000) %>%
   layout(hoverlabel = list(bgcolor = "white"))
 ```
 
+
 ### Fan plots {.tabset}
 
 Fan plots showing the 80% prediction intervals for the forecasts made by the CMU forecasters and the outside forecasters. The black line is the truth data.
 
 ```{r}
 plot_dates <- forecast_dates[seq(1, length(forecast_dates), by = 4)]
+plot_fan_plot <- function(geo_vals) {
+    forecast_subset <- params$forecasts %>%
+    filter(
+        geo_value %in% geo_vals,
+        forecast_date %in% plot_dates
+    ) %>%
+    mutate(quantile = as.character(quantile)) %>%
+    pivot_wider(names_from = "quantile", values_from = "prediction") %>%
+    mutate(ahead = as.numeric(target_end_date - forecast_date))
+
+    p <- ggplot(
+    data = forecast_subset,
+    aes(x = target_end_date, group = forecast_date)
+    ) +
+      geom_ribbon(aes(ymin = `0.1`, ymax = `0.8`, fill = forecast_date), alpha = 0.3) +
+      geom_line(aes(y = `0.5`, color = forecast_date), linetype = 2L) +
+      geom_point(aes(y = `0.5`, color = forecast_date), size = 0.75) +
+      geom_line(
+      data = params$truth_data %>%
+        filter(
+          geo_value %in% geo_vals,
+          target_end_date >= min(plot_dates),
+          target_end_date <= max(plot_dates) + 5 * 7
+        ),
+      aes(x = target_end_date, y = true_value),
+      inherit.aes = FALSE, na.rm = TRUE,
+      color = "black", linetype = 1
+    ) +
+      scale_y_continuous(n.breaks = 15) +
+      scale_x_date(breaks = "1 month", date_labels = "%b\n%y") +
+      facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
+      labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
+      theme(legend.position = "none")
+    ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
+  layout(hoverlabel = list(bgcolor = "white"))
+}
 ```
 
 #### Large States
 
-```{r}
+```{r, fig.height = 40}
 # We plot a subset of the dates and geos for the fan plot
-geo_vals <- c("ca", "fl", "pa", "tx", "ny")
-forecast_subset <- params$forecasts %>%
-  filter(
-    forecaster %in% forecasters_to_keep,
-    geo_value %in% geo_vals,
-    forecast_date %in% plot_dates
-  ) %>%
-  mutate(quantile = as.character(quantile)) %>%
-  pivot_wider(names_from = "quantile", values_from = "prediction") %>%
-  mutate(ahead = as.numeric(target_end_date - forecast_date))
-
-p <- ggplot(
-  data = forecast_subset,
-  aes(x = target_end_date, group = forecast_date)
-) +
-  geom_ribbon(aes(ymin = `0.1`, ymax = `0.9`, fill = forecast_date), alpha = 0.3) +
-  geom_line(aes(y = `0.5`, color = forecast_date), linetype = 2L) +
-  geom_point(aes(y = `0.5`, color = forecast_date), size = 0.75) +
-  geom_line(
-    data = params$truth_data %>%
-      filter(
-        geo_value %in% geo_vals,
-        target_end_date >= min(plot_dates),
-        target_end_date <= max(plot_dates) + 5 * 7
-      ),
-    aes(x = target_end_date, y = true_value),
-    inherit.aes = FALSE, na.rm = TRUE,
-    color = "black", linetype = 1
-  ) +
-  scale_y_continuous(n.breaks = 15) +
-  facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
-  labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
-  theme(legend.position = "none")
-
-ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
-  layout(hoverlabel = list(bgcolor = "white"))
+plot_fan_plot(c("ca", "fl", "pa", "tx", "ny"))
 ```
 
 #### Medium States
 
 ```{r}
 # We plot a subset of the dates and geos for the fan plot
-geo_vals <- c("mn", "co", "ky", "md")
-forecast_subset <- params$forecasts %>%
-  filter(
-    forecaster %in% forecasters_to_keep,
-    geo_value %in% geo_vals,
-    forecast_date %in% plot_dates
-  ) %>%
-  mutate(quantile = as.character(quantile)) %>%
-  pivot_wider(names_from = "quantile", values_from = "prediction") %>%
-  mutate(ahead = as.numeric(target_end_date - forecast_date))
-
-p <- ggplot(
-  data = forecast_subset,
-  aes(x = target_end_date, group = forecast_date)
-) +
-  geom_ribbon(aes(ymin = `0.1`, ymax = `0.9`, fill = forecast_date), alpha = 0.3) +
-  geom_line(aes(y = `0.5`, color = forecast_date), linetype = 2L) +
-  geom_point(aes(y = `0.5`, color = forecast_date), size = 0.75) +
-  geom_line(
-    data = params$truth_data %>%
-      filter(
-        geo_value %in% geo_vals,
-        target_end_date >= min(plot_dates),
-        target_end_date <= max(plot_dates) + 5 * 7
-      ),
-    aes(x = target_end_date, y = true_value),
-    inherit.aes = FALSE, na.rm = TRUE,
-    color = "black", linetype = 1
-  ) +
-  scale_y_continuous(n.breaks = 15) +
-  facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
-  labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
-  theme(legend.position = "none")
-
-ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
-  layout(hoverlabel = list(bgcolor = "white"))
+plot_fan_plot(c("mn", "co", "ky", "md"))
 ```
 
 #### Small States
 
 ```{r}
 # We plot a subset of the dates and geos for the fan plot
-geo_vals <- c("nv", "vt", "de", "ri", "nm")
-forecast_subset <- params$forecasts %>%
-  filter(
-    forecaster %in% forecasters_to_keep,
-    geo_value %in% geo_vals,
-    forecast_date %in% plot_dates
-  ) %>%
-  mutate(quantile = as.character(quantile)) %>%
-  pivot_wider(names_from = "quantile", values_from = "prediction") %>%
-  mutate(ahead = as.numeric(target_end_date - forecast_date))
-
-p <- ggplot(
-  data = forecast_subset,
-  aes(x = target_end_date, group = forecast_date)
-) +
-  geom_ribbon(aes(ymin = `0.1`, ymax = `0.9`, fill = forecast_date), alpha = 0.3) +
-  geom_line(aes(y = `0.5`, color = forecast_date), linetype = 2L) +
-  geom_point(aes(y = `0.5`, color = forecast_date), size = 0.75) +
-  geom_line(
-    data = params$truth_data %>%
-      filter(
-        geo_value %in% geo_vals,
-        target_end_date >= min(plot_dates),
-        target_end_date <= max(plot_dates) + 5 * 7
-      ),
-    aes(x = target_end_date, y = true_value),
-    inherit.aes = FALSE, na.rm = TRUE,
-    color = "black", linetype = 1
-  ) +
-  scale_y_continuous(n.breaks = 15) +
-  facet_grid(factor(forecaster, levels = param_table$id) ~ geo_value, scales = "free") +
-  labs(x = "Reference Date", y = "Weekly Sums of Hospitalizations", title = "Monthly Forecasts and Truth Data") +
-  theme(legend.position = "none")
-
-ggplotly(p, tooltip = "text", height = 300 * length(param_table$id), width = 1000) %>%
-  layout(hoverlabel = list(bgcolor = "white"))
+plot_fan_plot(c("nv", "vt", "de", "ri", "nm"))
 ```

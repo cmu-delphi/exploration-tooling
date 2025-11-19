@@ -11,95 +11,45 @@
 create_covid_data_targets <- function() {
   rlang::list2(
     tar_target(
-      name = hhs_archive_data_asof,
+      name = nhsn_archive,
+      ## change = get_s3_object_last_modified("nhsn_data_archive.parquet", "forecasting-team-data"),
       command = {
-        get_health_data(as.Date(forecast_dates), disease = "covid") %>%
-          mutate(version = as.Date(forecast_dates)) %>%
-          relocate(geo_value, time_value, version, hhs)
-      },
-      pattern = map(forecast_dates)
-    ),
-    tar_target(
-      name = hhs_archive,
-      command = {
-        hhs_archive <- hhs_archive_data_asof %>%
-          rename(value = hhs) %>%
-          as_epi_archive(compactify = TRUE) %>%
-          daily_to_weekly_archive(agg_columns = "value")
-        hhs_archive$geo_type <- "state"
-        hhs_archive
-      }
-    ),
-    tar_target(
-      name = hhs_evaluation_data,
-      command = {
-        retry_fn(
-          max_attempts = 10,
-          wait_seconds = 1,
-          fn = pub_covidcast,
-          source = "hhs",
-          signals = g_hhs_signal,
-          geo_type = "state",
-          time_type = "day",
-          geo_values = "*",
-          time_values = "*",
-          fetch_args = g_fetch_args
-        ) %>%
-          select(signal, geo_value, time_value, value) %>%
-          # This aggregates the data to the week and labels each Sunday - Saturday
-          # summation with the Wednesday of that week.
-          daily_to_weekly(keys = c("geo_value", "signal")) %>%
-          select(signal, geo_value, target_end_date = time_value, true_value = value) %>%
-          # Correction for timing offsets
-          mutate(target_end_date = target_end_date + g_time_value_adjust)
+        archive <- get_nhsn_data_archive("nhsn_covid")
+        archive$DT %<>% mutate(
+          time_value = floor_date(time_value, "weeks", week_start = 7) + 3,
+        )
+        archive
       }
     ),
     tar_target(
       name = state_geo_values,
       command = {
-        hhs_evaluation_data %>%
+        evaluation_data %>%
           pull(geo_value) %>%
           unique()
       }
     ),
     tar_target(
       name = nssp_archive,
+      ## change = max(
+      ##   get_covidcast_signal_last_update("nssp", "pct_ed_visits_covid", "state"),
+      ##   get_socrata_updated_at("https://data.cdc.gov/api/views/mpgq-jmmr", lubridate::now(tz = "UTC"))
+      ## ),
       command = {
-        nssp_state <- retry_fn(
-          max_attempts = 10,
-          wait_seconds = 1,
-          fn = pub_covidcast,
-          source = "nssp",
-          signals = "pct_ed_visits_covid",
-          time_type = "week",
-          geo_type = "state",
-          geo_values = "*",
-          fetch_args = g_fetch_args
-        )
-        nssp_hhs <- retry_fn(
-          max_attempts = 10,
-          wait_seconds = 1,
-          fn = pub_covidcast,
-          source = "nssp",
-          signals = "pct_ed_visits_covid",
-          time_type = "week",
-          geo_type = "hhs",
-          geo_values = "*",
-          fetch_args = g_fetch_args
-        )
-        nssp_state %>%
-          bind_rows(nssp_hhs) %>%
-          select(geo_value, time_value, issue, nssp = value) %>%
-          as_epi_archive(compactify = TRUE) %>%
-          extract2("DT") %>%
-          # weekly data is indexed from the start of the week
-          mutate(time_value = time_value + 6 - g_time_value_adjust) %>%
-          # Artifically add in a one-week latency.
-          mutate(version = time_value + 7) %>%
-          # Always convert to data.frame after dplyr operations on data.table.
-          # https://github.com/cmu-delphi/epiprocess/issues/618
-          as.data.frame() %>%
-          as_epi_archive(compactify = TRUE)
+        archive <- up_to_date_nssp_state_archive("covid")
+        archive$geo_type <- "custom"
+        archive$DT %<>%
+          mutate(
+            time_value = floor_date(time_value, "weeks", week_start = 7) + 3,
+          )
+        archive
+      }
+    ),
+    tar_target(
+      name = nssp_latest_data,
+      command = {
+        nssp_archive %>%
+          epix_as_of(min(Sys.Date(), nssp_archive$versions_end))
       }
     ),
     tar_target(
@@ -121,7 +71,7 @@ create_covid_data_targets <- function() {
             geo_values = "*",
             fetch_args = g_fetch_args
           )
-          google_symptoms_hhs_archive <- retry_fn(
+          google_symptoms_archive <- retry_fn(
             max_attempts = 10,
             wait_seconds = 1,
             fn = pub_covidcast,
@@ -133,7 +83,7 @@ create_covid_data_targets <- function() {
             fetch_args = g_fetch_args
           )
           google_symptoms_archive_min <- google_symptoms_state_archive %>%
-            bind_rows(google_symptoms_hhs_archive) %>%
+            bind_rows(google_symptoms_archive) %>%
             select(geo_value, time_value, value) %>%
             daily_to_weekly() %>%
             mutate(version = time_value) %>%
@@ -158,17 +108,18 @@ create_covid_data_targets <- function() {
           as_epi_archive(compactify = TRUE)
         google_symptoms_archive <- epix_merge(all_of_them[[1]], all_of_them[[2]])
         pre_pipeline <- google_symptoms_archive %>%
-          epix_as_of(as.Date("2023-10-04")) %>%
+          epix_as_of(as.Date("2024-10-04")) %>%
           mutate(source = "none")
         # Google Symptoms has two signals that have different and unknown scales,
         # so we need to whiten them.
         colnames <- c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia")
         for (colname in colnames) {
           learned_params <- calculate_whitening_params(pre_pipeline, colname = colname)
-          google_symptoms_archive$DT %<>% data_whitening(colname = colname, learned_params, join_cols = "geo_value")
+          google_symptoms_archive$DT %>% data_whitening(colname = colname, learned_params, join_cols = "geo_value")
         }
         # Sum the two signals.
-        google_symptoms_archive$DT %>%
+        google_symptoms_archive <-
+          google_symptoms_archive$DT %>%
           mutate(
             google_symptoms = ifelse(is.na(google_symptoms_4_bronchitis), 0, google_symptoms_4_bronchitis) +
               ifelse(is.na(google_symptoms_5_ageusia), 0, google_symptoms_5_ageusia)
@@ -177,12 +128,19 @@ create_covid_data_targets <- function() {
           # Always convert to data.frame after dplyr operations on data.table
           # https://github.com/cmu-delphi/epiprocess/issues/618
           as.data.frame() %>%
+          mutate(
+            time_value = floor_date(time_value, "weeks", week_start = 7) + 3,
+          ) %>%
           as_epi_archive(compactify = TRUE)
+        google_symptoms_archive$time_type <- "week"
+        google_symptoms_archive
       }
     ),
+    ## broken, see nwss_covid_export.py
     tar_target(
       name = nwss_coarse,
       command = {
+        return()
         nwss <- get_nwss_coarse_data("covid") %>%
           rename(value = state_med_conc) %>%
           arrange(geo_value, time_value) %>%
@@ -288,9 +246,14 @@ create_covid_data_targets <- function() {
           mutate(time_value = time_value, version = time_value) %>%
           # Filter to when data is decent quality
           filter(time_value >= "2020-01-01") %>%
+          # align weekly data to saturdays
+          mutate(
+            time_value = floor_date(time_value, "weeks", week_start = 7) + 3,
+          ) %>%
           # Make it an archive
           as_epi_archive(compactify = TRUE)
         varch$geo_type <- "custom"
+        varch$time_type <- "week"
         varch
       }
     ),
@@ -310,36 +273,36 @@ create_covid_data_targets <- function() {
       }
     ),
     tar_target(
-      name = joined_archive_data,
+      name = joined_archive_data_nhsn,
       command = {
-        # reformt hhs_archive, remove data spotty locations
-        joined_archive_data <- hhs_archive$DT %>%
+        # reformat nhsn_archive, remove data spotty locations
+        archive <- nhsn_archive$DT %>%
           select(geo_value, time_value, value, version) %>%
-          rename("hhs" := value) %>%
-          add_hhs_region_sum(hhs_region) %>%
+          add_hhs_region_sum(hhs_region, value) %>%
+          rename(nhsn_hhs_region = value_hhs_region) %>%
           filter(geo_value != "us") %>%
           # Always convert to data.frame after dplyr operations on data.table
           # https://github.com/cmu-delphi/epiprocess/issues/618
           as.data.frame() %>%
           as_epi_archive(compactify = TRUE)
-        joined_archive_data$geo_type <- "custom"
-        joined_archive_data <- joined_archive_data %>% epix_merge(nwss_coarse, sync = "locf")
-        joined_archive_data$geo_type <- "custom"
-        joined_archive_data %<>% epix_merge(nssp_archive, sync = "locf")
-        joined_archive_data$geo_type <- "custom"
-        joined_archive_data %<>% epix_merge(google_symptoms_archive, sync = "locf")
-        joined_archive_data$geo_type <- "custom"
-        joined_archive_data %<>% epix_merge(veteran_state_archive, sync = "locf")
-        joined_archive_data <- joined_archive_data$DT %>%
+        ## joined_archive_data <- joined_archive_data %>% epix_merge(nwss_coarse, sync = "locf")
+        archive$geo_type <- "custom"
+        archive %<>% epix_merge(nssp_archive, sync = "locf")
+        archive$geo_type <- "custom"
+        archive %<>% epix_merge(google_symptoms_archive, sync = "locf")
+        archive$geo_type <- "custom"
+        archive %<>% epix_merge(veteran_state_archive, sync = "locf")
+        archive$geo_type <- "custom"
+        archive <- archive$DT %>%
           filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% g_insufficient_data_geos)) %>%
           # Always convert to data.frame after dplyr operations on data.table
           # https://github.com/cmu-delphi/epiprocess/issues/618
           as.data.frame() %>%
           as_epi_archive(compactify = TRUE)
-        joined_archive_data$geo_type <- "state"
+        archive$geo_type <- "state"
         # TODO: This is a hack to ensure the as_of data is cached. Maybe there's a better way.
-        epix_slide_simple(joined_archive_data, dummy_forecaster, forecast_dates, cache_key = "joined_archive_data")
-        joined_archive_data
+        epix_slide_simple(archive, dummy_forecaster, forecast_dates, cache_key = "joined_archive_data")
+        archive
       }
     ),
     tar_target(
@@ -347,7 +310,7 @@ create_covid_data_targets <- function() {
       command = {
         # TODO: This can be a bit more granular (per geo, per source, etc.)
         min_time_value <- joined_archive_data$DT %>%
-          filter(if_all(all_of(c("hhs")), ~ !is.na(.))) %>%
+          filter(if_all(all_of(c("value")), ~ !is.na(.))) %>%
           distinct(time_value) %>%
           pull(time_value) %>%
           min()

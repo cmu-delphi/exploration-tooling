@@ -1,4 +1,4 @@
-#' Configuration parameters for COVID hospitalization forecasting
+#' Configuration parameters for COVID Emergency Department forecasting
 #'
 #' This file contains configuration parameters used by the COVID hospitalization
 #' forecasting pipeline.
@@ -14,8 +14,12 @@
 #' @param dummy_mode Boolean indicating whether to use dummy forecasters
 #' @return A list of forecaster parameter combinations
 #' @export
-get_covid_forecaster_params <- function() {
+get_covid_nssp_forecaster_params <- function() {
   out <- rlang::list2(
+    cdc_baseline = tidyr::expand_grid(
+      forecaster = "forecaster_cdc_baseline",
+      all_aheads = list(g_aheads),
+    ),
     scaled_pop_main = tidyr::expand_grid(
       forecaster = "scaled_pop",
       trainer = "quantreg",
@@ -36,15 +40,15 @@ get_covid_forecaster_params <- function() {
       expand_grid(
         forecaster = "scaled_pop",
         trainer = "quantreg",
-        extra_sources = list2("nssp", "google_symptoms", "va_covid_per_100k", "nhsn_hhs_region"),
-        # "nwss", "nwss_region",  # removed b/c missing
+        extra_sources = list2("nhsn", "google_symptoms", "va_covid_per_100k"),
+        ## extra_sources = list2("nhsn", "google_symptoms", "nwss", "nwss_region", "va_covid_per_100k"),
         lags = list2(
           list2(
-            c(0, 7, 14, 21), # nhsn
+            c(0, 7, 14, 21), # nssp
             c(0, 7) # exogenous feature
           ),
           list2(
-            c(0, 7, 14, 21), # nhsn
+            c(0, 7, 14, 21), # nssp
             c(0, 7, 14) # exogenous feature
           )
         ),
@@ -56,10 +60,10 @@ get_covid_forecaster_params <- function() {
         forecaster = "scaled_pop",
         trainer = "quantreg",
         extra_sources = list2(
-          c("nssp", "google_symptoms"),
-          ## c("nssp", "nwss"), # removed b/c missing
-          ## c("nssp", "nwss_region"),
-          c("nssp", "va_covid_per_100k"),
+          c("nhsn", "google_symptoms"),
+          ## c("nhsn", "nwss"), # removed b/c missing
+          ## c("nhsn", "nwss_region"),
+          c("nhsn", "va_covid_per_100k"),
           ## c("google_symptoms", "nwss"),
           ## c("google_symptoms", "nwss_region"),
           c("google_symptoms", "va_covid_per_100k"),
@@ -68,7 +72,7 @@ get_covid_forecaster_params <- function() {
         ),
         lags = list2(
           list2(
-            c(0, 7, 14, 21), # nhsn
+            c(0, 7, 14, 21), # nssp
             c(0, 7), # first feature
             c(0, 7) # second feature
           )
@@ -81,21 +85,21 @@ get_covid_forecaster_params <- function() {
         forecaster = "scaled_pop",
         trainer = "quantreg",
         extra_sources = list2(
-          c("nssp", "google_symptoms", "va_covid_per_100k"),
+          c("nhsn", "google_symptoms", "va_covid_per_100k"),
           # "nwss", "nwss_region",  # missing
         ),
         lags = list2(
           list2(
-            c(0, 7, 14, 21), # nhsn
-            c(0, 7), # nssp
+            c(0, 7, 14, 21), # nssp
+            c(0, 7), # nhsn
             c(0, 7), # google symptoms
             ## c(0, 7), # nwss
             ## c(0, 7), # nwss_region
             c(0, 7), # va_covid_per_100k
           ),
           list2(
-            c(0, 7, 14, 21), # nhsn
-            c(0, 7), # nssp
+            c(0, 7, 14, 21), # hhs
+            c(0, 7), # nhsn
             c(0, 7, 14), # google symptoms
             ## c(0, 7, 14), # nwss
             ## c(0, 7, 14), # nwss_region

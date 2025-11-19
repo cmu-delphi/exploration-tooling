@@ -38,6 +38,9 @@ prod-backtest: prod-covid-backtest prod-flu-backtest
 explore-covid:
 	export TAR_RUN_PROJECT=covid_hosp_explore; Rscript scripts/run.R
 
+explore-nssp-covid:
+	export TAR_RUN_PROJECT=covid_nssp_explore; Rscript scripts/run.R
+
 explore-flu:
 	export TAR_RUN_PROJECT=flu_hosp_explore; Rscript scripts/run.R
 

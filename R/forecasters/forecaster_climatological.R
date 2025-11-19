@@ -1,24 +1,23 @@
 #' @params model_used the model used. "climate" means just climatological_model, "climate_linear" means the weighted ensemble with a linear model, "climatological_forecaster" means using the model from epipredict
 #'
 climate_linear_ensembled <- function(
-  epi_data,
-  outcome,
-  extra_sources = character(),
-  ahead = 7,
-  trainer = parsnip::linear_reg(),
-  quantile_levels = covidhub_probs(),
-  model_used = "climate_linear",
-  filter_source = "",
-  filter_agg_level = "",
-  scale_method = c("quantile", "std", "none"),
-  center_method = c("median", "mean", "none"),
-  nonlin_method = c("quart_root", "none"),
-  quantiles_by_geo = TRUE,
-  drop_non_season = FALSE,
-  residual_tail = 0.99,
-  residual_center = 0.35,
-  ...
-) {
+    epi_data,
+    outcome,
+    extra_sources = character(),
+    ahead = 7,
+    trainer = parsnip::linear_reg(),
+    quantile_levels = covidhub_probs(),
+    model_used = "climate_linear",
+    filter_source = "",
+    filter_agg_level = "",
+    scale_method = c("quantile", "std", "none"),
+    center_method = c("median", "mean", "none"),
+    nonlin_method = c("quart_root", "none"),
+    quantiles_by_geo = TRUE,
+    drop_non_season = FALSE,
+    residual_tail = 0.99,
+    residual_center = 0.35,
+    ...) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
@@ -164,6 +163,7 @@ climate_linear_ensembled <- function(
     select(-source)
   # move dates to appropriate markers
   pred_final <- pred_final %>%
+    filter(!is.na(value)) %>%
     mutate(target_end_date = target_end_date - 3) %>%
     sort_by_quantile()
   return(pred_final)

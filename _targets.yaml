@@ -3,6 +3,11 @@ covid_hosp_explore:
   store: covid_hosp_explore
   use_crew: yes
   reporter_make: timestamp
+covid_nssp_explore:
+  script: scripts/covid_nssp_explore.R
+  store: covid_nssp_explore
+  use_crew: yes
+  reporter_make: timestamp
 flu_hosp_explore:
   script: scripts/flu_hosp_explore.R
   store: flu_hosp_explore
@@ -18,4 +23,3 @@ covid_hosp_prod:
   store: covid_hosp_prod
   use_crew: yes
   reporter_make: timestamp
-

@@ -4,9 +4,11 @@ import pandas as pd
 import numpy as np
 import json
 
+# This is broken, unfortunately, and we would need to set up a new download link
+# 
 # Pull JSON from Trend Over Time link on CDC web page below
 # https://www.cdc.gov/nwss/rv/COVID19-statetrend.html
-response = urlopen("https://www.cdc.gov/wcms/vizdata/NCEZID_DIDRI/NWSSStateLevel.json")
+response = urlopen("https://www.cdc.gov/wcms/vizdata/NCEZID_DIDRI/SC2/NWSSStateLevel.json")
 json_data = response.read()
 json_data = json.loads(json_data)
 df = pd.json_normalize(json_data)

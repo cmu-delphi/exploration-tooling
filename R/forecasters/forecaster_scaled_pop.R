@@ -46,21 +46,20 @@
 #' @importFrom recipes all_numeric
 #' @export
 scaled_pop <- function(
-  epi_data,
-  outcome,
-  extra_sources = character(),
-  ahead = 1,
-  pop_scaling = TRUE,
-  drop_non_seasons = FALSE,
-  scale_method = c("none", "quantile", "std"),
-  center_method = c("median", "mean", "none"),
-  nonlin_method = c("quart_root", "none"),
-  trainer = epipredict::quantile_reg(),
-  quantile_levels = covidhub_probs(),
-  filter_source = "",
-  filter_agg_level = "",
-  ...
-) {
+    epi_data,
+    outcome,
+    extra_sources = character(),
+    ahead = 1,
+    pop_scaling = TRUE,
+    drop_non_seasons = FALSE,
+    scale_method = c("none", "quantile", "std"),
+    center_method = c("median", "mean", "none"),
+    nonlin_method = c("quart_root", "none"),
+    trainer = epipredict::quantile_reg(),
+    quantile_levels = covidhub_probs(),
+    filter_source = "",
+    filter_agg_level = "",
+    ...) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)

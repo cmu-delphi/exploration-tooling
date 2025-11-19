@@ -102,24 +102,22 @@ arx_postprocess <- function(postproc, trainer, args_list, forecast_date = NULL, 
 #' @importFrom epipredict epi_workflow fit add_frosting get_test_data
 #' @export
 run_workflow_and_format <- function(
-  preproc,
-  postproc,
-  trainer,
-  train_data,
-  full_data = NULL,
-  test_data_interval = as.difftime(52, units = "weeks"),
-  return_model = FALSE,
-  source_value = "nhsn"
-) {
+    preproc,
+    postproc,
+    trainer,
+    train_data,
+    full_data = NULL,
+    test_data_interval = as.difftime(52, units = "weeks"),
+    return_model = FALSE,
+    source_value = "nhsn") {
   as_of <- attributes(train_data)$metadata$as_of
   if (is.null(as_of)) {
     as_of <- max(train_data$time_value)
   }
 
   # Look at the train data (uncomment for debuggin).
-  # df <- preproc %>% prep(train_data) %>% bake(train_data)
-  # browser()
-
+  ## df <- preproc %>% prep(train_data) %>% bake(train_data)
+  ## browser()
   workflow <- epi_workflow(preproc, trainer) %>%
     fit(train_data) %>%
     add_frosting(postproc)

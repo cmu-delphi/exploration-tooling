@@ -297,7 +297,7 @@ create_flu_data_targets <- function() {
       }
     ),
     tar_target(
-      name = hhs_evaluation_data,
+      name = evaluation_data,
       command = {
         new_flu_data <- flusion_data_archive$DT %>%
           filter(
@@ -391,7 +391,7 @@ create_flu_data_targets <- function() {
     tar_target(
       name = state_geo_values,
       command = {
-        hhs_evaluation_data %>%
+        evaluation_data %>%
           pull(geo_value) %>%
           unique()
       }
