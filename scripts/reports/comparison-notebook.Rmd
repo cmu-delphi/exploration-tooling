@@ -1,5 +1,5 @@
 ---
-title: "`r params$forecaster_family`: evaluation on 2023/24 in 2024/25"
+title: "`r params$forecaster_family`: evaluation on 2024/25 in 2025/26"
 date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
 output:
   html_document:
