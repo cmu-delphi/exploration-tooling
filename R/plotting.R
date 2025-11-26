@@ -89,7 +89,7 @@ plot_forecasts <- function(
       size = 0.25,
       color = "black"
     )
-  # Add lines, facet, and theme
+  # Add lines, facet, and theme, and grid lines
   if ((geo_type == "state") & (length(unique(predictions_cards$forecaster)) > 1)) {
     g <- g +
       facet_grid(.data$geo_value ~ .data$forecaster, scales = "free_y", drop = TRUE)
@@ -100,7 +100,10 @@ plot_forecasts <- function(
     g <- g +
       facet_grid(~ .data$forecaster, scales = "free_y", drop = TRUE)
   }
-  g <- g + theme(legend.position = "top", legend.text = element_text(size = 7))
+  g <- g +
+    theme(legend.position = "top", legend.text = element_text(size = 7)) +
+    scale_y_continuous(breaks = scales::pretty_breaks(n = 10), labels = scales::comma) +
+    scale_x_date(breaks = "3 months", minor_breaks = "1 month", labels = scales::label_date_short())
 
   # add highlights for the training regions
   if (!is.null(relevant_period)) {

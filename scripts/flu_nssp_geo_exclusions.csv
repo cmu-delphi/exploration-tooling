@@ -12,6 +12,18 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, climate_geo_agged, all, 0
 2024-10-01, climate_quantile_extrapolated, all, 0
 ##################
+# Nov 26
+##################
+2025-11-26, all, mp, 0
+2025-11-26, windowed_seasonal, all, 3
+2025-11-26, windowed_seasonal_extra_sources, all, 0.5
+2025-11-26, climate_linear, all, 0.001
+2025-11-26, linear_no_population_scale, all, 2
+2025-11-26, linearlog, all, 0
+2025-11-26, climate_base, all, 0.5
+2025-11-26, climate_geo_agged, all, 0
+2025-11-26, climate_quantile_extrapolated, all, 0
+##################
 # Nov 19, data returns, switch back to seasonal forecasters
 ##################
 2025-11-19, all, mp, 0

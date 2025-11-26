@@ -468,8 +468,7 @@ ensemble_targets <- tar_map(
       climate_linear %>%
         bind_rows(
           forecast_nhsn_full_filtered %>%
-            filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources")) %>%
-            filter(forecast_date < target_end_date) # don't use for neg aheads
+            filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources"))
         ) %>%
         ensemble_weighted(geo_forecasters_weights) %>%
         mutate(forecaster = "ensemble_mix")
@@ -690,7 +689,7 @@ ensemble_targets <- tar_map(
           params = list(
             disease = "flu",
             forecast_nhsn = forecasts_and_ensembles %>% ungroup() %>% filter(forecaster != "climate_geo_agged"),
-            forecast_nssp = forecasts_and_ensembles_nssp,
+            forecast_nssp = forecasts_and_ensembles_nssp %>% ungroup() %>% filter(forecaster != "climate_geo_agged"),
             forecast_date = as.Date(forecast_date_int),
             truth_data_nhsn = truth_data_nhsn,
             truth_data_nssp = truth_data_nssp
