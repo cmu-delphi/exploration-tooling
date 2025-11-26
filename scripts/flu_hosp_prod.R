@@ -347,6 +347,7 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_nhsn,
     command = {
+      browser()
       if (grepl("latest", id)) {
         nssp_data <- nssp_archive_data %>%
           epix_as_of(nssp_archive_data$versions_end) %>%
@@ -730,7 +731,8 @@ external_forecast_targets <- tar_map(
       score_forecasts(
         nssp_latest_data %>% mutate(value = nssp),
         external_forecasts,
-        "wk inc flu prop ed visits")
+        "wk inc flu prop ed visits"
+      )
     }
   )
 )
@@ -832,12 +834,12 @@ if (g_backtest_mode) {
         }
         # Don't run if there aren't forecasts in the past 4 weeks to evaluate
         if (external_forecasts_full %>%
-            filter(
-              forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4*7,
-              target == "wk inc flu hosp"
-            ) %>%
-            distinct(forecast_date) %>%
-            nrow() == 0) {
+          filter(
+            forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4 * 7,
+            target == "wk inc flu hosp"
+          ) %>%
+          distinct(forecast_date) %>%
+          nrow() == 0) {
           return()
         }
         rmarkdown::render(
@@ -863,10 +865,10 @@ if (g_backtest_mode) {
           dir.create(here::here("reports"))
         }
         if (external_forecasts_full %>%
-            filter(
-              forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4*7,
-              target == "wk inc flu prop ed visits"
-            ) %>% distinct(forecast_date) %>% nrow() == 0) {
+          filter(
+            forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4 * 7,
+            target == "wk inc flu prop ed visits"
+          ) %>% distinct(forecast_date) %>% nrow() == 0) {
           return()
         }
         rmarkdown::render(

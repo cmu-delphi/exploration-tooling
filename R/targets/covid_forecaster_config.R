@@ -16,6 +16,10 @@
 #' @export
 get_covid_forecaster_params <- function() {
   out <- rlang::list2(
+    cdc_baseline = tidyr::expand_grid(
+      forecaster = "forecaster_cdc_baseline",
+      all_aheads = list(g_aheads),
+    ),
     scaled_pop_main = tidyr::expand_grid(
       forecaster = "scaled_pop",
       trainer = "quantreg",

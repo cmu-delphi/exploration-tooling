@@ -30,7 +30,8 @@ get_covid_nssp_forecaster_params <- function() {
         c(0, 7, 14, 21, 28)
       ),
       pop_scaling = FALSE,
-      n_training = Inf
+      n_training = Inf,
+      logit_100_columns = list(c(), c("nssp"))
     ),
     flatline_forecaster = tidyr::expand_grid(
       forecaster = "flatline_fc",
@@ -54,7 +55,8 @@ get_covid_nssp_forecaster_params <- function() {
         ),
         pop_scaling = FALSE,
         scale_method = "quantile",
-        n_training = Inf
+        n_training = Inf,
+        logit_100_columns = list(c(), c("nssp"))
       ),
       expand_grid(
         forecaster = "scaled_pop",
@@ -79,7 +81,7 @@ get_covid_nssp_forecaster_params <- function() {
         ),
         pop_scaling = FALSE,
         scale_method = "quantile",
-        n_training = Inf
+        n_training = Inf,
       ),
       expand_grid(
         forecaster = "scaled_pop",
@@ -108,7 +110,7 @@ get_covid_nssp_forecaster_params <- function() {
         ),
         pop_scaling = FALSE,
         scale_method = "quantile",
-        n_training = Inf
+        n_training = Inf,
       )
     ),
     scaled_pop_season = tidyr::expand_grid(
@@ -120,6 +122,7 @@ get_covid_nssp_forecaster_params <- function() {
       ),
       pop_scaling = FALSE,
       n_training = Inf,
+      logit_100_columns = list(c(), c("nssp")),
       seasonal_method = list2(
         list2("covid"),
         list2("window"),

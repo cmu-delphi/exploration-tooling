@@ -198,6 +198,7 @@ create_joined_targets <- function() {
       overall_notebook,
       command = {
         baseline_forecaster_id <- g_forecaster_parameter_combinations$cdc_baseline$id
+        browser()
         rmarkdown::render(
           "scripts/reports/overall-comparison-notebook.Rmd",
           params = list(

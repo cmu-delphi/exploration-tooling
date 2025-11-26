@@ -59,10 +59,12 @@ scaled_pop <- function(
     quantile_levels = covidhub_probs(),
     filter_source = "",
     filter_agg_level = "",
+    logit_100_columns = list(c()),
     ...) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
+  logit_100_columns <- logit_100_columns[[1]]
 
   epi_data <- validate_epi_data(epi_data)
   extra_sources <- unlist(extra_sources)
@@ -103,6 +105,12 @@ scaled_pop <- function(
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
 
+  expit <- function(x) {
+    log(x) - log(1 - x)
+  }
+  # do logit scaling if relevant (if the variable is empty this is a no-op)
+  epi_data %<>%
+    mutate(across(any_of(logit_100_columns), \(x) expit(x / 100)))
   # if we're dropping non-seasonal and data from the years when flu wasn't active
   if (drop_non_seasons) {
     season_data <- epi_data %>% drop_non_seasons()
@@ -168,6 +176,11 @@ scaled_pop <- function(
   if (adding_source) {
     pred_final %<>% select(-source)
   }
+
+  # undo scaling if relevant (if the variable is empty this is a no-op)
+  epi_data %<>%
+    mutate(across(any_of(logit_100_columns), \(x) 100 * ifelse(x >= 0, 1 / (1 + exp(-x)), exp(x) / (1 + exp(x)))))
+
   gc()
   return(pred_final)
 }

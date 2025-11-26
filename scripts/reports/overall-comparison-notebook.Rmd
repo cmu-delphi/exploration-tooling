@@ -133,11 +133,11 @@ param_table <- params$forecaster_parameters %>%
     scores %>%
       group_by(forecaster) %>%
       summarize(
-        mean_ae = round(Mean(ae), 2),
-        geomean_ae = round(GeoMean(ae), 2),
-        mean_wis = round(Mean(wis), 2),
-        geomean_wis = round(GeoMean(wis), 2),
-        mean_coverage_90 = round(Mean(coverage_90), 2),
+        mean_ae = round(Mean(ae), 3),
+        geomean_ae = round(GeoMean(ae), 3),
+        mean_wis = round(Mean(wis), 3),
+        geomean_wis = round(GeoMean(wis), 3),
+        mean_coverage_90 = round(Mean(coverage_90), 3),
       ) %>%
       rename(id = forecaster)
   ) %>%

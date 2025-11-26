@@ -36,29 +36,30 @@
 #' @importFrom recipes all_numeric
 #' @export
 scaled_pop_seasonal <- function(
-  epi_data,
-  outcome,
-  extra_sources = character(),
-  ahead = 1,
-  pop_scaling = TRUE,
-  drop_non_seasons = FALSE,
-  scale_method = c("quantile", "std", "none"),
-  center_method = c("median", "mean", "none"),
-  nonlin_method = c("quart_root", "none"),
-  seasonal_method = c("none", "flu", "covid", "indicator", "window", "climatological"),
-  seasonal_backward_window = 5 * 7,
-  seasonal_forward_window = 3 * 7,
-  train_residual = FALSE,
-  trainer = epipredict::quantile_reg(),
-  quantile_levels = covidhub_probs(),
-  filter_source = "",
-  filter_agg_level = "",
-  clip_lower = TRUE,
-  ...
-) {
+    epi_data,
+    outcome,
+    extra_sources = character(),
+    ahead = 1,
+    pop_scaling = TRUE,
+    drop_non_seasons = FALSE,
+    scale_method = c("quantile", "std", "none"),
+    center_method = c("median", "mean", "none"),
+    nonlin_method = c("quart_root", "none"),
+    seasonal_method = c("none", "flu", "covid", "indicator", "window", "climatological"),
+    seasonal_backward_window = 5 * 7,
+    seasonal_forward_window = 3 * 7,
+    train_residual = FALSE,
+    trainer = epipredict::quantile_reg(),
+    quantile_levels = covidhub_probs(),
+    filter_source = "",
+    filter_agg_level = "",
+    clip_lower = TRUE,
+    logit_100_columns = list(""),
+    ...) {
   scale_method <- arg_match(scale_method)
   center_method <- arg_match(center_method)
   nonlin_method <- arg_match(nonlin_method)
+  logit_100_columns <- logit_100_columns[[1]]
 
   epi_data <- validate_epi_data(epi_data)
   extra_sources <- unlist(extra_sources)
@@ -111,6 +112,12 @@ scaled_pop_seasonal <- function(
   }
   # end of the copypasta
 
+  expit <- function(x) {
+    log(x) - log(1 - x)
+  }
+  # do logit scaling if relevant (if the variable is empty this is a no-op)
+  epi_data %<>%
+    mutate(across(any_of(logit_100_columns), \(x) expit(x / 100)))
   # whiten to get the sources on the same scale
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
@@ -265,6 +272,10 @@ scaled_pop_seasonal <- function(
   if (adding_source) {
     pred_final %<>% select(-source)
   }
+
+  # undo scaling if relevant (if the variable is empty this is a no-op)
+  epi_data %<>%
+    mutate(across(any_of(logit_100_columns), \(x) 100 * ifelse(x >= 0, 1 / (1 + exp(-x)), exp(x) / (1 + exp(x)))))
   gc()
 
   return(pred_final)
