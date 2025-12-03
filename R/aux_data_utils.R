@@ -70,11 +70,10 @@ step_season_week_sine <- function(preproc, season = 35) {
 #' but for now it's not worth the time
 #' @param original_dataset tibble or epi_df, should have states as 2 letter lower case
 add_pop_and_density <-
-  function(
-      original_dataset,
-      apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
-      state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
-      hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")) {
+  function(original_dataset,
+           apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
+           state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
+           hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")) {
     pops_by_state_hhs <- gen_pop_and_density_data(apportion_filename, state_code_filename, hhs_code_filename)
     # if the dataset uses "usa" instead of "us", substitute that
     if ("usa" %in% unique(original_dataset)$geo_value) {
@@ -705,7 +704,7 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
 get_nssp_github <- function(disease = c("covid", "influenza"), source = c("github", "socrata")) {
   source <- arg_match(source)
   if (source == "github") {
-    raw_file <- read_csv("https://raw.githubusercontent.com/CDCgov/covid19-forecast-hub/refs/heads/main/auxiliary-data/nssp-raw-data/latest.csv")
+    raw_file <- arrow::read_parquet("https://raw.githubusercontent.com/CDCgov/covid19-forecast-hub/refs/heads/main/auxiliary-data/nssp-raw-data/latest.parquet")
   } else if (source == "socrata") {
     raw_file <- read_csv(glue::glue("https://data.cdc.gov/resource/rdmq-nq56.csv?$limit=1000000&$select=geography,week_end,county,percent_visits_{disease}"))
   }
