@@ -362,7 +362,7 @@ av_re_spread <- revision_sum$revision_behavior %>%
   summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
   arrange(desc(rel_spread)) %>%
   filter(geo_value %nin% c("vi", "as", "gu"))
-worst_geos <- av_re_spread %>% filter((rel_spread > 0.10)) %>% pull(geo_value)
+worst_geos <- av_re_spread %>% pull(geo_value)
 worst_geos <- worst_geos[1:9]
 filtered_archive <- recent_archive %>%
   filter(geo_value %in% worst_geos) %>%
@@ -398,11 +398,11 @@ recent_archive %>%
 Plotting the forecasts from 8 weeks ago until 3 weeks ago for each geography, sorted by WIS or population scaled WIS.
 ```{r plotting_recent_forecasts_function, echo=FALSE, message=FALSE}
 plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n_plotting) {
-  geo_score_order <- geo_score_order[1:n_plotting]
+  geo_score_order_2 <- geo_score_order[1:n_plotting]
   plotting_archive <- recent_archive
   plotting_archive$DT %<>%
-    filter(geo_value %in% geo_score_order, time_value > plotting_window) %>%
-    mutate(geo_value = factor(geo_value, levels = geo_score_order))
+    filter(geo_value %in% geo_score_order_2, time_value > plotting_window) %>%
+    mutate(geo_value = factor(geo_value, levels = geo_score_order_2))
   if (params$target == "nhsn") {
     plotting_archive$DT %<>%
     left_join(state_census, by = join_by(geo_value == abbr)) %>%
@@ -418,12 +418,11 @@ plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n
   forecasts_to_plot <- forecasts %>%
     filter(
       forecaster == "CMU-TimeSeries",
-      geo_value %in% geo_score_order,
-      forecast_date > this_week - score_window * 7,
-      forecast_date < latest_data_date - 1 * 7
+      geo_value %in% geo_score_order_2,
+      forecast_date > this_week - score_window * 7
     ) %>%
     mutate(
-      geo_value = factor(geo_value, levels = geo_score_order),
+      geo_value = factor(geo_value, levels = geo_score_order_2),
       forecast_date = factor(forecast_date)
     ) %>%
     ungroup()
@@ -444,7 +443,7 @@ plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n
     geom_line(data = forecasts_to_plot, aes(y = `0.5`, group = forecast_date), alpha = 0.4) +
     scale_color_brewer(palette = "Set3") +
     scale_fill_brewer(palette = "Set3") +
-    facet_grid(factor(geo_value, levels = geo_score_order) ~ forecast_date, scale = if(n_plotting>20) "free" else "fixed") +
+    facet_grid(factor(geo_value, levels = geo_score_order_2) ~ forecast_date, scale = if(n_plotting>20) "free" else "fixed") +
     scale_y_continuous(breaks = breaks_pretty(n = 5), limits = c(0, NA)) +
     scale_x_date(breaks = "14 days", date_labels = "%d\n%b", sec.axis = sec_axis(~ ., name = "Forecast Date", breaks = NULL, labels = NULL))
 }
