@@ -99,7 +99,7 @@ g_windowed_seasonal_extra_sources <- function(epi_data, ahead, extra_data, ...) 
     ) %>%
     mutate(target_end_date = target_end_date + 3) %>%
     # Wyoming has no data for NSSP since July 2024
-    filter(geo_value %nin% c("mo", "usa", "wy"))
+    filter(geo_value %nin% c("mo", "wy"))
   fcst
 }
 g_baseline_forecaster <- function(epi_data, ahead, extra_data, ...) {

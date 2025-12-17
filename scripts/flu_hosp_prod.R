@@ -120,7 +120,7 @@ g_windowed_seasonal_extra_sources <- function(epi_data, ahead, extra_data, ...) 
     ) %>%
     select(-source) %>%
     mutate(target_end_date = target_end_date + 3) %>%
-    filter(geo_value %nin% c("mo", "us", "wy"))
+    filter(geo_value %nin% c("mo", "wy"))
   fcst
 }
 g_baseline_forecaster <- function(epi_data, ahead, extra_data, ...) {
