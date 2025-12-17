@@ -709,12 +709,13 @@ get_nssp_github <- function(disease = c("covid", "influenza"), source = c("githu
     raw_file <- read_csv(glue::glue("https://data.cdc.gov/resource/rdmq-nq56.csv?$limit=1000000&$select=geography,week_end,county,percent_visits_{disease}"))
   }
   state_map <- get_population_data() %>% filter(state_id != "usa")
-  raw_file %>%
+  processed_nssp <- raw_file %>%
     filter(county == "All") %>%
     left_join(state_map, by = join_by(geography == state_name)) %>%
     select(geo_value = state_id, time_value = week_end, nssp = starts_with(glue::glue("percent_visits_{disease}"))) %>%
     mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
     mutate(version = Sys.Date())
+  processed_nssp %>% arrange(desc(time_value))
 }
 
 check_nssp_socrata_github_diff <- function() {
