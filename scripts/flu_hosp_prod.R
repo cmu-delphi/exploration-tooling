@@ -288,10 +288,10 @@ forecast_targets <- tar_map(
       if (grepl("latest", id)) {
         train_data <- nhsn_archive_data %>%
           epix_as_of(nhsn_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_date_int))
+          filter(time_value < as.Date(forecast_generation_date_int))
       } else {
         train_data <- nhsn_archive_data %>%
-          epix_as_of(min(as.Date(forecast_date_int), nhsn_archive_data$versions_end))
+          epix_as_of(min(as.Date(forecast_generation_date_int), nhsn_archive_data$versions_end))
       }
       train_data %<>%
         add_season_info() %>%
@@ -323,10 +323,10 @@ forecast_targets <- tar_map(
       if (grepl("latest", id)) {
         nssp_data <- nssp_archive_data %>%
           epix_as_of(nssp_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_date_int))
+          filter(time_value < as.Date(forecast_generation_date_int))
       } else {
         nssp_data <- nssp_archive_data %>%
-          epix_as_of(min(as.Date(forecast_date_int), nssp_archive_data$versions_end))
+          epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
       }
 
       forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
@@ -361,7 +361,7 @@ forecast_targets <- tar_map(
           filter(time_value < as.Date(forecast_date_int))
       } else {
         nssp_data <- nssp_archive_data %>%
-          epix_as_of(min(as.Date(forecast_date_int), nssp_archive_data$versions_end))
+          epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
       }
 
       forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)

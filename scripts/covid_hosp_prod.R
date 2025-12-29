@@ -261,9 +261,9 @@ forecast_targets <- tar_map(
           filter(time_value < as.Date(forecast_date_int))
       } else {
         nhsn_data <- nhsn_archive_data %>%
-          epix_as_of(min(as.Date(forecast_date_int), nhsn_archive_data$versions_end))
+          epix_as_of(min(as.Date(forecast_generation_date_int), nhsn_archive_data$versions_end))
         nssp_data <- nssp_archive_data %>%
-          epix_as_of(min(as.Date(forecast_date_int), nssp_archive_data$versions_end))
+          epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
       }
       nhsn_data <- nhsn_data %>%
         add_season_info() %>%
