@@ -36,11 +36,18 @@ if (!g_backtest_mode) {
   # Usually, the forecast_date is the same as the generation date, but you can
   # override this. It should be a Wednesday.
   g_forecast_dates <- round_date(g_forecast_generation_dates, "weeks", week_start = 3)
+  # the forecast is actually for the wednesday beforehand for these days
+  if (Sys.Date() %in% as.Date(c("2025-12-29"))) {
+    g_forecast_dates <- as.Date("2025-12-24")
+  }
 } else {
   g_forecast_generation_dates <- c(
     as.Date(c("2024-11-20", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")),
-    seq.Date(as.Date("2025-01-08"), Sys.Date(), by = 7L)
+    seq.Date(as.Date("2025-01-08"), as.Date("2025-12-17"), by = 7L),
+    as.Date(c("2025-12-29")),
+    seq.Date(as.Date("2025-12-31"), Sys.Date(), by = 7L),
   )
+  # Every Wednesday since mid-Nov 2024
   g_forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 }
 
