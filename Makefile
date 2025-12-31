@@ -59,7 +59,8 @@ prune-flu-explore:
 
 commit-covid:
 	cd ../covid19-forecast-hub; \
-	git fetch; \
+	git fetch origin; \
+	git fetch delphi; \ # needed to know the commits we're overwriting b/c of their squash merge
 	git stash --include-untracked; \
 	git reset --hard origin main; \
 	git stash pop; \
@@ -69,7 +70,8 @@ commit-covid:
 
 commit-flu:
 	cd ../FluSight-forecast-hub; \
-	git fetch; \
+	git fetch origin; \
+	git fetch delphi; \ # needed to know the commits we're overwriting b/c of their squash merge
 	git stash --include-untracked; \
 	git reset --hard origin main; \
 	git stash pop; \
