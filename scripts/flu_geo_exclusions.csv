@@ -3,7 +3,7 @@ forecast_date,forecaster,geo_value,weight
 # default values
 ##################
 2024-10-01, all, mp, 0
-2024-10-01, windowed_seasonal, all, 0.5
+2024-10-01, windowed_seasonal, all, 0.05
 2024-10-01, windowed_seasonal_extra_sources, all, 3
 2024-10-01, climate_linear, all, 0.001
 2024-10-01, linear, all, 3
@@ -11,6 +11,42 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, climate_base, all, 2
 2024-10-01, climate_geo_agged, all, 0
 2024-10-01, climate_quantile_extrapolated, all, 0
+##################
+# Jan 7
+##################
+2026-01-07, all, mp, 0
+2026-01-07, windowed_seasonal, all, 0.05
+2026-01-07, windowed_seasonal_extra_sources, all, 3
+2026-01-07, climate_linear, all, 0.001
+2026-01-07, linear, all, 3
+2026-01-07, linearlog, all, 0
+2026-01-07, climate_base, all, 2
+2026-01-07, climate_geo_agged, all, 0
+2026-01-07, climate_quantile_extrapolated, all, 0
+##################
+# Dec 31
+##################
+2025-12-31, all, mp, 0
+2025-12-31, windowed_seasonal, all, 0.5
+2025-12-31, windowed_seasonal_extra_sources, all, 3
+2025-12-31, climate_linear, all, 0.001
+2025-12-31, linear, all, 3
+2025-12-31, linearlog, all, 0
+2025-12-31, climate_base, all, 2
+2025-12-31, climate_geo_agged, all, 0
+2025-12-31, climate_quantile_extrapolated, all, 0
+##################
+# Dec 29
+##################
+2025-12-29, all, mp, 0
+2025-12-29, windowed_seasonal, all, 0.5
+2025-12-29, windowed_seasonal_extra_sources, all, 3
+2025-12-29, climate_linear, all, 0.001
+2025-12-29, linear, all, 3
+2025-12-29, linearlog, all, 0
+2025-12-29, climate_base, all, 2
+2025-12-29, climate_geo_agged, all, 0
+2025-12-29, climate_quantile_extrapolated, all, 0
 ##################
 # Dec 17
 ##################
