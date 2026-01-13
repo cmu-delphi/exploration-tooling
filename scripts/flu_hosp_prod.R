@@ -831,18 +831,35 @@ if (g_backtest_mode) {
           nrow() == 0) {
           return()
         }
+        # Score notebook individual average (see ongoing_score_report_rmd for documentation)
         rmarkdown::render(
           ongoing_score_report_rmd,
           output_file = here::here(
             "reports",
-            sprintf("%s_flu_nhsn_scoring.html", as.Date(Sys.Date()))
+            sprintf("%s_flu_nhsn_scoring_individual.html", as.Date(Sys.Date()))
           ),
           params = list(
             disease = "flu",
             target = "nhsn",
             external_forecasts = external_forecasts_full %>% filter(target == "wk inc flu hosp") %>% select(-target),
             archive = nhsn_archive_data,
-            scores = external_scores_nhsn_full
+            scores = external_scores_nhsn_full,
+            averaging_method = "individual"
+          )
+        )
+        rmarkdown::render(
+          ongoing_score_report_rmd,
+          output_file = here::here(
+            "reports",
+            sprintf("%s_flu_nhsn_scoring_common.html", as.Date(Sys.Date()))
+          ),
+          params = list(
+            disease = "flu",
+            target = "nhsn",
+            external_forecasts = external_forecasts_full %>% filter(target == "wk inc flu hosp") %>% select(-target),
+            archive = nhsn_archive_data,
+            scores = external_scores_nhsn_full,
+            averaging_method = "common"
           )
         )
       }

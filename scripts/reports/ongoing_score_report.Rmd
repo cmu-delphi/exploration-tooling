@@ -15,6 +15,7 @@ params:
   archive: ""
   scores: ""
   external_forecasts: ""
+  averaging_method: "individual"
 ---
 
 ```{css, echo=FALSE}
@@ -44,9 +45,28 @@ this_week <- round_date(Sys.Date() - 3, "week", 6)
 # Recent scores {.tabset}
 
 ```{r adjusting data, echo=FALSE, message=FALSE}
-forecasts <- params$external_forecasts
+# This "averaging method" refers to whether each forecaster's score is averaged over its own individually-reported set of keys and horizons
+# or if it's averaged over a common set. The main difference is PyRenew is tossed out because it reports too few horizons and we also stop
+# evaluating horizon -1.
+averaging_method <- params$averaging_method %||% "individual"
+if (averaging_method == "individual") {
+  forecasts <- params$external_forecasts
+  scores <- params$scores
+} else if (averaging_method == "common") {
+  forecasts <- params$external_forecasts %>%
+    # Filter out PyRenew because they only report horizons 0 and 1
+    filter(forecaster %nin% c("CFA_Pyrenew-Pyrenew_HE_Flu", "CFA_Pyrenew-Pyrenew_H_Flu")) %>%
+    # Select forecasts for only horizons 1 to 4 for all forecasters
+    filter(as.numeric(target_end_date - forecast_date) >= 0)
+  scores <- params$scores %>%
+    filter(forecaster %nin% c("CFA_Pyrenew-Pyrenew_HE_Flu", "CFA_Pyrenew-Pyrenew_H_Flu")) %>%
+    filter(ahead >= 0)
+} else {
+  stop("Unknown averaging method")
+}
+
 our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "seasonal_nssp_latest")
-scores <- params$scores %>%
+scores <- scores %>%
   mutate(
     forecaster =
       case_match(
@@ -221,7 +241,7 @@ all_forecasters_dates <- crossing(
 ordered_scores <- scores %>%
   full_join(
     all_forecasters_dates,
-    by = join_by(forecaster, forecast_date), 
+    by = join_by(forecaster, forecast_date),
   ) %>%
   arrange(forecast_date)
 sliding_ordered <- ordered_scores %>%
@@ -262,7 +282,7 @@ plotting_score <- function(sliding_plot, score_to_plot) {
   resulting_plot
 }
 gplot <- function(resulting_plot, height = 600, width = 1000) {
-  plotly_plot <- ggplotly(resulting_plot, tooltip = "text", height = height, width = width) 
+  plotly_plot <- ggplotly(resulting_plot, tooltip = "text", height = height, width = width)
   for (i in seq_along(plotly_plot$x$data)) {
     data_row <- plotly_plot$x$data[i]
     if (data_row[[1]]$name %in% start_hidden) {
@@ -307,7 +327,7 @@ if (params$target == "nhsn") {
                    "plotting_forecasts(plotting_window = this_week - 12 * 7, score_window = 8, geo_score_rate_order, n_plotting = 60)\n",
                    "```\n",
                    "\n"
-                 )) 
+                 ))
 }
 ```
 `r if (params$target == "nhsn") {knitr::knit(text = scaled_WIS_plot)}`
@@ -316,14 +336,14 @@ if (params$target == "nhsn") {
 ```{r moving_average_cov90, echo=FALSE, message=FALSE, out.width="100%"}
 cov_plot <- plotting_score(sliding_ordered, mean_cov_90) +
   scale_y_continuous(breaks = breaks_pretty(n = 20), limits = c(0, 1)) +
-  geom_hline(aes(yintercept = 0.90), color="black", linetype = "dashed") 
+  geom_hline(aes(yintercept = 0.90), color="black", linetype = "dashed")
 gplot(cov_plot)
 ```
 
 ## Mean Coverage 50
 
 ```{r moving_average_cov50, echo=FALSE, message=FALSE, out.width="100%"}
-cov_plot <- plotting_score(sliding_ordered, mean_cov_50) + 
+cov_plot <- plotting_score(sliding_ordered, mean_cov_50) +
   scale_y_continuous(breaks = breaks_pretty(n = 20), limits = c(0, 1)) +
   geom_hline(aes(yintercept = 0.50), color="black", linetype = "dashed")
 gplot(cov_plot)
@@ -455,7 +475,7 @@ geo_score_rate_order <- scores %>%
   arrange(desc(mean_wis_rate)) %>% pull(geo_value)
 ```
 <!-- include rates if we're plotting nhsn only -->
-```{r} 
+```{r}
 if (params$target == "nhsn") {
   plot1 <- knitr::knit_expand(
                     text = c(
@@ -472,7 +492,7 @@ if (params$target == "nhsn") {
                    "plotting_forecasts(plotting_window = this_week - 12 * 7, score_window = 8, geo_score_rate_order, n_plotting = 60)\n",
                    "```\n",
                    "\n"
-                 )) 
+                 ))
 }
 ```
 `r if (params$target == "nhsn") {knitr::knit(text = plot1)}`

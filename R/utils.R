@@ -404,7 +404,9 @@ update_site <- function() {
       }
     }
   }
-  score_files <- dir_ls(reports_dir, regex = ".*_scoring.html")
+
+  # Handle score reports
+  score_files <- dir_ls(reports_dir, regexp = ".*_scoring.*.html")
   score_table <- tibble(
     filename = score_files,
     dates = str_match_all(filename, "[0-9]{4}-..-..")
@@ -418,17 +420,16 @@ update_site <- function() {
     arrange(generation_date)
   for (score_file in score_table$filename) {
     file_name <- path_file(score_file)
-    file_parts <- str_split(fs::path_ext_remove(file_name), "_", simplify = TRUE)
-    generation_date <- file_parts[1]
-    disease <- file_parts[2]
-    dataset <- file_parts[3]
+    file_parts <- str_match(file_name, "(\\d{4}-\\d{2}-\\d{2})_(.*)\\.html")
+    file_path <- file_parts[1]
+    generation_date <- file_parts[2]
+    report_type <- file_parts[3]
 
     report_link <- sprintf(
-      "- [%s %s Scores, rendered %s](%s)",
-      str_to_title(disease),
-      str_to_title(dataset),
+      "- [Rendered %s, %s](%s)",
       generation_date,
-      file_name
+      report_type,
+      file_path
     )
 
     # Insert into Production Reports section, skipping a line

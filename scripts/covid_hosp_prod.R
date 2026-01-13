@@ -862,18 +862,35 @@ if (g_backtest_mode) {
           ) %>% distinct(forecast_date) %>% nrow() == 0) {
           return()
         }
+        # Score notebook individual average (see ongoing_score_report_rmd for documentation)
         rmarkdown::render(
           ongoing_score_report_rmd,
           output_file = here::here(
             "reports",
-            sprintf("%s_covid_nssp_scoring.html", as.Date(Sys.Date()))
+            sprintf("%s_covid_nssp_scoring_individual.html", as.Date(Sys.Date()))
           ),
           params = list(
             disease = "covid",
             target = "nssp",
             external_forecasts = external_forecasts_full %>% filter(target == "wk inc covid prop ed visits") %>% select(-target),
             archive = nssp_archive_data,
-            scores = external_scores_nssp_full
+            scores = external_scores_nssp_full,
+            averaging_method = "individual"
+          )
+        )
+        rmarkdown::render(
+          ongoing_score_report_rmd,
+          output_file = here::here(
+            "reports",
+            sprintf("%s_covid_nssp_scoring_common.html", as.Date(Sys.Date()))
+          ),
+          params = list(
+            disease = "covid",
+            target = "nssp",
+            external_forecasts = external_forecasts_full %>% filter(target == "wk inc covid prop ed visits") %>% select(-target),
+            archive = nssp_archive_data,
+            scores = external_scores_nssp_full,
+            averaging_method = "common"
           )
         )
       }
