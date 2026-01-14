@@ -381,16 +381,16 @@ update_site <- function() {
       pull(filename)
     for (report_file in files_this_season) {
       file_name <- path_file(report_file)
-      file_parts <- str_split(fs::path_ext_remove(file_name), "_", simplify = TRUE)
-      date <- file_parts[1]
-      disease <- file_parts[2]
-      generation_date <- file_parts[5]
+      file_parts <- str_match(file_name, "(\\d{4}-\\d{2}-\\d{2})_(.*)_prod_on_(\\d{4}-\\d{2}-\\d{2})\\.html")
+      date <- file_parts[2]
+      disease <- file_parts[3]
+      generation_date <- file_parts[4]
 
       report_link <- sprintf(
-        "- [%s Forecasts %s, Rendered %s](%s)",
+        "- [Rendered %s, %s Forecasts on %s](%s)",
+        generation_date,
         str_to_title(disease),
         date,
-        generation_date,
         file_name
       )
 
