@@ -929,3 +929,61 @@ compare_s3_etag <- function(bucket, key, region = "us-east-1") {
     file_size = file.info(temp_file)$size
   ))
 }
+
+build_cast_api_query <- function(
+  source = c("nssp"),
+  signal = NULL,
+  columns = NULL,
+  limit = 10000,
+  offset = 0,
+  report_ts_actual = NULL,
+  versions_before = NULL,
+  fill_method = c("source", "fill_ave", "fill_zero"),
+  time_value = NULL,
+  geo_value = NULL,
+  geo_type = c("state", "nation")
+) {
+  source <- rlang::arg_match(source)
+  columns <- columns %||% c("geo_value", "time_value", "value")
+  limit <- limit %||% 10000
+  offset <- offset %||% 0
+  fill_method <- rlang::arg_match(fill_method)
+  geo_type <- rlang::arg_match(geo_type)
+
+  url <- httr::modify_url(
+    url = "https://delphi.cmu.edu/cast-api/epidata/v2",
+    query = list(
+      source = source,
+      signal = signal,
+      limit = limit,
+      offset = offset,
+      report_ts_actual = report_ts_actual,
+      versions_before = versions_before,
+      fill_method = fill_method,
+      time_value = time_value,
+      geo_value = geo_value,
+      geo_type = geo_type
+    )
+  ) %>%
+  # TODO: This seems jank, but httr::modify_url doesn't seem to handle multiple
+  # query params with the same name, so we append them manually.
+  paste0(paste0("&columns=", columns, collapse = ""))
+  return(url)
+}
+
+get_cast_api_data <- function(...) {
+  url <- build_cast_api_query(...)
+  resp <- httr::GET(url)
+  httr::stop_for_status(resp)
+  tibble_data <- httr::content(resp, as = "parsed", type = "text/csv", encoding = "UTF-8", show_col_types = FALSE)
+  return(tibble_data)
+}
+
+get_cast_api_latest_update_date <- function(source = c("nssp")) {
+  source <- rlang::arg_match(source)
+  url <- httr::modify_url("https://delphi.cmu.edu/cast-api/epidata/v2/latest_update", query = list(source = source))
+  resp <- httr::GET(url)
+  httr::stop_for_status(resp)
+  json_data <- httr::content(resp, as = "parsed", type = "application/json", encoding = "UTF-8")
+  json_data$latest_update
+}

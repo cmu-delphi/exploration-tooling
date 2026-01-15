@@ -175,7 +175,7 @@ ids <- c(
   "climate_geo_agged",
   "seasonal_nssp_latest"
 )
-list_of_empty_lists <- lapply(1:length(ids), \(x) list())
+list_of_empty_lists <- lapply(seq_along(ids), \(x) list())
 g_forecaster_params_grid <- tibble(
   id = ids,
   forecaster = rlang::syms(c(
@@ -260,13 +260,45 @@ parameters_and_date_targets <- rlang::list2(
       up_to_date_nssp_state_archive("influenza")
     }
   ),
+  # tar_change(
+  #   name = nssp_archive_data2,
+  #   change = get_cast_api_latest_update_date(source = "nssp"),
+  #   command = {
+  #     get_cast_api_data(
+  #       source = "nssp",
+  #       signal = "pct_ed_visits_influenza",
+  #       geo_type = "state",
+  #       columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
+  #       limit = -1
+  #     )
+  #   }
+  # ),
   tar_target(
     name = nssp_latest_data,
     command = {
       nssp_archive_data %>%
         epix_as_of(min(Sys.Date(), nssp_archive_data$versions_end))
     }
-  )
+  ),
+  # tar_change(
+  #   name = nssp_latest_data2,
+  #   change = get_cast_api_latest_update_date(source = "nssp"),
+  #   command = {
+  #     df <- get_cast_api_data(
+  #       source = "nssp",
+  #       signal = "pct_ed_visits_influenza",
+  #       geo_type = "state",
+  #       versions_before = Sys.Date() + 1,
+  #       columns = c("geo_value", "time_value", "value", "report_ts_nominal_start"),
+  #       limit = -1
+  #     ) %>%
+  #       rename(nssp = value, issue = report_ts_nominal_start) %>%
+  #       # Need to adjust time_value by 3 days.
+  #       mutate(time_value = time_value - 3, geo_value = tolower(geo_value), issue = as.Date(issue))
+  #     max_issue <- df %>% summarize(max(issue)) %>% pull()
+  #     df %>% as_epi_df(as_of = max_issue)
+  #   }
+  # ),
 )
 
 

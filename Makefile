@@ -58,26 +58,10 @@ prune-flu-explore:
 	export TAR_PROJECT=flu_hosp_explore; Rscript -e "targets::tar_prune()"
 
 commit-covid:
-	cd ../covid19-forecast-hub; \
-	git fetch origin; \
-	git fetch delphi; \
-	git stash --include-untracked; \
-	git reset --hard origin main; \
-	git stash pop; \
-	git add model-output/CMU-TimeSeries/*; \
-	git commit -am "CMU-Delphi submission $(current_date)"; \
-	git push --force delphi main
+	./scripts/commit-script.sh '~/prod/covid19-forecast-hub'
 
 commit-flu:
-	cd ../FluSight-forecast-hub; \
-	git fetch origin; \
-	git fetch delphi; \
-	git stash --include-untracked; \
-	git reset --hard origin main; \
-	git stash pop; \
-	git add model-output/CMU-TimeSeries/*; \
-	git commit -am "CMU-Delphi submission $(current_date)"; \
-	git push --force delphi main
+	./scripts/commit-script.sh '~/prod/FluSight-forecast-hub'
 
 submit-covid: commit-covid
 	cd ../covid19-forecast-hub; \
@@ -157,7 +141,7 @@ netlify-log:
 	netlify deploy --dir=reports --prod >> cache/prod_netlify 2>&1
 
 netlify:
-	netlify deploy --dir=reports --prod 
+	netlify deploy --dir=reports --prod
 
 get-flu-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'flu_hosp_prod')"
