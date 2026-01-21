@@ -58,10 +58,10 @@ prune-flu-explore:
 	export TAR_PROJECT=flu_hosp_explore; Rscript -e "targets::tar_prune()"
 
 commit-covid:
-	./scripts/commit-script.sh '~/prod/covid19-forecast-hub'
+	./scripts/commit-script.sh '../covid19-forecast-hub'
 
 commit-flu:
-	./scripts/commit-script.sh '~/prod/FluSight-forecast-hub'
+	./scripts/commit-script.sh '../FluSight-forecast-hub'
 
 submit-covid: commit-covid
 	cd ../covid19-forecast-hub; \
