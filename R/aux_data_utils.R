@@ -700,8 +700,17 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     nssp_state <- nssp_state %>%
       bind_rows(get_nssp_github(disease))
   }
+  # covid wyoming is missing nssp data
+  if (disease == "covid") {
+    nssp_state <- nssp_state %>% filter(geo_value != "wy")
+  }
+  # nssp data in general in wyoming can sometimes report 0 when it should be NULL
+  nssp_state <- nssp_state %>% filter(geo_value == "wy") %>%
+    mutate(nssp = ifelse(nssp == 0, NA, nssp)) %>%
+    bind_rows(nssp_state %>% filter(geo_value != "wy")) %>%
+    arrange(geo_value, time_value, version)
+  # Complete the rest of the conversion.
   nssp_state %>%
-    filter(geo_value != "wy") %>%
     as_epi_archive(compactify = TRUE) %>%
     extract2("DT") %>%
     # End of week to midweek correction.

@@ -149,9 +149,10 @@ make_ensemble_grid <- function(tib) {
 #'
 #' @export
 get_exclusions <- function(
-    date,
-    forecaster,
-    exclusions_json = here::here("scripts", "geo_exclusions.json")) {
+  date,
+  forecaster,
+  exclusions_json = here::here("scripts", "geo_exclusions.json")
+) {
   if (!file.exists(exclusions_json)) {
     return("")
   }
@@ -779,7 +780,9 @@ get_unique <- function(forecasts, min_locations = 50, min_dates = 40) {
         nrow(distinct(x, forecast_date))
       }) %>%
       max()
-    cli::cli_abort("there are at most {max_geos} locations and {max_dates} dates. Adjust `min_locations` and/or `min_dates`.")
+    cli::cli_abort(
+      "there are at most {max_geos} locations and {max_dates} dates. Adjust `min_locations` and/or `min_dates`."
+    )
   }
   forecasters <- forecasters[to_keep]
   distinct <- distinct[to_keep]
@@ -792,7 +795,8 @@ get_unique <- function(forecasts, min_locations = 50, min_dates = 40) {
       forecast_date = round_date(forecast_date, unit = "week", week_start = 6)
     ) %>%
     cross_join(
-      tibble(forecaster = forecasters), .
+      tibble(forecaster = forecasters),
+      .
     )
 }
 
@@ -802,12 +806,13 @@ get_unique <- function(forecasts, min_locations = 50, min_dates = 40) {
 #' have previous years forecasts that we definitely want to exclude via
 #' `season_start`.
 filter_shared_geo_dates <- function(
-    local_forecasts,
-    external_forecasts,
-    season_start = "2024-11-01",
-    trucated_forecasters = "windowed_seasonal_extra_sources",
-    min_locations = 52,
-    min_dates = 12) {
+  local_forecasts,
+  external_forecasts,
+  season_start = "2024-11-01",
+  trucated_forecasters = "windowed_seasonal_extra_sources",
+  min_locations = 52,
+  min_dates = 12
+) {
   # the length is one if we're forecasting this week, in which case we only want the last 12 weeks of forecasts
   if (local_forecasts %>% distinct(forecast_date) %>% length() == 1) {
     viable_dates <-
@@ -944,15 +949,12 @@ build_cast_api_query <- function(
   geo_type = c("state", "nation")
 ) {
   source <- rlang::arg_match(source)
-  columns <- columns %||% c("geo_value", "time_value", "value")
-  limit <- limit %||% 10000
-  offset <- offset %||% 0
   fill_method <- rlang::arg_match(fill_method)
   geo_type <- rlang::arg_match(geo_type)
+  columns <- columns %||% c("geo_value", "time_value", "value")
 
-  url <- httr::modify_url(
-    url = "https://delphi.cmu.edu/cast-api/epidata/v2",
-    query = list(
+  httr2::request("https://delphi.cmu.edu/cast-api/epidata/v2") %>%
+    httr2::req_url_query(
       source = source,
       signal = signal,
       limit = limit,
@@ -962,28 +964,24 @@ build_cast_api_query <- function(
       fill_method = fill_method,
       time_value = time_value,
       geo_value = geo_value,
-      geo_type = geo_type
+      geo_type = geo_type,
+      columns = columns,
+      .multi = "explode"
     )
-  ) %>%
-  # TODO: This seems jank, but httr::modify_url doesn't seem to handle multiple
-  # query params with the same name, so we append them manually.
-  paste0(paste0("&columns=", columns, collapse = ""))
-  return(url)
 }
 
 get_cast_api_data <- function(...) {
-  url <- build_cast_api_query(...)
-  resp <- httr::GET(url)
-  httr::stop_for_status(resp)
-  tibble_data <- httr::content(resp, as = "parsed", type = "text/csv", encoding = "UTF-8", show_col_types = FALSE)
-  return(tibble_data)
+  req <- build_cast_api_query(...)
+  filename <- tempfile(fileext = ".csv")
+  req <- req %>% httr2::req_perform(path = filename)
+  readr::read_csv(filename, show_col_types = FALSE)
 }
 
 get_cast_api_latest_update_date <- function(source = c("nssp")) {
   source <- rlang::arg_match(source)
-  url <- httr::modify_url("https://delphi.cmu.edu/cast-api/epidata/v2/latest_update", query = list(source = source))
-  resp <- httr::GET(url)
-  httr::stop_for_status(resp)
-  json_data <- httr::content(resp, as = "parsed", type = "application/json", encoding = "UTF-8")
-  json_data$latest_update
+  json <- httr2::request("https://delphi.cmu.edu/cast-api/epidata/v2/latest_update") %>%
+    httr2::req_url_query(source = source) %>%
+    httr2::req_perform() %>%
+    httr2::resp_body_json()
+  json$latest_update
 }

@@ -260,19 +260,33 @@ parameters_and_date_targets <- rlang::list2(
       up_to_date_nssp_state_archive("influenza")
     }
   ),
-  # tar_change(
-  #   name = nssp_archive_data2,
-  #   change = get_cast_api_latest_update_date(source = "nssp"),
-  #   command = {
-  #     get_cast_api_data(
-  #       source = "nssp",
-  #       signal = "pct_ed_visits_influenza",
-  #       geo_type = "state",
-  #       columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
-  #       limit = -1
-  #     )
-  #   }
-  # ),
+  tar_change(
+    name = nssp_archive_data2,
+    # TODO: Currently takes 25s, while downloading takes 0.5s. Optimize later.
+    # change = get_cast_api_latest_update_date(source = "nssp"),
+    change = Sys.time(),
+    command = {
+      df_state <- get_cast_api_data(
+        source = "nssp",
+        signal = "pct_ed_visits_influenza",
+        geo_type = "state",
+        columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
+        limit = -1
+      )
+      df_us <- get_cast_api_data(
+        source = "nssp",
+        signal = "pct_ed_visits_influenza",
+        geo_type = "nation",
+        columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
+        limit = -1
+      )
+      bind_rows(df_state, df_us) %>%
+        # Rename columns
+        rename(nssp = value, issue = report_ts_nominal_start, issue_end = report_ts_nominal_end) %>%
+        # Need to adjust time_value by 3 days.
+        mutate(time_value = time_value - 3, geo_value = tolower(geo_value), issue = as.Date(issue), issue_end = as.Date(issue_end))
+    }
+  ),
   tar_target(
     name = nssp_latest_data,
     command = {
@@ -280,25 +294,42 @@ parameters_and_date_targets <- rlang::list2(
         epix_as_of(min(Sys.Date(), nssp_archive_data$versions_end))
     }
   ),
-  # tar_change(
-  #   name = nssp_latest_data2,
-  #   change = get_cast_api_latest_update_date(source = "nssp"),
-  #   command = {
-  #     df <- get_cast_api_data(
-  #       source = "nssp",
-  #       signal = "pct_ed_visits_influenza",
-  #       geo_type = "state",
-  #       versions_before = Sys.Date() + 1,
-  #       columns = c("geo_value", "time_value", "value", "report_ts_nominal_start"),
-  #       limit = -1
-  #     ) %>%
-  #       rename(nssp = value, issue = report_ts_nominal_start) %>%
-  #       # Need to adjust time_value by 3 days.
-  #       mutate(time_value = time_value - 3, geo_value = tolower(geo_value), issue = as.Date(issue))
-  #     max_issue <- df %>% summarize(max(issue)) %>% pull()
-  #     df %>% as_epi_df(as_of = max_issue)
-  #   }
-  # ),
+  tar_change(
+    name = nssp_latest_data2,
+    # TODO: Currently takes 25s, while downloading takes 0.5s. Optimize later.
+    # change = get_cast_api_latest_update_date(source = "nssp"),
+    change = Sys.time(),
+    command = {
+      # State values
+      df_state <- get_cast_api_data(
+        source = "nssp",
+        signal = "pct_ed_visits_influenza",
+        geo_type = "state",
+        versions_before = Sys.Date() + 1,
+        columns = c("geo_value", "time_value", "value", "report_ts_nominal_start"),
+        limit = -1
+      ) %>%
+        # Rename columns
+        rename(nssp = value, issue = report_ts_nominal_start) %>%
+        # Need to adjust time_value by 3 days.
+        mutate(time_value = time_value - 3, geo_value = tolower(geo_value), issue = as.Date(issue))
+      # US values
+      df_us <- get_cast_api_data(
+        source = "nssp",
+        signal = "pct_ed_visits_influenza",
+        geo_type = "nation",
+        versions_before = Sys.Date() + 1,
+        columns = c("geo_value", "time_value", "value", "report_ts_nominal_start"),
+        limit = -1
+      ) %>%
+        # Rename columns
+        rename(nssp = value, issue = report_ts_nominal_start) %>%
+        # Need to adjust time_value by 3 days.
+        mutate(time_value = time_value - 3, geo_value = "us", issue = as.Date(issue))
+
+      bind_rows(df_state, df_us)
+    }
+  )
 )
 
 

@@ -18,6 +18,7 @@ library(glue)
 library(grf)
 library(here)
 library(httpgd)
+library(httr2)
 if (Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache") != "cache") {
   library(hubValidations)
 }
