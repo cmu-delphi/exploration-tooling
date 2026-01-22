@@ -149,10 +149,9 @@ make_ensemble_grid <- function(tib) {
 #'
 #' @export
 get_exclusions <- function(
-  date,
-  forecaster,
-  exclusions_json = here::here("scripts", "geo_exclusions.json")
-) {
+    date,
+    forecaster,
+    exclusions_json = here::here("scripts", "geo_exclusions.json")) {
   if (!file.exists(exclusions_json)) {
     return("")
   }
@@ -806,13 +805,12 @@ get_unique <- function(forecasts, min_locations = 50, min_dates = 40) {
 #' have previous years forecasts that we definitely want to exclude via
 #' `season_start`.
 filter_shared_geo_dates <- function(
-  local_forecasts,
-  external_forecasts,
-  season_start = "2024-11-01",
-  trucated_forecasters = "windowed_seasonal_extra_sources",
-  min_locations = 52,
-  min_dates = 12
-) {
+    local_forecasts,
+    external_forecasts,
+    season_start = "2024-11-01",
+    trucated_forecasters = "windowed_seasonal_extra_sources",
+    min_locations = 52,
+    min_dates = 12) {
   # the length is one if we're forecasting this week, in which case we only want the last 12 weeks of forecasts
   if (local_forecasts %>% distinct(forecast_date) %>% length() == 1) {
     viable_dates <-
@@ -936,18 +934,17 @@ compare_s3_etag <- function(bucket, key, region = "us-east-1") {
 }
 
 build_cast_api_query <- function(
-  source = c("nssp"),
-  signal = NULL,
-  columns = NULL,
-  limit = 10000,
-  offset = 0,
-  report_ts_actual = NULL,
-  versions_before = NULL,
-  fill_method = c("source", "fill_ave", "fill_zero"),
-  time_value = NULL,
-  geo_value = NULL,
-  geo_type = c("state", "nation")
-) {
+    source = c("nssp"),
+    signal = NULL,
+    columns = NULL,
+    limit = 10000,
+    offset = 0,
+    report_ts_actual = NULL,
+    versions_before = NULL,
+    fill_method = c("source", "fill_ave", "fill_zero"),
+    time_value = NULL,
+    geo_value = NULL,
+    geo_type = c("state", "nation")) {
   source <- rlang::arg_match(source)
   fill_method <- rlang::arg_match(fill_method)
   geo_type <- rlang::arg_match(geo_type)
@@ -973,6 +970,11 @@ build_cast_api_query <- function(
 get_cast_api_data <- function(...) {
   req <- build_cast_api_query(...)
   filename <- tempfile(fileext = ".csv")
+  proxy_port <- Sys.getenv("CAST_API_PROXY_PORT", "")
+  if (proxy_port != "") {
+    # if you need to use a proxy, ssh -D localhost:proxy_port mentat will open the SOCKS5 proxy
+    req <- req %>% httr2::req_proxy(url = "socks5h://localhost", port = as.integer(proxy_port))
+  }
   req <- req %>% httr2::req_perform(path = filename)
   readr::read_csv(filename, show_col_types = FALSE)
 }
