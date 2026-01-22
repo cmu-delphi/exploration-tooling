@@ -209,28 +209,22 @@ create_joined_targets <- function() {
 }
 
 set_targets_config <- function() {
-  # On tanka, we have 64 cores, but we leave some free to try to reduce thrashing
-  # and to allow for other users.
-  if (parallel::detectCores() == 64) {
-    num_workers <- 30L
-  } else {
-    num_workers <- max(parallel::detectCores() - 4L, 1L)
-  }
+  # Leave at least 4 cores free for other processes, but cap at 30 workers.
+  num_workers <- min(max(parallel::detectCores() - 4L, 1L), 30L)
 
   tar_option_set(
-    format = "qs", # Optionally set the default storage format. qs is fast.
+    # qs is a fast serialization format for R objects.
+    format = "qs",
+    # More or less default crew settings for local parallelization.
+    # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
     controller = crew_controller_local(
       workers = num_workers,
       garbage_collection = TRUE,
       options_local = crew_options_local(log_directory = "local_logs")
     ),
-    # Set default crew controller.
-    # https://books.ropensci.org/targets/crew.html#heterogeneous-workers
-    memory = "transient",
     error = "stop",
-    garbage_collection = TRUE,
-    storage = "worker",
-    retrieval = "worker" # this may need to go back to main
+    # Run every n tasks.
+    garbage_collection = 5,
   )
 
   # Readr options.
