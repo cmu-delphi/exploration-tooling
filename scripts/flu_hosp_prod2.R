@@ -257,14 +257,30 @@ parameters_and_date_targets <- rlang::list2(
         filter(geo_value %nin% g_insufficient_data_geos)
     }
   ),
-  tar_change(
+  # TODO: Currently metadata queries are slow 25s, while downloading takes 0.5s. Optimize later.
+  # tar_change(
+  # change = get_cast_api_latest_update_date(source = "nssp"),
+  tar_target(
     name = nssp_archive_data,
-    change = max(
-      get_covidcast_signal_last_update("nssp", "pct_ed_visits_influenza", "state"),
-      get_socrata_updated_at("https://data.cdc.gov/api/views/mpgq-jmmr", lubridate::now(tz = "UTC"))
-    ),
     command = {
-      up_to_date_nssp_state_archive("influenza")
+      get_cast_api_data(
+        source = "nssp",
+        signal = "pct_ed_visits_influenza",
+        geo_type = "state",
+        columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
+        limit = -1
+      ) %>%
+        select(geo_value, time_value, nssp = value, version = report_ts_nominal_start) %>%
+        mutate(
+          geo_value = tolower(geo_value),
+          # Need to center the time_value on Wednesday of the week (rather than Saturday).
+          time_value = time_value - 3,
+          version = as.Date(version)
+        ) %>%
+        # Ensure uniqueness and convert to epi_archive
+        arrange(geo_value, time_value, version) %>%
+        distinct(geo_value, time_value, version, .keep_all = TRUE) %>%
+        as_epi_archive()
     }
   ),
   tar_target(
@@ -698,7 +714,7 @@ ensemble_targets <- tar_map(
           forecast_report_rmd,
           output_file = here::here(
             "reports",
-            sprintf("%s_flu_prod_on_%s.html", as.Date(forecast_date_int), as.Date(Sys.Date()))
+            sprintf("%s_flu_prod_on_%s_2.html", as.Date(forecast_date_int), as.Date(Sys.Date()))
           ),
           params = list(
             disease = "flu",
@@ -846,7 +862,7 @@ if (g_backtest_mode) {
           ongoing_score_report_rmd,
           output_file = here::here(
             "reports",
-            sprintf("%s_flu_nhsn_scoring_individual.html", as.Date(Sys.Date()))
+            sprintf("%s_flu_nhsn_scoring_individual_2.html", as.Date(Sys.Date()))
           ),
           params = list(
             disease = "flu",
@@ -861,7 +877,7 @@ if (g_backtest_mode) {
           ongoing_score_report_rmd,
           output_file = here::here(
             "reports",
-            sprintf("%s_flu_nhsn_scoring_common.html", as.Date(Sys.Date()))
+            sprintf("%s_flu_nhsn_scoring_common_2.html", as.Date(Sys.Date()))
           ),
           params = list(
             disease = "flu",
