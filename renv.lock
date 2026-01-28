@@ -2621,11 +2621,11 @@
       "Author": "Daniel J. McDonald [aut], Nat DeFries [cre, aut], Johns Hopkins University Center for Systems Science and Engineering [dtc] (Owner of COVID-19 cases and deaths data from the COVID-19 Data Repository), Johns Hopkins University [cph] (Copyright holder of COVID-19 cases and deaths data from the COVID-19 Data Repository), Carnegie Mellon University Delphi Group [dtc] (Owner of masking, social-distancing, and CLI data from the COVID-19 Trends and Impacts Survey. Owner of claims-based CLI data from the Delphi Epidata API), The COVID-19 Canada Open Data Working Group [dtc] (Owner of Canadian COVID-19 cases rates from the Covid19Canada data repository), Statistics Canada [dtc] (Owner of Canadian graduate employment income data from the Statistics Canada website), Google [dtc] (Collaborator on CLI data from the Google symptom surveys)",
       "Maintainer": "Nat DeFries <ndefries@andrew.cmu.edu>",
       "RemoteType": "github",
+      "RemoteHost": "api.github.com",
       "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epidatasets",
       "RemoteRef": "main",
       "RemoteSha": "0c3070b3202b50a094caf30511f1f8caf5b1b830",
-      "RemoteHost": "api.github.com",
       "Remotes": "cmu-delphi/delphidocs, cmu-delphi/epidatr, cmu-delphi/epiprocess"
     },
     "epidatr": {
@@ -2829,11 +2829,11 @@
       "Author": "Jacob Bien [ctb], Logan Brooks [aut, cre], Rafael Catoia [ctb], Nat DeFries [aut], Daniel McDonald [aut], Rachel Lobay [ctb], Ken Mawer [ctb], Chloe You [ctb], Quang Nguyen [ctb], Evan Ray [aut], Dmitry Shemetov [aut], Ryan Tibshirani [aut], David Weber [ctb], Lionel Henry [ctb] (Author of included rlang fragments), Hadley Wickham [ctb] (Author of included rlang fragments), Posit [cph] (Copyright holder of included rlang fragments), Johns Hopkins University Center for Systems Science and Engineering [dtc] (Owner of COVID-19 cases and deaths data from the COVID-19 Data Repository), Johns Hopkins University [cph] (Copyright holder of COVID-19 cases and deaths data from the COVID-19 Data Repository), Carnegie Mellon University Delphi Group [dtc] (Owner of claims-based CLI data from the Delphi Epidata API)",
       "Maintainer": "Logan Brooks <lcbrooks+github@andrew.cmu.edu>",
       "RemoteType": "github",
+      "RemoteHost": "api.github.com",
       "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epiprocess",
       "RemoteRef": "dev",
       "RemoteSha": "5d35361ecc4c760225b679a61c3a2cdc4c399875",
-      "RemoteHost": "api.github.com",
       "Remotes": "cmu-delphi/delphidocs, cmu-delphi/epidatasets, cmu-delphi/epidatr, cmu-delphi/epipredict, glmgen/trendfilter, reconverse/outbreaks"
     },
     "evaluate": {
@@ -3059,47 +3059,6 @@
       "NeedsCompilation": "no",
       "Author": "Mitchell O'Hara-Wild [aut, cre], Rob Hyndman [aut], Earo Wang [aut], Di Cook [ctb], Thiyanga Talagala [ctb] (Correlation features), Leanne Chhay [ctb] (Guerrero's method)",
       "Maintainer": "Mitchell O'Hara-Wild <mail@mitchelloharawild.com>",
-      "Repository": "RSPM"
-    },
-    "flexdashboard": {
-      "Package": "flexdashboard",
-      "Version": "0.6.2",
-      "Source": "Repository",
-      "Type": "Package",
-      "Title": "R Markdown Format for Flexible Dashboards",
-      "Authors@R": "c( person(\"Garrick\", \"Aden-Buie\", , \"garrick@posit.co\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-7111-0077\")), person(\"Carson\", \"Sievert\", , \"carson@posit.co\", role = \"aut\", comment = c(ORCID = \"0000-0002-4958-2844\")), person(\"Richard\", \"Iannone\", , \"rich@posit.co\", role = \"aut\", comment = c(ORCID = \"0000-0003-3925-190X\")), person(\"JJ\", \"Allaire\", , \"jj@posit.co\", role = \"aut\"), person(\"Barbara\", \"Borges\", , \"barb.b.ribeiro@gmail.com\", role = \"aut\"), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\")), person(, \"Keen IO\", role = c(\"ctb\", \"cph\"), comment = \"Dashboard CSS\"), person(\"Abdullah\", \"Almsaeed\", role = c(\"ctb\", \"cph\"), comment = \"Dashboard CSS\"), person(\"Jonas\", \"Mosbech\", role = c(\"ctb\", \"cph\"), comment = \"StickyTableHeaders\"), person(\"Noel\", \"Bossart\", role = c(\"ctb\", \"cph\"), comment = \"Featherlight\"), person(\"Lea\", \"Verou\", role = c(\"ctb\", \"cph\"), comment = \"Prism\"), person(\"Dmitry\", \"Baranovskiy\", role = c(\"ctb\", \"cph\"), comment = \"Raphael.js\"), person(, \"Sencha Labs\", role = c(\"ctb\", \"cph\"), comment = \"Raphael.js\"), person(\"Bojan\", \"Djuricic\", role = c(\"ctb\", \"cph\"), comment = \"JustGage\"), person(\"Tomas\", \"Sardyha\", role = c(\"ctb\", \"cph\"), comment = \"Sly\"), person(\"Bryan\", \"Lewis\", role = c(\"ctb\", \"cph\"), comment = \"Examples\"), person(\"Joshua\", \"Kunst\", role = c(\"ctb\", \"cph\"), comment = \"Examples\"), person(\"Ryan\", \"Hafen\", role = c(\"ctb\", \"cph\"), comment = \"Examples\"), person(\"Bob\", \"Rudis\", role = c(\"ctb\", \"cph\"), comment = \"Examples\"), person(\"Joe\", \"Cheng\", role = \"ctb\", comment = \"Examples\") )",
-      "Description": "Format for converting an R Markdown document to a grid oriented dashboard. The dashboard flexibly adapts the size of it's components to the containing web page.",
-      "License": "MIT + file LICENSE",
-      "URL": "https://pkgs.rstudio.com/flexdashboard/, https://github.com/rstudio/flexdashboard/",
-      "BugReports": "https://github.com/rstudio/flexdashboard/issues",
-      "Depends": [
-        "R (>= 3.0.2)"
-      ],
-      "Imports": [
-        "bslib (>= 0.2.5)",
-        "grDevices",
-        "htmltools (>= 0.5.1)",
-        "htmlwidgets (>= 0.6)",
-        "jsonlite",
-        "knitr (>= 1.30)",
-        "rmarkdown (>= 2.8)",
-        "sass",
-        "scales",
-        "shiny (>= 0.13)",
-        "tools",
-        "utils"
-      ],
-      "Suggests": [
-        "testthat"
-      ],
-      "Config/Needs/deploy": "dplyr, ggplot2, DT, talgalili/d3heatmap, plotly, plyr, biclust, webshot, bit, jcheng5/bubbles, digest, hadley/shinySignals, dygraphs, quantmod, forecast, highcharter, arules, treemap, viridisLite, leaflet, metricsgraphics, rbokeh, readr, tidyr, jsonlite, maptools, purrr, maps, hexbin",
-      "Config/Needs/website": "rstudio/quillt",
-      "Config/testthat/edition": "3",
-      "Encoding": "UTF-8",
-      "RoxygenNote": "7.2.3",
-      "NeedsCompilation": "no",
-      "Author": "Garrick Aden-Buie [aut, cre] (<https://orcid.org/0000-0002-7111-0077>), Carson Sievert [aut] (<https://orcid.org/0000-0002-4958-2844>), Richard Iannone [aut] (<https://orcid.org/0000-0003-3925-190X>), JJ Allaire [aut], Barbara Borges [aut], Posit Software, PBC [cph, fnd], Keen IO [ctb, cph] (Dashboard CSS), Abdullah Almsaeed [ctb, cph] (Dashboard CSS), Jonas Mosbech [ctb, cph] (StickyTableHeaders), Noel Bossart [ctb, cph] (Featherlight), Lea Verou [ctb, cph] (Prism), Dmitry Baranovskiy [ctb, cph] (Raphael.js), Sencha Labs [ctb, cph] (Raphael.js), Bojan Djuricic [ctb, cph] (JustGage), Tomas Sardyha [ctb, cph] (Sly), Bryan Lewis [ctb, cph] (Examples), Joshua Kunst [ctb, cph] (Examples), Ryan Hafen [ctb, cph] (Examples), Bob Rudis [ctb, cph] (Examples), Joe Cheng [ctb] (Examples)",
-      "Maintainer": "Garrick Aden-Buie <garrick@posit.co>",
       "Repository": "RSPM"
     },
     "fontawesome": {
@@ -6662,7 +6621,8 @@
       ],
       "Collate": "'adjective.R' 'adverb.R' 'exclamation.R' 'verb.R' 'rpackage.R' 'package.R'",
       "NeedsCompilation": "no",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "prettyunits": {
       "Package": "prettyunits",
@@ -7019,44 +6979,6 @@
       "NeedsCompilation": "yes",
       "Author": "Hadley Wickham [aut, cre] (ORCID: <https://orcid.org/0000-0003-4757-117X>), Lionel Henry [aut], Posit Software, PBC [cph, fnd] (ROR: <https://ror.org/03wc8by49>)",
       "Maintainer": "Hadley Wickham <hadley@posit.co>",
-      "Repository": "RSPM"
-    },
-    "qrcode": {
-      "Package": "qrcode",
-      "Version": "0.3.0",
-      "Source": "Repository",
-      "Type": "Package",
-      "Title": "Generate QRcodes with R",
-      "Authors@R": "c( person(\"Thierry\", \"Onkelinx\", , \"qrcode@muscardinus.be\", role = c(\"aut\", \"cre\"), comment = c(\"Author of the reimplemented functions\", ORCID = \"0000-0001-8804-4216\")), person(\"Victor\", \"Teh\", , \"victorteh@gmail.com\", role = \"aut\", comment = \"Original author\") )",
-      "Description": "Create static QR codes in R. The content of the QR code is exactly what the user defines. We don't add a redirect URL, making it impossible for us to track the usage of the QR code. This allows to generate fast, free to use and privacy friendly QR codes.",
-      "License": "GPL-3",
-      "URL": "https://thierryo.github.io/qrcode/, https://github.com/ThierryO/qrcode, https://doi.org/10.5281/zenodo.5040088",
-      "BugReports": "https://github.com/ThierryO/qrcode/issues",
-      "Depends": [
-        "R (>= 4.1.0)"
-      ],
-      "Imports": [
-        "assertthat",
-        "stats",
-        "utils"
-      ],
-      "Suggests": [
-        "httr",
-        "jpeg",
-        "knitr",
-        "opencv",
-        "png",
-        "rsvg",
-        "testthat (>= 3.0.0)"
-      ],
-      "Config/checklist/keywords": "two-dimensional barcode; matrix barcode",
-      "Config/testthat/edition": "3",
-      "Encoding": "UTF-8",
-      "Language": "en-GB",
-      "RoxygenNote": "7.3.2",
-      "NeedsCompilation": "no",
-      "Author": "Thierry Onkelinx [aut, cre] (Author of the reimplemented functions, <https://orcid.org/0000-0001-8804-4216>), Victor Teh [aut] (Original author)",
-      "Maintainer": "Thierry Onkelinx <qrcode@muscardinus.be>",
       "Repository": "RSPM"
     },
     "qs": {
@@ -10210,9 +10132,10 @@
         "R (>= 2.10.0)"
       ],
       "License": "GPL (>= 2)",
-      "Repository": "CRAN",
+      "Repository": "RSPM",
       "NeedsCompilation": "no",
-      "Author": "David B. Dahl [aut], David Scott [aut, cre], Charles Roosen [aut], Arni Magnusson [aut], Jonathan Swinton [aut], Ajay Shah [ctb], Arne Henningsen [ctb], Benno Puetz [ctb], Bernhard Pfaff [ctb], Claudio Agostinelli [ctb], Claudius Loehnert [ctb], David Mitchell [ctb], David Whiting [ctb], Fernando da Rosa [ctb], Guido Gay [ctb], Guido Schulz [ctb], Ian Fellows [ctb], Jeff Laake [ctb], John Walker [ctb], Jun Yan [ctb], Liviu Andronic [ctb], Markus Loecher [ctb], Martin Gubri [ctb], Matthieu Stigler [ctb], Robert Castelo [ctb], Seth Falcon [ctb], Stefan Edwards [ctb], Sven Garbade [ctb], Uwe Ligges [ctb]"
+      "Author": "David B. Dahl [aut], David Scott [aut, cre], Charles Roosen [aut], Arni Magnusson [aut], Jonathan Swinton [aut], Ajay Shah [ctb], Arne Henningsen [ctb], Benno Puetz [ctb], Bernhard Pfaff [ctb], Claudio Agostinelli [ctb], Claudius Loehnert [ctb], David Mitchell [ctb], David Whiting [ctb], Fernando da Rosa [ctb], Guido Gay [ctb], Guido Schulz [ctb], Ian Fellows [ctb], Jeff Laake [ctb], John Walker [ctb], Jun Yan [ctb], Liviu Andronic [ctb], Markus Loecher [ctb], Martin Gubri [ctb], Matthieu Stigler [ctb], Robert Castelo [ctb], Seth Falcon [ctb], Stefan Edwards [ctb], Sven Garbade [ctb], Uwe Ligges [ctb]",
+      "Encoding": "UTF-8"
     },
     "yaml": {
       "Package": "yaml",
