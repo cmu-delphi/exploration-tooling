@@ -725,10 +725,6 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     distinct(geo_value, time_value, version, .keep_all = TRUE) %>%
     select(geo_value, time_value, version, nssp = value)
 
-  # covid wyoming is missing nssp data
-  if (disease == "covid") {
-    nssp_state <- nssp_state %>% filter(geo_value != "wy")
-  }
   # nssp data in general in wyoming can sometimes report 0 when it should be NULL
   nssp_state <- nssp_state %>%
     filter(geo_value == "wy", nssp != 0) %>%
