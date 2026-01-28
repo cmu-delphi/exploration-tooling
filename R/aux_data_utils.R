@@ -683,6 +683,46 @@ get_nhsn_data_archive <- function(disease_name) {
 
 up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
   disease <- arg_match(disease)
+  nssp_national <- get_cast_api_data(
+    source = "nssp",
+    signal = glue::glue("pct_ed_visits_{disease}"),
+    geo_type = "nation",
+    columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
+    limit = -1
+  )
+  nssp_state <- get_cast_api_data(
+    source = "nssp",
+    signal = glue::glue("pct_ed_visits_{disease}"),
+    geo_type = "state",
+    columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
+    limit = -1
+  )
+  nssp_data <- nssp_state %>%
+    rbind(nssp_national) %>%
+    select(geo_value, time_value, nssp = value, version = report_ts_nominal_start) %>%
+    mutate(
+      geo_value = tolower(geo_value),
+  # Need to center the time_value on Wednesday of the week (rather than Saturday).
+      time_value = time_value - 3,
+      version = as.Date(version)
+    ) %>%
+  # Ensure uniqueness and convert to epi_archive
+    arrange(geo_value, time_value, version) %>%
+    distinct(geo_value, time_value, version, .keep_all = TRUE)
+
+  # covid wyoming is missing nssp data
+  if (disease == "covid") {
+    nssp_data <- nssp_data %>% filter(geo_value != "wy")
+  }
+  # Complete the rest of the conversion.
+  nssp_data %>%
+    # End of week to midweek correction.
+    mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
+    as_epi_archive(compactify = TRUE)
+}
+
+old_up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
+  disease <- arg_match(disease)
   nssp_from_legacy_api <- bind_rows(
     retry_fn(
       max_attempts = 10,

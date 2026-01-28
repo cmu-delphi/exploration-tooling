@@ -17,11 +17,17 @@ prod-covid-log:
 prod-covid:
 	export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
 
+prod-covid-2:
+	export TAR_RUN_PROJECT=covid_hosp_prod_2; Rscript scripts/run.R
+
 prod-flu-log:
 	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R >> cache/logs/prod_flu 2>&1
 
 prod-flu:
 	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R
+
+prod-flu-2:
+	export TAR_RUN_PROJECT=flu_hosp_prod2; Rscript scripts/run.R
 
 prod: prod-covid prod-flu update-site netlify
 
