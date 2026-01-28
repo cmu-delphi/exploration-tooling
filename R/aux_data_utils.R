@@ -683,41 +683,88 @@ get_nhsn_data_archive <- function(disease_name) {
 
 up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
   disease <- arg_match(disease)
-  nssp_state <- retry_fn(
-    max_attempts = 10,
-    wait_seconds = 1,
-    fn = pub_covidcast,
-    source = "beta_nssp",
-    signals = glue::glue("pct_ed_visits_{disease}"),
-    time_type = "week",
-    geo_type = "state",
-    geo_values = "*",
-    issues = "*"
+  nssp_national <- get_cast_api_data(
+    source = "nssp",
+    signal = glue::glue("pct_ed_visits_{disease}"),
+    geo_type = "nation",
+    columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
+    limit = -1
   )
-  nssp_state_github <- retry_fn(
-    max_attempts = 10,
-    wait_seconds = 1,
-    fn = pub_covidcast,
-    source = "beta_nssp_github",
-    signals = glue::glue("pct_ed_visits_{disease}"),
-    time_type = "week",
+  nssp_state <- get_cast_api_data(
+    source = "nssp",
+    signal = glue::glue("pct_ed_visits_{disease}"),
     geo_type = "state",
-    geo_values = "*",
-    issues = "*"
+    columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
+    limit = -1
   )
-  most_recent_github <- get_nssp_upstream(disease)
-
-  # Combine Socrata and Github sources.
-  nssp_state <- nssp_state %>%
-    bind_rows(nssp_state_github, most_recent_github) %>%
-    arrange(geo_value, time_value, issue) %>%
-    distinct(geo_value, time_value, issue, .keep_all = TRUE) %>%
-    select(geo_value, time_value, version = issue, nssp = value)
+  nssp_data <- nssp_state %>%
+    rbind(nssp_national) %>%
+    select(geo_value, time_value, nssp = value, version = report_ts_nominal_start) %>%
+    mutate(
+      geo_value = tolower(geo_value),
+  # Need to center the time_value on Wednesday of the week (rather than Saturday).
+      time_value = time_value - 3,
+      version = as.Date(version)
+    ) %>%
+  # Ensure uniqueness and convert to epi_archive
+    arrange(geo_value, time_value, version) %>%
+    distinct(geo_value, time_value, version, .keep_all = TRUE)
 
   # covid wyoming is missing nssp data
   if (disease == "covid") {
-    nssp_state <- nssp_state %>% filter(geo_value != "wy")
+    nssp_data <- nssp_data %>% filter(geo_value != "wy")
   }
+  # Complete the rest of the conversion.
+  nssp_data %>%
+    # End of week to midweek correction.
+    mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
+    as_epi_archive(compactify = TRUE)
+}
+
+old_up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
+  disease <- arg_match(disease)
+  nssp_from_legacy_api <- bind_rows(
+    retry_fn(
+      max_attempts = 10,
+      wait_seconds = 1,
+      fn = pub_covidcast,
+      source = "beta_nssp",
+      signals = glue::glue("pct_ed_visits_{disease}"),
+      time_type = "week",
+      geo_type = "state",
+      geo_values = "*",
+      issues = "*",
+      # Label both versions and time_value with the Wednesday contained in the
+      # week. This is inaccurate, but it gets us around some part of epiprocess
+      # that don't allow time_value > version (slide?).
+      fetch_args = fetch_args_list(reference_week_day = 4)
+    ),
+    retry_fn(
+      max_attempts = 10,
+      wait_seconds = 1,
+      fn = pub_covidcast,
+      source = "beta_nssp_github",
+      signals = glue::glue("pct_ed_visits_{disease}"),
+      time_type = "week",
+      geo_type = "state",
+      geo_values = "*",
+      issues = "*",
+      # Label both versions and time_value with the Wednesday contained in the
+      # week. This is inaccurate, but it gets us around some part of epiprocess
+      # that don't allow time_value > version (slide?).
+      fetch_args = fetch_args_list(reference_week_day = 4)
+    )
+  ) %>%
+    select(geo_value, time_value, value, version = issue)
+  most_recent_github <- get_nssp_upstream(disease)
+
+  # Combine Socrata and Github sources.
+  nssp_state <- bind_rows(nssp_from_legacy_api, most_recent_github) %>%
+    # Deduplicate rows, keeping the first occurrence only.
+    arrange(geo_value, time_value, version) %>%
+    distinct(geo_value, time_value, version, .keep_all = TRUE) %>%
+    select(geo_value, time_value, version, nssp = value)
+
   # nssp data in general in wyoming can sometimes report 0 when it should be NULL
   nssp_state <- nssp_state %>%
     filter(geo_value == "wy", nssp != 0) %>%
@@ -725,8 +772,6 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     arrange(geo_value, time_value, version)
   # Complete the rest of the conversion.
   nssp_state %>%
-    as_epi_archive(compactify = TRUE) %>%
-    extract2("DT") %>%
     # End of week to midweek correction.
     mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
     as_epi_archive(compactify = TRUE)
@@ -753,13 +798,13 @@ get_nssp_upstream <- function(disease = c("covid", "influenza"), source = c("git
     left_join(state_map, by = join_by(geography == state_name)) %>%
     select(geo_value = state_id, time_value = week_end, value = starts_with(glue::glue("percent_visits_{disease}"))) %>%
     mutate(time_value = as.Date(floor_date(time_value, "week", week_start = 7) + 3)) %>%
-    mutate(issue = Sys.Date())
+    mutate(version = as.Date(floor_date(Sys.Date(), "week", week_start = 7) + 3))
   processed_nssp %>% arrange(desc(time_value))
 }
 
 check_nssp_socrata_github_diff <- function() {
   df1 <- get_nssp_upstream("github")
   df2 <- get_nssp_upstream("socrata")
-  out <- full_join(df1, df2, by = c("geo_value", "time_value", "issue"))
+  out <- full_join(df1, df2, by = c("geo_value", "time_value", "version"))
   out %>% filter(abs(value.x - value.y) > 1e-6)
 }

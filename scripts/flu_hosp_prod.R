@@ -133,7 +133,13 @@ g_windowed_seasonal_extra_sources <- function(epi_data, ahead, extra_data, ...) 
 g_baseline_forecaster <- function(epi_data, ahead, extra_data, ...) {
   # all of the forecasts are made in the last ahead
   if (ahead < 3) {
-    return(tibble(geo_value = character(), forecast_date = Date(), target_end_date = Date(), quantile_value = numeric(), value = numeric()))
+    return(tibble(
+      geo_value = character(),
+      forecast_date = Date(),
+      target_end_date = Date(),
+      quantile_value = numeric(),
+      value = numeric()
+    ))
   }
   real_forecast_date <- attributes(epi_data)$metadata$as_of
   last_data <- epi_data$time_value %>% max()
@@ -146,7 +152,8 @@ g_baseline_forecaster <- function(epi_data, ahead, extra_data, ...) {
     `$`(predictions) %>%
     pivot_quantiles_longer(.pred_distn) %>%
     select(
-      geo_value, forecast_date,
+      geo_value,
+      forecast_date,
       target_end_date = target_date,
       value = .pred_distn_value,
       quantile = .pred_distn_quantile_level
@@ -250,41 +257,13 @@ parameters_and_date_targets <- rlang::list2(
         filter(geo_value %nin% g_insufficient_data_geos)
     }
   ),
-  tar_change(
+  # TODO: Currently metadata queries are slow 25s, while downloading takes 0.5s. Optimize later.
+  # tar_change(
+  # change = get_cast_api_latest_update_date(source = "nssp"),
+  tar_target(
     name = nssp_archive_data,
-    change = max(
-      get_covidcast_signal_last_update("nssp", "pct_ed_visits_influenza", "state"),
-      get_socrata_updated_at("https://data.cdc.gov/api/views/mpgq-jmmr", lubridate::now(tz = "UTC"))
-    ),
     command = {
       up_to_date_nssp_state_archive("influenza")
-    }
-  ),
-  tar_change(
-    name = nssp_archive_data2,
-    # TODO: Currently takes 25s, while downloading takes 0.5s. Optimize later.
-    # change = get_cast_api_latest_update_date(source = "nssp"),
-    change = Sys.time(),
-    command = {
-      df_state <- get_cast_api_data(
-        source = "nssp",
-        signal = "pct_ed_visits_influenza",
-        geo_type = "state",
-        columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
-        limit = -1
-      )
-      df_us <- get_cast_api_data(
-        source = "nssp",
-        signal = "pct_ed_visits_influenza",
-        geo_type = "nation",
-        columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
-        limit = -1
-      )
-      bind_rows(df_state, df_us) %>%
-        # Rename columns
-        rename(nssp = value, issue = report_ts_nominal_start, issue_end = report_ts_nominal_end) %>%
-        # Need to adjust time_value by 3 days.
-        mutate(time_value = time_value - 3, geo_value = tolower(geo_value), issue = as.Date(issue), issue_end = as.Date(issue_end))
     }
   ),
   tar_target(
@@ -292,42 +271,6 @@ parameters_and_date_targets <- rlang::list2(
     command = {
       nssp_archive_data %>%
         epix_as_of(min(Sys.Date(), nssp_archive_data$versions_end))
-    }
-  ),
-  tar_change(
-    name = nssp_latest_data2,
-    # TODO: Currently takes 25s, while downloading takes 0.5s. Optimize later.
-    # change = get_cast_api_latest_update_date(source = "nssp"),
-    change = Sys.time(),
-    command = {
-      # State values
-      df_state <- get_cast_api_data(
-        source = "nssp",
-        signal = "pct_ed_visits_influenza",
-        geo_type = "state",
-        versions_before = Sys.Date() + 1,
-        columns = c("geo_value", "time_value", "value", "report_ts_nominal_start"),
-        limit = -1
-      ) %>%
-        # Rename columns
-        rename(nssp = value, issue = report_ts_nominal_start) %>%
-        # Need to adjust time_value by 3 days.
-        mutate(time_value = time_value - 3, geo_value = tolower(geo_value), issue = as.Date(issue))
-      # US values
-      df_us <- get_cast_api_data(
-        source = "nssp",
-        signal = "pct_ed_visits_influenza",
-        geo_type = "nation",
-        versions_before = Sys.Date() + 1,
-        columns = c("geo_value", "time_value", "value", "report_ts_nominal_start"),
-        limit = -1
-      ) %>%
-        # Rename columns
-        rename(nssp = value, issue = report_ts_nominal_start) %>%
-        # Need to adjust time_value by 3 days.
-        mutate(time_value = time_value - 3, geo_value = "us", issue = as.Date(issue))
-
-      bind_rows(df_state, df_us)
     }
   )
 )
@@ -885,13 +828,16 @@ if (g_backtest_mode) {
           dir.create(here::here("reports"))
         }
         # Don't run if there aren't forecasts in the past 4 weeks to evaluate
-        if (external_forecasts_full %>%
-          filter(
-            forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4 * 7,
-            target == "wk inc flu hosp"
-          ) %>%
-          distinct(forecast_date) %>%
-          nrow() == 0) {
+        if (
+          external_forecasts_full %>%
+            filter(
+              forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4 * 7,
+              target == "wk inc flu hosp"
+            ) %>%
+            distinct(forecast_date) %>%
+            nrow() ==
+            0
+        ) {
           return()
         }
         # Score notebook individual average (see ongoing_score_report_rmd for documentation)

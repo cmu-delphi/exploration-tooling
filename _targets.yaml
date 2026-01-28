@@ -18,4 +18,3 @@ covid_hosp_prod:
   store: covid_hosp_prod
   use_crew: yes
   reporter_make: timestamp
-
