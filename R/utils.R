@@ -702,6 +702,13 @@ get_covidcast_signal_last_update <- function(source, signal, geo_type, missing_v
   )
 }
 
+get_local_file_last_modified <- function(file_path, missing_value = MIN_TIMESTAMP) {
+  if (!file.exists(file_path)) {
+    return(missing_value)
+  }
+  file.info(file_path)$mtime %>% as.POSIXct(tz = "UTC")
+}
+
 #' Get the last modified date of an S3 object
 #'
 #' @param bucket The name of the S3 bucket.

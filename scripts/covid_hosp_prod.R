@@ -203,9 +203,13 @@ parameters_and_date_targets <- rlang::list2(
   ),
   tar_change(
     name = nhsn_archive_data,
-    change = get_s3_object_last_modified("nhsn_data_archive.parquet", "forecasting-team-data"),
+    change = get_local_file_last_modified("cache/nhsn_data_archive.parquet"),
     command = {
-      get_nhsn_data_archive("nhsn_covid")
+      nanoparquet::read_parquet("cache/nhsn_data_archive.parquet") %>%
+        filter(disease == "nhsn_covid") %>%
+        filter(!grepl("region.*", geo_value)) %>%
+        select(-version_timestamp, -disease) %>%
+        as_epi_archive(compactify = TRUE)
     }
   ),
   tar_target(
