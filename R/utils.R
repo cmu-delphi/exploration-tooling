@@ -943,15 +943,14 @@ compare_s3_etag <- function(bucket, key, region = "us-east-1") {
 build_cast_api_query <- function(
     source = c("nssp", "nhsn"),
     signal = NULL,
+    geo_type = c("state", "nation"),
     columns = NULL,
-    limit = 10000,
-    offset = 0,
-    report_ts_actual = NULL,
-    versions_before = NULL,
     fill_method = c("source", "fill_ave", "fill_zero"),
-    time_value = NULL,
+    limit = -1,
+    offset = 0,
+    versions_before = NULL,
     geo_value = NULL,
-    geo_type = c("state", "nation")) {
+    time_value = NULL) {
   source <- rlang::arg_match(source)
   fill_method <- rlang::arg_match(fill_method)
   geo_type <- rlang::arg_match(geo_type)
@@ -961,15 +960,14 @@ build_cast_api_query <- function(
     httr2::req_url_query(
       source = source,
       signal = signal,
+      geo_type = geo_type,
+      versions_before = versions_before,
+      columns = columns,
       limit = limit,
       offset = offset,
-      report_ts_actual = report_ts_actual,
-      versions_before = versions_before,
       fill_method = fill_method,
-      time_value = time_value,
       geo_value = geo_value,
-      geo_type = geo_type,
-      columns = columns,
+      time_value = time_value,
       .multi = "explode"
     )
 }
