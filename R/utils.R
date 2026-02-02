@@ -941,7 +941,7 @@ compare_s3_etag <- function(bucket, key, region = "us-east-1") {
 }
 
 build_cast_api_query <- function(
-    source = c("nssp"),
+    source = c("nssp", "nhsn"),
     signal = NULL,
     columns = NULL,
     limit = 10000,
