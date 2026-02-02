@@ -1,4 +1,4 @@
-# Archive Builder
+  # Archive Builder
 #
 # This script is meant to run every minute. It checks if the source data has
 # been updated and updates the archive if so.
@@ -15,7 +15,7 @@
 # 4. Your S3 bucket storage layout
 #
 # The crontab (every minute):
-# * * * * * cd /path/to/root/of/this/project && R -s -q -f scripts/build_nhsn_archive.R >> cache/build_nhsn_archive.log 2>&1
+# * * * * * cd /path/to/root/of/this/project && R -s -q -f scripts/build_nssp_archive.R >> cache/build_nssp_archive.log 2>&1
 suppressPackageStartupMessages({
   library(aws.s3)
   library(cli)
@@ -39,13 +39,11 @@ options(cli.width = 120)
 run_time <- with_tz(Sys.time(), tzone = "UTC")
 run_time_local <- with_tz(run_time)
 
-DATA_SOURCE_NAME <- "nhsn"
+DATA_SOURCE_NAME <- "nssp"
 # Configuration
 config <- list(
-  raw_query_url = "https://data.cdc.gov/resource/ua7e-t2fy.csv?$limit=50000",
-  prelim_query_url = "https://data.cdc.gov/resource/mpgq-jmmr.csv?$limit=50000",
-  raw_metadata_url = "https://data.cdc.gov/api/views/ua7e-t2fy",
-  prelim_metadata_url = "https://data.cdc.gov/api/views/mpgq-jmmr",
+  raw_query_url = "https://data.cdc.gov/resource/rdmq-nq56.csv?$limit=10000000",
+  raw_metadata_url = "https://data.cdc.gov/api/views/rdmq-nq56",
   raw_file_name_prefix = glue("{DATA_SOURCE_NAME}_data_raw"),
   s3_bucket = "forecasting-team-data",
   local_raw_cache_path = glue("cache/{DATA_SOURCE_NAME}_raw_cache"),
