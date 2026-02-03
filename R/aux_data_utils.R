@@ -661,26 +661,6 @@ gen_ili_data <- function(default_day_of_week = 1) {
     as_epi_archive(compactify = TRUE)
 }
 
-#' Get the NHSN data archive from S3
-#'
-#' If you want to avoid downloading the archive from S3 every time, you can
-#' call `get_s3_object_last_modified` to check if the archive has been updated
-#' since the last time you downloaded it.
-#'
-#' @param disease_name The name of the disease ("nhsn_covid" or "nhsn_flu")
-#' @return An epi_archive of the NHSN data.
-get_nhsn_data_archive <- function(disease_name) {
-  aws.s3::s3read_using(
-    nanoparquet::read_parquet,
-    object = "nhsn_data_archive.parquet",
-    bucket = "forecasting-team-data"
-  ) %>%
-    filter(disease == disease_name) %>%
-    filter(!grepl("region.*", geo_value)) %>%
-    select(-version_timestamp, -disease) %>%
-    as_epi_archive(compactify = TRUE)
-}
-
 up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
   disease <- arg_match(disease)
   nssp_national <- get_cast_api_data(
