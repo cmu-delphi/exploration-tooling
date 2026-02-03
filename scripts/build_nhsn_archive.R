@@ -186,6 +186,8 @@ update_data_raw <- function() {
 
   # Get the last time the raw data was updated from Socrata.
   raw_update_at <- get_socrata_updated_at(config$raw_metadata_url, missing_value = current_time)
+  # Uncomment if you want to force download.
+  # raw_update_at <- current_time
   last_raw_file_update_at <- get_last_raw_update_at("raw")
   # If the raw data has been updated or there was a failure getting metadata,
   # download it.
@@ -216,6 +218,8 @@ update_data_raw <- function() {
 
   # Get the last time the prelim data was updated from Socrata.
   prelim_update_at <- get_socrata_updated_at(config$prelim_metadata_url, missing_value = current_time)
+  # Uncomment if you want to force download.
+  # prelim_update_at <- current_time
   last_prelim_file_update_at <- get_last_raw_update_at("prelim")
   # If the prelim data has been updated or there was a failure getting metadata,
   # download it.
