@@ -220,7 +220,8 @@ parameters_and_date_targets <- rlang::list2(
     name = nssp_archive_data,
     command = {
       up_to_date_nssp_state_archive("covid")
-    }
+    },
+    cue = tar_cue("always")
   ),
   tar_target(
     name = nssp_latest_data,

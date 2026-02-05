@@ -242,11 +242,12 @@ parameters_and_date_targets <- rlang::list2(
         filter(source != "nhsn")
     }
   ),
-  tar_make(
+  tar_target(
     name = nhsn_archive_data,
     command = {
       get_nhsn_data_archive("flu")
-    }
+    },
+    cue = tar_cue("always")
   ),
   tar_target(
     name = nhsn_latest_data,
@@ -263,7 +264,8 @@ parameters_and_date_targets <- rlang::list2(
     name = nssp_archive_data,
     command = {
       up_to_date_nssp_state_archive("influenza")
-    }
+    },
+    cue = tar_cue("always")
   ),
   tar_target(
     name = nssp_latest_data,
