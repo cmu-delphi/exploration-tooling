@@ -4,10 +4,14 @@
 
 ## Overview
 
-- The weekly fanplots were used by the team to visually inspect the forecasts.
+- The weekly fanplots are used by the team to visually inspect the forecasts.
 - The season reports provide a general analysis of the 2024-2025 season's data and forecaster performance.
 - The backtesting reports were pre-season tests of a variety of forecasters on the 2023-2024 season's data.
-- A description of the forecaster families explored is provided at the bottom of the page.
+- The current forecaster consists of
+  - Main component: An AR model using the most recent week and the week before that, with training data taken from a 7 week window centered on the date of the forecast in all previous year's data. This is the seasonal training window described [here](### Autoregressive models with exogenous features)
+  - Minor secondary component: The same model without nssp, but potentially normalized and using alternative historical sources. This is described [here](### Autoregressive models with augmented data).
+  - Backup: climate linear, which combines the historical quantiles with a linear extrapolation of the most recent data.
+- A more detailed description of the forecaster families explored is provided at the bottom of the page.
 
 ## Most recent week
 

@@ -201,12 +201,12 @@ parameters_and_date_targets <- rlang::list2(
     name = covid_data_substitutions,
     command = "scripts/covid_data_substitutions.csv"
   ),
-  tar_change(
+  tar_target(
     name = nhsn_archive_data,
-    change = get_local_file_last_modified("cache/nhsn_data_archive.parquet"),
     command = {
       get_nhsn_data_archive("covid")
-    }
+    },
+    cue = tar_cue("always")
   ),
   tar_target(
     name = nhsn_latest_data,
@@ -216,12 +216,8 @@ parameters_and_date_targets <- rlang::list2(
         filter(geo_value %nin% g_insufficient_data_geos)
     }
   ),
-  tar_change(
+  tar_target(
     name = nssp_archive_data,
-    change = max(
-      get_covidcast_signal_last_update("nssp", "pct_ed_visits_covid", "state"),
-      get_socrata_updated_at("https://data.cdc.gov/api/views/mpgq-jmmr", lubridate::now(tz = "UTC"))
-    ),
     command = {
       up_to_date_nssp_state_archive("covid")
     }
