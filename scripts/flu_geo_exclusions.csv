@@ -12,18 +12,6 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, climate_geo_agged, all, 0
 2024-10-01, climate_quantile_extrapolated, all, 0
 ##################
-# Feb 11, lots of geo variation
-##################
-2026-02-11, all, mp, 0
-2026-02-11, windowed_seasonal, all, 0.5
-2026-02-11, windowed_seasonal_extra_sources, all, 3
-2026-02-11, climate_linear, all, 10
-2026-02-11, linear, all, 3
-2026-02-11, linearlog, all, 0
-2026-02-11, climate_base, all, 2
-2026-02-11, climate_geo_agged, all, 0
-2026-02-11, climate_quantile_extrapolated, all, 0
-##################
 # Jan 7
 ##################
 2026-01-07, all, mp, 0
