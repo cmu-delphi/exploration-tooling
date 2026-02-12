@@ -676,14 +676,14 @@ get_nhsn_data_archive <- function(disease = c("covid", "flu")) {
     signal = glue::glue("confirmed_admissions_{disease}_ew"),
     geo_type = "state",
     columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
-    limit = -1
+    version_query = glue::glue("all<={Sys.Date()}")
   )
   nhsn_nation <- get_cast_api_data(
     source = "nhsn",
     signal = glue::glue("confirmed_admissions_{disease}_ew"),
     geo_type = "nation",
     columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
-    limit = -1
+    version_query = glue::glue("all<={Sys.Date()}")
   )
   nhsn_data <- nhsn_state %>%
     rbind(nhsn_nation) %>%
@@ -707,14 +707,14 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     signal = glue::glue("pct_ed_visits_{disease}"),
     geo_type = "nation",
     columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
-    limit = -1
+    version_query = glue::glue("all<={Sys.Date()}")
   )
   nssp_state <- get_cast_api_data(
     source = "nssp",
     signal = glue::glue("pct_ed_visits_{disease}"),
     geo_type = "state",
     columns = c("geo_value", "time_value", "value", "report_ts_nominal_start", "report_ts_nominal_end"),
-    limit = -1
+    version_query = glue::glue("all<={Sys.Date()}")
   )
   nssp_data <- nssp_state %>%
     rbind(nssp_national) %>%

@@ -941,19 +941,16 @@ compare_s3_etag <- function(bucket, key, region = "us-east-1") {
 }
 
 build_cast_api_query <- function(
-    source = c("nssp", "nhsn"),
-    signal = NULL,
-    geo_type = c("state", "nation"),
+    source,
+    signal,
+    geo_type,
     columns = NULL,
     fill_method = c("source", "fill_ave", "fill_zero"),
-    limit = -1,
-    offset = 0,
-    versions_before = NULL,
-    geo_value = NULL,
-    time_value = NULL) {
-  source <- rlang::arg_match(source)
+    version_query = NULL) {
+  source <- rlang::arg_match(source, values = c("nssp", "nhsn"))
+  stopifnot(is.character(signal), length(signal) == 1L)
+  geo_type <- rlang::arg_match(geo_type, values = c("state", "nation"))
   fill_method <- rlang::arg_match(fill_method)
-  geo_type <- rlang::arg_match(geo_type)
   columns <- columns %||% c("geo_value", "time_value", "value")
 
   httr2::request("https://delphi.cmu.edu/cast-api/epidata/v2") %>%
@@ -961,13 +958,9 @@ build_cast_api_query <- function(
       source = source,
       signal = signal,
       geo_type = geo_type,
-      versions_before = versions_before,
+      versions_before = version_query,
       columns = columns,
-      limit = limit,
-      offset = offset,
       fill_method = fill_method,
-      geo_value = geo_value,
-      time_value = time_value,
       .multi = "explode"
     )
 }

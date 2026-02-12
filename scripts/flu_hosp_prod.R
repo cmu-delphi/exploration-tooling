@@ -242,12 +242,12 @@ parameters_and_date_targets <- rlang::list2(
         filter(source != "nhsn")
     }
   ),
-  tar_target(
+  tar_change(
     name = nhsn_archive_data,
+    change = get_cast_api_latest_update_date(source = "nhsn"),
     command = {
       get_nhsn_data_archive("flu")
-    },
-    cue = tar_cue("always")
+    }
   ),
   tar_target(
     name = nhsn_latest_data,
@@ -257,15 +257,12 @@ parameters_and_date_targets <- rlang::list2(
         filter(geo_value %nin% g_insufficient_data_geos)
     }
   ),
-  # TODO: Currently metadata queries are slow 25s, while downloading takes 0.5s. Optimize later.
-  # tar_change(
-  # change = get_cast_api_latest_update_date(source = "nssp"),
-  tar_target(
+  tar_change(
     name = nssp_archive_data,
+    change = get_cast_api_latest_update_date(source = "nssp"),
     command = {
       up_to_date_nssp_state_archive("influenza")
-    },
-    cue = tar_cue("always")
+    }
   ),
   tar_target(
     name = nssp_latest_data,
