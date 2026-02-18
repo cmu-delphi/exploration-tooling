@@ -174,7 +174,10 @@ data_substitutions <- function(dataset, substitutions_path, forecast_generation_
   ) %>%
     filter(forecast_date == forecast_generation_date) %>%
     select(-forecast_date) %>%
-    rename(new_value = value)
+    rename(new_value = value) %>%
+    mutate(
+      time_value = floor_date(time_value, "week", week_start = 7) + 3
+    )
   # Replace the most recent values in the appropriate keys with the substitutions
   new_values <- dataset %>%
     inner_join(substitutions, by = join_by(geo_value, time_value)) %>%
