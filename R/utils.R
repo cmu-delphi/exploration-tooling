@@ -1,3 +1,4 @@
+EPIDATA_V2_URL <- "https://delphi.cmu.edu/cast-api/epidata/v2"
 #' Look up forecasters by name
 #'
 #' Given a (partial) forecaster name, look up all forecasters in the given
@@ -149,9 +150,10 @@ make_ensemble_grid <- function(tib) {
 #'
 #' @export
 get_exclusions <- function(
-    date,
-    forecaster,
-    exclusions_json = here::here("scripts", "geo_exclusions.json")) {
+  date,
+  forecaster,
+  exclusions_json = here::here("scripts", "geo_exclusions.json")
+) {
   if (!file.exists(exclusions_json)) {
     return("")
   }
@@ -754,6 +756,26 @@ get_socrata_updated_at <- function(dataset_url, missing_value) {
   )
 }
 
+get_cast_api_updated_at <- function(source, signal = NULL) {
+  req <- httr2::request(EPIDATA_V2_URL) %>%
+    httr2::req_url_path_append("metadata/latest_update/") %>%
+    httr2::req_url_query(
+      source = source,
+      signal = signal,
+      .multi = "explode"
+    )
+  proxy_port <- Sys.getenv("CAST_API_PROXY_PORT", "")
+  if (proxy_port != "") {
+    # if you need to use a proxy, ssh -D localhost:proxy_port mentat will open the SOCKS5 proxy
+    req <- req %>% httr2::req_proxy(url = "socks5h://localhost", port = as.integer(proxy_port))
+  }
+  # actually make the request
+  httr2::req_perform(req) %>%
+    httr2::resp_body_json() %>%
+    `$`("latest_update") %>%
+    as_datetime()
+}
+
 #' create a list of valid locations x forecast_dates shared among forecasters
 #' which have at least `min_locations` and `min_dates`, and create a list of
 #' these for each forecaster
@@ -812,12 +834,13 @@ get_unique <- function(forecasts, min_locations = 50, min_dates = 40) {
 #' have previous years forecasts that we definitely want to exclude via
 #' `season_start`.
 filter_shared_geo_dates <- function(
-    local_forecasts,
-    external_forecasts,
-    season_start = "2024-11-01",
-    trucated_forecasters = "windowed_seasonal_extra_sources",
-    min_locations = 52,
-    min_dates = 12) {
+  local_forecasts,
+  external_forecasts,
+  season_start = "2024-11-01",
+  trucated_forecasters = "windowed_seasonal_extra_sources",
+  min_locations = 52,
+  min_dates = 12
+) {
   # the length is one if we're forecasting this week, in which case we only want the last 12 weeks of forecasts
   if (local_forecasts %>% distinct(forecast_date) %>% length() == 1) {
     viable_dates <-
@@ -941,26 +964,35 @@ compare_s3_etag <- function(bucket, key, region = "us-east-1") {
 }
 
 build_cast_api_query <- function(
-    source,
-    signal,
-    geo_type,
-    columns = NULL,
-    fill_method = c("source", "fill_ave", "fill_zero"),
-    version_query = NULL) {
-  source <- rlang::arg_match(source, values = c("nssp", "nhsn"))
-  stopifnot(is.character(signal), length(signal) == 1L)
-  geo_type <- rlang::arg_match(geo_type, values = c("state", "nation"))
+  source = c("nssp", "nhsn"),
+  signal = NULL,
+  geo_type = c("state", "nation"),
+  columns = NULL,
+  fill_method = c("source", "fill_ave", "fill_zero"),
+  limit = -1,
+  offset = 0,
+  version_query = NULL,
+  geo_value = NULL,
+  time_value = NULL
+) {
+  source <- rlang::arg_match(source)
   fill_method <- rlang::arg_match(fill_method)
-  columns <- columns %||% c("geo_value", "time_value", "value")
+  geo_type <- rlang::arg_match(geo_type)
+  columns <- columns %||% c("geo_value", "time_value", "value", "report_ts_nominal_start")
 
-  httr2::request("https://delphi.cmu.edu/cast-api/epidata/v2") %>%
+  httr2::request(EPIDATA_V2_URL) %>%
+    httr2::req_url_path_append("archive/") %>%
     httr2::req_url_query(
       source = source,
       signal = signal,
       geo_type = geo_type,
-      versions_before = version_query,
+      version_query = version_query,
       columns = columns,
+      limit = limit,
+      offset = offset,
       fill_method = fill_method,
+      geo_value = geo_value,
+      time_value = time_value,
       .multi = "explode"
     )
 }
@@ -977,10 +1009,17 @@ get_cast_api_data <- function(...) {
   readr::read_csv(filename, show_col_types = FALSE)
 }
 
-get_cast_api_latest_update_date <- function(source = c("nssp")) {
+get_cast_api_latest_update_date <- function(source = c("nssp", "nhsn")) {
   source <- rlang::arg_match(source)
-  json <- httr2::request("https://delphi.cmu.edu/cast-api/epidata/v2/latest_update") %>%
-    httr2::req_url_query(source = source) %>%
+  proxy_port <- Sys.getenv("CAST_API_PROXY_PORT", "")
+  req <- httr2::request(EPIDATA_V2_URL) %>%
+    httr2::req_url_path_append("metadata/latest_update/") %>%
+    httr2::req_url_query(source = source)
+  if (proxy_port != "") {
+    # if you need to use a proxy, ssh -D localhost:proxy_port mentat will open the SOCKS5 proxy
+    req <- req %>% httr2::req_proxy(url = "socks5h://localhost", port = as.integer(proxy_port))
+  }
+  json <- req %>%
     httr2::req_perform() %>%
     httr2::resp_body_json()
   json$latest_update

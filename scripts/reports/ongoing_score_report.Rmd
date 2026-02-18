@@ -161,7 +161,7 @@ score_summary <- function(scores) {
     ) %>%
     left_join(se_mean_states(scores), by = "forecaster") %>%
     arrange(mean_wis) %>%
-    select(forecaster, mean_wis, se_mean_wis, mean_wis_rate, se_mean_wis_rate, mean_cov_50, mean_cov_90, geomean_wis) %>%
+    select(forecaster, mean_wis, se_mean_wis, mean_wis_rate, se_mean_wis_rate, mean_cov_50, mean_cov_90, geomean_wis, n) %>%
     mutate(forecast_date = .env$forecast_date)
 }
 datatable_function <- function(score_summary) {
@@ -207,7 +207,7 @@ datatable_function <- function(score_summary) {
 ```{r datatable_short, out.width= "100%", fig.height = 60, fig.width = 12, echo=FALSE, message=FALSE}
 score_summary_8 <- scores %>%
   filter(forecast_date >= this_week - 8 * 7) %>%
-  score_summary()
+  score_summary() %>% select(-forecast_date)
 datatable_function(score_summary_8)
 ```
 
@@ -216,7 +216,8 @@ datatable_function(score_summary_8)
 ```{r datatable_shortest, out.width= "100%", fig.height = 60, fig.width = 12, echo=FALSE, message=FALSE}
 score_summary_short <- scores %>%
   filter(forecast_date > this_week - 4 * 7) %>%
-  score_summary()
+  score_summary() %>%
+  select(-forecast_date)
 datatable_function(score_summary_short)
 ```
 
@@ -224,9 +225,22 @@ datatable_function(score_summary_short)
 ```{r datatable_long, fig.height = 60, fig.width = 12, echo=FALSE, message=FALSE}
 score_summary_long <- scores %>%
   filter(forecast_date > this_week - 52 * 7) %>%
-  score_summary()
+  score_summary() %>%
+  select(-forecast_date)
 datatable_function(score_summary_long)
 ```
+
+## Comparing with PyRenew last 8 weeks
+```{r datatable_pyrenew, fig.height = 60, fig.width = 12, echo=FALSE, message=FALSE}
+pyrenew_keys <- scores %>% filter(grepl("Pyrenew", forecaster)) %>% distinct(forecast_date, ahead, geo_value)
+score_summary_pyrenew <- scores %>%
+  filter(forecast_date >= this_week - 8 * 7) %>%
+  right_join(pyrenew_keys) %>%
+  score_summary() %>%
+  select(-forecast_date)
+datatable_function(score_summary_pyrenew)
+```
+
 
 # Moving 8 week average of scores{.tabset}
 
