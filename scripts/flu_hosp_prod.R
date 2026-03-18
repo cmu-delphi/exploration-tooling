@@ -244,9 +244,9 @@ parameters_and_date_targets <- rlang::list2(
   ),
   tar_change(
     name = nhsn_archive_data,
-    change = get_cast_api_latest_update_date(source = "nhsn"),
+    change = get_local_file_last_modified("cache/nhsn_data_archive.parquet"),
     command = {
-      get_nhsn_data_archive("flu")
+      get_old_nhsn_data_archive("flu")
     }
   ),
   tar_target(

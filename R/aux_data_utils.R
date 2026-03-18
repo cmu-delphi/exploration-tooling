@@ -700,6 +700,19 @@ get_nhsn_data_archive <- function(disease = c("covid", "flu")) {
   nhsn_data
 }
 
+
+get_old_nhsn_data_archive <- function(disease_name) {
+  aws.s3::s3read_using(
+    nanoparquet::read_parquet,
+    object = "nhsn_data_archive.parquet",
+    bucket = "forecasting-team-data"
+  ) %>%
+    filter(disease == disease_name) %>%
+    filter(!grepl("region.*", geo_value)) %>%
+    select(-version_timestamp, -disease) %>%
+    as_epi_archive(compactify = TRUE)
+}
+
 up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
   disease <- arg_match(disease)
   nssp_national <- get_cast_api_data(
