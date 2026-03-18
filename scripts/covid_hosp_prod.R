@@ -204,7 +204,7 @@ parameters_and_date_targets <- rlang::list2(
   tar_target(
     name = nhsn_archive_data,
     command = {
-      get_old_nhsn_data_archive("covid")
+      get_old_nhsn_data_archive("nhsn_covid")
     },
     cue = tar_cue("always")
   ),

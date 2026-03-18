@@ -245,7 +245,7 @@ parameters_and_date_targets <- rlang::list2(
   tar_target(
     name = nhsn_archive_data,
     command = {
-      get_old_nhsn_data_archive("flu")
+      get_old_nhsn_data_archive("nhsn_flu")
     },
     cue = tar_cue("always")
   ),
