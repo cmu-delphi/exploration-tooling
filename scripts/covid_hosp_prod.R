@@ -201,12 +201,12 @@ parameters_and_date_targets <- rlang::list2(
     name = covid_data_substitutions,
     command = "scripts/covid_data_substitutions.csv"
   ),
-  tar_change(
+  tar_target(
     name = nhsn_archive_data,
-    change = get_local_file_last_modified("cache/nhsn_data_archive.parquet"),
     command = {
       get_old_nhsn_data_archive("covid")
-    }
+    },
+    cue = tar_cue("always")
   ),
   tar_target(
     name = nhsn_latest_data,
