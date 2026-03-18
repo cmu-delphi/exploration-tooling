@@ -203,7 +203,6 @@ parameters_and_date_targets <- rlang::list2(
   ),
   tar_target(
     name = nhsn_archive_data,
-    change = get_cast_api_latest_update_date(source = "nhsn"),
     command = {
       get_nhsn_data_archive("covid")
     },
