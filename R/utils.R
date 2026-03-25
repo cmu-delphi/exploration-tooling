@@ -982,6 +982,8 @@ build_cast_api_query <- function(
   fill_method <- rlang::arg_match(fill_method)
   geo_type <- rlang::arg_match(geo_type)
   columns <- columns %||% c("geo_value", "time_value", "value", "report_ts_nominal_start")
+  columns <- paste(columns, collapse = ",")
+  print(columns)
 
   httr2::request(EPIDATA_V2_URL) %>%
     httr2::req_url_path_append("archive/") %>%
@@ -1002,6 +1004,7 @@ build_cast_api_query <- function(
 
 get_cast_api_data <- function(...) {
   req <- build_cast_api_query(...)
+  print(req)
   filename <- tempfile(fileext = ".csv")
   proxy_port <- Sys.getenv("CAST_API_PROXY_PORT", "")
   if (proxy_port != "") {
