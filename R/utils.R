@@ -1,4 +1,4 @@
-EPIDATA_V2_URL <- "https://delphi.cmu.edu/cast-api/epidata/v2"
+EPIDATA_V5_URL <- "https://delphi.cmu.edu/cast-api/epidata/v5"
 #' Look up forecasters by name
 #'
 #' Given a (partial) forecaster name, look up all forecasters in the given
@@ -760,7 +760,7 @@ get_socrata_updated_at <- function(dataset_url, missing_value) {
 }
 
 get_cast_api_updated_at <- function(source, signal = NULL) {
-  req <- httr2::request(EPIDATA_V2_URL) %>%
+  req <- httr2::request(EPIDATA_V5_URL) %>%
     httr2::req_url_path_append("metadata/latest_update/") %>%
     httr2::req_url_query(
       source = source,
@@ -985,7 +985,7 @@ build_cast_api_query <- function(
   columns <- paste(columns, collapse = ",")
   print(columns)
 
-  httr2::request(EPIDATA_V2_URL) %>%
+  httr2::request(EPIDATA_V5_URL) %>%
     httr2::req_url_path_append("archive/") %>%
     httr2::req_url_query(
       source = source,
@@ -1018,7 +1018,7 @@ get_cast_api_data <- function(...) {
 get_cast_api_latest_update_date <- function(source = c("nssp", "nhsn")) {
   source <- rlang::arg_match(source)
   proxy_port <- Sys.getenv("CAST_API_PROXY_PORT", "")
-  req <- httr2::request(EPIDATA_V2_URL) %>%
+  req <- httr2::request(EPIDATA_V5_URL) %>%
     httr2::req_url_path_append("metadata/latest_update/") %>%
     httr2::req_url_query(source = source)
   if (proxy_port != "") {
