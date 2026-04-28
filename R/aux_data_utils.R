@@ -675,19 +675,19 @@ get_nhsn_data_archive <- function(disease = c("covid", "flu")) {
     source = "nhsn",
     signal = glue::glue("confirmed_admissions_{disease}_ew"),
     geo_type = "state",
-    columns = c("geo_value", "time_value", "value", "report_ts_nominal_start"),
+    columns = c("geo_value", "time_value", "value", "version"),
     version_query = glue::glue("<={Sys.Date()}")
   )
   nhsn_nation <- get_cast_api_data(
     source = "nhsn",
     signal = glue::glue("confirmed_admissions_{disease}_ew"),
     geo_type = "nation",
-    columns = c("geo_value", "time_value", "value", "report_ts_nominal_start"),
+    columns = c("geo_value", "time_value", "value", "version"),
     version_query = glue::glue("<={Sys.Date()}")
   )
   nhsn_data <- nhsn_state %>%
     rbind(nhsn_nation) %>%
-    select(geo_value, time_value, version = report_ts_nominal_start, value) %>%
+    select(geo_value, time_value, version, value) %>%
     mutate(
       geo_value = tolower(geo_value),
       # Need to center the time_value on Wednesday of the week (rather than Saturday).
@@ -719,19 +719,17 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
     source = "nssp",
     signal = glue::glue("pct_ed_visits_{disease}"),
     geo_type = "nation",
-    columns = c("geo_value", "time_value", "value", "report_ts_nominal_start"),
-    version_query = glue::glue("<={Sys.Date()}")
+    columns = c("geo_value", "time_value", "value", "version"),
   )
   nssp_state <- get_cast_api_data(
     source = "nssp",
     signal = glue::glue("pct_ed_visits_{disease}"),
     geo_type = "state",
-    columns = c("geo_value", "time_value", "value", "report_ts_nominal_start"),
-    version_query = glue::glue("<={Sys.Date()}")
+    columns = c("geo_value", "time_value", "value", "version"),
   )
   nssp_data <- nssp_state %>%
     rbind(nssp_national) %>%
-    select(geo_value, time_value, nssp = value, version = report_ts_nominal_start) %>%
+    select(geo_value, time_value, nssp = value, version) %>%
     mutate(
       geo_value = tolower(geo_value),
       # Need to center the time_value on Wednesday of the week (rather than Saturday).

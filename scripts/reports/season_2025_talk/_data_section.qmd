@@ -1,0 +1,103 @@
+# The Data
+
+## Recent Seasons Data: Flu
+
+```{r flu_archive, fig.width = 20, fig.height = 10, fig.align = "center"}
+nhsn_latest <- nhsn_archive_flu %>%
+  epix_as_of_current() %>%
+  filter(time_value >= "2020-10-01") %>%
+  add_season_info() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"))
+ggplot(nhsn_latest, aes(x = season_week, y = value, color = season, size = season)) +
+  geom_line() +
+  facet_wrap(~geo_value, scale = "free") +
+  theme(legend.text = element_text(size = 12)) +
+  scale_size_manual(values = c(rep(0.5,5), 1))
+```
+
+::: {.notes}
+Here we see the 2024/25 season in pink.
+It's the worst season in 15 years and very different from the previous 2 seasons.
+Before that, the 2020/21 and the 2021/22 seasons are essentially negligible due to the pandemic (so we've dropped them).
+
+[SciAm article with some speculation on why](https://www.scientificamerican.com/article/why-this-years-flu-season-is-the-worst-in-more-than-a-decade/).
+- Late start -> less protection + 2nd wave
+- different strain (H3N2 H1N1)
+- decreased vaccination (not that low)
+- lower levels of immunity from decreased exposure
+
+This bears out somewhat in NSSP, but it is not as extreme an increase, so it may be a change in reporting.
+:::
+
+## Recent Seasons Data: Covid
+
+```{r covid_archive, fig.width = 20, fig.height = 10, fig.align = "center"}
+nhsn_latest_covid <- nhsn_archive_covid %>%
+  epix_as_of_current() %>%
+  add_season_info() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"), season %nin% c("2019/20", "2020/21", "2021/22"))
+ggplot(nhsn_latest_covid, aes(x = season_week, y = value, color = season, size = season)) +
+  geom_line() +
+  facet_wrap(~geo_value, scale = "free") +
+  theme(legend.text = element_text(size = 12)) +
+  scale_size_manual(values = c(rep(0.5, 2), 1))
+```
+
+::: {.notes}
+Here we've dropped the 2020 through 2022 seasons because they absolutely swamp the past 3 years.
+Even so, this year is frequently without a season at all depending on the geo (for instance, see CA and FL and TX); part of the reason for this is the late summer wave, which is not visible in this data.
+:::
+
+## Data Revisions: Flu
+
+```{r flu_revision}
+nhsn_archive_flu$time_type <- "day"
+revision_sum <- nhsn_archive_flu %>% epiprocess::revision_analysis(value, min_waiting_period = NULL)
+av_re_spread <- revision_sum$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+nhsn_filtered <- nhsn_archive_flu %>%
+  filter(geo_value %in% av_re_spread$geo_value[1:18]) %>%
+  filter(time_value >= "2024-11-19")
+nhsn_filtered$DT %<>%
+  mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value[1:18]))
+```
+
+```{r flu_revision_plot, fig.width = 20, fig.height = 10, fig.align = "center"}
+autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8)) +
+  labs(title = "States with the largest mean revision")
+```
+
+::: {.notes}
+Here we see the revision behavior in the states with the largest mean revision.
+Note that some revisions are massive: NH, AZ, MN, MO.
+:::
+
+## Data Revisions: Covid
+
+```{r covid_revision}
+nhsn_archive_covid$time_type <- "day"
+revision_sum <- nhsn_archive_covid %>% epiprocess::revision_analysis(value, min_waiting_period = NULL)
+av_re_spread <- revision_sum$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+nhsn_filtered <- nhsn_archive_covid %>%
+  filter(geo_value %in% av_re_spread$geo_value[1:18]) %>%
+  filter(time_value >= "2024-11-19")
+nhsn_filtered$DT %<>%
+  mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value[1:18]))
+```
+
+```{r covid_revision_plot, fig.width = 20, fig.height = 10, fig.align = "center"}
+autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8)) +
+  labs(title = "States with the largest mean revision")
+```
+
+::: {.notes}
+Here we see the revision behavior in the states with the largest mean revision.
+Note that some revisions are massive: DC, AZ, MN, MO, HI.
+:::

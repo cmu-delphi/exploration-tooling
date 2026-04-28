@@ -999,19 +999,15 @@ build_cast_api_query <- function(
       geo_value = geo_value,
       time_value = time_value,
       .multi = "explode"
-    )
+    ) %>%
+    httr2::req_headers_redacted(token = Sys.getenv("delphi.epidata.key"))
 }
 
 get_cast_api_data <- function(...) {
   req <- build_cast_api_query(...)
   print(req)
   filename <- tempfile(fileext = ".csv")
-  proxy_port <- Sys.getenv("CAST_API_PROXY_PORT", "")
-  if (proxy_port != "") {
-    # if you need to use a proxy, ssh -D localhost:proxy_port mentat will open the SOCKS5 proxy
-    req <- req %>% httr2::req_proxy(url = "socks5h://localhost", port = as.integer(proxy_port))
-  }
-  req <- req %>% httr2::req_perform(path = filename)
+  req %>% httr2::req_perform(path = filename)
   readr::read_csv(filename, show_col_types = FALSE)
 }
 
@@ -1020,13 +1016,8 @@ get_cast_api_latest_update_date <- function(source = c("nssp", "nhsn")) {
   proxy_port <- Sys.getenv("CAST_API_PROXY_PORT", "")
   req <- httr2::request(EPIDATA_V5_URL) %>%
     httr2::req_url_path_append("metadata/latest_update/") %>%
-    httr2::req_url_query(source = source)
-  if (proxy_port != "") {
-    # if you need to use a proxy, ssh -D localhost:proxy_port mentat will open the SOCKS5 proxy
-    req <- req %>% httr2::req_proxy(url = "socks5h://localhost", port = as.integer(proxy_port))
-  }
-  json <- req %>%
+    httr2::req_url_query(source = source) %>%
     httr2::req_perform() %>%
     httr2::resp_body_json()
-  json$latest_update
+  req$latest_update
 }

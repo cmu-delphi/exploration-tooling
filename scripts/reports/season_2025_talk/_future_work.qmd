@@ -1,0 +1,11 @@
+## Future Work {.smaller}
+
+- Account for "always decreasing" behavior observed in nearly all forecasters (include external forecasters)
+  - We've determined that this is due to data bias, so we need ways to mitigate that.
+  - Possible solution is to attempt to split the data into phase components and fit a different model to each phase.
+    (Was tried before, but didn't work as well as hoped; perhaps with a better phase definition it could be better?)
+- Nowcasting, revision anticipation
+- Forecasting at the city/county level for NSSP (metrocasting)
+- Check evaluation robustness via data "fuzzing"
+  - A way to mitigate over-weighting the performance of a forecaster on a single season
+  - Possibilities include parametric boot with observational noise (additive and/or shifts) or leave-one-out training across seasons (e.g. leave 2023 out and train on 2022 and 2024)

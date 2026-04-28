@@ -1,0 +1,77 @@
+# Appendix
+
+## Scoring Metrics
+
+:::: {.columns}
+::: {.column width="50%"}
+
+- Weighted interval score (WIS)
+  - Discrete approximation to CRPS, which sums the colored area in the figure squared
+- Absolute error (AE)
+  - $|y_t - m|$ where $m$ is the median forecast
+- 80% prediction interval coverage (80%PI)
+  - Proportion of times the true value falls within the center 80%
+:::
+::: {.column width="50%"}
+
+```{r wis_definition_intuition, fig.width = 5, fig.height = 5}
+df <- data.frame(x = seq(-1, 2, length.out = 3000))
+
+df$y1 <- pnorm(df$x, mean = 0.5, sd = 0.25)
+df$y2 <- ifelse(df$x >= 0.75, 1, 0)
+
+ggplot(df, aes(x = x)) +
+  geom_line(aes(y = y1, color = "CDF of forecast")) +
+  geom_line(aes(y = y2, color = "Eventually observed value")) +
+  geom_ribbon(aes(ymin = pmin(y1, y2), ymax = pmax(y1, y2), fill = "WIS ~ ∫(F(x) - I(x ≥ .75))²"),
+              alpha = 0.3) +
+  scale_color_manual(name = "", values = c("CDF of forecast" = "red",
+                                          "Eventually observed value" = "blue")) +
+  scale_fill_manual(name = "", values = c("WIS ~ ∫(F(x) - I(x ≥ .75))²" = "red")) +
+  theme(legend.position = c(0.2, 0.8),
+        legend.background = element_rect(fill = "white"),
+        legend.text = element_text(size = 6)) +
+  labs(x = "x", y = "CDF", title = "WIS example") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+:::
+::::
+
+
+## Explicit phase definitions: Flu
+
+```{r flu_season_definitions, fig.width = 25, fig.height = 15, fig.align = "center"}
+flu_current %>%
+  filter(time_value > "2024-11-01") %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(data = flu_within_max, aes(xintercept = first_above)) +
+  geom_vline(data = flu_within_max, aes(xintercept = last_above)) +
+  facet_wrap(~geo_value, scale = "free") +
+  theme(legend.position = "none")
+```
+
+
+## Explicit phase definitions: Covid
+```{r covid_phase_definitions, fig.width = 18, fig.height = 9}
+no_phase <- covid_within_max %>% arrange(desc(rel_duration)) %>% filter(rel_duration > covid_flat_threshold)
+covid_current %>%
+  filter(time_value > "2024-11-01", geo_value %nin% no_phase$geo_value) %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(data = covid_within_max, aes(xintercept = first_above)) +
+  geom_vline(data = covid_within_max, aes(xintercept = last_above)) +
+  facet_wrap(~geo_value, scale = "free") +
+  ylim(0, NA) +
+  theme(legend.position = "none")
+```
+
+## Explicit phase definitions: Covid `flat`
+```{r covid_phase_definitions_flat, fig.width = 15, fig.height = 8}
+covid_current %>%
+  filter(time_value > "2022-06-01") %>%
+  filter(geo_value %in% no_phase$geo_value) %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(aes(xintercept = as.Date("2024-11-01"))) +
+  ylim(0, NA) +
+  theme(legend.position = "none")
+```
