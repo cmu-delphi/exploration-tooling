@@ -1,4 +1,4 @@
-EPIDATA_V5_URL <- "https://delphi.cmu.edu/cast-api/epidata/v5"
+EPIDATA_V5_URL <- "https://delphi.cmu.edu/epidata/v5"
 #' Look up forecasters by name
 #'
 #' Given a (partial) forecaster name, look up all forecasters in the given
