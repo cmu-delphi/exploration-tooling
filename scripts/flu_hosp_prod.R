@@ -734,6 +734,77 @@ external_forecast_targets <- tar_map(
     command = {
       score_forecasts(nhsn_latest_data, external_forecasts, "wk inc flu hosp")
     }
+  ),
+  tar_target(
+    name = score_external_nssp_forecasts,
+    command = {
+      score_forecasts(
+        nssp_latest_data %>% mutate(value = nssp),
+        external_forecasts,
+        "wk inc flu prop ed visits"
+      )
+    }
+  )
+)
+
+joined_targets <- list2(
+  tar_combine(
+    name = local_forecasts_and_ensembles_nhsn,
+    ensemble_targets[["forecasts_and_ensembles"]],
+    command = {
+      dplyr::bind_rows(!!!.x)
+    }
+  ),
+  tar_combine(
+    name = local_forecasts_and_ensembles_nssp,
+    ensemble_targets[["forecasts_and_ensembles_nssp"]],
+    command = {
+      dplyr::bind_rows(!!!.x)
+    }
+  ),
+  tar_target(
+    name = local_scores_nhsn,
+    command = {
+      score_forecasts(nhsn_latest_data, local_forecasts_and_ensembles_nhsn, "wk inc flu hosp")
+    }
+  ),
+  tar_target(
+    name = local_scores_nssp,
+    command = {
+      nssp_latest_data %>%
+        rename(value = nssp) %>%
+        mutate(time_value = ceiling_date(time_value, unit = "week") - 1) %>%
+        score_forecasts(local_forecasts_and_ensembles_nssp %>% mutate(value = value / 100), "wk inc flu prop ed visits")
+    }
+  ),
+  tar_combine(
+    name = joined_forecasts_and_ensembles_nhsn,
+    ensemble_targets[["forecasts_and_ensembles"]],
+    command = {
+      filter_shared_geo_dates(
+        dplyr::bind_rows(!!!.x),
+        external_forecasts_full %>%
+          filter(target == "wk inc flu hosp") %>%
+          select(-target),
+        min_locations = 52,
+        min_dates = 40
+      )
+    }
+  ),
+  tar_combine(
+    name = joined_forecasts_and_ensembles_nssp,
+    ensemble_targets[["forecasts_and_ensembles_nssp"]],
+    command = {
+      filter_shared_geo_dates(
+        dplyr::bind_rows(!!!.x),
+        external_forecasts_full %>%
+          filter(target == "wk inc flu prop ed visits") %>%
+          select(-target) %>%
+          mutate(value = value * 100),
+        min_locations = 50,
+        min_dates = 14
+      )
+    }
   )
 )
 
@@ -751,80 +822,46 @@ combined_targets <- list2(
     command = {
       dplyr::bind_rows(!!!.x)
     }
-  )
-)
-
-score_targets <- list2(
-  tar_change(
-    external_forecasts,
-    change = get_s3_object_last_modified(g_external_object_name, "forecasting-team-data"),
-    command = {
-      get_external_forecasts(g_external_object_name)
-    }
   ),
   tar_combine(
-    name = local_forecasts_and_ensembles_nhsn,
-    ensemble_targets[["forecasts_and_ensembles"]],
+    name = external_scores_nssp_full,
+    external_forecast_targets[["score_external_nssp_forecasts"]],
     command = {
       dplyr::bind_rows(!!!.x)
-    }
-  ),
-  tar_combine(
-    name = joined_forecasts_and_ensembles_nhsn,
-    ensemble_targets[["forecasts_and_ensembles"]],
-    command = {
-      filter_shared_geo_dates(
-        dplyr::bind_rows(!!!.x),
-        external_forecasts %>%
-          filter(target == "wk inc flu hosp") %>%
-          select(-target),
-        min_locations = 52,
-        min_dates = 40
-      )
-    }
-  ),
-  tar_combine(
-    name = joined_forecasts_and_ensembles_nssp,
-    ensemble_targets[["forecasts_and_ensembles_nssp"]],
-    command = {
-      filter_shared_geo_dates(
-        dplyr::bind_rows(!!!.x),
-        external_forecasts %>%
-          filter(target == "wk inc flu prop ed visits") %>%
-          select(-target) %>%
-          mutate(value = value * 100),
-        min_locations = 50,
-        min_dates = 14
-      )
     }
   ),
   tar_target(
     name = scores_nhsn,
     command = {
-      score_forecasts(nhsn_latest_data, joined_forecasts_and_ensembles_nhsn, "wk inc flu hosp")
+      bind_rows(external_scores_nhsn_full, local_scores_nhsn)
     }
   ),
   tar_target(
     name = scores_nssp,
     command = {
-      nssp_latest_data %>%
-        rename(value = nssp) %>%
-        mutate(time_value = ceiling_date(time_value, unit = "week") - 1) %>%
-        score_forecasts(joined_forecasts_and_ensembles_nssp, "wk inc flu prop ed visits")
+      bind_rows(external_scores_nssp_full, local_scores_nssp)
     }
   )
 )
+
 if (g_backtest_mode) {
-  score_notebook <- tar_target(
-    name = score_plot,
-    command = {
-      render_score_plot(score_report_rmd, scores_nhsn, g_forecast_dates, "flu", "nhsn")
-    },
-    cue = tar_cue("always")
+  score_notebook <- list2(
+    tar_target(
+      name = score_nhsn_plot,
+      command = {
+        render_score_plot(score_report_rmd, scores_nhsn, g_forecast_dates, "flu", "nhsn")
+      },
+      cue = tar_cue("always")
+    ),
+    tar_target(
+      name = score_nssp_plot,
+      command = {
+        render_score_plot(score_report_rmd, scores_nssp, g_forecast_dates, "flu", "nssp")
+      },
+      cue = tar_cue("always")
+    )
   )
 } else {
-  # Only render the report if there is only one forecast date
-  # i.e. we're running this in prod on schedule
   score_notebook <- list2(
     tar_target(
       ongoing_nhsn_score_notebook,
@@ -832,7 +869,6 @@ if (g_backtest_mode) {
         if (!dir.exists(here::here("reports"))) {
           dir.create(here::here("reports"))
         }
-        # Don't run if there aren't forecasts in the past 4 weeks to evaluate
         if (
           external_forecasts_full %>%
             filter(
@@ -840,12 +876,10 @@ if (g_backtest_mode) {
               target == "wk inc flu hosp"
             ) %>%
             distinct(forecast_date) %>%
-            nrow() ==
-            0
+            nrow() == 0
         ) {
           return()
         }
-        # Score notebook individual average (see ongoing_score_report_rmd for documentation)
         rmarkdown::render(
           ongoing_score_report_rmd,
           output_file = here::here(
@@ -877,6 +911,51 @@ if (g_backtest_mode) {
           )
         )
       }
+    ),
+    tar_target(
+      ongoing_nssp_score_notebook,
+      command = {
+        if (!dir.exists(here::here("reports"))) {
+          dir.create(here::here("reports"))
+        }
+        if (external_forecasts_full %>%
+          filter(
+            forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4 * 7,
+            target == "wk inc flu prop ed visits"
+          ) %>% distinct(forecast_date) %>% nrow() == 0) {
+          return()
+        }
+        rmarkdown::render(
+          ongoing_score_report_rmd,
+          output_file = here::here(
+            "reports",
+            sprintf("%s_flu_nssp_scoring_individual.html", as.Date(Sys.Date()))
+          ),
+          params = list(
+            disease = "flu",
+            target = "nssp",
+            external_forecasts = external_forecasts_full %>% filter(target == "wk inc flu prop ed visits") %>% select(-target),
+            archive = nssp_archive_data,
+            scores = external_scores_nssp_full,
+            averaging_method = "individual"
+          )
+        )
+        rmarkdown::render(
+          ongoing_score_report_rmd,
+          output_file = here::here(
+            "reports",
+            sprintf("%s_flu_nssp_scoring_common.html", as.Date(Sys.Date()))
+          ),
+          params = list(
+            disease = "flu",
+            target = "nssp",
+            external_forecasts = external_forecasts_full %>% filter(target == "wk inc flu prop ed visits") %>% select(-target),
+            archive = nssp_archive_data,
+            scores = external_scores_nssp_full,
+            averaging_method = "common"
+          )
+        )
+      }
     )
   )
 }
@@ -889,6 +968,6 @@ list2(
   combined_nssp_forecasts,
   external_forecast_targets,
   combined_targets,
-  score_targets,
+  joined_targets,
   score_notebook
 )
