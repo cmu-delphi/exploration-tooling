@@ -818,7 +818,7 @@ if (g_backtest_mode) {
   score_notebook <- tar_target(
     name = score_plot,
     command = {
-      render_score_plot(score_report_rmd, scores_nhsn, g_forecast_dates, "flu")
+      render_score_plot(score_report_rmd, scores_nhsn, g_forecast_dates, "flu", "nhsn")
     },
     cue = tar_cue("always")
   )
