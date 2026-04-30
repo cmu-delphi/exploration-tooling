@@ -1,0 +1,1136 @@
+---
+talk-title: "Delphi Forecasting Season 2024-25"
+talk-short-title: "Forecasting 2025"
+talk-subtitle: "State level quantile forecasting of flu and covid hospitalizations (NHSN dataset)"
+author: "Dmitry Shemetov & David Weber"
+other-authors: "help from Logan Brooks, Nat DeFries, Daniel McDonald, and Ryan Tibshirani."
+repo-address: ""
+date: "2025-08-12"
+format:
+  revealjs:
+    theme: [default, themer.scss]
+    css: tachyons-minimal.css
+    logo: "gfx/delphi.jpg"
+    chalkboard: false
+    width: 1280
+    height: 720
+    html-math-method: mathjax
+    slide-number: true
+    fig-format: svg
+    fig-align: center
+    fig-width: 5.33
+    fig-height: 3
+    scrollable: false
+    history: false
+    link-external-icon: true
+    link-external-newwindow: true
+    code-overflow: wrap
+    lang: en-CA
+    footer: "{{< meta talk-short-title >}} --- {{< meta repo-address >}}"
+    output-file: "delphi_forecasting_2025.html"
+    self-contained: true
+---
+
+<!-- Set any of the above to "" to omit them -->
+
+<!-- The below is _titleslide.qmd from before -->
+
+---
+---
+
+\DeclareMathOperator*{\minimize}{minimize}
+
+```{r setup}
+#| include: false
+primary <- "#a8201a"
+secondary <- "#f9c80e"
+tertiary <- "#2a76dd"
+fourth_colour <- "#311847"
+library(epiprocess)
+suppressMessages(library(tidyverse))
+x <- archive_cases_dv_subset
+x_latest <- epix_as_of(x, max_version = max(x$DT$version))
+self_max = max(x$DT$version)
+versions = seq(as.Date("2020-06-01"), self_max - 1, by = "1 month")
+snapshots_all <- map_dfr(versions, function(v) {
+  epix_as_of(x, max_version = v) %>% mutate(version = v)}) %>%
+  bind_rows(x_latest %>% mutate(version = self_max)) %>%
+  mutate(latest = version == self_max)
+snapshots <- snapshots_all %>%
+  filter(geo_value %in% c("ca", "fl"))
+```
+
+```{r cover-art}
+#| include: false
+snapshots_all |>
+  arrange(geo_value, version, time_value) |>
+  # filter(!latest) |>
+  ggplot(aes(x = time_value, y = percent_cli)) +
+  geom_line(
+    aes(color = factor(version), group = interaction(geo_value, version))
+  ) +
+  # geom_vline(aes(color = factor(version), xintercept = version), lty = 3,
+  #           size = 0.5) +
+  scale_x_date(minor_breaks = "month", labels = NULL) +
+  labs(x = "", y = "") +
+  theme_void() +
+  coord_cartesian(xlim = as.Date(c("2020-10-01", NA)), ylim = c(-5, NA)) +
+  scale_color_viridis_d(option = "B", end = .8) +
+  theme(legend.position = "none", panel.background = element_blank()) +
+  geom_line(
+    data = snapshots %>% filter(latest),
+    aes(x = time_value, y = percent_cli, group = geo_value),
+    inherit.aes = FALSE, color = primary)
+```
+
+::: flex
+::: w-30
+
+:::
+::: w-70
+
+## {{< meta talk-title >}} {background-image="gfx/cover-art-1.svg" background-position="bottom"}
+
+::: {.notes}
+Just one project, the grad students are up to other things, such as nowcasting tools, real case count estimates, etc.
+:::
+### {{< meta talk-subtitle >}}
+
+<br>
+
+#### {{< meta author >}}
+{{< meta other-authors >}}
+
+{{< meta date >}}
+:::
+:::
+
+<!-- The above is _titleslide.qmd from before -->
+
+```{r useful_functions}
+compute_peak_season <- function(data_current, threshold = 0.5, start_of_year = as.Date("2024-11-01")) {
+  season_length <- data_current %>% pull(time_value) %>% max() - start_of_year
+  data_current %>%
+    filter(time_value > start_of_year) %>%
+    group_by(geo_value) %>%
+    mutate(max_val = max(value)) %>%
+    filter(value >= threshold * max_val) %>%
+    summarize(first_above = min(time_value), last_above = max(time_value)) %>%
+    mutate(
+      duration = last_above - first_above,
+      rel_duration = as.integer(duration) / as.integer(season_length))
+}
+classify_phase <- function(time_value, first_above, last_above, rel_duration, threshold) {
+  case_when(
+    rel_duration > threshold ~ "flat",
+    time_value < first_above ~ "increasing",
+    time_value > last_above ~ "decreasing",
+    .default = "peak"
+  ) %>% factor(levels = c("increasing", "peak", "decreasing", "flat"))
+}
+```
+
+```{r data_setup, include=FALSE}
+library(aws.s3)
+library(qs2)
+library(tidyverse)
+library(epidatr)
+library(epipredict)
+library(epidatasets)
+theme_set(theme_bw())
+knitr::opts_chunk$set(
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE,
+  dev = "png"
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+here::i_am("scripts/reports/delphi_forecasting_2025/delphi_forecasting_2025.qmd")
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+Mean <- function(x) mean(x, na.rm = TRUE)
+GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
+our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "seasonal_nssp_latest", "ensemble_mix")
+rename_forecasters <- function(df) {
+  dplyr::mutate(df, forecaster = dplyr::case_match(
+    forecaster,
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = forecaster
+  ))
+}
+
+cache_dir <- file.path(getwd(), "_cache")
+dir.create(cache_dir, showWarnings = FALSE, recursive = TRUE)
+cache_key <- format(as.Date(cut(Sys.Date(), "week")), "%Y-%m-%d")
+cached_load <- function(name, fn) {
+  path <- file.path(cache_dir, paste0(name, "_", cache_key, ".rds"))
+  if (file.exists(path)) readRDS(path) else { result <- fn(); saveRDS(result, path); result }
+}
+s3_read <- function(object, bucket = "forecasting-team-data") {
+  aws.s3::s3read_using(qs2::qs_read, object = object, bucket = bucket)
+}
+
+nhsn_archive_flu   <- cached_load("nhsn_archive_flu",   \() s3_read("2024/flu_hosp_prod/objects/nhsn_archive_data"))
+nhsn_archive_covid <- cached_load("nhsn_archive_covid", \() s3_read("2024/covid_hosp_prod/objects/nhsn_archive_data"))
+flu_forecasts      <- cached_load("flu_forecasts",      \() bind_rows(
+  s3_read("2024/flu_hosp_prod/objects/local_forecasts_and_ensembles_nhsn"),
+  s3_read("2024/flu_hosp_prod/objects/external_forecasts_full")
+) %>% rename_forecasters())
+flu_scores         <- cached_load("flu_scores", \() {
+  nhsn_flu_latest <- nhsn_archive_flu %>%
+    epix_as_of_current() %>%
+    filter(geo_value %nin% c("as", "gu", "mp", "vi"))
+  result <- score_forecasts(nhsn_flu_latest, flu_forecasts, "wk inc flu hosp") %>%
+    rename_forecasters()
+  if (nrow(result) == 0) return(result)
+  result %>% mutate(
+    target_end_date = forecast_date + ahead * 7L,
+    our_forecaster = forecaster %in% our_forecasters
+  )
+})
+forecast_dates     <- cached_load("forecast_dates",     \() s3_read("2024/flu_hosp_prod/objects/forecast_dates"))
+covid_scores       <- cached_load("covid_scores",       \() s3_read("2024/covid_hosp_prod/objects/scores_nhsn") %>% rename_forecasters() %>% mutate(our_forecaster = forecaster %in% our_forecasters, target_end_date = forecast_date + ahead * 7L))
+covid_forecasts    <- cached_load("covid_forecasts",    \() bind_rows(
+  s3_read("2024/covid_hosp_prod/objects/local_forecasts_and_ensembles_nhsn"),
+  s3_read("2024/covid_hosp_prod/objects/external_forecasts_full")
+) %>% ungroup() %>% rename_forecasters())
+
+covid_current <- nhsn_archive_covid %>%
+  epix_as_of_current() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"))
+covid_max <- covid_current %>% group_by(geo_value) %>% summarize(max_value = max(value))
+covid_within_max <- compute_peak_season(covid_current)
+
+forecast_week <- flu_scores$forecast_date %>% unique()
+forecast_weeks_to_plot <- c(seq.Date(min(forecast_week), max(forecast_week), by = 3*7), as.Date("2025-01-18"), as.Date("2025-02-01"))
+forecast_weeks_to_plot %in% (flu_scores$forecast_date %>% unique())
+forecast_weeks_to_plot %in% (covid_scores$forecast_date %>% unique())
+```
+
+
+# Major Forecasting Challenges
+
+- **non-stationarity** - varying vaccination rates, new strains, changing mobility patterns, superspreader events, etc.
+- **large seasonal variation (flu)** - season start, duration, and peak size vary
+- **lack of seasonal component (covid)** - seasonal pattern in the data is weak or inconsistent (post-pandemic)
+- **data quality issues** - initial observations are incomplete, regular reporting delays, reporting errors, etc.
+- **few seasons to train on** - NHSN data starts in 2020, the first two seasons are excluded because they were anomalous due to the pandemic, so effectively only 2 seasons of data are available for training
+
+::: {.notes}
+- non stationarity
+- seasonal variation
+- non-seasonal
+- data quality
+- few seasons: for Flu, you can augment this using older data sources, which we do. The data isn't on the same scale however, so you have to be careful.
+:::
+
+# The Data
+Target: NHSN State level hospitalizations
+
+## Recent Seasons Data: Flu
+
+```{r flu_archive, fig.width = 20, fig.height = 10, fig.align = "center"}
+nhsn_latest <- nhsn_archive_flu %>%
+  epix_as_of_current() %>%
+  # Cut out the tiny fraction of 2019/20 data (there's like 58 data points)
+  filter(time_value >= "2020-10-01") %>%
+  add_season_info() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi")) %>%
+  dplyr::rename(counts = value)
+ggplot(nhsn_latest, aes(x = season_week, y = counts, color = season, size = season)) +
+  geom_line() +
+  facet_wrap(~geo_value, scale = "free") +
+  theme(legend.text = element_text(size = 12)) +
+  scale_size_manual(values = c(rep(0.5,5), 1))
+```
+
+::: {.notes}
+Here we see the 2024/25 season in pink.
+It's the worst season in 15 years and very different from the previous 2 seasons.
+Before that, the 2020/21 and the 2021/22 seasons are essentially negligible due to the pandemic (so we've dropped them).
+
+[SciAm article with some speculation on why](https://www.scientificamerican.com/article/why-this-years-flu-season-is-the-worst-in-more-than-a-decade/).
+- Late start -> less protection + 2nd wave
+- different strain (H3N2 H1N1)
+- decreased vaccination (not that low)
+- lower levels of immunity from decreased exposure
+
+This bears out somewhat in NSSP, but it is not as extreme an increase, so it may be a change in reporting.
+:::
+
+## Recent Seasons Data: Covid
+
+```{r covid_archive, fig.width = 20, fig.height = 10, fig.align = "center"}
+nhsn_latest_covid <- nhsn_archive_covid %>%
+  epix_as_of_current() %>%
+  add_season_info() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"), season %nin% c("2019/20", "2020/21", "2021/22")) %>%
+  rename(counts = value)
+ggplot(nhsn_latest_covid, aes(x = season_week, y = counts, color = season, size = season)) +
+  geom_line() +
+  facet_wrap(~geo_value, scale = "free") +
+  theme(legend.text = element_text(size = 12)) +
+  scale_size_manual(values = c(rep(0.5, 2), 1))
+```
+
+::: {.notes}
+Here we've dropped the 2020 through 2022 seasons because they absolutely swamp the past 3 years.
+Even so, this year is frequently without a season at all depending on the geo (for instance, see CA and FL and TX); part of the reason for this is the late summer wave, which is not visible in this data.
+:::
+
+## Data Revisions: Flu
+
+```{r flu_revision}
+nhsn_archive_flu$time_type <- "day"
+revision_sum <- nhsn_archive_flu %>% epiprocess::revision_analysis(value, min_waiting_period = NULL)
+av_re_spread <- revision_sum$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+nhsn_filtered <- nhsn_archive_flu %>%
+  filter(geo_value %in% av_re_spread$geo_value[1:18]) %>%
+  filter(time_value >= "2024-11-19")
+nhsn_filtered$DT %<>%
+  mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value[1:18]))
+```
+
+```{r flu_revision_plot, fig.width = 20, fig.height = 10, fig.align = "center"}
+autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 10)) +
+  labs(title = "States with the largest mean revision")
+```
+
+::: {.notes}
+Revision behavior in the states with the largest mean revision, ordered by mean revision.
+Note that some revisions are massive: NH, AZ, MN, MO.
+
+There's ~2 kinds of revision; the predictable upwards that takes a couple of weeks to filter in (nm), and massive on-time revisions (az).
+:::
+
+## Data Revisions: Covid
+
+```{r covid_revision}
+nhsn_archive_covid$time_type <- "day"
+revision_sum <- nhsn_archive_covid %>% epiprocess::revision_analysis(value, min_waiting_period = NULL)
+av_re_spread <- revision_sum$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+nhsn_filtered <- nhsn_archive_covid %>%
+  filter(geo_value %in% av_re_spread$geo_value[1:18]) %>%
+  filter(time_value >= "2024-11-19")
+nhsn_filtered$DT %<>%
+  mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value[1:18]))
+```
+
+```{r covid_revision_plot, fig.width = 20, fig.height = 10, fig.align = "center"}
+autoplot(nhsn_filtered, "value") + facet_wrap(~geo_value, ncol = 3, scales = "free") + theme(strip.text.x = element_text(size = 8)) +
+  labs(title = "States with the largest mean revision")
+```
+
+::: {.notes}
+Here we see the revision behavior in the states with the largest mean revision.
+Note that some revisions are massive: DC, AZ, MN, MO, HI.
+:::
+
+# Our Models
+
+Ensembles of simpler forecasters
+
+## Our Models: Baselines
+
+::: {.notes}
+Our typical forecast submission is an ensemble of several models.
+These assume the data is untrustworthy in some way. (linear throws out old data, climate_base throws out historical data).
+
+Contrast with the current baseline which just forecasts today's value forwards.
+:::
+
+- `linear`: linearly extrapolate the last 4 weeks, quantiles from the fit error
+- `climate_base`: a climatological model, quantiles estimated from a 7 week period centered on the `target_date`'s season week from historical data for that geo
+
+- `climate_linear`: a weighted ensemble of the climatological and linear, depending on the ahead and quantile
+
+## Our Models: Baselines
+```{r computing_phase}
+flu_current <- nhsn_archive_flu %>%
+  epix_as_of_current() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"))
+flu_max <- flu_current %>% group_by(geo_value) %>% summarize(max_value = max(value))
+flu_flat_threshold <- 0.9
+flu_within_max <- compute_peak_season(flu_current)
+
+sanity_check_classifying <- flu_current %>%
+  left_join(flu_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(time_value, first_above, last_above, rel_duration, flu_flat_threshold)) %>%
+  group_by(geo_value) %>%
+  distinct(phase)
+flu_repo_forecasters <- c(setdiff(unique(flu_scores$forecaster), our_forecasters), "CMU-TimeSeries")
+
+se_mean_states <- flu_scores %>%
+  left_join(flu_within_max, by = "geo_value") %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(wis_rate = wis * 1e5/pop) %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, flu_flat_threshold)) %>%
+  group_by(forecaster, geo_value) %>%
+  summarize(
+    mean_wis = Mean(wis),
+    geo_mean_wis = GeoMean(wis),
+    mean_ae = Mean(ae_median),
+    geomean_ae = GeoMean(ae_median),
+    mean_rate_wis = Mean(wis * 1e5/pop)
+  ) %>%
+  group_by(forecaster) %>%
+  summarize(
+    se_mean_wis = sd(mean_wis) / sqrt(n()),
+    se_rate_wis = sd(mean_rate_wis) / sqrt(n()),
+    se_geomean_wis = sd(geo_mean_wis) / sqrt(n()),
+    se_mean_ae = sd(mean_ae) / sqrt(n()),
+    se_geomean_ae = sd(geomean_ae) / sqrt(n())
+  ) %>%
+  mutate(across(starts_with("se"), \(x) round(x, 2)))
+flu_score_summary <- flu_scores %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  group_by(forecaster) %>%
+  mutate(
+    min_wis = min(wis[wis > 1e-5]),
+    min_ae = min(ae_median[ae_median > 1e-5])
+  ) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    wis_sd = round(sd(wis), 2),
+    pop_norm_wis = round(Mean(wis *1e5/pop), 2),
+    pop_norm_wis_sd = round(sd(wis * 1e5/pop), 2),
+    geomean_wis = round(GeoMean(wis, min_wis), 2),
+    #nWISzero = sum(wis < 1e-5),
+    mean_ae = round(Mean(ae_median), 2),
+    ae_sd = round(sd(ae_median), 2),
+    pop_norm_ae = round(Mean(ae_median*1e5/pop), 2),
+    pop_norm_ae_sd = round(sd(ae_median * 1e5/pop), 2),
+    geomean_ae = round(GeoMean(ae_median, min_ae), 2),
+    #nAEzero = sum(ae_median < 1e-5),
+    mean_cov_50 = round(Mean(interval_coverage_50), 2),
+    mean_cov_90 = round(Mean(interval_coverage_90), 2),
+    n = n()
+  ) %>%
+  left_join(se_mean_states, by = "forecaster") %>%
+  arrange(mean_wis)
+wis_score_order <- flu_score_summary %>% pull(forecaster)
+
+
+#flu_scores %>% group_by(geo_value,)
+```
+
+```{r demo_climate_linear, fig.height = 7, fig.width = 16, echo=FALSE}
+plot_geos <- c("pa", "mi")
+demo_start <- as.Date("2024-11-15")
+demo_date <- as.Date("2025-02-22")
+demo_end <- as.Date("2025-04-15")
+filtered_flu_forecasts <-
+  flu_forecasts %>%
+  filter(quantile %in% c(0.05, 0.1, 0.25, 0.4, 0.5, 0.6, 0.75, 0.9, 0.95), geo_value %in% plot_geos) %>%
+  filter(forecaster %in% c("climate_base", "linear", "climate_linear"))
+
+flu_forecast_plt <-
+  filtered_flu_forecasts %>%
+  filter(forecast_date == demo_date) %>%
+  mutate(forecaster = factor(forecaster, levels = c("linear", "climate_base", "climate_linear"))) %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(value = value * 1e5 / pop) %>%
+  pivot_wider(names_from = quantile, values_from = value) %>%
+  ggplot(aes(x = target_end_date)) +
+  geom_ribbon(aes(ymin = `0.05`, ymax = `0.95`, color = NA, fill = forecaster, group = forecast_date), alpha = 0.2) +
+  geom_ribbon(aes(ymin = `0.1`, ymax = `0.9`, color = NA, fill = forecaster, group = forecast_date), alpha = 0.2) +
+  geom_ribbon(aes(ymin = `0.25`, ymax = `0.75`, color = NA, fill = forecaster, group = forecast_date), alpha = 0.2) +
+  geom_ribbon(aes(ymin = `0.4`, ymax = `0.6`, color = NA, fill = forecaster, group = forecast_date), alpha = 0.2) +
+  geom_line(aes(y = `0.5`, color = forecaster, group = forecast_date), size = 1.2) +
+  geom_line(
+    data = flu_current %>%
+      filter(time_value > demo_start, time_value < demo_end, geo_value %in% plot_geos) %>%
+      left_join(state_census, by = join_by(geo_value == abbr)) %>%
+      mutate(value = value * 1e5 / pop),
+    aes(x = time_value, y = value)) +
+  scale_color_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2") +
+  facet_grid(geo_value ~ forecaster, scale = "free") +
+  theme(legend.position = "none") +
+  scale_x_date(breaks = "1 month", date_labels = "%b") +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 16)) +
+  ylab("rates")
+
+flu_forecast_plt
+```
+
+:::{.notes}
+`climate_linear` is ~linear at the start, and ~ climate at the end.
+Chosen to clearly represent behavior, atypically good.
+:::
+
+## Our Models: Autoregressive
+
+`windowed_seasonal`: an AR model trained on data from the same seasonal window in previous years
+
+$$x_{t+h} = a_0 + a_1 \cdot x_{t-7} + a_2 \cdot x_{t-14}$$
+
+- $x$ is hospitalization rates, $t$ is the forecast date, $h$ is the horizon in days
+- training data is drawn from a ±4 week window around the current season week in all prior seasons
+- built using [epipredict](https://cmu-delphi.github.io/epipredict/)
+
+::: {.notes}
+The "training window" approach to handling seasonality gave a large improvement over a plain AR model.
+:::
+
+## Our Models: Autoregressive — Data Preprocessing
+
+NHSN reports **counts**; we convert to **rates per 100k** before forecasting
+
+For Flu, we also augment with ILI+ and FluSURV data (inspired by Flusion), then whiten on a per-geo+source basis:
+
+1. **Variance stabilization** — 4th root transform
+2. **Scaling** — divide by the inter-quantile range (5th–95th percentile)
+3. **Centering** — subtract so that the median is zero
+
+::: {.notes}
+The augmented data sources improved the model score.
+We did not see much improvement from adding more lags or tweaking the whitening settings.
+Covid uses rates directly across all states; no whitening.
+:::
+
+## Our Models: Autoregressive — Fitting
+
+We use **quantile regression** via [epipredict](https://cmu-delphi.github.io/epipredict/reference/quantile_reg.html):
+
+- Each quantile level $\tau$ is fit as a **separate weighted linear program**:
+
+$$\minimize_{\beta} \sum_i w_i \cdot \rho_\tau(y_i - x_i^\top \beta)$$
+
+where $\rho_\tau$ is the pinball loss
+
+- No distributional assumptions — each quantile is fit independently
+- Directly optimises the WIS scoring metric used for evaluation
+
+::: {.notes}
+This is the standard quantile regression / pinball loss / check function setup.
+The weighted LP formulation means no closed-form solution, but it's fast enough in practice.
+:::
+
+## Our Models: Autoregressive with Exogenous Predictors
+
+`windowed_seasonal_nssp`: adds NSSP emergency department visits as an exogenous predictor
+
+$$x_{t+h} = a_0 + a_1 x_{t-7} + a_2 x_{t-14} + a_3 y_{t-7} + a_4 y_{t-14}$$
+
+- $y$ is NSSP (ED visit rates) — a leading indicator for hospitalizations
+- no whitening, no augmented sources (NSSP doesn't go back far enough)
+- same formulation for both Flu and Covid
+
+::: {.notes}
+Also tried Google Symptoms and NWSS state-level aggregations — no meaningful improvement.
+ED visits lead hospitalizations by ~1 week, so the signal is real but modest.
+:::
+
+## Flu: Sample Forecasts Rate Scale
+::: {.notes}
+80% CI
+Locations large/small and large/small WIS.
+We've scaled so everything is in rates per 100k; even after that the peak value varies drastically.
+Forecasters we've produced are blue, while forecasters from other teams are red; PSI-PROF is a SIR model, UMass-flusion is an AR using pre-2020 data.
+Something about the Flu data in particular leads to constantly decreasing forecasts.
+:::
+
+```{r flu_plot_sample_forecast, fig.height = 7, fig.width = 16, echo=FALSE}
+plot_geos <- c("ca", "dc", "pa", "hi", "tx")
+filtered_flu_forecasts <- flu_forecasts %>%
+  filter(quantile %in% c(0.1, 0.5, 0.9), geo_value %in% plot_geos) %>%
+  filter(forecaster %in% c("UMass-flusion", "CMU-TimeSeries", "PSI-PROF", "windowed_seasonal"))
+
+flu_forecast_plt <-
+  filtered_flu_forecasts %>%
+  filter(forecast_date %in% forecast_weeks_to_plot) %>%
+  mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
+  mutate(our_forecaster = factor(forecaster %in% our_forecasters, levels = c(TRUE, FALSE))) %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(value = value * 1e5/ pop) %>%
+  pivot_wider(names_from = quantile, values_from = value) %>%
+  ggplot(aes(x = target_end_date)) +
+  geom_ribbon(aes(ymin = `0.1`, ymax = `0.9`, color = our_forecaster, fill = our_forecaster, group = forecast_date), alpha = 0.5) +
+  geom_line(aes(y = `0.5`, color = our_forecaster, group = forecast_date)) +
+  geom_line(
+    data = flu_current %>%
+      filter(time_value > "2024-11-01", geo_value %in% plot_geos) %>%
+      left_join(state_census, by = join_by(geo_value == abbr)) %>%
+      mutate(value = value * 1e5/ pop),
+    aes(x = time_value, y = value)) +
+  scale_color_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2") +
+  facet_grid(forecaster ~ geo_value, scale = "free") +
+  theme(legend.position = "none") +
+  scale_x_date(breaks = "1 month", date_labels = "%b") +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 16)) +
+  ylab("rates")
+
+flu_forecast_plt
+```
+
+## Covid: Sample Forecasts Rate Scale
+::: {.notes}
+80% CI
+Covid doesn't have the decreasing forecasters problem. (Though PA has some revision troubles like many locations).
+:::
+
+```{r computing_phase_covid}
+covid_flat_threshold <- 0.6
+sanity_check_classifying <- covid_current %>%
+  left_join(covid_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(time_value, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  group_by(geo_value) %>%
+  distinct(phase)
+
+covid_repo_forecasters <- c(setdiff(unique(covid_scores$forecaster), our_forecasters), "CMU-TimeSeries")
+
+covid_se_mean_states <- covid_scores %>%
+  left_join(covid_within_max, by = "geo_value") %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(wis_rate = wis * 1e5/pop) %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  group_by(forecaster, geo_value) %>%
+  summarize(
+    mean_wis = Mean(wis),
+    mean_rate_wis = Mean(wis_rate),
+    geo_mean_wis = GeoMean(wis),
+    mean_ae = Mean(ae_median),
+    geomean_ae = GeoMean(ae_median)
+  ) %>%
+  group_by(forecaster) %>%
+  summarize(
+    se_mean_wis = sd(mean_wis) / sqrt(n()),
+    se_mean_rate_wis = sd(mean_rate_wis) / sqrt(n()),
+    se_geomean_wis = sd(geo_mean_wis) / sqrt(n()),
+    se_mean_ae = sd(mean_ae) / sqrt(n()),
+    se_geomean_ae = sd(geomean_ae) / sqrt(n())
+  ) %>%
+  mutate(across(starts_with("se"), \(x) round(x, 2)))
+
+
+covid_score_summary <- covid_scores %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  group_by(forecaster) %>%
+  mutate(
+    min_wis = min(wis[wis > 1e-5]),
+    min_ae = min(ae_median[ae_median > 1e-5])
+  ) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    wis_sd = round(sd(wis), 2),
+    pop_norm_wis = round(Mean(wis *1e5/pop), 2),
+    pop_norm_wis_sd = round(sd(wis * 1e5/pop), 2),
+    geomean_wis = round(GeoMean(wis, min_wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    ae_sd = round(sd(ae_median), 2),
+    pop_norm_ae = round(Mean(ae_median*1e5/pop), 2),
+    pop_norm_ae_sd = round(sd(ae_median * 1e5/pop), 2),
+    geomean_ae = round(GeoMean(ae_median, min_ae), 2),
+    mean_cov_50 = round(Mean(interval_coverage_50), 2),
+    mean_cov_90 = round(Mean(interval_coverage_90), 2),
+    n = n()
+  ) %>%
+  left_join(covid_se_mean_states, by = "forecaster") %>%
+  arrange(mean_wis)
+covid_wis_score_order <- covid_score_summary %>% pull(forecaster)
+```
+
+```{r covid_plot_sample_forecast, fig.height = 7, fig.width = 16, echo=FALSE}
+plot_geos <- c("ca", "dc", "pa", "hi", "tx")
+filtered_covid_forecasts <- covid_forecasts %>%
+  filter(quantile %in% c(0.1, 0.5, 0.9), geo_value %in% plot_geos) %>%
+  filter(forecaster %in% c("CovidHub-ensemble", "CMU-TimeSeries", "UMass-ar6_pooled", "windowed_seasonal_nssp"))
+
+covid_forecast_plt <-
+  filtered_covid_forecasts %>%
+  filter(forecast_date %in% forecast_weeks_to_plot) %>%
+  mutate(forecaster = factor(forecaster, levels = covid_wis_score_order)) %>%
+  mutate(our_forecaster = factor(forecaster %in% our_forecasters, levels = c(TRUE, FALSE))) %>%
+  left_join(state_census, by = join_by(geo_value == abbr)) %>%
+  mutate(value = value * 1e5/ pop) %>%
+  pivot_wider(names_from = quantile, values_from = value) %>%
+  ggplot(aes(x = target_end_date)) +
+  geom_ribbon(aes(ymin = `0.1`, ymax = `0.9`, color = our_forecaster, fill = our_forecaster, group = forecast_date), alpha = 0.5) +
+  geom_line(aes(y = `0.5`, color = our_forecaster, group = forecast_date)) +
+  geom_line(
+    data = covid_current %>%
+      filter(time_value > "2024-11-01", geo_value %in% plot_geos) %>%
+      left_join(state_census, by = join_by(geo_value == abbr)) %>%
+      mutate(value = value * 1e5/ pop),
+    aes(x = time_value, y = value)) +
+  scale_color_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2") +
+  facet_grid(forecaster ~ geo_value, scale = "free") +
+  theme(legend.position = "none") +
+  scale_x_date(breaks = "1 month", date_labels = "%b") +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 16)) +
+  ylab("rates")
+
+covid_forecast_plt
+```
+
+## Scoring Metrics
+
+:::: {.columns}
+::: {.column width="50%"}
+
+- **Weighted interval score (WIS)**
+  - Discrete approximation to CRPS, which sums the colored area in the figure squared
+  - Roughly, the number of mis-forecasted hospitalizations, weighted by probability squared.
+- 80% prediction interval coverage (80%PI)
+  - Proportion of times the true value falls within the center 80% probability interval
+:::
+::: {.column width="50%"}
+
+```{r wis_definition_intuition, fig.width = 5, fig.height = 5}
+df <- data.frame(x = seq(-1, 2, length.out = 3000))
+
+# Calculate y values for both functions
+df$y1 <- pnorm(df$x, mean = 0.5, sd = 0.25)  # Normal CDF
+df$y2 <- ifelse(df$x >= 0.75, 1, 0)        # Step function
+
+# Plot
+ggplot(df, aes(x = x)) +
+  # Plot the functions with color aesthetic
+  geom_line(aes(y = y1, color = "CDF of forecast")) +
+  geom_line(aes(y = y2, color = "Eventually observed value")) +
+  # Add the ribbon between the functions
+  geom_ribbon(aes(ymin = pmin(y1, y2), ymax = pmax(y1, y2), fill = "WIS ~ ∫(F(x) - I(x ≥ .75))²"),
+              alpha = 0.3) +
+  # Customize colors and fills
+  scale_color_manual(name = "", values = c("CDF of forecast" = "red",
+                                          "Eventually observed value" = "blue")) +
+  scale_fill_manual(name = "", values = c("WIS ~ ∫(F(x) - I(x ≥ .75))²" = "red")) +
+  # Add legend inside plot
+  theme(legend.position = c(0.2, 0.8),  # Adjust these values to position the legend
+        legend.background = element_rect(fill = "white"),
+        legend.text = element_text(size = 6)) +
+  labs(x = "x", y = "CDF", title = "WIS example") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+:::
+::::
+
+
+# Flu Scores
+
+
+## Flu Scores: WIS {.smaller}
+
+:::{.notes}
+mean\_wis gives the average wis across all weeks, aheads, and geos.
+mean\_rate\_wis converts the errors to a rate scale before averaging, which increases the importance of getting Wyoming correct relative to California.
+
+Throughout, `se_mean` is the standard error of the sample mean with each state a separate estimate.
+
+Our submitted forecasts are "CMU-TimeSeries".
+The rest are our component models (as they exist now).
+
+Takeaways:
+- most forecasters are statistically indistinguishable
+- `windowed_seasonal_nssp` attains very low WIS
+- `climate_linear` performs surprisingly well given its simplicity
+:::
+
+```{r flu_datatable, fig.height = 60, fig.width = 12, echo=FALSE}
+flu_score_non_plot_forecasters <- c("retro_submission", "ensemble_windowed", "climate_geo_agged")
+pop_score_order <- flu_score_summary %>% arrange(pop_norm_wis) %>% pull(forecaster)
+flu_wis_summary <- flu_score_summary %>%
+  select(forecaster, mean_wis, se_mean_wis, mean_rate_wis = pop_norm_wis, se_rate_wis) %>%
+  filter(forecaster %nin% flu_score_non_plot_forecasters)
+datatable(
+  flu_wis_summary,
+  fillContainer = FALSE,
+  options = list(
+    initComplete = htmlwidgets::JS(
+          "function(settings, json) {",
+          paste0("$(this.api().table().container()).css({'font-size': '", "10pt", "'});"),
+          "}"),
+    pageLength = 25
+  )
+) %>%
+  formatStyle("forecaster", target = c("cell"),
+              fontWeight = styleEqual(flu_repo_forecasters, rep("900", length(flu_repo_forecasters))),
+              textDecoration = styleEqual("CMU-TimeSeries", "underline")) %>%
+  formatStyle(
+    "mean_wis",
+    background = styleColorBar(c(0, max(flu_wis_summary$mean_wis)), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "mean_rate_wis",
+    background = styleColorBar(c(0, max(flu_wis_summary$mean_rate_wis)), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  )
+```
+
+Forecasters in **bold** are actually submitted to the hub. Others are our experimental models.
+
+Related Flusight-hub dashboard [here](https://reichlab.io/flusight-dashboard/eval.html): https://reichlab.io/flusight-dashboard/eval.html
+
+## Flu Scores: Phase {.smaller}
+::: {.notes}
+We classify the season into three phases: increasing, peak, and decreasing.
+Increasing is before the first time the value exceeds a threshold.
+Decreasing is the last time the value dips below the threshold.
+Peak is between these two.
+The threshold is chosen at 50% of the max value.
+
+Note that our WIS/AE is in the top 5, but everyone's score is quite similar and washed out.
+We performed well in the increasing/decreasing phases, but most of our error came in the peak phase.
+:::
+
+```{r flu_phase}
+flu_include_phase <- flu_scores %>%
+  left_join(flu_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, flu_flat_threshold))
+flu_phase_se <- flu_include_phase %>%
+  group_by(forecaster, geo_value, phase) %>%
+  summarize(
+    mean_wis = Mean(wis),
+    geo_mean_wis = GeoMean(wis),
+    mean_ae = Mean(ae_median),
+    geomean_ae = GeoMean(ae_median)
+  ) %>%
+  group_by(forecaster, phase) %>%
+  summarize(
+    se_mean_wis = sd(mean_wis) / sqrt(n()),
+    se_geomean_wis = sd(geo_mean_wis) / sqrt(n()),
+    se_mean_ae = sd(mean_ae) / sqrt(n()),
+    se_geomean_ae = sd(geomean_ae) / sqrt(n())
+  ) %>%
+  mutate(across(starts_with("se"), \(x) round(x, 2)))
+phase_scores <- flu_include_phase %>%
+  group_by(forecaster, phase) %>%
+  summarize(
+    wis_sd = round(sd(wis, na.rm = TRUE), 2),
+    ae_sd = round(sd(ae_median, na.rm = TRUE), 2),
+    across(c(wis, ae_median, interval_coverage_90), \(x) round(Mean(x), 2)),
+    n = n(),
+    our_forecaster = first(our_forecaster),
+    .groups = "drop"
+  ) %>%
+  left_join(flu_phase_se, by = c("forecaster", "phase")) %>%
+  rename(mean_wis = wis)
+sketch <- htmltools::withTags(table(
+  class = 'display',
+  style = "font-size: 11px;",
+  thead(
+    tr(
+      th(colspan = 2, "forecaster"),
+      th(colspan = 2, 'increasing'),
+      th(colspan = 2, 'peak'),
+      th(colspan = 2, 'decreasing')
+    ),
+    tr(
+      list(th("peak_wis_rank"), th("name"),
+           lapply(rep(c('mean_wis', "se_mean_wis"), 3), th)
+           )
+    )
+  )
+))
+phase_scores_wider <- phase_scores %>%
+  select(forecaster, phase, mean_wis, se_mean_wis, our_forecaster) %>%
+  pivot_wider(names_from = phase, values_from = c(mean_wis, se_mean_wis))
+wis_max <- phase_scores_wider %>% select(mean_wis_increasing, mean_wis_peak, mean_wis_decreasing) %>% max()
+phase_scores_wider %>%
+  select(forecaster, mean_wis_increasing, se_mean_wis_increasing, mean_wis_peak, se_mean_wis_peak, mean_wis_decreasing, se_mean_wis_decreasing) %>%
+  arrange(mean_wis_peak) %>%
+  filter(forecaster %nin% flu_score_non_plot_forecasters) %>%
+  datatable(
+    fillContainer = FALSE,
+    options = list(
+      initComplete = htmlwidgets::JS(
+          "function(settings, json) {",
+          paste0("$(this.api().table().container()).css({'font-size': '", "11pt", "'});"),
+          "}"),
+      pageLength = 25
+    ),
+    container = sketch
+  ) %>%
+  formatStyle("forecaster", target = c("cell"),
+              fontWeight = styleEqual(flu_repo_forecasters, rep("900", length(flu_repo_forecasters))),
+              textDecoration = styleEqual("CMU-TimeSeries", "underline")) %>%
+  formatStyle(
+    "mean_wis_increasing",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "mean_wis_peak",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "mean_wis_decreasing",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  )
+
+```
+Forecasters in **bold** are actually submitted to the hub. Others are our experimental models.
+
+Related Flusight-hub dashboard [here](https://reichlab.io/flusight-dashboard/eval.html): https://reichlab.io/flusight-dashboard/eval.html
+
+# Covid Scores
+## Covid Scores: WIS {.smaller}
+::: {.notes}
+`CMU-TimeSeries` did significantly worse; a large part of this is poor performance on first few weeks when we were using the baseline models.
+:::
+
+```{r covid_datatable, fig.height = 60, fig.width = 12, echo=FALSE}
+wis_score_order <- covid_score_summary %>% pull(forecaster)
+pop_score_order <- covid_score_summary %>% arrange(pop_norm_wis) %>% pull(forecaster)
+covid_score_non_plot_forecasters <- c("ensemble_windowed", "ensemble_mix", "climate_geo_agged")
+covid_wis_summary <-
+  covid_score_summary %>%
+  filter(forecaster %nin% covid_score_non_plot_forecasters) %>%
+  select(forecaster, mean_wis, se_mean_wis, mean_rate_wis =pop_norm_wis, se_mean_rate_wis)
+
+  datatable(
+    covid_wis_summary,
+    fillContainer = FALSE,
+    options = list(
+      initComplete = htmlwidgets::JS(
+          "function(settings, json) {",
+          paste0("$(this.api().table().container()).css({'font-size': '", "10pt", "'});"),
+          "}"),
+      pageLength = 25
+    )
+  ) %>%
+  formatStyle("forecaster", target = c("cell"),
+              fontWeight = styleEqual(covid_repo_forecasters, rep("900", length(covid_repo_forecasters))),
+              textDecoration = styleEqual("CMU-TimeSeries", "underline")) %>%
+  formatStyle(
+    "mean_wis",
+    background = styleColorBar(c(0, max(flu_wis_summary$mean_wis)), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "mean_rate_wis",
+    background = styleColorBar(c(0, max(flu_wis_summary$mean_rate_wis)), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  )
+```
+
+Forecasters in **bold** are actually submitted to the hub. Others are our experimental models.
+
+Related covidhub-dashboard [here](https://reichlab.io/covidhub-dashboard/eval.html): https://reichlab.io/covidhub-dashboard/eval.html
+
+## Covid Scores: Aggregated By Forecast Date {visibility="hidden"}
+:::{.notes}
+Too much inside baseball to be worth including.
+:::
+```{r, fig.height = 6, fig.width = 12, echo=FALSE}
+agg_covid <- covid_scores %>%
+  filter(forecaster %nin% c("climate_geo_agged", "linear")) %>%
+  filter(forecast_date > "2024-10-01") %>%
+  filter(forecast_date != as.Date("2025-01-25")) %>%
+  group_by(forecaster, forecast_date) %>%
+  summarize(
+    mean_wis = round(Mean(wis), 2),
+    wis_sd = round(sd(wis), 2),
+    geomean_wis = round(GeoMean(wis), 2),
+    mean_ae = round(Mean(ae_median), 2),
+    geomean_ae = round(GeoMean(ae_median), 2),
+    mean_interval_coverage_90 = round(Mean(interval_coverage_90), 2),
+  )
+
+p <- ggplot(agg_covid, aes(x = forecast_date, y = mean_wis, color = forecaster)) +
+  geom_line() +
+  #geom_ribbon(aes(ymin = mean_wis - wis_sd, ymax = mean_wis + wis_sd, fill = forecaster), alpha = 0.1) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Forecast Date", y = "Mean WIS")
+
+style(ggplotly(p), visible = "legendonly", traces = c(1, 6, 8, 9, 10, 11, 12, 13, 14))
+```
+
+
+## Covid Scores: Phase {.smaller}
+
+```{r covid_phase}
+covid_include_phase <- covid_scores %>%
+  left_join(covid_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold))
+
+covid_phase_se <- covid_include_phase %>%
+  group_by(forecaster, geo_value, phase) %>%
+  summarize(
+    mean_wis = Mean(wis),
+    geo_mean_wis = GeoMean(wis),
+    mean_ae = Mean(ae_median),
+    geomean_ae = GeoMean(ae_median)
+  ) %>%
+  group_by(forecaster, phase) %>%
+  summarize(
+    se_mean_wis = sd(mean_wis, na.rm = TRUE) / sqrt(n()),
+    se_geomean_wis = sd(geo_mean_wis, na.rm = TRUE) / sqrt(n()),
+    se_mean_ae = sd(mean_ae, na.rm = TRUE) / sqrt(n()),
+    se_geomean_ae = sd(geomean_ae, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  mutate(across(starts_with("se"), \(x) round(x, 2)))
+
+phase_scores <-
+  covid_scores %>%
+  left_join(covid_within_max, by = "geo_value") %>%
+  mutate(phase = classify_phase(target_end_date, first_above, last_above, rel_duration, covid_flat_threshold)) %>%
+  group_by(forecaster, phase) %>%
+  summarize(
+    wis_sd = round(sd(wis, na.rm = TRUE), 2),
+    ae_sd = round(sd(ae_median, na.rm = TRUE), 2),
+    across(c(wis, ae_median, interval_coverage_90), \(x) round(Mean(x), 2)),
+    n = n(),
+    our_forecaster = first(our_forecaster),
+    .groups = "drop"
+  ) %>%
+  left_join(covid_phase_se, by = c("forecaster", "phase")) %>%
+  rename(mean_wis = wis)
+sketch <- htmltools::withTags(table(
+  class = 'display',
+  style = "font-size: 12px;",
+  thead(
+    tr(
+      th(colspan = 2, "forecaster"),
+      th(colspan = 2, 'increasing'),
+      th(colspan = 2, 'peak'),
+      th(colspan = 2, 'decreasing'),
+      th(colspan = 2, 'flat')
+    ),
+    tr(
+      list(th("peak_wis_rank"), th("name"),
+           lapply(rep(c('mean_wis', 'se_mean_wis'), 4), th)
+           )
+    )
+  )
+))
+phase_scores_wider <- phase_scores %>%
+  select(forecaster, phase, mean_wis, se_mean_wis, our_forecaster) %>%
+  pivot_wider(names_from = phase, values_from = c(mean_wis, se_mean_wis)) %>%
+  select(forecaster, mean_wis_increasing, se_mean_wis_increasing, mean_wis_peak, se_mean_wis_peak, mean_wis_decreasing, se_mean_wis_decreasing, mean_wis_flat, se_mean_wis_flat) %>%
+  arrange(mean_wis_peak)
+wis_max <- phase_scores_wider %>% 
+  filter(forecaster %nin% covid_score_non_plot_forecasters) %>%
+  select(mean_wis_increasing, mean_wis_peak, mean_wis_decreasing) %>%
+  max()
+datatable(
+  phase_scores_wider %>% filter(forecaster %nin% c("seasonal_nssp_latest")),
+  fillContainer = FALSE,
+  options = list(
+    initComplete = htmlwidgets::JS(
+          "function(settings, json) {",
+          paste0("$(this.api().table().container()).css({'font-size': '", "12pt", "'});"),
+          "}"),
+    pageLength = 25
+  ),
+  container = sketch
+) %>%
+  formatStyle("forecaster", target = c("cell"),
+              fontWeight = styleEqual(covid_repo_forecasters, rep("900", length(covid_repo_forecasters))),
+              textDecoration = styleEqual("CMU-TimeSeries", "underline")) %>%
+  formatStyle(
+    "mean_wis_increasing",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "mean_wis_peak",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "mean_wis_decreasing",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  ) %>%
+  formatStyle(
+    "mean_wis_flat",
+    background = styleColorBar(c(0, wis_max), 'lightblue'),
+    backgroundSize = '98% 88%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  )
+```
+
+Forecasters in **bold** are actually submitted to the hub. Others are our experimental models.
+
+Related covidhub-dashboard [here](https://reichlab.io/covidhub-dashboard/eval.html): https://reichlab.io/covidhub-dashboard/eval.html
+
+## Future Work {.smaller}
+
+- Account for "always decreasing" behavior observed in nearly all forecasters (including external forecasters)
+  - We've determined that this is due to data bias, so we need ways to mitigate that.
+  - Possible solution is to attempt to split the data into phase components and fit a different model to each phase.
+- Nowcasting, revision anticipation; ideally gives ~10% improvement in performance.
+- Forecasting at the city/county level for NSSP (metrocasting)
+<!-- - Check evaluation robustness via data "fuzzing" -->
+<!--   - A way to mitigate over-weighting the performance of a forecaster on a single season -->
+<!--   - Possibilities include parametric boot with observational noise (additive and/or shifts) or leave-one-out training across seasons (e.g. leave 2023 out and train on 2022 and 2024) -->
+
+
+# Appendix
+
+## Explicit phase definitions: Flu
+
+```{r flu_season_definitions, fig.width = 25, fig.height = 15, fig.align = "center"}
+flu_current %>%
+  filter(time_value > "2024-11-01") %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(data = flu_within_max, aes(xintercept = first_above)) +
+  geom_vline(data = flu_within_max, aes(xintercept = last_above)) +
+  facet_wrap(~geo_value, scale = "free") +
+  theme(legend.position = "none")
+```
+
+
+## Explicit phase definitions: Covid
+```{r, fig.width = 18, fig.height = 9}
+no_phase <- covid_within_max %>% arrange(desc(rel_duration)) %>% filter(rel_duration > covid_flat_threshold)
+covid_current %>%
+  filter(time_value > "2024-11-01", geo_value %nin% no_phase$geo_value) %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(data = covid_within_max, aes(xintercept = first_above)) +
+  geom_vline(data = covid_within_max, aes(xintercept = last_above)) +
+  facet_wrap(~geo_value, scale = "free") +
+  ylim(0, NA) +
+  theme(legend.position = "none")
+```
+
+## Explicit phase definitions: Covid `flat`
+```{r, fig.width = 15, fig.height = 8}
+covid_current %>%
+  filter(time_value > "2022-06-01") %>%
+  filter(geo_value %in% no_phase$geo_value) %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(aes(xintercept = as.Date("2024-11-01"))) +
+  ylim(0, NA) +
+  theme(legend.position = "none")
+```

@@ -52,7 +52,7 @@ if (!g_backtest_mode) {
     as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")),
     seq.Date(as.Date("2025-01-08"), as.Date("2025-12-17"), by = 7L),
     as.Date(c("2025-12-29")),
-    seq.Date(as.Date("2025-12-31"), Sys.Date(), by = 7L),
+    seq.Date(as.Date("2025-12-31"), Sys.Date(), by = 7L)
   )
   # Every Wednesday since mid-Nov 2024
   g_forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
@@ -760,6 +760,13 @@ list2(
     change = get_s3_object_last_modified(g_external_object_name, "forecasting-team-data"),
     command = {
       get_external_forecasts(g_external_object_name)
+    }
+  ),
+  tar_combine(
+    name = local_forecasts_and_ensembles_nhsn,
+    ensemble_targets[["forecasts_and_ensembles"]],
+    command = {
+      dplyr::bind_rows(!!!.x)
     }
   ),
   tar_combine(
