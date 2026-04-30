@@ -754,7 +754,7 @@ combined_targets <- list2(
   )
 )
 
-list2(
+score_targets <- list2(
   tar_change(
     external_forecasts,
     change = get_s3_object_last_modified(g_external_object_name, "forecasting-team-data"),
@@ -889,5 +889,6 @@ list2(
   combined_nssp_forecasts,
   external_forecast_targets,
   combined_targets,
+  score_targets,
   score_notebook
 )
