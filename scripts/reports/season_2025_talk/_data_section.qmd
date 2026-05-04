@@ -7,12 +7,12 @@ nhsn_latest <- nhsn_archive_flu %>%
   epix_as_of_current() %>%
   filter(time_value >= "2020-10-01") %>%
   add_season_info() %>%
-  filter(geo_value %nin% c("as", "gu", "mp", "vi"))
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"), season <= "2024/25")
 ggplot(nhsn_latest, aes(x = season_week, y = value, color = season, size = season)) +
   geom_line() +
   facet_wrap(~geo_value, scale = "free") +
   theme(legend.text = element_text(size = 12)) +
-  scale_size_manual(values = c(rep(0.5,5), 1))
+  scale_size_manual(values = c(rep(0.5, n_distinct(nhsn_latest$season) - 1), 1))
 ```
 
 ::: {.notes}
@@ -35,12 +35,12 @@ This bears out somewhat in NSSP, but it is not as extreme an increase, so it may
 nhsn_latest_covid <- nhsn_archive_covid %>%
   epix_as_of_current() %>%
   add_season_info() %>%
-  filter(geo_value %nin% c("as", "gu", "mp", "vi"), season %nin% c("2019/20", "2020/21", "2021/22"))
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"), season %nin% c("2019/20", "2020/21", "2021/22"), season <= "2024/25")
 ggplot(nhsn_latest_covid, aes(x = season_week, y = value, color = season, size = season)) +
   geom_line() +
   facet_wrap(~geo_value, scale = "free") +
   theme(legend.text = element_text(size = 12)) +
-  scale_size_manual(values = c(rep(0.5, 2), 1))
+  scale_size_manual(values = c(rep(0.5, n_distinct(nhsn_latest_covid$season) - 1), 1))
 ```
 
 ::: {.notes}

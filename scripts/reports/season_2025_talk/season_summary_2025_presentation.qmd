@@ -46,6 +46,7 @@ knitr::opts_chunk$set(
   dev = "png"
 )
 ggplot2::theme_set(ggplot2::theme_bw())
+here::i_am("scripts/reports/season_2025_talk/season_summary_2025_presentation.qmd")
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "seasonal_nssp_latest", "ensemble_mix")
@@ -62,17 +63,23 @@ rename_forecasters <- function(df) {
     .default = forecaster
     ))
 }
-tar_read(external_forecasts)
-tibble(
-    forecast_date_int = seq(as.Date("2024-11-23"), round_date(Sys.Date() - 3, "week", 6), by = "week")
-  ) %>%
-    mutate(
-      forecast_date_chr = as.character(as.Date(forecast_date_int)),
-      filename = paste0("exploration/", forecast_date_chr, "/", "covid", "_forecasts.parquet"),
-    )
 forecast_date_seq <- seq(as.Date("2024-11-23"), round_date(Sys.Date() - 3, "week", 6), by = "week")
 
-get_external_forecasts(paste0("exploration/", as.character("2026-54-28"), "/", disease, "_forecasts.parquet"))
+cache_dir <- file.path(getwd(), "_cache")
+dir.create(cache_dir, showWarnings = FALSE, recursive = TRUE)
+cache_key <- as.character(max(forecast_date_seq))
+
+cached_load <- function(name, fn) {
+  path <- file.path(cache_dir, paste0(name, "_", cache_key, ".rds"))
+  if (file.exists(path)) {
+    readRDS(path)
+  } else {
+    result <- fn()
+    saveRDS(result, path)
+    result
+  }
+}
+
 load_season_forecasts <- function(disease) {
   map_dfr(forecast_date_seq, \(d) {
     get_external_forecasts(paste0("exploration/", as.character(d), "/", disease, "_forecasts.parquet"))
@@ -80,11 +87,10 @@ load_season_forecasts <- function(disease) {
     rename_forecasters()
 }
 
-nhsn_archive_flu <- get_nhsn_data_archive("flu")
-nhsn_archive_covid <- get_nhsn_data_archive("covid")
-
-flu_forecasts <- load_season_forecasts("flu")
-covid_forecasts <- load_season_forecasts("covid")
+nhsn_archive_flu   <- cached_load("nhsn_archive_flu",   \() get_nhsn_data_archive("flu"))
+nhsn_archive_covid <- cached_load("nhsn_archive_covid", \() get_nhsn_data_archive("covid"))
+flu_forecasts      <- cached_load("flu_forecasts",      \() load_season_forecasts("flu"))
+covid_forecasts    <- cached_load("covid_forecasts",    \() load_season_forecasts("covid"))
 
 nhsn_flu_latest <- nhsn_archive_flu %>%
   epix_as_of_current() %>%
@@ -93,12 +99,24 @@ nhsn_covid_latest <- nhsn_archive_covid %>%
   epix_as_of_current() %>%
   filter(geo_value %nin% c("as", "gu", "mp", "vi"))
 
-flu_scores <- score_forecasts(nhsn_flu_latest, flu_forecasts, "wk inc flu hosp") %>%
-  rename_forecasters() %>%
-  mutate(our_forecaster = forecaster %in% our_forecasters)
-covid_scores <- score_forecasts(nhsn_covid_latest, covid_forecasts, "wk inc covid hosp") %>%
-  rename_forecasters() %>%
-  mutate(our_forecaster = forecaster %in% our_forecasters)
+flu_scores <- cached_load("flu_scores", \() {
+  result <- score_forecasts(nhsn_flu_latest, flu_forecasts, "wk inc flu hosp") %>%
+    rename_forecasters()
+  if (nrow(result) == 0) return(result)
+  result %>% mutate(
+    target_end_date = forecast_date + ahead * 7L,
+    our_forecaster = forecaster %in% our_forecasters
+  )
+})
+covid_scores <- cached_load("covid_scores", \() {
+  result <- score_forecasts(nhsn_covid_latest, covid_forecasts, "wk inc covid hosp") %>%
+    rename_forecasters()
+  if (nrow(result) == 0) return(result)
+  result %>% mutate(
+    target_end_date = forecast_date + ahead * 7L,
+    our_forecaster = forecaster %in% our_forecasters
+  )
+})
 
 forecast_week <- flu_scores$forecast_date %>% unique()
 forecast_weeks_to_plot <- c(seq.Date(min(forecast_week), max(forecast_week), by = 3*7), as.Date("2025-01-18"), as.Date("2025-02-01"))

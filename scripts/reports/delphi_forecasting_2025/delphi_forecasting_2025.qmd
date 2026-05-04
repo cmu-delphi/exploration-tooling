@@ -5,7 +5,7 @@ talk-subtitle: "State level quantile forecasting of flu and covid hospitalizatio
 author: "Dmitry Shemetov & David Weber"
 other-authors: "help from Logan Brooks, Nat DeFries, Daniel McDonald, and Ryan Tibshirani."
 repo-address: ""
-date: "2025-08-12"
+date: "2026-05-01"
 format:
   revealjs:
     theme: [default, themer.scss]
@@ -176,26 +176,19 @@ nhsn_archive_flu   <- cached_load("nhsn_archive_flu",   \() s3_read("2024/flu_ho
 nhsn_archive_covid <- cached_load("nhsn_archive_covid", \() s3_read("2024/covid_hosp_prod/objects/nhsn_archive_data"))
 flu_forecasts      <- cached_load("flu_forecasts",      \() bind_rows(
   s3_read("2024/flu_hosp_prod/objects/local_forecasts_and_ensembles_nhsn"),
-  s3_read("2024/flu_hosp_prod/objects/external_forecasts_full")
+  s3_read("2024/flu_hosp_prod/objects/external_forecasts_full") %>%
+    filter(target == "wk inc flu hosp" | is.na(target))
 ) %>% rename_forecasters())
-flu_scores         <- cached_load("flu_scores", \() {
-  nhsn_flu_latest <- nhsn_archive_flu %>%
-    epix_as_of_current() %>%
-    filter(geo_value %nin% c("as", "gu", "mp", "vi"))
-  result <- score_forecasts(nhsn_flu_latest, flu_forecasts, "wk inc flu hosp") %>%
-    rename_forecasters()
-  if (nrow(result) == 0) return(result)
-  result %>% mutate(
-    target_end_date = forecast_date + ahead * 7L,
-    our_forecaster = forecaster %in% our_forecasters
-  )
-})
+flu_scores         <- cached_load("flu_scores",         \() s3_read("2024/flu_hosp_prod/objects/scores_nhsn") %>% rename_forecasters() %>% mutate(our_forecaster = forecaster %in% our_forecasters, target_end_date = forecast_date + ahead * 7L))
 forecast_dates     <- cached_load("forecast_dates",     \() s3_read("2024/flu_hosp_prod/objects/forecast_dates"))
 covid_scores       <- cached_load("covid_scores",       \() s3_read("2024/covid_hosp_prod/objects/scores_nhsn") %>% rename_forecasters() %>% mutate(our_forecaster = forecaster %in% our_forecasters, target_end_date = forecast_date + ahead * 7L))
 covid_forecasts    <- cached_load("covid_forecasts",    \() bind_rows(
   s3_read("2024/covid_hosp_prod/objects/local_forecasts_and_ensembles_nhsn"),
   s3_read("2024/covid_hosp_prod/objects/external_forecasts_full")
-) %>% ungroup() %>% rename_forecasters())
+) %>%
+ungroup() %>%
+filter(target == "wk inc covid hosp" | is.na(target)) %>%
+rename_forecasters())
 
 covid_current <- nhsn_archive_covid %>%
   epix_as_of_current() %>%
@@ -207,6 +200,10 @@ forecast_week <- flu_scores$forecast_date %>% unique()
 forecast_weeks_to_plot <- c(seq.Date(min(forecast_week), max(forecast_week), by = 3*7), as.Date("2025-01-18"), as.Date("2025-02-01"))
 forecast_weeks_to_plot %in% (flu_scores$forecast_date %>% unique())
 forecast_weeks_to_plot %in% (covid_scores$forecast_date %>% unique())
+
+flu_current <- nhsn_archive_flu %>%
+  epix_as_of_current() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"))
 ```
 
 
@@ -216,7 +213,7 @@ forecast_weeks_to_plot %in% (covid_scores$forecast_date %>% unique())
 - **large seasonal variation (flu)** - season start, duration, and peak size vary
 - **lack of seasonal component (covid)** - seasonal pattern in the data is weak or inconsistent (post-pandemic)
 - **data quality issues** - initial observations are incomplete, regular reporting delays, reporting errors, etc.
-- **few seasons to train on** - NHSN data starts in 2020, the first two seasons are excluded because they were anomalous due to the pandemic, so effectively only 2 seasons of data are available for training
+- **few seasons to train on** - NHSN data starts in 2020, the first two seasons are excluded because they were anomalous due to the pandemic, so effectively only 3 seasons of data are available for training
 
 ::: {.notes}
 - non stationarity
@@ -239,11 +236,12 @@ nhsn_latest <- nhsn_archive_flu %>%
   add_season_info() %>%
   filter(geo_value %nin% c("as", "gu", "mp", "vi")) %>%
   dplyr::rename(counts = value)
+n_flu_seasons <- n_distinct(nhsn_latest$season)
 ggplot(nhsn_latest, aes(x = season_week, y = counts, color = season, size = season)) +
   geom_line() +
   facet_wrap(~geo_value, scale = "free") +
   theme(legend.text = element_text(size = 12)) +
-  scale_size_manual(values = c(rep(0.5,5), 1))
+  scale_size_manual(values = c(rep(0.5, n_flu_seasons - 1), 1))
 ```
 
 ::: {.notes}
@@ -268,11 +266,12 @@ nhsn_latest_covid <- nhsn_archive_covid %>%
   add_season_info() %>%
   filter(geo_value %nin% c("as", "gu", "mp", "vi"), season %nin% c("2019/20", "2020/21", "2021/22")) %>%
   rename(counts = value)
+n_covid_seasons <- n_distinct(nhsn_latest_covid$season)
 ggplot(nhsn_latest_covid, aes(x = season_week, y = counts, color = season, size = season)) +
   geom_line() +
   facet_wrap(~geo_value, scale = "free") +
   theme(legend.text = element_text(size = 12)) +
-  scale_size_manual(values = c(rep(0.5, 2), 1))
+  scale_size_manual(values = c(rep(0.5, n_covid_seasons - 1), 1))
 ```
 
 ::: {.notes}
@@ -427,7 +426,7 @@ wis_score_order <- flu_score_summary %>% pull(forecaster)
 ```{r demo_climate_linear, fig.height = 7, fig.width = 16, echo=FALSE}
 plot_geos <- c("pa", "mi")
 demo_start <- as.Date("2024-11-15")
-demo_date <- as.Date("2025-02-22")
+demo_date <- as.Date("2025-02-19")
 demo_end <- as.Date("2025-04-15")
 filtered_flu_forecasts <-
   flu_forecasts %>%
@@ -476,18 +475,104 @@ Chosen to clearly represent behavior, atypically good.
 $$x_{t+h} = a_0 + a_1 \cdot x_{t-7} + a_2 \cdot x_{t-14}$$
 
 - $x$ is hospitalization rates, $t$ is the forecast date, $h$ is the horizon in days
-- training data is drawn from a ±4 week window around the current season week in all prior seasons
 - built using [epipredict](https://cmu-delphi.github.io/epipredict/)
+- training data: 3 weeks before now through 5 weeks after the target date (-3/+8 from now)
+
+```{r windowed_seasonal_illustration, fig.width=25, fig.height=3.2, echo=FALSE, out.extra='class="r-stretch"'}
+demo_week <- 10
+backward_window <- 3
+forward_window <- 5
+max_ahead <- 3
+anomalous <- c("2020/21", "2021/22")
+seasons <- c("2020/21", "2021/22", "2022/23", "2023/24", "2024/25", "2025/26")
+week_min <- -5
+week_max <- 26
+
+pal <- RColorBrewer::brewer.pal(8, "Set2")
+target_week <- demo_week + max_ahead
+window_left  <- demo_week - backward_window
+window_right <- target_week + forward_window
+
+x_breaks <- c(seq(week_min + 1, 0, by = 2), seq(1, week_max, by = 5))
+x_labels <- ifelse(x_breaks <= 0, as.character(52 + x_breaks), as.character(x_breaks))
+
+tidyr::expand_grid(
+  season = factor(seasons, levels = rev(seasons)),
+  season_week = week_min:week_max
+) %>%
+  dplyr::mutate(category = dplyr::case_when(
+    season %in% anomalous                                          ~ "excluded (anomalous)",
+    season == "2025/26" & season_week == demo_week                                    ~ "forecast date",
+    season == "2025/26" & season_week == target_week                                  ~ "target date",
+    season == "2025/26" & season_week > demo_week                                     ~ "unobserved",
+    season == "2025/26" & ((season_week == demo_week - 1) | (season_week == demo_week - 2))                                ~ "predictor",
+    season == "2025/26" & season_week >= window_left & season_week <= demo_week - 2   ~ "training window",
+    season == "2025/26" & ((season_week == window_left - 1) | (season_week == window_left - 2))                              ~ "predictor",
+    season == "2025/26"                                                               ~ "observed and discarded",
+    season_week >= window_left & season_week <= window_right       ~ "training window",
+    !(season %in% anomalous) & ((season_week == window_left - 1) | (season_week == window_left - 2)) ~ "predictor",
+    TRUE                                                       ~ "observed and discarded"
+  )) %>%
+  ggplot(aes(x = season_week, y = season, fill = category)) +
+  geom_tile(color = "white", linewidth = 0.3) +
+  geom_vline(xintercept = window_left - 0.5,
+             linetype = "dashed", color = "#2ca25f", linewidth = 1.2) +
+  geom_vline(xintercept = window_right + 0.5,
+             linetype = "dashed", color = "#2ca25f", linewidth = 1.2) +
+  geom_vline(xintercept = demo_week,
+             linetype = "solid", color = pal[2], linewidth = 1.2) +
+  geom_vline(xintercept = 0.5, linetype = "dotted", color = "black", linewidth = 0.8) +
+  annotate("text", x = -2.5,      y = 6.7,  label = "← prior yr", size = 7,   color = "grey40") +
+  annotate("text", x = demo_week,   y = -0.15, label = "now",   size = 6.5, color = pal[2], vjust = 1) +
+  annotate("text", x = target_week, y = -0.15, label = "+3 wk", size = 6.5, color = pal[4], vjust = 1) +
+  scale_fill_manual(
+    name = "",
+    values = c(
+      "training window"       = pal[1],
+      "forecast date"         = pal[2],
+      "target date"           = pal[4],
+      "predictor"             = pal[3],
+      "observed and discarded" = "#d9d9d9",
+      "unobserved"            = "#f0f0f0",
+      "excluded (anomalous)"  = "#bdbdbd"
+    )
+  ) +
+  scale_x_continuous(breaks = x_breaks, labels = x_labels, name = "Week") +
+  coord_cartesian(clip = "off") +
+  labs(y = "") +
+  theme_bw() +
+  theme(
+    legend.position = "right",
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    axis.line = element_line(colour = "grey50"),
+    legend.text = element_text(size = 16),
+    legend.key.size = unit(0.7, "cm"),
+    axis.text = element_text(size = 16),
+    axis.title = element_text(size = 17),
+    plot.margin = margin(t = 5, r = 5, b = 30, l = 5)
+  )
+```
 
 ::: {.notes}
 The "training window" approach to handling seasonality gave a large improvement over a plain AR model.
 :::
+
+## Our Models: Autoregressive
+For forecasting NSSP for either flu or covid, since it is a rate to begin with, we just use that 2 term autoregressive model, using all states as training data.
 
 ## Our Models: Autoregressive — Data Preprocessing
 
 NHSN reports **counts**; we convert to **rates per 100k** before forecasting
 
 For Flu, we also augment with ILI+ and FluSURV data (inspired by Flusion), then whiten on a per-geo+source basis:
+
+- NHSN usable data: **2 seasons** (2022/23–2023/24, excluding pandemic years)
+- ILI+ extends this to **~25 seasons** (back to 1997)
+- FluSURV extends this another **~11 seasons** (back to 2009/10)
+
+To make these comparable, we normalize in several ways:
+
 
 1. **Variance stabilization** — 4th root transform
 2. **Scaling** — divide by the inter-quantile range (5th–95th percentile)
@@ -497,24 +582,6 @@ For Flu, we also augment with ILI+ and FluSURV data (inspired by Flusion), then 
 The augmented data sources improved the model score.
 We did not see much improvement from adding more lags or tweaking the whitening settings.
 Covid uses rates directly across all states; no whitening.
-:::
-
-## Our Models: Autoregressive — Fitting
-
-We use **quantile regression** via [epipredict](https://cmu-delphi.github.io/epipredict/reference/quantile_reg.html):
-
-- Each quantile level $\tau$ is fit as a **separate weighted linear program**:
-
-$$\minimize_{\beta} \sum_i w_i \cdot \rho_\tau(y_i - x_i^\top \beta)$$
-
-where $\rho_\tau$ is the pinball loss
-
-- No distributional assumptions — each quantile is fit independently
-- Directly optimises the WIS scoring metric used for evaluation
-
-::: {.notes}
-This is the standard quantile regression / pinball loss / check function setup.
-The weighted LP formulation means no closed-form solution, but it's fast enough in practice.
 :::
 
 ## Our Models: Autoregressive with Exogenous Predictors
@@ -532,6 +599,65 @@ Also tried Google Symptoms and NWSS state-level aggregations — no meaningful i
 ED visits lead hospitalizations by ~1 week, so the signal is real but modest.
 :::
 
+## Our Models: Autoregressive — Fitting
+
+We use **quantile regression** via [epipredict](https://cmu-delphi.github.io/epipredict/reference/quantile_reg.html), which wraps the standard [quantreg](https://rdrr.io/cran/quantreg/) package:
+
+- Each quantile level $\tau$ is fit as a **separate weighted linear program**:
+
+$$\minimize_{\beta} \sum_i w_i \cdot L(y_i,\, x_i^\top \beta)$$
+
+- The **pinball loss** penalises under- and over-shoots asymmetrically:
+
+$$L(y, t) := \begin{cases} (1-\tau)(t - y), & y < t \\ \tau(y - t), & y \geq t \end{cases}$$
+
+::: {.notes}
+This is the standard quantile regression / pinball loss / check function setup.
+The weighted LP formulation means no closed-form solution, but it's fast enough in practice.
+Directly optimises the WIS scoring metric used for evaluation.
+:::
+
+## Our Models: Ensemble
+
+Our submission (`CMU-TimeSeries`) is a **weighted ensemble** of the component models, with geo-level weights
+
+- Weights are (nominally) set manually each week based on performance and data quality
+- **2024/25**: initially relied heavily on `climate_linear` — the season started late and we were unsure of data quality. Eventually transitioned back to AR forecasters
+- **2025/26**: almost exclusively `windowed_seasonal_nssp` (NSSP exogenous), with a small contribution from `windowed_seasonal` (the whitening AR) for Flu
+
+::: {.notes}
+The geo-level weights let us down-weight or exclude forecasters for specific states where data quality is poor or a model is known to misbehave.
+The shift from climate_linear to nssp reflects the NSSP data becoming more reliable and the season being more "normal".
+:::
+
+## Infrastructure
+
+**Pipeline**: weekly automated runs via [`targets`](https://docs.ropensci.org/targets/) + [`epipredict`](https://cmu-delphi.github.io/epipredict/)
+
+- Each model variant is a target; `targets` skips recomputation when inputs haven't changed
+- Forecasts and scores uploaded to S3; rendered notebooks for review each week
+- Use of make to handle shared environmental variables, submitting after manual checks and any adjustments
+
+
+::: {.notes}
+The targets pipeline means the whole run is reproducible and incremental — adding a new forecast date only reruns the affected targets.
+The exploration grid was run as a backtest over 2023/24 and 2024/25; the best-performing configs (by WIS) informed the production ensemble choices.
+We ended up with windowed_seasonal_nssp as the clear winner once NSSP data quality stabilised.
+:::
+
+## Model Selection
+**Exploration**: backtest over the 2023/24 season of versioned data with several model variants
+
+- lags, up to 5 weeks back
+- Exogenous sources: NSSP, NWSS, NWSS region, Veteran's affairs, google symptoms
+- Seasonal augmentation methods: 
+  + windowed (various sizes, {3, 5, 7} weeks × forward ∈ {1, 3, 5} weeks)
+  + Aux signals:
+    - seasonal sinusoid
+    - PCA
+    - climatological
+- Residual whitening: on/off
+
 ## Flu: Sample Forecasts Rate Scale
 ::: {.notes}
 80% CI
@@ -543,34 +669,51 @@ Something about the Flu data in particular leads to constantly decreasing foreca
 
 ```{r flu_plot_sample_forecast, fig.height = 7, fig.width = 16, echo=FALSE}
 plot_geos <- c("ca", "dc", "pa", "hi", "tx")
-filtered_flu_forecasts <- flu_forecasts %>%
-  filter(quantile %in% c(0.1, 0.5, 0.9), geo_value %in% plot_geos) %>%
-  filter(forecaster %in% c("UMass-flusion", "CMU-TimeSeries", "PSI-PROF", "windowed_seasonal"))
+flu_season_start <- if (any(flu_forecasts$forecast_date >= "2025-11-01")) "2025-11-01" else "2024-11-01"
+truth_season_start <- if (flu_season_start == "2025-11-01") "2025-11-01" else "2024-11-01"
 
+# external forecasters present in 2025/26 with good geo coverage,
+# ranked by 2024/25 WIS where available
+flu_external_to_plot <- c("UMass-flusion", "FluSight-ensemble")
+flu_plot_forecasters <- c("CMU-TimeSeries", "windowed_seasonal", "windowed_seasonal_nssp", flu_external_to_plot)
+
+to_wednesday <- function(d) floor_date(d, "weeks", week_start = 7) + 3
+season_max_fd <- max(flu_forecasts$forecast_date[flu_forecasts$forecast_date >= flu_season_start])
+target_wednesdays <- seq.Date(
+  to_wednesday(as.Date(flu_season_start)),
+  to_wednesday(season_max_fd),
+  by = 3 * 7
+)
 flu_forecast_plt <-
-  filtered_flu_forecasts %>%
-  filter(forecast_date %in% forecast_weeks_to_plot) %>%
-  mutate(forecaster = factor(forecaster, levels = wis_score_order)) %>%
+  flu_forecasts %>%
+  filter(quantile %in% c(0.1, 0.5, 0.9), geo_value %in% plot_geos,
+         forecaster %in% flu_plot_forecasters,
+         forecast_date >= flu_season_start,
+         forecast_date <= target_end_date,
+         to_wednesday(forecast_date) %in% target_wednesdays) %>%
   mutate(our_forecaster = factor(forecaster %in% our_forecasters, levels = c(TRUE, FALSE))) %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
-  mutate(value = value * 1e5/ pop) %>%
+  mutate(value = value * 1e5 / pop) %>%
   pivot_wider(names_from = quantile, values_from = value) %>%
   ggplot(aes(x = target_end_date)) +
   geom_ribbon(aes(ymin = `0.1`, ymax = `0.9`, color = our_forecaster, fill = our_forecaster, group = forecast_date), alpha = 0.5) +
   geom_line(aes(y = `0.5`, color = our_forecaster, group = forecast_date)) +
   geom_line(
     data = flu_current %>%
-      filter(time_value > "2024-11-01", geo_value %in% plot_geos) %>%
+      filter(time_value > truth_season_start, geo_value %in% plot_geos) %>%
       left_join(state_census, by = join_by(geo_value == abbr)) %>%
-      mutate(value = value * 1e5/ pop),
+      mutate(value = value * 1e5 / pop),
     aes(x = time_value, y = value)) +
   scale_color_brewer(palette = "Set2") +
   scale_fill_brewer(palette = "Set2") +
-  facet_grid(forecaster ~ geo_value, scale = "free") +
+  ggh4x::facet_grid2(forecaster ~ geo_value, scales = "free", independent = "y") +
   theme(legend.position = "none") +
-  scale_x_date(breaks = "1 month", date_labels = "%b") +
+  scale_x_date(
+    breaks = "1 month",
+    labels = \(x) ifelse(format(x, "%m") == "01", format(x, "%b\n%Y"), format(x, "%b"))
+  ) +
   scale_y_continuous(breaks = scales::pretty_breaks(n = 16)) +
-  ylab("rates")
+  ylab("rates per 100k")
 
 flu_forecast_plt
 ```
@@ -644,39 +787,67 @@ covid_wis_score_order <- covid_score_summary %>% pull(forecaster)
 
 ```{r covid_plot_sample_forecast, fig.height = 7, fig.width = 16, echo=FALSE}
 plot_geos <- c("ca", "dc", "pa", "hi", "tx")
-filtered_covid_forecasts <- covid_forecasts %>%
-  filter(quantile %in% c(0.1, 0.5, 0.9), geo_value %in% plot_geos) %>%
-  filter(forecaster %in% c("CovidHub-ensemble", "CMU-TimeSeries", "UMass-ar6_pooled", "windowed_seasonal_nssp"))
+covid_season_start <- if (any(covid_forecasts$forecast_date >= "2025-11-01")) "2025-11-01" else "2024-11-01"
+covid_truth_season_start <- if (max(covid_current$time_value) >= as.Date("2025-11-01")) "2025-11-01" else "2024-11-01"
+
+covid_2526_coverage <- covid_forecasts %>%
+  filter(forecast_date >= covid_season_start, !forecaster %in% our_forecasters) %>%
+  group_by(forecaster) %>%
+  summarize(n_geos = n_distinct(geo_value)) %>%
+  filter(n_geos >= 40)
+covid_2425_wis <- covid_scores %>%
+  filter(!forecaster %in% our_forecasters) %>%
+  group_by(forecaster) %>%
+  summarize(mean_wis = mean(wis, na.rm = TRUE))
+covid_external_to_plot <- covid_2526_coverage %>%
+  left_join(covid_2425_wis, by = "forecaster") %>%
+  arrange(coalesce(mean_wis, Inf)) %>%
+  pull(forecaster) %>% head(2)
+covid_plot_forecasters <- c("CMU-TimeSeries", "windowed_seasonal_nssp", "windowed_seasonal", "CovidHub-ensemble", "OHT_JHU-nbxd")
+
+covid_season_max_fd <- max(covid_forecasts$forecast_date[covid_forecasts$forecast_date >= covid_season_start])
+covid_target_wednesdays <- seq.Date(
+  to_wednesday(as.Date(covid_season_start)),
+  to_wednesday(covid_season_max_fd),
+  by = 3 * 7
+)
 
 covid_forecast_plt <-
-  filtered_covid_forecasts %>%
-  filter(forecast_date %in% forecast_weeks_to_plot) %>%
-  mutate(forecaster = factor(forecaster, levels = covid_wis_score_order)) %>%
+  covid_forecasts %>%
+  filter(quantile %in% c(0.1, 0.5, 0.9), geo_value %in% plot_geos,
+         forecaster %in% covid_plot_forecasters,
+         forecast_date >= covid_season_start,
+         forecast_date <= target_end_date,
+         to_wednesday(forecast_date) %in% covid_target_wednesdays,
+         (target == "wk inc covid hosp") | is.na(target)) %>%
   mutate(our_forecaster = factor(forecaster %in% our_forecasters, levels = c(TRUE, FALSE))) %>%
   left_join(state_census, by = join_by(geo_value == abbr)) %>%
-  mutate(value = value * 1e5/ pop) %>%
+  mutate(value = value * 1e5 / pop) %>%
   pivot_wider(names_from = quantile, values_from = value) %>%
   ggplot(aes(x = target_end_date)) +
   geom_ribbon(aes(ymin = `0.1`, ymax = `0.9`, color = our_forecaster, fill = our_forecaster, group = forecast_date), alpha = 0.5) +
   geom_line(aes(y = `0.5`, color = our_forecaster, group = forecast_date)) +
   geom_line(
     data = covid_current %>%
-      filter(time_value > "2024-11-01", geo_value %in% plot_geos) %>%
+      filter(time_value > covid_truth_season_start, geo_value %in% plot_geos) %>%
       left_join(state_census, by = join_by(geo_value == abbr)) %>%
-      mutate(value = value * 1e5/ pop),
+      mutate(value = value * 1e5 / pop),
     aes(x = time_value, y = value)) +
   scale_color_brewer(palette = "Set2") +
   scale_fill_brewer(palette = "Set2") +
-  facet_grid(forecaster ~ geo_value, scale = "free") +
+  ggh4x::facet_grid2(forecaster ~ geo_value, scales = "free", independent = "y") +
   theme(legend.position = "none") +
-  scale_x_date(breaks = "1 month", date_labels = "%b") +
+  scale_x_date(
+    breaks = "1 month",
+    labels = \(x) ifelse(format(x, "%m") == "01", format(x, "%b\n%Y"), format(x, "%b"))
+  ) +
   scale_y_continuous(breaks = scales::pretty_breaks(n = 16)) +
-  ylab("rates")
+  ylab("rates per 100k")
 
 covid_forecast_plt
 ```
 
-## Scoring Metrics
+## Scoring Metrics {visibility="hidden"}
 
 :::: {.columns}
 ::: {.column width="50%"}
@@ -720,10 +891,7 @@ ggplot(df, aes(x = x)) +
 ::::
 
 
-# Flu Scores
-
-
-## Flu Scores: WIS {.smaller}
+## Flu Scores: WIS {visibility="hidden"}
 
 :::{.notes}
 mean\_wis gives the average wis across all weeks, aheads, and geos.
@@ -780,7 +948,7 @@ Forecasters in **bold** are actually submitted to the hub. Others are our experi
 
 Related Flusight-hub dashboard [here](https://reichlab.io/flusight-dashboard/eval.html): https://reichlab.io/flusight-dashboard/eval.html
 
-## Flu Scores: Phase {.smaller}
+## Flu Scores: Phase {visibility="hidden"}
 ::: {.notes}
 We classify the season into three phases: increasing, peak, and decreasing.
 Increasing is before the first time the value exceeds a threshold.
@@ -890,8 +1058,7 @@ Forecasters in **bold** are actually submitted to the hub. Others are our experi
 
 Related Flusight-hub dashboard [here](https://reichlab.io/flusight-dashboard/eval.html): https://reichlab.io/flusight-dashboard/eval.html
 
-# Covid Scores
-## Covid Scores: WIS {.smaller}
+## Covid Scores: WIS {visibility="hidden"}
 ::: {.notes}
 `CMU-TimeSeries` did significantly worse; a large part of this is poor performance on first few weeks when we were using the baseline models.
 :::
@@ -969,7 +1136,7 @@ style(ggplotly(p), visible = "legendonly", traces = c(1, 6, 8, 9, 10, 11, 12, 13
 ```
 
 
-## Covid Scores: Phase {.smaller}
+## Covid Scores: Phase {visibility="hidden"}
 
 ```{r covid_phase}
 covid_include_phase <- covid_scores %>%
@@ -1084,21 +1251,38 @@ Forecasters in **bold** are actually submitted to the hub. Others are our experi
 
 Related covidhub-dashboard [here](https://reichlab.io/covidhub-dashboard/eval.html): https://reichlab.io/covidhub-dashboard/eval.html
 
-## Future Work {.smaller}
+# Future Work
 
-- Account for "always decreasing" behavior observed in nearly all forecasters (including external forecasters)
-  - We've determined that this is due to data bias, so we need ways to mitigate that.
-  - Possible solution is to attempt to split the data into phase components and fit a different model to each phase.
-- Nowcasting, revision anticipation; ideally gives ~10% improvement in performance.
-- Forecasting at the city/county level for NSSP (metrocasting)
-<!-- - Check evaluation robustness via data "fuzzing" -->
-<!--   - A way to mitigate over-weighting the performance of a forecaster on a single season -->
-<!--   - Possibilities include parametric boot with observational noise (additive and/or shifts) or leave-one-out training across seasons (e.g. leave 2023 out and train on 2022 and 2024) -->
+- **"Always decreasing" bias** — many forecasters underpredict during rising phases, especially for flu; root cause is data bias, possible fix is phase-specific models
+- **Metrocasting** — city/county level forecasting for NSSP
+
+# Future Work
+
+- **Nowcasting / revision anticipation** — NHSN data is substantially revised in the weeks after initial release; a nowcasting model that anticipates these revisions could recover ~10% of forecast error
+
+```{r future_work_revision, fig.width = 20, fig.height = 7, fig.align = "center", echo = FALSE}
+nhsn_archive_flu$time_type <- "day"
+revision_sum <- nhsn_archive_flu %>% epiprocess::revision_analysis(value, min_waiting_period = NULL)
+av_re_spread <- revision_sum$revision_behavior %>%
+  group_by(geo_value) %>%
+  summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
+  arrange(desc(rel_spread)) %>%
+  filter(geo_value %nin% c("vi", "as", "gu"))
+nhsn_filtered <- nhsn_archive_flu %>%
+  filter(geo_value %in% av_re_spread$geo_value[1:12]) %>%
+  filter(time_value >= "2024-11-19")
+nhsn_filtered$DT %<>%
+  mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value[1:12]))
+autoplot(nhsn_filtered, "value") +
+  facet_wrap(~geo_value, ncol = 4, scales = "free") +
+  theme(strip.text.x = element_text(size = 10)) +
+  labs(title = "Flu: states with the largest mean revision (2024/25 season)")
+```
 
 
-# Appendix
+# Appendix {visibility="hidden"}
 
-## Explicit phase definitions: Flu
+## Explicit phase definitions: Flu {visibility="hidden"}
 
 ```{r flu_season_definitions, fig.width = 25, fig.height = 15, fig.align = "center"}
 flu_current %>%
@@ -1111,7 +1295,7 @@ flu_current %>%
 ```
 
 
-## Explicit phase definitions: Covid
+## Explicit phase definitions: Covid {visibility="hidden"}
 ```{r, fig.width = 18, fig.height = 9}
 no_phase <- covid_within_max %>% arrange(desc(rel_duration)) %>% filter(rel_duration > covid_flat_threshold)
 covid_current %>%
@@ -1124,7 +1308,7 @@ covid_current %>%
   theme(legend.position = "none")
 ```
 
-## Explicit phase definitions: Covid `flat`
+## Explicit phase definitions: Covid `flat` {visibility="hidden"}
 ```{r, fig.width = 15, fig.height = 8}
 covid_current %>%
   filter(time_value > "2022-06-01") %>%

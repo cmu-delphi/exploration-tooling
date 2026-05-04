@@ -3,7 +3,7 @@ get_external_forecasts <- function(external_object_name) {
   tryCatch(
     {
       external_values <- s3read_using(
-        nanoparquet::read_parquet,
+        arrow::read_parquet,
         object = external_object_name,
         bucket = "forecasting-team-data"
       )
@@ -19,7 +19,11 @@ get_external_forecasts <- function(external_object_name) {
       return(external_values)
     },
     error = function(e) {
-      return(tibble())
+      msg <- conditionMessage(e)
+      if (grepl("NoSuchKey|404|does not exist|not found", msg, ignore.case = TRUE)) {
+        return(tibble())
+      }
+      stop(e)
     }
   )
 }

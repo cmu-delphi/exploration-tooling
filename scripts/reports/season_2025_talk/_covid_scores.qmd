@@ -317,7 +317,7 @@ sketch <- htmltools::withTags(table(
 ))
 phase_scores_wider <- phase_scores %>%
   select(forecaster, phase, wis, se_mean_wis, our_forecaster) %>%
-  pivot_wider(names_from = phase, values_from = c(wis, se_mean_wis)) %>%
+  pivot_wider(names_from = phase, values_from = c(wis, se_mean_wis), names_expand = TRUE) %>%
   select(forecaster, wis_increasing, se_mean_wis_increasing, wis_peak, se_mean_wis_peak, wis_decreasing, se_mean_wis_decreasing, wis_flat, se_mean_wis_flat) %>%
   arrange(wis_peak)
 wis_max <- phase_scores_wider %>%

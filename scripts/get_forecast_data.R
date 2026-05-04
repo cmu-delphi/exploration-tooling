@@ -78,7 +78,6 @@ check_github_file <- function(forecaster, filename, disease) {
   response <- GET(url)
   return(status_code(response) == 200)
 }
-
 # Function to download and read a single file
 download_forecast_file <- function(forecaster, filename, disease) {
   if (disease == "covid") {
