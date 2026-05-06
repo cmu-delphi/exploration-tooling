@@ -35,3 +35,7 @@ test_proj
 .RData
 .Rhistory
 *objects*
+*.png
+covid_hosp_prod_2
+covid_hosp_prod_backup
+covid_nssp_explore

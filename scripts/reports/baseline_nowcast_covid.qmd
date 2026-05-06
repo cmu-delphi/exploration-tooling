@@ -1,0 +1,591 @@
+---
+title: "Baseline Nowcast Evaluation: COVID NHSN"
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+format:
+  html:
+    code-fold: true
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup}
+#| message: false
+#| warning: false
+knitr::opts_chunk$set(fig.align = "center", warning = FALSE, message = FALSE, cache = TRUE)
+ggplot2::theme_set(ggplot2::theme_bw())
+
+library(baselinenowcast)
+library(scoringutils)
+library(furrr)
+source(here::here("R/load_all.R"))
+```
+
+It may be worth noting that they have literally already [done some nowcasting for nssp](https://baselinenowcast.epinowcast.org/articles/nssp_nowcast.html)! They do seem to be using line-list data, so it's a different nssp source than the one we typically forecast.
+
+TODO: may also be worth checking out [NoBS](https://cran.r-project.org/web//packages/NobBS/NobBS.pdf) and/or [epi-nowcast](https://www.epinowcast.org/)
+
+## Data
+
+Load the NHSN COVID archive (cached to avoid repeat API calls).
+
+```{r load-data}
+nhsn_archive <- get_nhsn_data_archive("covid")
+
+align_version_to_wednesday <- function(dt) {
+  dt |>
+    as_tibble() |>
+    mutate(
+      version_wed = lubridate::floor_date(version, "week", week_start = 3L),
+      is_wednesday = lubridate::wday(version, week_start = 1L) == 3L
+    ) |>
+    group_by(geo_value, time_value, version_wed) |>
+    arrange(desc(is_wednesday)) |>
+    slice(1) |>
+    ungroup() |>
+    mutate(version = version_wed) |>
+    select(-version_wed, -is_wednesday)
+}
+nhsn_archive <- nhsn_archive$DT %>%
+  align_version_to_wednesday() %>%
+  mutate(time_value = lubridate::floor_date(time_value, "week", week_start = 3L)) %>%
+  distinct(geo_value, time_value, version, .keep_all = TRUE) %>%
+  as_epi_archive(compactify = TRUE)
+
+cat("Archive spans", format(min(nhsn_archive$DT$time_value)), "to",
+    format(max(nhsn_archive$DT$time_value)), "\n")
+cat("Version range:", format(min(nhsn_archive$DT$version)), "to",
+    format(max(nhsn_archive$DT$version)), "\n")
+cat("Geos:", length(unique(nhsn_archive$DT$geo_value)), "\n")
+```
+
+## Data Transformation
+
+The archive stores `value` as the revised count for a reference week at each `version` date. `baselinenowcast` expects a reporting triangle where each cell is the **incremental** count added at each delay step. We compute that as the first-difference within each (geo, time_value) group.
+
+```{r transform-fn}
+#' Align archive versions onto Wednesdays using ceiling_date.
+#'
+#' Within each (geo_value, time_value, ceiled version) group, prefers the row
+#' whose version was already a Wednesday; otherwise keeps the first.
+
+#' Convert a subset of the NHSN epi_archive to reporting triangle long format.
+#'
+#' Aligns versions to Wednesdays, filters to a single geo and all versions up
+#' to nowcast_date, then computes incremental counts per reference week.
+incremental_data <- nhsn_archive$DT |>
+  filter(time_value >= min(version)) |>
+  group_by(geo_value, time_value) |>
+  arrange(geo_value, time_value, version) |>
+  mutate(count = as.integer(value - lag(value, default = 0L))) |>
+  ungroup() |>
+  rename(reference_date = time_value, report_date = version) |>
+  select(geo_value, reference_date, report_date, count)
+make_reporting_long <- function(archive_dt, geo, nowcast_date) {
+  archive_dt |>
+    filter(geo_value == geo, version <= nowcast_date) |>
+    filter(time_value >= min(version)) |>
+    arrange(time_value, version) |>
+    group_by(time_value) |>
+    mutate(count = as.integer(value - lag(value, default = 0L))) |>
+    ungroup() |>
+    rename(reference_date = time_value, report_date = version) |>
+    select(reference_date, report_date, count)
+}
+```
+
+### Explore the reporting structure
+
+Before nowcasting, inspect the revision behaviour for national data using `epiprocess::revision_analysis`.
+
+```{r explore-revisions}
+national_archive <- nhsn_archive$DT |>
+  filter(geo_value == "us") |>
+  as_epi_archive(compactify = TRUE)
+national_archive$time_type <- "day"
+
+revision_sum <- national_archive |>
+  revision_analysis(value, min_waiting_period = NULL)
+
+print(revision_sum, quick_revision = as.difftime(7, units = "days"))
+```
+
+```{r explore-revision-plots}
+#| fig-width: 11
+#| fig-height: 8
+rev_tib <- revision_sum$revision_behavior |>
+  mutate(lag_near_latest_days = as.numeric(lag_near_latest, units = "days")) |> filter(time_value >= min(nhsn_archive$DT$version))
+
+p1 <- ggplot(rev_tib, aes(time_value, rel_spread)) +
+  geom_point(alpha = 0.5, size = 1) +
+  geom_smooth(se = FALSE) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Relative spread over time",
+       subtitle = "spread / max_value per reference week",
+       x = NULL, y = "Relative spread")
+
+p2 <- ggplot(rev_tib, aes(n_revisions)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = "Distribution of revision counts",
+       x = "Number of revisions", y = "Count")
+
+p3 <- ggplot(rev_tib, aes(lag_near_latest_days)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = "Days until value settles within 20% of final",
+       x = "lag_near_latest (days)", y = "Count")
+
+cowplot::plot_grid(p1, p2, p3, ncol = 1)
+```
+
+
+```{r geos_by_latency}
+#| fig-width: 11
+#| fig-height: 8
+recent_archive <- nhsn_archive
+recent_archive$time_type <- "day"
+revision_sum <- recent_archive |>
+  epiprocess::revision_analysis(value, min_waiting_period = NULL)
+
+revision_sum$revision_behavior |>
+  arrange(desc(rel_spread)) |>
+  filter(
+    geo_value %nin% c("vi", "as", "gu"),
+    n_revisions > 1,
+    time_value > "2025-05-01") |>
+  print(n=30)
+```
+
+## Single Nowcast Example
+
+Run a single nowcast for the national level at a specific date to verify the workflow end-to-end.
+
+```{r single-nowcast}
+example_nowcast_date <- as.Date("2026-02-11")
+geo <- "us"
+max_delay_weeks <- 4L # 4 weeks
+
+example_long <- incremental_data |>
+  filter(report_date <= example_nowcast_date, geo_value == geo) |>
+  select(-geo_value)
+
+rep_tri <- example_long |>
+  as_reporting_triangle(delays_unit="weeks") |>
+  truncate_to_quantile(0.5)
+
+summary(rep_tri)
+```
+
+```{r single-nowcast-run}
+set.seed(42)
+nowcast_draws <- baselinenowcast(
+  rep_tri,
+  scale_factor = 3,
+  prop_delay = 0.5,
+  draws = 500
+)
+
+nowcast_draws
+```
+
+```{r single-nowcast-plot}
+#| fig-width: 10
+#| fig-height: 5
+# Final values (most recent version per reference week)
+final_values <- nhsn_archive |>
+  epix_as_of_current() |>
+  filter(geo_value == geo) |>
+  select(reference_date = time_value, final_value = value)
+
+nowcast_summary <- nowcast_draws |>
+  group_by(reference_date) |>
+  summarise(
+    median = median(pred_count),
+    q05 = quantile(pred_count, 0.05),
+    q25 = quantile(pred_count, 0.25),
+    q75 = quantile(pred_count, 0.75),
+    q95 = quantile(pred_count, 0.95)
+  ) |>
+  left_join(final_values, by = "reference_date")
+
+# Latest reported (as of nowcast_date) for comparison
+as_of_values <- nhsn_archive |>
+  epix_as_of(example_nowcast_date) |>
+  filter(geo_value == geo) |>
+  select(reference_date = time_value, as_of_value = value)
+
+plot_data <- nowcast_summary |>
+  left_join(as_of_values, by = "reference_date")
+## first_plot_date <- plot_data |> filter((final_value - as_of_value) / pmax(final_value, as_of_value) >0.01) |> pull(reference_date) |> min()
+## plot_data <- plot_data |> filter(reference_date > first_plot_date)
+
+ggplot(plot_data, aes(reference_date)) +
+  geom_ribbon(aes(ymin = q05, ymax = q95), alpha = 0.15, fill = "steelblue") +
+  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.3, fill = "steelblue") +
+  geom_line(aes(y = median, colour = "Nowcast median")) +
+  geom_point(aes(y = final_value, colour = "Final value")) +
+  geom_point(aes(y = as_of_value, colour = "As-of value"), shape = 1) +
+  geom_vline(xintercept = example_nowcast_date, linetype = "dashed", alpha = 0.5) +
+  scale_colour_manual(values = c(
+    "Nowcast median" = "steelblue",
+    "Final value" = "black",
+    "As-of value" = "tomato"
+  )) +
+  labs(
+    title = glue::glue("Baseline nowcast as of {example_nowcast_date} (national)"),
+    subtitle = "90% and 50% CI shaded; dashed line = nowcast date",
+    x = "Reference week", y = "COVID hospitalisations", colour = NULL
+  )
+```
+
+So this has the unfortunate potential of royally messing up your data by predicting medians that are Just Wrong. Focusing just on the tail where ther's at least a 1% difference between the 5th and 95th quantiles:
+
+
+```{r plotting-latest-only}
+first_plot_date <- plot_data |> filter(q95 > q05) |> pull(reference_date) |> min()
+plot_data <- plot_data |> filter(reference_date > first_plot_date - 7)
+
+ggplot(plot_data, aes(reference_date)) +
+  geom_ribbon(aes(ymin = q05, ymax = q95), alpha = 0.15, fill = "steelblue") +
+  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.3, fill = "steelblue") +
+  geom_line(aes(y = median, colour = "Nowcast median")) +
+  geom_point(aes(y = final_value, colour = "Final value")) +
+  geom_point(aes(y = as_of_value, colour = "As-of value"), shape = 1) +
+  geom_vline(xintercept = example_nowcast_date, linetype = "dashed", alpha = 0.5) +
+  scale_colour_manual(values = c(
+    "Nowcast median" = "steelblue",
+    "Final value" = "black",
+    "As-of value" = "tomato"
+  )) +
+  labs(
+    title = glue::glue("Baseline nowcast as of {example_nowcast_date} (national)"),
+    subtitle = "90% and 50% CI shaded; dashed line = nowcast date",
+    x = "Reference week", y = "COVID hospitalisations", colour = NULL
+  )
+```
+### Triangle Plot
+
+```{r triangle-plot}
+#| fig-width: 10
+#| fig-height: 5
+# Final values (most recent version per reference week)
+triangle_df <- as.data.frame(rep_tri) |>
+  mutate(time = as.numeric(factor(reference_date)))
+
+plot_triangle <- ggplot(
+  triangle_df,
+  aes(x = delay, y = time, fill = count)
+) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "blue") +
+  labs(title = "Reporting triangle", x = "Delay", y = "Time") +
+  theme_bw() +
+  scale_y_reverse()
+```
+
+```{r show-triangle-plot}
+plot_triangle
+```
+
+## Retrospective Evaluation
+
+Evaluate nowcast accuracy across multiple past dates by iterating over a sequence of nowcast dates.
+
+```{r retro-setup}
+retro_nowcast_dates <- seq(
+  from = min(nhsn_archive$DT$version),
+  to = max(nhsn_archive$DT$version),
+  by = "1 week"
+)
+
+# Only keep dates where we have enough archive history
+min_version <- min(nhsn_archive$DT$version)
+retro_nowcast_dates <- retro_nowcast_dates[retro_nowcast_dates >= min_version + 35 * 7]
+
+cat("Running retrospective nowcasts for", length(retro_nowcast_dates), "dates\n")
+```
+
+```{r retro-run}
+#| cache: true
+#| dependson: ["retro-setup", "transform-fn", "load-data"]
+nowcast_date <- as.Date("2026-02-04")
+geo <- "ak"
+run_retro_nowcast <- function(nowcast_date, incremental_data, geo,
+                              truncate_quantile = 0.5, draws = 500L, eval_window_weeks = 7L) {
+  long_data <- incremental_data |>
+    filter(geo_value == geo, report_date <= nowcast_date) |>
+    select(-geo_value)
+
+  has_negatives <- any(long_data$count < 0)
+
+  rep_tri_trunc <- tryCatch(
+    suppressMessages(
+      as_reporting_triangle(long_data, delays_unit = "weeks") |>
+        truncate_to_quantile(truncate_quantile)
+    ),
+    error = function(e) {NULL}
+  )
+  if (is.null(rep_tri_trunc) || nrow(as.data.frame(rep_tri_trunc)) == 0) return(NULL)
+
+  set.seed(as.integer(nowcast_date))
+  draws_df <- tryCatch(
+    baselinenowcast(rep_tri_trunc, scale_factor = 3, prop_delay = 0.5, draws = draws),
+    error = function(e) {NULL})
+  if (is.null(draws_df)) return(NULL)
+
+  draws_df |>
+    filter(nowcast_date - reference_date < eval_window_weeks * 7) |>
+    group_by(reference_date) |>
+    summarise(
+      median = median(pred_count),
+      q05 = quantile(pred_count, 0.05),
+      q25 = quantile(pred_count, 0.25),
+      q75 = quantile(pred_count, 0.75),
+      q95 = quantile(pred_count, 0.95)
+    ) |>
+    mutate(nowcast_date = nowcast_date, geo_value = geo, has_negatives = has_negatives)
+}
+
+
+geo_values <- unique(nhsn_archive$DT$geo_value)
+
+retro_grid <- tidyr::expand_grid(
+  nowcast_date = retro_nowcast_dates,
+  geo = geo_values
+)
+
+plan(multisession, workers = parallel::detectCores() - 1)
+retro_nowcasts <- furrr::future_pmap(
+  retro_grid,
+  run_retro_nowcast,
+  incremental_data = incremental_data,
+  .options = furrr_options(seed = TRUE)
+) |>
+  purrr::compact() |>
+  bind_rows()
+plan(sequential)
+
+cat("Total nowcast dates to evaluate:", nrow(retro_nowcasts), "\n")
+cat("Reference dates covered:", n_distinct(retro_nowcasts$reference_date), "\n")
+```
+
+```{r retro-score}
+#| cache: true
+#| dependson: ["retro-run", "load-data"]
+final_values_retro <- nhsn_archive |>
+  epix_as_of_current() |>
+  select(geo_value, reference_date = time_value, final_value = value)
+
+calc_naive_wis <- function(as_of_date) {
+  nhsn_archive |>
+    epix_as_of(as_of_date) |>
+    rename(reference_date = time_value, as_of_value = value) |>
+    left_join(final_values_retro, by = join_by(geo_value, reference_date)) |>
+    mutate(nowcast_date = as_of_date, naive_wis = abs(as_of_value - final_value)) |>
+    select(geo_value, nowcast_date, reference_date, naive_wis) |>
+    filter(naive_wis > 0)
+}
+# Naive WIS = absolute error of the as-of value (WIS of a point forecast)
+naive_wis <- map(retro_nowcasts$nowcast_date |> unique(), calc_naive_wis) |> list_rbind()
+
+scores <- retro_nowcasts |>
+  left_join(final_values_retro, by = join_by(geo_value, reference_date)) |>
+  filter(!is.na(final_value)) |>
+  pivot_longer(
+    cols = c(q05, q25, median, q75, q95),
+    names_to = "quantile_level",
+    values_to = "predicted"
+  ) |>
+  mutate(
+    quantile_level = case_match(
+      quantile_level,
+      "q05" ~ 0.05, "q25" ~ 0.25, "median" ~ 0.5, "q75" ~ 0.75, "q95" ~ 0.95
+    ),
+    model = "baselinenowcast"
+  ) |>
+  rename(observed = final_value) |>
+  as_forecast_quantile(
+    forecast_unit = c("model", "nowcast_date", "reference_date", "geo_value"),
+    observed = "observed",
+    predicted = "predicted",
+    quantile_level = "quantile_level"
+  ) |>
+  score() |>
+  left_join(naive_wis, by = join_by(geo_value, nowcast_date, reference_date)) |>
+  mutate(
+    relative_wis = wis / naive_wis,
+    horizon_weeks = difftime(nowcast_date, reference_date, units = "weeks")
+  )
+
+scores |>
+  summarise(
+    across(c(wis, naive_wis, relative_wis, overprediction, underprediction, dispersion),
+           ~ round(mean(.x, na.rm = TRUE), 2))
+  )
+```
+
+### Score by horizon
+
+Horizon = number of weeks between the reference date and the nowcast date (smaller = harder to nowcast).
+
+```{r score-by-horizon}
+#| fig-width: 9
+#| fig-height: 4
+scores |>
+  group_by(horizon_weeks) |>
+  summarise(mean_relative_wis = mean(relative_wis, na.rm = TRUE), n = n()) |>
+  ggplot(aes(horizon_weeks, mean_relative_wis)) +
+  geom_col() +
+  geom_hline(yintercept = 1, linetype = "dashed", colour = "tomato") +
+  scale_x_continuous(breaks = \(x) seq(floor(min(x)), ceiling(max(x)))) +
+  labs(title = "Mean relative WIS by nowcast horizon",
+       subtitle = "WIS / naive WIS (as-of value); dashed = no improvement over nominal",
+       x = "Horizon (weeks)", y = "Mean relative WIS")
+```
+
+### Coverage
+
+Empirical coverage of 50% and 90% credible intervals.
+
+```{r coverage}
+retro_nowcasts |>
+  left_join(final_values_retro, by = join_by(geo_value, reference_date)) |>
+  filter(!is.na(final_value)) |>
+  summarise(
+    `50% coverage` = mean(final_value >= q25 & final_value <= q75),
+    `90% coverage` = mean(final_value >= q05 & final_value <= q95),
+    n = n()
+  )
+```
+
+### Nowcasts for most-revised weeks
+
+For the reference weeks with the largest relative revision, show how the nowcast evolved across successive nowcast dates compared to the final value.
+
+```{r high-revision-nowcasts}
+#| cache: true
+#| dependson: ["geos_by_latency", "retro-run", "retro-score", "load-data"]
+#| fig-width: 12
+#| fig-height: 10
+revision_sum$revision_behavior |> print(width=10000)
+top_revised <- revision_sum$revision_behavior |>
+  filter(
+    geo_value %nin% c("vi", "as", "gu"),
+    min_value > 10
+  ) |>
+  semi_join(retro_nowcasts, by = join_by(geo_value, time_value == reference_date)) |>
+  slice_max(rel_spread, n = 6) |>
+  select(geo_value, reference_date = time_value)
+
+as_of_retro <- retro_nowcasts$nowcast_date |>
+  unique() |>
+  purrr::map(\(d) nhsn_archive |> epix_as_of(d) |> mutate(nowcast_date = d)) |>
+  list_rbind() |>
+  rename(reference_date = time_value, as_of_value = value) |>
+  select(geo_value, nowcast_date, reference_date, as_of_value)
+
+high_rev_summary <- retro_nowcasts |>
+  inner_join(top_revised, by = join_by(geo_value, reference_date)) |>
+  left_join(final_values_retro, by = join_by(geo_value, reference_date)) |>
+  left_join(as_of_retro, by = join_by(geo_value, nowcast_date, reference_date))
+
+ggplot(high_rev_summary, aes(nowcast_date)) +
+  geom_ribbon(aes(ymin = q05, ymax = q95), alpha = 0.15, fill = "steelblue") +
+  geom_ribbon(aes(ymin = q25, ymax = q75), alpha = 0.3, fill = "steelblue") +
+  geom_line(aes(y = median, colour = "Nowcast median")) +
+  geom_point(aes(y = as_of_value, colour = "As-of value"), shape = 1, size = 1.5) +
+  geom_hline(aes(yintercept = final_value, colour = "Final value"), linetype = "dashed") +
+  scale_colour_manual(values = c(
+    "Nowcast median" = "steelblue",
+    "As-of value" = "tomato",
+    "Final value" = "black"
+  )) +
+  facet_wrap(~ geo_value + reference_date, scales = "free", ncol = 2) +
+  labs(
+    title = "Nowcast evolution for 6 most-revised (geo, reference week) pairs",
+    subtitle = "x-axis = nowcast date; dashed = final value; points = as-of value at that date",
+    x = "Nowcast date", y = "COVID hospitalisations", colour = NULL
+  )
+```
+
+### Nowcast vs final over time
+
+
+Plotting the latest nowcast for each nowcast_date; this will be the day which has the worst quality data, and the one we're most interested in getting right.
+
+The other option would be to choose the last nowcast that is ever made for any given day, which may actually be asking what we nowcast months later.
+
+```{r retro-plot}
+#| cache: true
+#| dependson: ["high-revision-nowcasts", "retro-run", "retro-score"]
+#| fig-width: 24
+#| fig-height: 20
+#| column: screen
+retro_summary <- retro_nowcasts |>
+  group_by(geo_value, nowcast_date) |>
+  slice_max(reference_date, n = 1) |>
+  ungroup() |>
+  left_join(final_values_retro, by = join_by(geo_value, reference_date)) |>
+  left_join(as_of_retro, by = join_by(geo_value, nowcast_date, reference_date))
+plot_ex <- retro_summary |> filter(geo_value %nin% c("vi", "as", "gu")) |> pull(geo_value) |> unique()
+ggplot(retro_summary |> filter(geo_value %in% plot_ex), aes(reference_date)) +
+  geom_ribbon(aes(ymin = q25, ymax = q75),
+              alpha = 0.5, fill = "steelblue") +
+  geom_ribbon(aes(ymin = q05, ymax = q95),
+              alpha = 0.2, fill = "steelblue") +
+  geom_point(aes(y = median, colour = "Nowcast median"), size = 1) +
+  geom_point(aes(y = as_of_value, colour = "As-of value"), shape = 1, size = 1) +
+  geom_line(
+    data = semi_join(final_values_retro, retro_summary, by = join_by(geo_value, reference_date)) |> filter(geo_value %in% plot_ex),
+    aes(y = final_value, colour = "Final value")
+  ) +
+  facet_wrap(~ geo_value, scales = "free_y", ncol=4) +
+  scale_colour_manual(values = c(
+    "Nowcast median" = "steelblue",
+    "As-of value" = "tomato",
+    "Final value" = "black"
+  )) +
+  theme(text = element_text(size = 9), plot.title = element_text(size = 11)) +
+  labs(
+    title = "Retrospective nowcast medians vs final values",
+    subtitle = "90% CI shown; latest nowcast per nowcast date",
+    x = "Reference week", y = "COVID hospitalisations", colour = NULL
+  )
+```
+since the 95% being as large as it is obscures the values, here's a capped version to get a clearer plot.
+```{r retro-plot-clipped}
+#| cache: true
+#| dependson: ["retro-plot", "retro-score"]
+#| fig-width: 24
+#| fig-height: 20
+#| column: screen
+retro_clipped <- retro_summary |>
+  filter(geo_value %in% plot_ex) |>
+  group_by(geo_value) |>
+  mutate(y_max = max(q75, final_value, na.rm = TRUE)) |>
+  ungroup() |>
+  mutate(across(c(q05, q25, median, q75, q95, as_of_value), \(x) pmin(x, y_max)))
+
+ggplot(retro_clipped, aes(reference_date)) +
+  geom_ribbon(aes(ymin = q25, ymax = q75),
+              alpha = 0.5, fill = "steelblue") +
+  geom_ribbon(aes(ymin = q05, ymax = q95),
+              alpha = 0.2, fill = "steelblue") +
+  geom_point(aes(y = median, colour = "Nowcast median"), size = 1) +
+  geom_point(aes(y = as_of_value, colour = "As-of value"), shape = 1, size = 1) +
+  geom_line(
+    data = semi_join(final_values_retro, retro_clipped, by = join_by(geo_value, reference_date)),
+    aes(y = final_value, colour = "Final value")
+  ) +
+  facet_wrap(~ geo_value, scales = "free_y", ncol=4) +
+  scale_colour_manual(values = c(
+    "Nowcast median" = "steelblue",
+    "As-of value" = "tomato",
+    "Final value" = "black"
+  )) +
+  theme(text = element_text(size = 9), plot.title = element_text(size = 11)) +
+  labs(
+    title = "Retrospective nowcast medians vs final values (clipped to q75)",
+    subtitle = "y-axis capped at max(q75, final_value) per geo; outlier nowcasts extend beyond",
+    x = "Reference week", y = "COVID hospitalisations", colour = NULL
+  )
+```
