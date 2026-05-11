@@ -15,7 +15,7 @@ aux_data
 .netlify
 reports/*.html
 reports/report.md
-cache/
+*cache*
 data/
 .vscode/
 .envrc
@@ -39,3 +39,4 @@ test_proj
 covid_hosp_prod_2
 covid_hosp_prod_backup
 covid_nssp_explore
+run_garbage.R
