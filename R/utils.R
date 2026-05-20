@@ -170,7 +170,13 @@ data_substitutions <- function(dataset, substitutions_path, forecast_generation_
   substitutions <- readr::read_csv(
     substitutions_path,
     comment = "#",
-    show_col_types = FALSE
+    show_col_types = FALSE,
+    col_types = readr::cols(
+      geo_value = readr::col_character(),
+      forecast_date = readr::col_date(),
+      time_value = readr::col_date(),
+      value = readr::col_double()
+    )
   ) %>%
     filter(forecast_date == forecast_generation_date) %>%
     select(-forecast_date) %>%
@@ -1013,7 +1019,6 @@ get_cast_api_data <- function(...) {
 
 get_cast_api_latest_update_date <- function(source = c("nssp", "nhsn")) {
   source <- rlang::arg_match(source)
-  proxy_port <- Sys.getenv("CAST_API_PROXY_PORT", "")
   req <- httr2::request(EPIDATA_V5_URL) %>%
     httr2::req_url_path_append("metadata/latest_update/") %>%
     httr2::req_url_query(source = source) %>%

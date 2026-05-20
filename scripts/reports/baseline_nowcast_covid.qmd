@@ -24,7 +24,11 @@ source(here::here("R/load_all.R"))
 
 It may be worth noting that they have literally already [done some nowcasting for nssp](https://baselinenowcast.epinowcast.org/articles/nssp_nowcast.html)! They do seem to be using line-list data, so it's a different nssp source than the one we typically forecast.
 
-TODO: may also be worth checking out [NoBS](https://cran.r-project.org/web//packages/NobBS/NobBS.pdf) and/or [epi-nowcast](https://www.epinowcast.org/)
+TODO: may also be worth checking out 
+- [NoBS](https://cran.r-project.org/web//packages/NobBS/NobBS.pdf) and/or 
+- [epi-nowcast](https://www.epinowcast.org/)
+- [epinow2](https://epiforecasts.io/EpiNow2/)
+- [delphiRF](https://github.com/cmu-delphi/DelphiRF)
 
 # Data
 

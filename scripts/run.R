@@ -15,6 +15,8 @@ aws_s3_prefix <- Sys.getenv("AWS_S3_PREFIX", "2024") %>% paste0("/", tar_project
 flu_submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
 # Where to place covid forecasts
 covid_submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
+# Where to place rsv forecasts
+rsv_submission_directory <- Sys.getenv("RSV_SUBMISSION_DIRECTORY", "cache")
 # Backtest mode
 backtest_mode <- Sys.getenv("BACKTEST_MODE", "FALSE")
 cli::cli_inform(
@@ -24,6 +26,7 @@ cli::cli_inform(
     "*" = "AWS_S3_PREFIX = {aws_s3_prefix}",
     "*" = "FLU_SUBMISSION_DIRECTORY = {flu_submission_directory}",
     "*" = "COVID_SUBMISSION_DIRECTORY = {covid_submission_directory}",
+    "*" = "RSV_SUBMISSION_DIRECTORY = {rsv_submission_directory}",
     "*" = "BACKTEST_MODE = {backtest_mode}"
   )
 )

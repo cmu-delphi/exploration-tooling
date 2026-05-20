@@ -18,3 +18,8 @@ covid_hosp_prod:
   store: covid_hosp_prod
   use_crew: yes
   reporter_make: timestamp
+rsv_hosp_prod:
+  script: scripts/rsv_hosp_prod.R
+  store: rsv_hosp_prod
+  use_crew: yes
+  reporter_make: timestamp

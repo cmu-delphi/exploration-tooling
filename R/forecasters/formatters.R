@@ -55,7 +55,7 @@ format_covidhub <- function(pred, true_forecast_date, target_end_date, quantile_
 
 #' Expects columns: geo_value, forecast_date, target_end_date, quantile, value
 #' Returns columns: reference_date, target, horizon, target_end_date, location, output_type, output_type_id, value
-format_flusight <- function(pred, disease = c("flu", "covid")) {
+format_flusight <- function(pred, disease = c("flu", "covid", "rsv")) {
   disease <- arg_match(disease)
   pred %>%
     mutate(

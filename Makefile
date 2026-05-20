@@ -1,4 +1,7 @@
-.PHONY: all test test-forecasters run sync download upload dashboard
+.PHONY: all test test-forecasters run sync download upload dashboard \
+	prod-rsv prod-rsv-log prod-rsv-backtest prune-rsv-prod \
+	commit-rsv submit-rsv submit-rsv-dry \
+	pull-rsv-prod push-rsv-prod get-rsv-prod-errors
 
 current_date:=$(shell date +%F)
 
@@ -23,9 +26,15 @@ prod-flu-log:
 prod-flu:
 	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R
 
-prod: prod-covid prod-flu update-site netlify
+prod-rsv-log:
+	export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R >> cache/logs/prod_rsv 2>&1
 
-prod-log: prod-covid-log prod-flu-log update-site-log netlify-log
+prod-rsv:
+	export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R
+
+prod: prod-covid prod-flu prod-rsv update-site netlify
+
+prod-log: prod-covid-log prod-flu-log prod-rsv-log update-site-log netlify-log
 
 prod-covid-backtest:
 	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
@@ -33,7 +42,10 @@ prod-covid-backtest:
 prod-flu-backtest:
 	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R
 
-prod-backtest: prod-covid-backtest prod-flu-backtest
+prod-rsv-backtest:
+	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R
+
+prod-backtest: prod-covid-backtest prod-flu-backtest prod-rsv-backtest
 
 explore-covid:
 	export TAR_RUN_PROJECT=covid_hosp_explore; Rscript scripts/run.R
@@ -43,13 +55,16 @@ explore-flu:
 
 explore: explore-covid explore-flu update-site netlify
 
-prune: prune-covid-prod prune-flu-prod prune-covid-explore prune-flu-explore
+prune: prune-covid-prod prune-flu-prod prune-rsv-prod prune-covid-explore prune-flu-explore
 
 prune-covid-prod:
 	export TAR_PROJECT=covid_hosp_prod; export BACKTEST_MODE=TRUE; Rscript -e "targets::tar_prune()"
 
 prune-flu-prod:
 	export TAR_PROJECT=flu_hosp_prod; export BACKTEST_MODE=TRUE; Rscript -e "targets::tar_prune()"
+
+prune-rsv-prod:
+	export TAR_PROJECT=rsv_hosp_prod; export BACKTEST_MODE=TRUE; Rscript -e "targets::tar_prune()"
 
 prune-covid-explore:
 	export TAR_PROJECT=covid_hosp_explore; Rscript -e "targets::tar_prune()"
@@ -63,6 +78,9 @@ commit-covid:
 commit-flu:
 	./scripts/commit-script.sh '../FluSight-forecast-hub'
 
+commit-rsv:
+	./scripts/commit-script.sh '../rsv-forecast-hub'
+
 submit-covid: commit-covid
 	cd ../covid19-forecast-hub; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo CDCgov/covid19-forecast-hub
@@ -70,6 +88,10 @@ submit-covid: commit-covid
 submit-flu: commit-flu
 	cd ../FluSight-forecast-hub; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcepi/FluSight-forecast-hub
+
+submit-rsv: commit-rsv
+	cd ../rsv-forecast-hub; \
+	gh pr create --title "CMU-TimeSeries $(current_date)" --repo CDCgov/rsv-forecast-hub
 
 submit-covid-dry: commit-covid
 	cd ../covid19-forecast-hub; \
@@ -79,7 +101,11 @@ submit-flu-dry: commit-flu
 	cd ../FluSight-forecast-hub; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcepi/FluSight-forecast-hub --dry-run
 
-submit: submit-covid submit-flu
+submit-rsv-dry: commit-rsv
+	cd ../rsv-forecast-hub; \
+	gh pr create --title "CMU-TimeSeries $(current_date)" --repo CDCgov/rsv-forecast-hub --dry-run
+
+submit: submit-covid submit-flu submit-rsv
 
 get-nwss:
 	mkdir -p aux_data/nwss_covid_data; \
@@ -98,13 +124,16 @@ pull-covid-prod:
 pull-flu-prod:
 	aws s3 sync s3://forecasting-team-data/2024/flu_hosp_prod/ flu_hosp_prod/ --delete
 
+pull-rsv-prod:
+	aws s3 sync s3://forecasting-team-data/2024/rsv_hosp_prod/ rsv_hosp_prod/ --delete
+
 pull-covid-explore:
 	aws s3 sync s3://forecasting-team-data/2024/covid_hosp_explore/ covid_hosp_explore/ --delete
 
 pull-flu-explore:
 	aws s3 sync s3://forecasting-team-data/2024/flu_hosp_explore/ flu_hosp_explore/ --delete
 
-pull: pull-aux-data pull-covid-prod pull-flu-prod pull-covid-explore pull-flu-explore
+pull: pull-aux-data pull-covid-prod pull-flu-prod pull-rsv-prod pull-covid-explore pull-flu-explore
 
 download: pull
 
@@ -114,13 +143,16 @@ push-covid-prod:
 push-flu-prod:
 	aws s3 sync flu_hosp_prod/ s3://forecasting-team-data/2024/flu_hosp_prod/ --delete
 
+push-rsv-prod:
+	aws s3 sync rsv_hosp_prod/ s3://forecasting-team-data/2024/rsv_hosp_prod/ --delete
+
 push-covid-explore:
 	aws s3 sync covid_hosp_explore/ s3://forecasting-team-data/2024/covid_hosp_explore/ --delete
 
 push-flu-explore:
 	aws s3 sync flu_hosp_explore/ s3://forecasting-team-data/2024/flu_hosp_explore/ --delete
 
-push: push-covid-prod push-flu-prod push-covid-explore push-flu-explore
+push: push-covid-prod push-flu-prod push-rsv-prod push-covid-explore push-flu-explore
 
 upload: push
 
@@ -148,6 +180,9 @@ get-flu-prod-errors:
 
 get-covid-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'covid_hosp_prod')"
+
+get-rsv-prod-errors:
+	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'rsv_hosp_prod')"
 
 summary-reports:
 	Rscript -e "rmarkdown::render('scripts/reports/revision_summary_report_2025.Rmd', output_file = here::here('reports', 'revision_summary_2025.html'))"; \

@@ -119,3 +119,56 @@ plot_forecasts <- function(
   }
   return(g)
 }
+
+# Sets the initial plotly view to the past year on x and per-geo ensemble_mix
+# max on y. All data is preserved so the user can zoom/pan out to full history.
+apply_view_defaults <- function(p, forecast_data, truth_data, forecast_date, quantiles = c(0.8)) {
+  one_year_ago <- forecast_date - 365
+  forecast_end <- max(forecast_data$target_end_date, na.rm = TRUE)
+  max_q <- max(quantiles)
+
+  ens_max <- forecast_data %>%
+    filter(forecaster == "ensemble_mix", near(.data$quantile, max_q)) %>%
+    group_by(.data$geo_value) %>%
+    summarise(max_y = max(.data$value, na.rm = TRUE), .groups = "drop")
+
+  truth_max <- truth_data %>%
+    filter(.data$target_end_date >= one_year_ago) %>%
+    group_by(.data$geo_value) %>%
+    summarise(max_y = max(.data$value, na.rm = TRUE), .groups = "drop")
+
+  geo_max <- bind_rows(ens_max, truth_max) %>%
+    group_by(.data$geo_value) %>%
+    summarise(max_y = max(.data$max_y, na.rm = TRUE) * 1.1, .groups = "drop")
+
+  pb <- plotly_build(p)
+  layout_items <- pb$x$layout
+
+  x_range <- list(format(one_year_ago, "%Y-%m-%d"), format(forecast_end + 7, "%Y-%m-%d"))
+  # Set every x-axis to the past-year range. facet_grid(geo ~ forecaster) creates
+  # one xaxis entry per forecaster column, so we must update them all.
+  xaxis_keys <- names(layout_items)[grepl("^xaxis", names(layout_items))]
+  xaxis_updates <- setNames(
+    lapply(xaxis_keys, function(k) list(range = x_range, autorange = FALSE)),
+    xaxis_keys
+  )
+
+  # Primary y-axes are those with their own domain (one per row = one per geo).
+  # Sort by domain[1] descending: top of screen = highest domain value = first geo alphabetically.
+  yaxis_keys <- names(layout_items)[grepl("^yaxis", names(layout_items))]
+  primary_yaxis <- Filter(function(k) !is.null(layout_items[[k]]$domain), yaxis_keys)
+  domain_bottoms <- sapply(primary_yaxis, function(k) layout_items[[k]]$domain[[1]])
+  yaxis_by_position <- names(sort(domain_bottoms, decreasing = TRUE))
+
+  geos <- sort(unique(as.character(forecast_data$geo_value)))
+
+  yaxis_updates <- list()
+  for (ii in seq_along(geos)) {
+    if (ii > length(yaxis_by_position)) break
+    max_y <- geo_max %>% filter(.data$geo_value == geos[[ii]]) %>% pull(.data$max_y)
+    if (length(max_y) == 0 || !is.finite(max_y)) next
+    yaxis_updates[[yaxis_by_position[[ii]]]] <- list(range = list(0, max_y), autorange = FALSE)
+  }
+
+  do.call(layout, c(list(p), xaxis_updates, yaxis_updates))
+}

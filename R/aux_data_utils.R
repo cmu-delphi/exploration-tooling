@@ -669,7 +669,7 @@ gen_ili_data <- function(default_day_of_week = 1) {
 #'
 #' @param disease_name The name of the disease ("nhsn_covid" or "nhsn_flu")
 #' @return An epi_archive of the NHSN data.
-get_nhsn_data_archive <- function(disease = c("covid", "flu")) {
+get_nhsn_data_archive <- function(disease = c("covid", "flu", "rsv")) {
   disease <- arg_match(disease)
   nhsn_state <- get_cast_api_data(
     source = "nhsn",
@@ -713,7 +713,7 @@ get_old_nhsn_data_archive <- function(disease_name) {
     as_epi_archive(compactify = TRUE)
 }
 
-up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza")) {
+up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv")) {
   disease <- arg_match(disease)
   nssp_national <- get_cast_api_data(
     source = "nssp",
