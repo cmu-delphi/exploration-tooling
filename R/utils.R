@@ -1019,10 +1019,10 @@ get_cast_api_data <- function(...) {
 
 get_cast_api_latest_update_date <- function(source = c("nssp", "nhsn")) {
   source <- rlang::arg_match(source)
-  req <- httr2::request(EPIDATA_V5_URL) %>%
-    httr2::req_url_path_append("metadata/latest_update/") %>%
+  httr2::request(EPIDATA_V5_URL) %>%
+    httr2::req_url_path_append("metadata/") %>%
     httr2::req_url_query(source = source) %>%
     httr2::req_perform() %>%
-    httr2::resp_body_json()
-  req$latest_update
+    httr2::resp_body_json() %>%
+    purrr::pluck(source, "version_range", "latest")
 }
