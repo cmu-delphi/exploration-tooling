@@ -25,12 +25,13 @@ img {
 }
 ```
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, message=TRUE}
 knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 ggplot2::theme_set(ggplot2::theme_bw())
 options(width=500)
 library(ggnewscale)
 recent_archive <- params$archive
+message("DEBUG archive DT cols: ", paste(names(recent_archive$DT), collapse = ", "))
 if (params$target == "nssp") {
   recent_archive$DT <- rename(recent_archive$DT, value = nssp)
 }
@@ -383,10 +384,11 @@ ahead_wis_plot %>% gplot(height = 1200)
 ```
 # Large recent data revisions {.tabset}
 
-```{r revisions, echo=FALSE, message=FALSE, out.width="100%"}
+```{r revisions, echo=FALSE, message=TRUE, out.width="100%"}
 recent_archive <- recent_archive %>%
   filter(this_week - time_value < 10*7)
 recent_archive$time_type <- "day"
+message("DEBUG post-filter archive DT cols: ", paste(names(recent_archive$DT), collapse = ", "))
 revision_sum <- recent_archive %>%
   epiprocess::revision_analysis(value, min_waiting_period = NULL)
 av_re_spread <- revision_sum$revision_behavior %>%
