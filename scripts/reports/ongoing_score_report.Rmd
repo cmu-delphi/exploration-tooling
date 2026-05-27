@@ -30,12 +30,20 @@ knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 ggplot2::theme_set(ggplot2::theme_bw())
 options(width=500)
 library(ggnewscale)
+dbg <- function(...) write(paste0("[", format(Sys.time(), "%H:%M:%S"), "] ", ...), "/tmp/ongoing_score_debug.txt", append = TRUE)
+dbg("setup chunk start")
+dbg(paste("params$target:", params$target))
+dbg(paste("params$archive class:", paste(class(params$archive), collapse = ", ")))
 recent_archive <- params$archive
-message("DEBUG archive DT cols: ", paste(names(recent_archive$DT), collapse = ", "))
+dbg(paste("archive DT cols:", paste(names(recent_archive$DT), collapse = ", ")))
 if (params$target == "nssp") {
   recent_archive$DT <- rename(recent_archive$DT, value = nssp)
+  dbg("renamed nssp -> value")
 }
+dbg(paste("external_forecasts cols:", paste(names(params$external_forecasts), collapse = ", ")))
+dbg(paste("scores cols:", paste(names(params$scores), collapse = ", ")))
 this_week <- round_date(Sys.Date() - 3, "week", 6)
+dbg("setup chunk done")
 ## suppressPackageStartupMessages(source("R/load_all.R"))
 ## params <- list()
 ## params$external_forecasts <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "external_forecasts_full")) %>% select(-target)
@@ -47,7 +55,9 @@ this_week <- round_date(Sys.Date() - 3, "week", 6)
 This "averaging method" refers to whether each forecaster's score is averaged over its own individually-reported set of keys and horizons or if it's averaged over a common set. The main difference is that for the "common" method, PyRenew is tossed out because it reports too few horizons, and we also stop evaluating horizon -1.
 
 ```{r adjusting data, echo=FALSE, message=FALSE}
+dbg("adjusting data chunk start")
 averaging_method <- params$averaging_method %||% "individual"
+dbg(paste("averaging_method:", averaging_method))
 if (averaging_method == "individual") {
   forecasts <- params$external_forecasts
   scores <- params$scores
@@ -63,7 +73,8 @@ if (averaging_method == "individual") {
 } else {
   stop("Unknown averaging method")
 }
-
+dbg(paste("forecasts cols:", paste(names(forecasts), collapse = ", ")))
+dbg(paste("scores cols:", paste(names(scores), collapse = ", ")))
 our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "seasonal_nssp_latest")
 scores <- scores %>%
   mutate(
@@ -79,8 +90,10 @@ scores <- scores %>%
   mutate(wis_rate = wis * 1e5 / pop) %>%
   mutate(ae_rate = ae_median * 1e5 / pop) %>%
   mutate(pop = factor(pop))
+dbg(paste("scores post-join cols:", paste(names(scores), collapse = ", ")))
 Mean <- function(x) mean(x, na.rm = TRUE)
 GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
+dbg("adjusting data chunk done")
 ```
 
 ```{r score_summary_functions, echo=FALSE, message=FALSE}
@@ -385,12 +398,14 @@ ahead_wis_plot %>% gplot(height = 1200)
 # Large recent data revisions {.tabset}
 
 ```{r revisions, echo=FALSE, message=TRUE, out.width="100%"}
+dbg("revisions chunk start")
 recent_archive <- recent_archive %>%
   filter(this_week - time_value < 10*7)
 recent_archive$time_type <- "day"
-message("DEBUG post-filter archive DT cols: ", paste(names(recent_archive$DT), collapse = ", "))
+dbg(paste("post-filter archive DT cols:", paste(names(recent_archive$DT), collapse = ", ")))
 revision_sum <- recent_archive %>%
   epiprocess::revision_analysis(value, min_waiting_period = NULL)
+dbg("revision_analysis done")
 av_re_spread <- revision_sum$revision_behavior %>%
   group_by(geo_value) %>%
   summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
