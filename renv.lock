@@ -811,7 +811,7 @@
     },
     "arrow": {
       "Package": "arrow",
-      "Version": "23.0.0",
+      "Version": "23.0.1.2",
       "Source": "Repository",
       "Title": "Integration to 'Apache' 'Arrow'",
       "Authors@R": "c( person(\"Neal\", \"Richardson\", email = \"neal.p.richardson@gmail.com\", role = c(\"aut\")), person(\"Ian\", \"Cook\", email = \"ianmcook@gmail.com\", role = c(\"aut\")), person(\"Nic\", \"Crane\", email = \"thisisnic@gmail.com\", role = c(\"aut\")), person(\"Dewey\", \"Dunnington\", role = c(\"aut\"), email = \"dewey@fishandwhistle.net\", comment = c(ORCID = \"0000-0002-9415-4582\")), person(\"Romain\", \"Fran\\u00e7ois\", role = c(\"aut\"), comment = c(ORCID = \"0000-0002-2444-4226\")), person(\"Jonathan\", \"Keane\", email = \"jkeane@gmail.com\", role = c(\"aut\", \"cre\")), person(\"Bryce\", \"Mecum\", email = \"brycemecum@gmail.com\", role = c(\"aut\")), person(\"Drago\\u0219\", \"Moldovan-Gr\\u00fcnfeld\", email = \"dragos.mold@gmail.com\", role = c(\"aut\")), person(\"Jeroen\", \"Ooms\", email = \"jeroen@berkeley.edu\", role = c(\"aut\")), person(\"Jacob\", \"Wujciak-Jens\", email = \"jacob@wujciak.de\", role = c(\"aut\")), person(\"Javier\", \"Luraschi\", email = \"javier@rstudio.com\", role = c(\"ctb\")), person(\"Karl\", \"Dunkle Werner\", email = \"karldw@users.noreply.github.com\", role = c(\"ctb\"), comment = c(ORCID = \"0000-0003-0523-7309\")), person(\"Jeffrey\", \"Wong\", email = \"jeffreyw@netflix.com\", role = c(\"ctb\")), person(\"Apache Arrow\", email = \"dev@arrow.apache.org\", role = c(\"aut\", \"cph\")) )",
@@ -1055,6 +1055,57 @@
       "VignetteBuilder": "knitr",
       "Author": "Michel Lang [cre, aut] (<https://orcid.org/0000-0001-9754-0393>), Apache Foundation [ctb, cph], Free Software Foundation [ctb, cph]",
       "Maintainer": "Michel Lang <michellang@gmail.com>",
+      "Repository": "RSPM"
+    },
+    "baselinenowcast": {
+      "Package": "baselinenowcast",
+      "Version": "0.2.0",
+      "Source": "Repository",
+      "Title": "Baseline Nowcasting for Right-Truncated Epidemiological Data",
+      "Authors@R": "c(person(given = \"Kaitlyn\", family = \"Johnson\", role = c(\"aut\", \"cre\", \"cph\"), email = \"kaitlyn.johnson@lshtm.ac.uk\", comment = c(ORCID = \"0000-0001-8011-0012\")), person(given = \"Emily\", family = \"Tyszka\", email = \"etsyzka@umass.edu\", role = c(\"aut\"), comment = c(ORCID = \"0009-0005-6088-4017\")), person(given = \"Johannes\", family = \"Bracher\", role = c(\"aut\"), email = \"johannes.bracher@kit.edu\", comment = c(ORCID = \"0000-0002-3777-1410\")), person(given = \"Sebastian\", family = \"Funk\", role = c(\"aut\"), email = \"sebastian.funk@lshtm.ac.uk\", comment = c(ORCID = \"0000-0002-2842-3406\")), person(given = \"Sam\", family = \"Abbott\", role = c(\"aut\"), email = \"contact@samabbott.co.uk\", comment = c(ORCID = \"0000-0001-8057-8037\")), person(given   = \"Tim\", family  = \"Taylor\", role    = \"ctb\", email   = \"tim.taylor@hiddenelephants.co.uk\", comment = c(ORCID = \"0000-0002-8587-7113\")))",
+      "Description": "Nowcasting right-truncated epidemiological data is critical for timely public health decision-making, as reporting delays can create misleading impressions of declining trends in recent data. This package provides nowcasting methods based on using empirical delay distributions and uncertainty from past performance. It is also designed to be used as a baseline method for developers of new nowcasting methods. For more details on the performance of the method(s) in this package applied to case studies of COVID-19 and norovirus, see our recent paper at <https://wellcomeopenresearch.org/articles/10-614>. The package supports standard data frame inputs with reference date, report date, and count columns, as well as the direct use of reporting triangles, and is compatible with 'epinowcast' objects. Alongside an opinionated default workflow, it has a low-level pipe-friendly modular interface, allowing context-specific workflows. It can accommodate a wide spectrum of reporting schedules, including mixed patterns of reference and reporting (daily-weekly, weekly-daily). It also supports sharing delay distributions and uncertainty estimates between strata, as well as custom uncertainty models and delay estimation methods.",
+      "License": "MIT + file LICENSE",
+      "URL": "https://github.com/epinowcast/baselinenowcast, https://baselinenowcast.epinowcast.org",
+      "BugReports": "https://github.com/epinowcast/baselinenowcast/issues",
+      "Depends": [
+        "R (>= 4.1.0)"
+      ],
+      "Imports": [
+        "cli",
+        "checkmate",
+        "stats",
+        "utils",
+        "rlang",
+        "purrr"
+      ],
+      "Suggests": [
+        "bookdown",
+        "ChainLadder",
+        "dplyr",
+        "tidyr",
+        "stringr",
+        "lubridate",
+        "readr",
+        "ggplot2",
+        "spelling",
+        "rmarkdown",
+        "testthat (>= 3.1.9)",
+        "usethis",
+        "withr",
+        "knitr",
+        "zoo",
+        "glue"
+      ],
+      "Encoding": "UTF-8",
+      "Language": "en-GB",
+      "LazyData": "true",
+      "RoxygenNote": "7.3.3",
+      "VignetteBuilder": "knitr",
+      "Config/Needs/hexsticker": "hexSticker, sysfonts, ggplot2",
+      "Config/Needs/website": "r-lib/pkgdown, epinowcast/enwtheme",
+      "NeedsCompilation": "no",
+      "Author": "Kaitlyn Johnson [aut, cre, cph] (ORCID: <https://orcid.org/0000-0001-8011-0012>), Emily Tyszka [aut] (ORCID: <https://orcid.org/0009-0005-6088-4017>), Johannes Bracher [aut] (ORCID: <https://orcid.org/0000-0002-3777-1410>), Sebastian Funk [aut] (ORCID: <https://orcid.org/0000-0002-2842-3406>), Sam Abbott [aut] (ORCID: <https://orcid.org/0000-0001-8057-8037>), Tim Taylor [ctb] (ORCID: <https://orcid.org/0000-0002-8587-7113>)",
+      "Maintainer": "Kaitlyn Johnson <kaitlyn.johnson@lshtm.ac.uk>",
       "Repository": "RSPM"
     },
     "bigD": {
@@ -1850,6 +1901,56 @@
       "Maintainer": "Hadley Wickham <hadley@rstudio.com>",
       "Repository": "RSPM"
     },
+    "cowplot": {
+      "Package": "cowplot",
+      "Version": "1.2.0",
+      "Source": "Repository",
+      "Title": "Streamlined Plot Theme and Plot Annotations for 'ggplot2'",
+      "Authors@R": "person( given = \"Claus O.\", family = \"Wilke\", role = c(\"aut\", \"cre\"), email = \"wilke@austin.utexas.edu\", comment = c(ORCID = \"0000-0002-7470-9261\") )",
+      "Description": "Provides various features that help with creating publication-quality figures with 'ggplot2', such as a set of themes, functions to align plots and arrange them into complex compound figures, and functions that make it easy to annotate plots and or mix plots with images. The package was originally written for internal use in the Wilke lab, hence the name (Claus O. Wilke's plot package). It has also been used extensively in the book Fundamentals of Data Visualization.",
+      "URL": "https://wilkelab.org/cowplot/",
+      "BugReports": "https://github.com/wilkelab/cowplot/issues",
+      "Depends": [
+        "R (>= 3.5.0)"
+      ],
+      "Imports": [
+        "ggplot2 (>= 3.5.2)",
+        "grid",
+        "gtable",
+        "grDevices",
+        "methods",
+        "rlang",
+        "scales"
+      ],
+      "License": "GPL-2",
+      "Suggests": [
+        "Cairo",
+        "covr",
+        "dplyr",
+        "forcats",
+        "gridGraphics (>= 0.4-0)",
+        "knitr",
+        "lattice",
+        "magick",
+        "maps",
+        "PASWR",
+        "patchwork",
+        "rmarkdown",
+        "ragg",
+        "testthat (>= 1.0.0)",
+        "tidyr",
+        "vdiffr (>= 0.3.0)",
+        "VennDiagram"
+      ],
+      "VignetteBuilder": "knitr",
+      "Collate": "'add_sub.R' 'align_plots.R' 'as_grob.R' 'as_gtable.R' 'axis_canvas.R' 'cowplot.R' 'draw.R' 'get_plot_component.R' 'get_axes.R' 'get_titles.R' 'get_legend.R' 'get_panel.R' 'gtable.R' 'key_glyph.R' 'plot_grid.R' 'save.R' 'set_null_device.R' 'setup.R' 'stamp.R' 'themes.R' 'utils_ggplot2.R'",
+      "RoxygenNote": "7.3.2",
+      "Encoding": "UTF-8",
+      "NeedsCompilation": "no",
+      "Author": "Claus O. Wilke [aut, cre] (ORCID: <https://orcid.org/0000-0002-7470-9261>)",
+      "Maintainer": "Claus O. Wilke <wilke@austin.utexas.edu>",
+      "Repository": "RSPM"
+    },
     "cpp11": {
       "Package": "cpp11",
       "Version": "0.5.3",
@@ -2621,11 +2722,11 @@
       "Author": "Daniel J. McDonald [aut], Nat DeFries [cre, aut], Johns Hopkins University Center for Systems Science and Engineering [dtc] (Owner of COVID-19 cases and deaths data from the COVID-19 Data Repository), Johns Hopkins University [cph] (Copyright holder of COVID-19 cases and deaths data from the COVID-19 Data Repository), Carnegie Mellon University Delphi Group [dtc] (Owner of masking, social-distancing, and CLI data from the COVID-19 Trends and Impacts Survey. Owner of claims-based CLI data from the Delphi Epidata API), The COVID-19 Canada Open Data Working Group [dtc] (Owner of Canadian COVID-19 cases rates from the Covid19Canada data repository), Statistics Canada [dtc] (Owner of Canadian graduate employment income data from the Statistics Canada website), Google [dtc] (Collaborator on CLI data from the Google symptom surveys)",
       "Maintainer": "Nat DeFries <ndefries@andrew.cmu.edu>",
       "RemoteType": "github",
-      "RemoteHost": "api.github.com",
       "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epidatasets",
       "RemoteRef": "main",
       "RemoteSha": "0c3070b3202b50a094caf30511f1f8caf5b1b830",
+      "RemoteHost": "api.github.com",
       "Remotes": "cmu-delphi/delphidocs, cmu-delphi/epidatr, cmu-delphi/epiprocess"
     },
     "epidatr": {
@@ -2829,11 +2930,11 @@
       "Author": "Jacob Bien [ctb], Logan Brooks [aut, cre], Rafael Catoia [ctb], Nat DeFries [aut], Daniel McDonald [aut], Rachel Lobay [ctb], Ken Mawer [ctb], Chloe You [ctb], Quang Nguyen [ctb], Evan Ray [aut], Dmitry Shemetov [aut], Ryan Tibshirani [aut], David Weber [ctb], Lionel Henry [ctb] (Author of included rlang fragments), Hadley Wickham [ctb] (Author of included rlang fragments), Posit [cph] (Copyright holder of included rlang fragments), Johns Hopkins University Center for Systems Science and Engineering [dtc] (Owner of COVID-19 cases and deaths data from the COVID-19 Data Repository), Johns Hopkins University [cph] (Copyright holder of COVID-19 cases and deaths data from the COVID-19 Data Repository), Carnegie Mellon University Delphi Group [dtc] (Owner of claims-based CLI data from the Delphi Epidata API)",
       "Maintainer": "Logan Brooks <lcbrooks+github@andrew.cmu.edu>",
       "RemoteType": "github",
-      "RemoteHost": "api.github.com",
       "RemoteUsername": "cmu-delphi",
       "RemoteRepo": "epiprocess",
       "RemoteRef": "dev",
       "RemoteSha": "5d35361ecc4c760225b679a61c3a2cdc4c399875",
+      "RemoteHost": "api.github.com",
       "Remotes": "cmu-delphi/delphidocs, cmu-delphi/epidatasets, cmu-delphi/epidatr, cmu-delphi/epipredict, glmgen/trendfilter, reconverse/outbreaks"
     },
     "evaluate": {
@@ -3061,6 +3162,47 @@
       "Maintainer": "Mitchell O'Hara-Wild <mail@mitchelloharawild.com>",
       "Repository": "RSPM"
     },
+    "flexdashboard": {
+      "Package": "flexdashboard",
+      "Version": "0.6.2",
+      "Source": "Repository",
+      "Type": "Package",
+      "Title": "R Markdown Format for Flexible Dashboards",
+      "Authors@R": "c( person(\"Garrick\", \"Aden-Buie\", , \"garrick@posit.co\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-7111-0077\")), person(\"Carson\", \"Sievert\", , \"carson@posit.co\", role = \"aut\", comment = c(ORCID = \"0000-0002-4958-2844\")), person(\"Richard\", \"Iannone\", , \"rich@posit.co\", role = \"aut\", comment = c(ORCID = \"0000-0003-3925-190X\")), person(\"JJ\", \"Allaire\", , \"jj@posit.co\", role = \"aut\"), person(\"Barbara\", \"Borges\", , \"barb.b.ribeiro@gmail.com\", role = \"aut\"), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\")), person(, \"Keen IO\", role = c(\"ctb\", \"cph\"), comment = \"Dashboard CSS\"), person(\"Abdullah\", \"Almsaeed\", role = c(\"ctb\", \"cph\"), comment = \"Dashboard CSS\"), person(\"Jonas\", \"Mosbech\", role = c(\"ctb\", \"cph\"), comment = \"StickyTableHeaders\"), person(\"Noel\", \"Bossart\", role = c(\"ctb\", \"cph\"), comment = \"Featherlight\"), person(\"Lea\", \"Verou\", role = c(\"ctb\", \"cph\"), comment = \"Prism\"), person(\"Dmitry\", \"Baranovskiy\", role = c(\"ctb\", \"cph\"), comment = \"Raphael.js\"), person(, \"Sencha Labs\", role = c(\"ctb\", \"cph\"), comment = \"Raphael.js\"), person(\"Bojan\", \"Djuricic\", role = c(\"ctb\", \"cph\"), comment = \"JustGage\"), person(\"Tomas\", \"Sardyha\", role = c(\"ctb\", \"cph\"), comment = \"Sly\"), person(\"Bryan\", \"Lewis\", role = c(\"ctb\", \"cph\"), comment = \"Examples\"), person(\"Joshua\", \"Kunst\", role = c(\"ctb\", \"cph\"), comment = \"Examples\"), person(\"Ryan\", \"Hafen\", role = c(\"ctb\", \"cph\"), comment = \"Examples\"), person(\"Bob\", \"Rudis\", role = c(\"ctb\", \"cph\"), comment = \"Examples\"), person(\"Joe\", \"Cheng\", role = \"ctb\", comment = \"Examples\") )",
+      "Description": "Format for converting an R Markdown document to a grid oriented dashboard. The dashboard flexibly adapts the size of it's components to the containing web page.",
+      "License": "MIT + file LICENSE",
+      "URL": "https://pkgs.rstudio.com/flexdashboard/, https://github.com/rstudio/flexdashboard/",
+      "BugReports": "https://github.com/rstudio/flexdashboard/issues",
+      "Depends": [
+        "R (>= 3.0.2)"
+      ],
+      "Imports": [
+        "bslib (>= 0.2.5)",
+        "grDevices",
+        "htmltools (>= 0.5.1)",
+        "htmlwidgets (>= 0.6)",
+        "jsonlite",
+        "knitr (>= 1.30)",
+        "rmarkdown (>= 2.8)",
+        "sass",
+        "scales",
+        "shiny (>= 0.13)",
+        "tools",
+        "utils"
+      ],
+      "Suggests": [
+        "testthat"
+      ],
+      "Config/Needs/deploy": "dplyr, ggplot2, DT, talgalili/d3heatmap, plotly, plyr, biclust, webshot, bit, jcheng5/bubbles, digest, hadley/shinySignals, dygraphs, quantmod, forecast, highcharter, arules, treemap, viridisLite, leaflet, metricsgraphics, rbokeh, readr, tidyr, jsonlite, maptools, purrr, maps, hexbin",
+      "Config/Needs/website": "rstudio/quillt",
+      "Config/testthat/edition": "3",
+      "Encoding": "UTF-8",
+      "RoxygenNote": "7.2.3",
+      "NeedsCompilation": "no",
+      "Author": "Garrick Aden-Buie [aut, cre] (<https://orcid.org/0000-0002-7111-0077>), Carson Sievert [aut] (<https://orcid.org/0000-0002-4958-2844>), Richard Iannone [aut] (<https://orcid.org/0000-0003-3925-190X>), JJ Allaire [aut], Barbara Borges [aut], Posit Software, PBC [cph, fnd], Keen IO [ctb, cph] (Dashboard CSS), Abdullah Almsaeed [ctb, cph] (Dashboard CSS), Jonas Mosbech [ctb, cph] (StickyTableHeaders), Noel Bossart [ctb, cph] (Featherlight), Lea Verou [ctb, cph] (Prism), Dmitry Baranovskiy [ctb, cph] (Raphael.js), Sencha Labs [ctb, cph] (Raphael.js), Bojan Djuricic [ctb, cph] (JustGage), Tomas Sardyha [ctb, cph] (Sly), Bryan Lewis [ctb, cph] (Examples), Joshua Kunst [ctb, cph] (Examples), Ryan Hafen [ctb, cph] (Examples), Bob Rudis [ctb, cph] (Examples), Joe Cheng [ctb] (Examples)",
+      "Maintainer": "Garrick Aden-Buie <garrick@posit.co>",
+      "Repository": "RSPM"
+    },
     "fontawesome": {
       "Package": "fontawesome",
       "Version": "0.5.3",
@@ -3180,9 +3322,47 @@
       "Maintainer": "Gábor Csárdi <csardi.gabor@gmail.com>",
       "Repository": "RSPM"
     },
+    "furrr": {
+      "Package": "furrr",
+      "Version": "0.4.0",
+      "Source": "Repository",
+      "Title": "Apply Mapping Functions in Parallel using Futures",
+      "Authors@R": "c( person(\"Davis\", \"Vaughan\", , \"davis@posit.co\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0003-4777-038X\")), person(\"Henrik\", \"Bengtsson\", , \"henrikb@braju.com\", role = \"aut\", comment = c(ORCID = \"0000-0002-7579-5165\")), person(\"Matt\", \"Dancho\", , \"mdancho@business-science.io\", role = \"aut\"), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\")) )",
+      "Description": "Implementations of the family of map() functions from 'purrr' that can be resolved using any 'future'-supported backend, e.g. parallel on the local machine or distributed on a compute cluster.",
+      "License": "MIT + file LICENSE",
+      "URL": "https://github.com/futureverse/furrr, https://furrr.futureverse.org/",
+      "BugReports": "https://github.com/futureverse/furrr/issues",
+      "Depends": [
+        "future (>= 1.70.0)",
+        "R (>= 4.1.0)"
+      ],
+      "Imports": [
+        "globals (>= 0.19.1)",
+        "purrr (>= 1.2.1)",
+        "rlang (>= 1.1.7)",
+        "vctrs (>= 0.7.0)"
+      ],
+      "Suggests": [
+        "carrier",
+        "covr",
+        "dplyr (>= 1.1.4)",
+        "knitr",
+        "parallelly (>= 1.46.1)",
+        "testthat (>= 3.3.2)",
+        "tidyselect"
+      ],
+      "Config/Needs/website": "progressr",
+      "Config/testthat/edition": "3",
+      "Encoding": "UTF-8",
+      "RoxygenNote": "7.3.3",
+      "NeedsCompilation": "no",
+      "Author": "Davis Vaughan [aut, cre] (ORCID: <https://orcid.org/0000-0003-4777-038X>), Henrik Bengtsson [aut] (ORCID: <https://orcid.org/0000-0002-7579-5165>), Matt Dancho [aut], Posit Software, PBC [cph, fnd]",
+      "Maintainer": "Davis Vaughan <davis@posit.co>",
+      "Repository": "RSPM"
+    },
     "future": {
       "Package": "future",
-      "Version": "1.69.0",
+      "Version": "1.70.0",
       "Source": "Repository",
       "Title": "Unified Parallel and Distributed Processing in R for Everyone",
       "Depends": [
@@ -3194,6 +3374,7 @@
         "listenv (>= 0.8.0)",
         "parallel",
         "parallelly (>= 1.44.0)",
+        "tools",
         "utils"
       ],
       "Suggests": [
@@ -3439,6 +3620,51 @@
       "Author": "Matthew Kay [aut, cre], Brenton M. Wiernik [ctb]",
       "Repository": "RSPM"
     },
+    "ggh4x": {
+      "Package": "ggh4x",
+      "Version": "0.3.1",
+      "Source": "Repository",
+      "Title": "Hacks for 'ggplot2'",
+      "Authors@R": "person(given = \"Teun\", family = \"van den Brand\", role = c(\"aut\", \"cre\"), email = \"tahvdbrand@gmail.com\", comment = c(ORCID = \"0000-0002-9335-7468\"))",
+      "Description": "A 'ggplot2' extension that does a variety of little helpful things.  The package extends 'ggplot2' facets through customisation, by setting individual scales per panel, resizing panels and providing nested facets.  Also allows multiple colour and fill scales per plot. Also hosts a smaller collection of stats, geoms and axis  guides.",
+      "License": "MIT + file LICENSE",
+      "URL": "https://github.com/teunbrand/ggh4x, https://teunbrand.github.io/ggh4x/",
+      "BugReports": "https://github.com/teunbrand/ggh4x/issues",
+      "Depends": [
+        "ggplot2 (>= 3.5.2)"
+      ],
+      "Imports": [
+        "grid",
+        "gtable",
+        "scales",
+        "vctrs (>= 0.5.0)",
+        "rlang (>= 1.1.0)",
+        "lifecycle",
+        "stats",
+        "cli",
+        "S7"
+      ],
+      "Suggests": [
+        "covr",
+        "fitdistrplus",
+        "ggdendro",
+        "vdiffr",
+        "knitr",
+        "MASS",
+        "rmarkdown",
+        "testthat (>= 3.0.0)",
+        "utils"
+      ],
+      "VignetteBuilder": "knitr",
+      "Encoding": "UTF-8",
+      "RoxygenNote": "7.3.2",
+      "Config/testthat/edition": "3",
+      "Collate": "'at_panel.R' 'borrowed_ggplot2.R' 'conveniences.R' 'ggh4x_extensions.R' 'coord_axes_inside.R' 'deprecated.R' 'element_part_rect.R' 'facet_grid2.R' 'facet_wrap2.R' 'facet_manual.R' 'facet_nested.R' 'facet_nested_wrap.R' 'facetted_pos_scales.R' 'force_panelsize.R' 'geom_box.R' 'geom_outline_point.R' 'geom_pointpath.R' 'geom_polygonraster.R' 'geom_rectrug.R' 'geom_text_aimed.R' 'ggh4x-package.R' 'guide_stringlegend.R' 'help_secondary.R' 'position_disjoint_ranges.R' 'position_lineartrans.R' 'scale_facet.R' 'scale_listed.R' 'scale_manual.R' 'scale_multi.R' 'stat_difference.R' 'stat_funxy.R' 'stat_rle.R' 'stat_roll.R' 'stat_theodensity.R' 'strip_vanilla.R' 'strip_themed.R' 'strip_nested.R' 'strip_split.R' 'strip_tag.R' 'themes.R' 'utils.R' 'utils_grid.R' 'utils_gtable.R'",
+      "NeedsCompilation": "no",
+      "Author": "Teun van den Brand [aut, cre] (ORCID: <https://orcid.org/0000-0002-9335-7468>)",
+      "Maintainer": "Teun van den Brand <tahvdbrand@gmail.com>",
+      "Repository": "RSPM"
+    },
     "ggnewscale": {
       "Package": "ggnewscale",
       "Version": "0.5.2",
@@ -3619,7 +3845,7 @@
     },
     "globals": {
       "Package": "globals",
-      "Version": "0.18.0",
+      "Version": "0.19.1",
       "Source": "Repository",
       "Depends": [
         "R (>= 3.1.2)"
@@ -3637,7 +3863,7 @@
       "Encoding": "UTF-8",
       "URL": "https://globals.futureverse.org, https://github.com/futureverse/globals",
       "BugReports": "https://github.com/futureverse/globals/issues",
-      "RoxygenNote": "7.3.2",
+      "RoxygenNote": "7.3.3",
       "NeedsCompilation": "no",
       "Author": "Henrik Bengtsson [aut, cre, cph], Davis Vaughan [ctb]",
       "Maintainer": "Henrik Bengtsson <henrikb@braju.com>",
@@ -6621,8 +6847,7 @@
       ],
       "Collate": "'adjective.R' 'adverb.R' 'exclamation.R' 'verb.R' 'rpackage.R' 'package.R'",
       "NeedsCompilation": "no",
-      "Repository": "RSPM",
-      "Encoding": "UTF-8"
+      "Repository": "CRAN"
     },
     "prettyunits": {
       "Package": "prettyunits",
@@ -6979,6 +7204,44 @@
       "NeedsCompilation": "yes",
       "Author": "Hadley Wickham [aut, cre] (ORCID: <https://orcid.org/0000-0003-4757-117X>), Lionel Henry [aut], Posit Software, PBC [cph, fnd] (ROR: <https://ror.org/03wc8by49>)",
       "Maintainer": "Hadley Wickham <hadley@posit.co>",
+      "Repository": "RSPM"
+    },
+    "qrcode": {
+      "Package": "qrcode",
+      "Version": "0.3.0",
+      "Source": "Repository",
+      "Type": "Package",
+      "Title": "Generate QRcodes with R",
+      "Authors@R": "c( person(\"Thierry\", \"Onkelinx\", , \"qrcode@muscardinus.be\", role = c(\"aut\", \"cre\"), comment = c(\"Author of the reimplemented functions\", ORCID = \"0000-0001-8804-4216\")), person(\"Victor\", \"Teh\", , \"victorteh@gmail.com\", role = \"aut\", comment = \"Original author\") )",
+      "Description": "Create static QR codes in R. The content of the QR code is exactly what the user defines. We don't add a redirect URL, making it impossible for us to track the usage of the QR code. This allows to generate fast, free to use and privacy friendly QR codes.",
+      "License": "GPL-3",
+      "URL": "https://thierryo.github.io/qrcode/, https://github.com/ThierryO/qrcode, https://doi.org/10.5281/zenodo.5040088",
+      "BugReports": "https://github.com/ThierryO/qrcode/issues",
+      "Depends": [
+        "R (>= 4.1.0)"
+      ],
+      "Imports": [
+        "assertthat",
+        "stats",
+        "utils"
+      ],
+      "Suggests": [
+        "httr",
+        "jpeg",
+        "knitr",
+        "opencv",
+        "png",
+        "rsvg",
+        "testthat (>= 3.0.0)"
+      ],
+      "Config/checklist/keywords": "two-dimensional barcode; matrix barcode",
+      "Config/testthat/edition": "3",
+      "Encoding": "UTF-8",
+      "Language": "en-GB",
+      "RoxygenNote": "7.3.2",
+      "NeedsCompilation": "no",
+      "Author": "Thierry Onkelinx [aut, cre] (Author of the reimplemented functions, <https://orcid.org/0000-0001-8804-4216>), Victor Teh [aut] (Original author)",
+      "Maintainer": "Thierry Onkelinx <qrcode@muscardinus.be>",
       "Repository": "RSPM"
     },
     "qs": {
@@ -7576,7 +7839,57 @@
     "renv": {
       "Package": "renv",
       "Version": "1.1.6",
-      "Source": "Repository"
+      "Source": "Repository",
+      "Type": "Package",
+      "Title": "Project Environments",
+      "Authors@R": "c( person(\"Kevin\", \"Ushey\", role = c(\"aut\", \"cre\"), email = \"kevin@rstudio.com\", comment = c(ORCID = \"0000-0003-2880-7407\")), person(\"Hadley\", \"Wickham\", role = c(\"aut\"), email = \"hadley@rstudio.com\", comment = c(ORCID = \"0000-0003-4757-117X\")), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\")) )",
+      "Description": "A dependency management toolkit for R. Using 'renv', you can create and manage project-local R libraries, save the state of these libraries to a 'lockfile', and later restore your library as required. Together, these tools can help make your projects more isolated, portable, and reproducible.",
+      "License": "MIT + file LICENSE",
+      "URL": "https://rstudio.github.io/renv/, https://github.com/rstudio/renv",
+      "BugReports": "https://github.com/rstudio/renv/issues",
+      "Imports": [
+        "utils"
+      ],
+      "Suggests": [
+        "BiocManager",
+        "cli",
+        "compiler",
+        "covr",
+        "cpp11",
+        "curl",
+        "devtools",
+        "generics",
+        "gitcreds",
+        "jsonlite",
+        "jsonvalidate",
+        "knitr",
+        "miniUI",
+        "modules",
+        "packrat",
+        "pak",
+        "R6",
+        "remotes",
+        "reticulate",
+        "rmarkdown",
+        "rstudioapi",
+        "shiny",
+        "testthat",
+        "uuid",
+        "waldo",
+        "yaml",
+        "webfakes"
+      ],
+      "Encoding": "UTF-8",
+      "RoxygenNote": "7.3.3",
+      "VignetteBuilder": "knitr",
+      "Config/Needs/website": "tidyverse/tidytemplate",
+      "Config/testthat/edition": "3",
+      "Config/testthat/parallel": "true",
+      "Config/testthat/start-first": "bioconductor,python,install,restore,snapshot,retrieve,remotes",
+      "NeedsCompilation": "no",
+      "Author": "Kevin Ushey [aut, cre] (ORCID: <https://orcid.org/0000-0003-2880-7407>), Hadley Wickham [aut] (ORCID: <https://orcid.org/0000-0003-4757-117X>), Posit Software, PBC [cph, fnd]",
+      "Maintainer": "Kevin Ushey <kevin@rstudio.com>",
+      "Repository": "RSPM"
     },
     "reprex": {
       "Package": "reprex",
@@ -10082,10 +10395,9 @@
         "R (>= 2.10.0)"
       ],
       "License": "GPL (>= 2)",
-      "Repository": "RSPM",
+      "Repository": "CRAN",
       "NeedsCompilation": "no",
-      "Author": "David B. Dahl [aut], David Scott [aut, cre], Charles Roosen [aut], Arni Magnusson [aut], Jonathan Swinton [aut], Ajay Shah [ctb], Arne Henningsen [ctb], Benno Puetz [ctb], Bernhard Pfaff [ctb], Claudio Agostinelli [ctb], Claudius Loehnert [ctb], David Mitchell [ctb], David Whiting [ctb], Fernando da Rosa [ctb], Guido Gay [ctb], Guido Schulz [ctb], Ian Fellows [ctb], Jeff Laake [ctb], John Walker [ctb], Jun Yan [ctb], Liviu Andronic [ctb], Markus Loecher [ctb], Martin Gubri [ctb], Matthieu Stigler [ctb], Robert Castelo [ctb], Seth Falcon [ctb], Stefan Edwards [ctb], Sven Garbade [ctb], Uwe Ligges [ctb]",
-      "Encoding": "UTF-8"
+      "Author": "David B. Dahl [aut], David Scott [aut, cre], Charles Roosen [aut], Arni Magnusson [aut], Jonathan Swinton [aut], Ajay Shah [ctb], Arne Henningsen [ctb], Benno Puetz [ctb], Bernhard Pfaff [ctb], Claudio Agostinelli [ctb], Claudius Loehnert [ctb], David Mitchell [ctb], David Whiting [ctb], Fernando da Rosa [ctb], Guido Gay [ctb], Guido Schulz [ctb], Ian Fellows [ctb], Jeff Laake [ctb], John Walker [ctb], Jun Yan [ctb], Liviu Andronic [ctb], Markus Loecher [ctb], Martin Gubri [ctb], Matthieu Stigler [ctb], Robert Castelo [ctb], Seth Falcon [ctb], Stefan Edwards [ctb], Sven Garbade [ctb], Uwe Ligges [ctb]"
     },
     "yaml": {
       "Package": "yaml",
