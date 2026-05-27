@@ -424,6 +424,7 @@ filtered_archive$DT %<>%
 The states most likely to be subject to total revisions requiring substitution.
 
 ```{r revision_plots, fig.width = 15, fig.height = 10, fig.align = "center", echo=FALSE}
+dbg(paste("revision_plots: filtered_archive DT cols:", paste(names(filtered_archive$DT), collapse = ", ")))
 autoplot(filtered_archive, "value") +
   facet_wrap(~geo_value, ncol = 3, scales = "free") +
   theme(strip.text.x = element_text(size = 8)) +
@@ -434,6 +435,7 @@ autoplot(filtered_archive, "value") +
 
 ## All revisions
 ```{r all_revision_plots, out.width="120%", fig.width = 15, fig.height = 60, fig.align = "center"}
+dbg(paste("all_revision_plots: recent_archive DT cols:", paste(names(recent_archive$DT), collapse = ", ")))
 recent_archive$DT %<>% mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value))
 recent_archive %>%
   autoplot("value") +
@@ -447,16 +449,19 @@ recent_archive %>%
 Plotting the forecasts from 8 weeks ago until 3 weeks ago for each geography, sorted by WIS or population scaled WIS.
 ```{r plotting_recent_forecasts_function, echo=FALSE, message=FALSE}
 plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n_plotting) {
+  dbg(paste("plotting_forecasts called, target:", params$target))
   geo_score_order_2 <- geo_score_order[1:n_plotting]
   plotting_archive <- recent_archive
   plotting_archive$DT %<>%
     filter(geo_value %in% geo_score_order_2, time_value > plotting_window) %>%
     mutate(geo_value = factor(geo_value, levels = geo_score_order_2))
+  dbg(paste("plotting_archive DT cols:", paste(names(plotting_archive$DT), collapse = ", ")))
   if (params$target == "nhsn") {
     plotting_archive$DT %<>%
     left_join(state_census, by = join_by(geo_value == abbr)) %>%
     mutate(value = value * 1e5/ pop) %>%
     select(-pop)
+    dbg(paste("after nhsn join, plotting_archive DT cols:", paste(names(plotting_archive$DT), collapse = ", ")))
   } else {
     forecasts %<>%
       mutate(
@@ -475,10 +480,12 @@ plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n
       forecast_date = factor(forecast_date)
     ) %>%
     ungroup()
+  dbg(paste("forecasts_to_plot cols before pivot:", paste(names(forecasts_to_plot), collapse = ", ")))
   if (params$target == "nhsn") {
     forecasts_to_plot %<>%
       left_join(state_census, by = join_by(geo_value == abbr)) %>%
       mutate(value = value * 1e5/ pop)
+    dbg(paste("forecasts_to_plot cols after nhsn join:", paste(names(forecasts_to_plot), collapse = ", ")))
   }
   forecasts_to_plot %<>%
     pivot_wider(names_from = quantile, values_from = value) %>%
