@@ -469,10 +469,10 @@ plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n
   plotting_archive %>%
     autoplot("value") +
     new_scale_color() +
-    geom_ribbon(data = forecasts_to_plot, aes(ymin = `0.25`, ymax = `0.75`, fill = forecaster, group = forecast_date), alpha = 0.4) +
-    geom_ribbon(data = forecasts_to_plot, aes(ymin = `0.1`, ymax = `0.9`, fill = forecaster, group = forecast_date), alpha = 0.4) +
-    geom_ribbon(data = forecasts_to_plot, aes(ymin = `0.05`, ymax = `0.95`, fill = forecaster, group = forecast_date), alpha = 0.4) +
-    geom_line(data = forecasts_to_plot, aes(y = `0.5`, group = forecast_date), alpha = 0.4) +
+    geom_ribbon(data = forecasts_to_plot, aes(x = time_value, ymin = `0.25`, ymax = `0.75`, fill = forecaster, group = forecast_date), alpha = 0.4, inherit.aes = FALSE) +
+    geom_ribbon(data = forecasts_to_plot, aes(x = time_value, ymin = `0.1`, ymax = `0.9`, fill = forecaster, group = forecast_date), alpha = 0.4, inherit.aes = FALSE) +
+    geom_ribbon(data = forecasts_to_plot, aes(x = time_value, ymin = `0.05`, ymax = `0.95`, fill = forecaster, group = forecast_date), alpha = 0.4, inherit.aes = FALSE) +
+    geom_line(data = forecasts_to_plot, aes(x = time_value, y = `0.5`, group = forecast_date), alpha = 0.4, inherit.aes = FALSE) +
     scale_color_brewer(palette = "Set3") +
     scale_fill_brewer(palette = "Set3") +
     facet_grid(factor(geo_value, levels = geo_score_order_2) ~ forecast_date, scale = if(n_plotting>20) "free" else "fixed") +
