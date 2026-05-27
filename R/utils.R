@@ -977,15 +977,15 @@ build_cast_api_query <- function(
   signal = NULL,
   geo_type = c("state", "nation"),
   columns = NULL,
-  fill_method = c("source", "fill_ave", "fill_zero"),
-  limit = -1,
-  offset = 0,
+  fill_method = NULL,
+  limit = NULL,
+  offset = NULL,
   version_query = NULL,
   geo_value = NULL,
   time_value = NULL
 ) {
   source <- rlang::arg_match(source)
-  fill_method <- rlang::arg_match(fill_method)
+  if (!is.null(fill_method)) fill_method <- rlang::arg_match(fill_method, c("source", "fill_ave", "fill_zero"))
   geo_type <- rlang::arg_match(geo_type)
   columns <- columns %||% c("geo_value", "time_value", "value", "version")
   columns <- gsub("\\btime_value\\b", "reference_time", columns)
@@ -1012,7 +1012,7 @@ build_cast_api_query <- function(
 
 get_cast_api_data <- function(...) {
   req <- build_cast_api_query(...)
-  print(req)
+  if (Sys.getenv("DEBUG_MODE") == "true") print(req)
   filename <- tempfile(fileext = ".csv")
   req %>% httr2::req_perform(path = filename)
   readr::read_csv(filename, show_col_types = FALSE) %>%
