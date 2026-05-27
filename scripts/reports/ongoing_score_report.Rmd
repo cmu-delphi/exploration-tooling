@@ -453,16 +453,13 @@ plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n
   geo_score_order_2 <- geo_score_order[1:n_plotting]
   plotting_archive <- recent_archive
   plotting_archive$DT %<>%
-    filter(geo_value %in% geo_score_order_2, time_value > plotting_window) %>%
-    mutate(geo_value = factor(geo_value, levels = geo_score_order_2))
+    filter(geo_value %in% geo_score_order_2, time_value > plotting_window)
   dbg(paste("plotting_archive DT cols:", paste(names(plotting_archive$DT), collapse = ", ")))
   if (params$target == "nhsn") {
-    dbg(paste("state_census cols:", paste(names(state_census), collapse = ", ")))
-    dbg(paste("geo_value class:", class(plotting_archive$DT$geo_value)))
     plotting_archive$DT %<>%
-    left_join(state_census, by = join_by(geo_value == abbr)) %>%
-    mutate(value = value * 1e5/ pop) %>%
-    select(-pop)
+      left_join(state_census, by = join_by(geo_value == abbr)) %>%
+      mutate(value = value * 1e5/ pop) %>%
+      select(-pop)
     dbg(paste("after nhsn join, plotting_archive DT cols:", paste(names(plotting_archive$DT), collapse = ", ")))
   } else {
     forecasts %<>%
@@ -470,6 +467,7 @@ plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n
         value = value * 100
       )
   }
+  plotting_archive$DT %<>% mutate(geo_value = factor(geo_value, levels = geo_score_order_2))
   latest_data_date <- plotting_archive$DT %>% pull(time_value) %>% max()
   forecasts_to_plot <- forecasts %>%
     filter(
