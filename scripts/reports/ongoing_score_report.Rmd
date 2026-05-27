@@ -30,34 +30,18 @@ knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 ggplot2::theme_set(ggplot2::theme_bw())
 options(width=500)
 library(ggnewscale)
-dbg <- function(...) write(paste0("[", format(Sys.time(), "%H:%M:%S"), "] ", ...), "/tmp/ongoing_score_debug.txt", append = TRUE)
-dbg("setup chunk start")
-dbg(paste("params$target:", params$target))
-dbg(paste("params$archive class:", paste(class(params$archive), collapse = ", ")))
 recent_archive <- params$archive
-dbg(paste("archive DT cols:", paste(names(recent_archive$DT), collapse = ", ")))
 if (params$target == "nssp") {
   recent_archive$DT <- rename(recent_archive$DT, value = nssp)
-  dbg("renamed nssp -> value")
 }
-dbg(paste("external_forecasts cols:", paste(names(params$external_forecasts), collapse = ", ")))
-dbg(paste("scores cols:", paste(names(params$scores), collapse = ", ")))
 this_week <- round_date(Sys.Date() - 3, "week", 6)
-dbg("setup chunk done")
-## suppressPackageStartupMessages(source("R/load_all.R"))
-## params <- list()
-## params$external_forecasts <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "external_forecasts_full")) %>% select(-target)
-## params$archive <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "nhsn_archive_data"))
-## params$scores <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "external_scores_nhsn_full"))
 ```
 
 # Recent scores {.tabset}
 This "averaging method" refers to whether each forecaster's score is averaged over its own individually-reported set of keys and horizons or if it's averaged over a common set. The main difference is that for the "common" method, PyRenew is tossed out because it reports too few horizons, and we also stop evaluating horizon -1.
 
 ```{r adjusting data, echo=FALSE, message=FALSE}
-dbg("adjusting data chunk start")
 averaging_method <- params$averaging_method %||% "individual"
-dbg(paste("averaging_method:", averaging_method))
 if (averaging_method == "individual") {
   forecasts <- params$external_forecasts
   scores <- params$scores
@@ -73,8 +57,6 @@ if (averaging_method == "individual") {
 } else {
   stop("Unknown averaging method")
 }
-dbg(paste("forecasts cols:", paste(names(forecasts), collapse = ", ")))
-dbg(paste("scores cols:", paste(names(scores), collapse = ", ")))
 our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "seasonal_nssp_latest")
 scores <- scores %>%
   mutate(
@@ -90,10 +72,8 @@ scores <- scores %>%
   mutate(wis_rate = wis * 1e5 / pop) %>%
   mutate(ae_rate = ae_median * 1e5 / pop) %>%
   mutate(pop = factor(pop))
-dbg(paste("scores post-join cols:", paste(names(scores), collapse = ", ")))
 Mean <- function(x) mean(x, na.rm = TRUE)
 GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
-dbg("adjusting data chunk done")
 ```
 
 ```{r score_summary_functions, echo=FALSE, message=FALSE}
@@ -398,14 +378,11 @@ ahead_wis_plot %>% gplot(height = 1200)
 # Large recent data revisions {.tabset}
 
 ```{r revisions, echo=FALSE, message=TRUE, out.width="100%"}
-dbg("revisions chunk start")
 recent_archive <- recent_archive %>%
   filter(this_week - time_value < 10*7)
 recent_archive$time_type <- "day"
-dbg(paste("post-filter archive DT cols:", paste(names(recent_archive$DT), collapse = ", ")))
 revision_sum <- recent_archive %>%
   epiprocess::revision_analysis(value, min_waiting_period = NULL)
-dbg("revision_analysis done")
 av_re_spread <- revision_sum$revision_behavior %>%
   group_by(geo_value) %>%
   summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
@@ -424,7 +401,6 @@ filtered_archive$DT %<>%
 The states most likely to be subject to total revisions requiring substitution.
 
 ```{r revision_plots, fig.width = 15, fig.height = 10, fig.align = "center", echo=FALSE}
-dbg(paste("revision_plots: filtered_archive DT cols:", paste(names(filtered_archive$DT), collapse = ", ")))
 autoplot(filtered_archive, "value") +
   facet_wrap(~geo_value, ncol = 3, scales = "free") +
   theme(strip.text.x = element_text(size = 8)) +
@@ -435,7 +411,6 @@ autoplot(filtered_archive, "value") +
 
 ## All revisions
 ```{r all_revision_plots, out.width="120%", fig.width = 15, fig.height = 60, fig.align = "center"}
-dbg(paste("all_revision_plots: recent_archive DT cols:", paste(names(recent_archive$DT), collapse = ", ")))
 recent_archive$DT %<>% mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value))
 recent_archive %>%
   autoplot("value") +
@@ -449,18 +424,16 @@ recent_archive %>%
 Plotting the forecasts from 8 weeks ago until 3 weeks ago for each geography, sorted by WIS or population scaled WIS.
 ```{r plotting_recent_forecasts_function, echo=FALSE, message=FALSE}
 plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n_plotting) {
-  dbg(paste("plotting_forecasts called, target:", params$target))
   geo_score_order_2 <- geo_score_order[1:n_plotting]
   plotting_archive <- recent_archive
+  plotting_archive$DT <- data.table::as.data.table(recent_archive$DT)
   plotting_archive$DT %<>%
     filter(geo_value %in% geo_score_order_2, time_value > plotting_window)
-  dbg(paste("plotting_archive DT cols:", paste(names(plotting_archive$DT), collapse = ", ")))
   if (params$target == "nhsn") {
     plotting_archive$DT %<>%
       left_join(state_census, by = join_by(geo_value == abbr)) %>%
       mutate(value = value * 1e5/ pop) %>%
       select(-pop)
-    dbg(paste("after nhsn join, plotting_archive DT cols:", paste(names(plotting_archive$DT), collapse = ", ")))
   } else {
     forecasts %<>%
       mutate(
@@ -468,6 +441,8 @@ plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n
       )
   }
   plotting_archive$DT %<>% mutate(geo_value = factor(geo_value, levels = geo_score_order_2))
+  data.table::setDT(plotting_archive$DT)
+  data.table::setkeyv(plotting_archive$DT, c("geo_value", "time_value", "version"))
   latest_data_date <- plotting_archive$DT %>% pull(time_value) %>% max()
   forecasts_to_plot <- forecasts %>%
     filter(
@@ -480,16 +455,15 @@ plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n
       forecast_date = factor(forecast_date)
     ) %>%
     ungroup()
-  dbg(paste("forecasts_to_plot cols before pivot:", paste(names(forecasts_to_plot), collapse = ", ")))
   if (params$target == "nhsn") {
     forecasts_to_plot %<>%
       left_join(state_census, by = join_by(geo_value == abbr)) %>%
       mutate(value = value * 1e5/ pop)
-    dbg(paste("forecasts_to_plot cols after nhsn join:", paste(names(forecasts_to_plot), collapse = ", ")))
   }
   forecasts_to_plot %<>%
     pivot_wider(names_from = quantile, values_from = value) %>%
     mutate(time_value = target_end_date)
+
   plotting_archive %>%
     autoplot("value") +
     new_scale_color() +
