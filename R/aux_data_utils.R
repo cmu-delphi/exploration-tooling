@@ -676,14 +676,14 @@ get_nhsn_data_archive <- function(disease = c("covid", "flu", "rsv")) {
     signal = glue::glue("confirmed_admissions_{disease}_ew"),
     geo_type = "state",
     columns = c("geo_value", "time_value", "value", "version"),
-    version_query = glue::glue("<={Sys.Date()}")
+    report_time_query = glue::glue("<={Sys.Date()}")
   )
   nhsn_nation <- get_cast_api_data(
     source = "nhsn",
     signal = glue::glue("confirmed_admissions_{disease}_ew"),
     geo_type = "nation",
     columns = c("geo_value", "time_value", "value", "version"),
-    version_query = glue::glue("<={Sys.Date()}")
+    report_time_query = glue::glue("<={Sys.Date()}")
   )
   nhsn_data <- nhsn_state %>%
     rbind(nhsn_nation) %>%

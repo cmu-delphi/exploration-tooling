@@ -980,7 +980,7 @@ build_cast_api_query <- function(
   fill_method = NULL,
   limit = NULL,
   offset = NULL,
-  version_query = NULL,
+  report_time_query = NULL,
   geo_value = NULL,
   time_value = NULL
 ) {
@@ -998,7 +998,7 @@ build_cast_api_query <- function(
       source = source,
       signal = signal,
       geo_type = geo_type,
-      version_query = version_query,
+      report_time_query = report_time_query,
       columns = columns,
       limit = limit,
       offset = offset,
