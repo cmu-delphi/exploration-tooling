@@ -457,6 +457,8 @@ plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n
     mutate(geo_value = factor(geo_value, levels = geo_score_order_2))
   dbg(paste("plotting_archive DT cols:", paste(names(plotting_archive$DT), collapse = ", ")))
   if (params$target == "nhsn") {
+    dbg(paste("state_census cols:", paste(names(state_census), collapse = ", ")))
+    dbg(paste("geo_value class:", class(plotting_archive$DT$geo_value)))
     plotting_archive$DT %<>%
     left_join(state_census, by = join_by(geo_value == abbr)) %>%
     mutate(value = value * 1e5/ pop) %>%
