@@ -987,9 +987,10 @@ build_cast_api_query <- function(
   source <- rlang::arg_match(source)
   fill_method <- rlang::arg_match(fill_method)
   geo_type <- rlang::arg_match(geo_type)
-  columns <- columns %||% c("geo_value", "time_value", "value", "report_ts_nominal_start")
+  columns <- columns %||% c("geo_value", "time_value", "value", "version")
+  columns <- gsub("\\btime_value\\b", "reference_time", columns)
+  columns <- gsub("\\bversion\\b", "report_time", columns)
   columns <- paste(columns, collapse = ",")
-  print(columns)
 
   httr2::request(EPIDATA_V5_URL) %>%
     httr2::req_url_path_append("archive/") %>%
@@ -1003,7 +1004,7 @@ build_cast_api_query <- function(
       offset = offset,
       fill_method = fill_method,
       geo_value = geo_value,
-      time_value = time_value,
+      reference_time = time_value,
       .multi = "explode"
     ) %>%
     httr2::req_headers_redacted(token = Sys.getenv("delphi.epidata.key"))
@@ -1014,7 +1015,8 @@ get_cast_api_data <- function(...) {
   print(req)
   filename <- tempfile(fileext = ".csv")
   req %>% httr2::req_perform(path = filename)
-  readr::read_csv(filename, show_col_types = FALSE)
+  readr::read_csv(filename, show_col_types = FALSE) %>%
+    dplyr::rename(any_of(c(time_value = "reference_time", version = "report_time")))
 }
 
 get_cast_api_latest_update_date <- function(source = c("nssp", "nhsn")) {
