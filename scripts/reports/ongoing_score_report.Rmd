@@ -30,7 +30,6 @@ knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 ggplot2::theme_set(ggplot2::theme_bw())
 options(width=500)
 library(ggnewscale)
-dbg <- function(...) write(paste0("[", format(Sys.time(), "%H:%M:%S"), "] ", ...), "/tmp/ongoing_score_debug.txt", append = TRUE)
 recent_archive <- params$archive
 if (params$target == "nssp") {
   recent_archive$DT <- rename(recent_archive$DT, value = nssp)
@@ -432,7 +431,7 @@ plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n
     filter(geo_value %in% geo_score_order_2, time_value > plotting_window)
   if (params$target == "nhsn") {
     plotting_archive$DT %<>%
-      left_join(state_census, by = join_by(geo_value == abbr)) %>%
+      left_join(select(state_census, abbr, pop), by = join_by(geo_value == abbr)) %>%
       mutate(value = value * 1e5/ pop) %>%
       select(-pop)
   } else {
@@ -444,10 +443,6 @@ plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n
   plotting_archive$DT %<>% mutate(geo_value = factor(geo_value, levels = geo_score_order_2))
   data.table::setDT(plotting_archive$DT)
   data.table::setkeyv(plotting_archive$DT, c("geo_value", "time_value", "version"))
-  finalized_check <- epix_as_of(plotting_archive, max(plotting_archive$DT$version))
-  dbg(paste("finalized cols:", paste(names(finalized_check), collapse = ", ")))
-  dbg(paste("finalized nrow:", nrow(finalized_check)))
-  rm(finalized_check)
   latest_data_date <- plotting_archive$DT %>% pull(time_value) %>% max()
   forecasts_to_plot <- forecasts %>%
     filter(
