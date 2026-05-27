@@ -30,11 +30,17 @@ knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 ggplot2::theme_set(ggplot2::theme_bw())
 options(width=500)
 library(ggnewscale)
+dbg <- function(...) write(paste0("[", format(Sys.time(), "%H:%M:%S"), "] ", ...), "/tmp/ongoing_score_debug.txt", append = TRUE)
+dbg("setup chunk start")
 recent_archive <- params$archive
+dbg(paste("archive DT cols:", paste(names(recent_archive$DT), collapse = ", ")))
+dbg(paste("is.data.table:", data.table::is.data.table(recent_archive$DT)))
 if (params$target == "nssp") {
   recent_archive$DT <- rename(recent_archive$DT, value = nssp)
+  dbg("renamed nssp -> value")
 }
 this_week <- round_date(Sys.Date() - 3, "week", 6)
+dbg("setup chunk done")
 ```
 
 # Recent scores {.tabset}
@@ -378,11 +384,15 @@ ahead_wis_plot %>% gplot(height = 1200)
 # Large recent data revisions {.tabset}
 
 ```{r revisions, echo=FALSE, message=TRUE, out.width="100%"}
+dbg("revisions chunk start")
 recent_archive <- recent_archive %>%
   filter(this_week - time_value < 10*7)
 recent_archive$time_type <- "day"
+dbg(paste("post-filter archive DT cols:", paste(names(recent_archive$DT), collapse = ", ")))
+dbg(paste("is.data.table post-filter:", data.table::is.data.table(recent_archive$DT)))
 revision_sum <- recent_archive %>%
   epiprocess::revision_analysis(value, min_waiting_period = NULL)
+dbg("revision_analysis done")
 av_re_spread <- revision_sum$revision_behavior %>%
   group_by(geo_value) %>%
   summarize(rel_spread = mean(rel_spread, na.rm = TRUE)) %>%
@@ -411,7 +421,9 @@ autoplot(filtered_archive, "value") +
 
 ## All revisions
 ```{r all_revision_plots, out.width="120%", fig.width = 15, fig.height = 60, fig.align = "center"}
+dbg(paste("all_revision_plots: is.data.table before mutate:", data.table::is.data.table(recent_archive$DT)))
 recent_archive$DT %<>% mutate(geo_value = factor(geo_value, levels = av_re_spread$geo_value))
+dbg(paste("all_revision_plots: is.data.table after mutate:", data.table::is.data.table(recent_archive$DT)))
 recent_archive %>%
   autoplot("value") +
   facet_wrap(~geo_value, ncol = 3, scales = "free") +
@@ -424,16 +436,22 @@ recent_archive %>%
 Plotting the forecasts from 8 weeks ago until 3 weeks ago for each geography, sorted by WIS or population scaled WIS.
 ```{r plotting_recent_forecasts_function, echo=FALSE, message=FALSE}
 plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n_plotting) {
+  dbg(paste("plotting_forecasts called, target:", params$target, "n_plotting:", n_plotting))
+  dbg(paste("recent_archive$DT is.data.table:", data.table::is.data.table(recent_archive$DT)))
   geo_score_order_2 <- geo_score_order[1:n_plotting]
   plotting_archive <- recent_archive
   plotting_archive$DT <- data.table::as.data.table(recent_archive$DT)
+  dbg(paste("after as.data.table copy, is.data.table:", data.table::is.data.table(plotting_archive$DT)))
   plotting_archive$DT %<>%
     filter(geo_value %in% geo_score_order_2, time_value > plotting_window)
+  dbg(paste("after filter, is.data.table:", data.table::is.data.table(plotting_archive$DT)))
+  dbg(paste("after filter, cols:", paste(names(plotting_archive$DT), collapse = ", ")))
   if (params$target == "nhsn") {
     plotting_archive$DT %<>%
       left_join(state_census, by = join_by(geo_value == abbr)) %>%
       mutate(value = value * 1e5/ pop) %>%
       select(-pop)
+    dbg(paste("after nhsn join, cols:", paste(names(plotting_archive$DT), collapse = ", ")))
   } else {
     forecasts %<>%
       mutate(
@@ -443,6 +461,9 @@ plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n
   plotting_archive$DT %<>% mutate(geo_value = factor(geo_value, levels = geo_score_order_2))
   data.table::setDT(plotting_archive$DT)
   data.table::setkeyv(plotting_archive$DT, c("geo_value", "time_value", "version"))
+  dbg(paste("before autoplot, is.data.table:", data.table::is.data.table(plotting_archive$DT)))
+  dbg(paste("before autoplot, key:", paste(data.table::key(plotting_archive$DT), collapse = ", ")))
+  dbg(paste("before autoplot, cols:", paste(names(plotting_archive$DT), collapse = ", ")))
   latest_data_date <- plotting_archive$DT %>% pull(time_value) %>% max()
   forecasts_to_plot <- forecasts %>%
     filter(
