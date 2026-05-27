@@ -21,7 +21,15 @@ get_external_forecasts <- function(external_object_name) {
     error = function(e) {
       msg <- conditionMessage(e)
       if (grepl("NoSuchKey|404|does not exist|not found", msg, ignore.case = TRUE)) {
-        return(tibble())
+        return(tibble(
+          target = character(),
+          forecaster = character(),
+          geo_value = character(),
+          forecast_date = as.Date(character()),
+          target_end_date = as.Date(character()),
+          quantile = numeric(),
+          value = numeric()
+        ))
       }
       stop(e)
     }

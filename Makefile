@@ -32,9 +32,9 @@ prod-rsv-log:
 prod-rsv:
 	export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R
 
-prod: prod-covid prod-flu prod-rsv update-site netlify
+prod: prod-covid prod-flu update-site netlify
 
-prod-log: prod-covid-log prod-flu-log prod-rsv-log update-site-log netlify-log
+prod-log: prod-covid-log prod-flu-log update-site-log netlify-log
 
 prod-covid-backtest:
 	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R

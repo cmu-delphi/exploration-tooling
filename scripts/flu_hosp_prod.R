@@ -374,7 +374,7 @@ ensemble_targets <- tar_map(
   tar_target(
     name = make_submission_csv,
     command = {
-      if (!g_backtest_mode && g_submission_directory != "cache") {
+      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
         forecast_reference_date <- get_forecast_reference_date(forecast_date_int)
         nhsn_submission <- ensemble_mixture$nhsn %>%
           format_flusight(disease = "flu")
@@ -398,7 +398,7 @@ ensemble_targets <- tar_map(
   tar_target(
     name = make_climate_submission_csv,
     command = {
-      if (!g_backtest_mode && g_submission_directory != "cache") {
+      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
         forecast_filtered$nhsn %>%
           filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
           group_by(geo_value, target_end_date, quantile) %>%
@@ -424,7 +424,7 @@ ensemble_targets <- tar_map(
     name = validate_result,
     command = {
       make_submission_csv
-      if (!g_backtest_mode && g_submission_directory != "cache") {
+      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
         validate_submission(
           g_submission_directory,
           file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(forecast_date_int))
@@ -438,7 +438,7 @@ ensemble_targets <- tar_map(
     name = validate_climate_result,
     command = {
       make_climate_submission_csv
-      if (!g_backtest_mode && g_submission_directory != "cache") {
+      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
         validate_submission(
           g_submission_directory,
           file_path = sprintf(
