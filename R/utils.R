@@ -1007,7 +1007,10 @@ build_cast_api_query <- function(
       reference_time = time_value,
       .multi = "explode"
     ) %>%
-    httr2::req_headers_redacted(token = Sys.getenv("delphi.epidata.key"))
+    {
+      key <- Sys.getenv("DELPHI_EPIDATA_KEY")
+      if (nchar(key) > 0) httr2::req_headers_redacted(., token = key) else .
+    }
 }
 
 get_cast_api_data <- function(...) {
