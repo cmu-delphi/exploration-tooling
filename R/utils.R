@@ -380,7 +380,7 @@ update_site <- function() {
   seasons <- tibble(
     season_name = c("2024-2025", "2025-2026"),
     season_start = as.Date(c("2024-11-20", "2025-06-04")),
-    season_end = as.Date(c("2025-06-03", "2026-06-05"))
+    season_end = as.Date(c("2025-06-03", "2026-10-15"))
   )
   for (iSeason in 1:nrow(seasons)) {
     season_name <- seasons[[iSeason, "season_name"]]
