@@ -1,0 +1,10 @@
+[Unit]
+Description=Run NWSS download every day at 06:25
+
+[Timer]
+OnCalendar=*-*-* 06:25:00
+TimeZone=America/Los_Angeles
+Persistent=true
+
+[Install]
+WantedBy=timers.target

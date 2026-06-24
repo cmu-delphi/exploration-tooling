@@ -1,0 +1,10 @@
+[Unit]
+Description=Run get-forecast-data every Tuesday at 09:00
+
+[Timer]
+OnCalendar=Tue *-*-* 09:00:00
+TimeZone=America/Los_Angeles
+Persistent=true
+
+[Install]
+WantedBy=timers.target

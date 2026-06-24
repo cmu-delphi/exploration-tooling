@@ -1,0 +1,7 @@
+[Unit]
+Description=Pull table of submitted forecasts for the current season
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/prod/exploration-tooling-2024
+ExecStart=/bin/bash -c 'source ~/.profile && Rscript scripts/get_forecast_data.R >> cache/get_forecast_data.log 2>&1'

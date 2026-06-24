@@ -1,0 +1,7 @@
+[Unit]
+Description=Run flu/covid prod forecasts once NHSN/NSSP data is fresh
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/prod/exploration-tooling-2024
+ExecStart=/bin/bash -c 'source ~/.profile && make prod-log-if-fresh'

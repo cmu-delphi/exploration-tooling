@@ -1,0 +1,7 @@
+[Unit]
+Description=Download NWSS data
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/nwss_data
+ExecStart=/bin/bash -c 'echo "pre-script" >> revision_hist.log && source venv/bin/activate && venv/bin/python nwss_download_script.py >> revision_hist.log 2>&1'

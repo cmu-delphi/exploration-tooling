@@ -1031,3 +1031,32 @@ get_cast_api_latest_update_date <- function(source = c("nssp", "nhsn")) {
     httr2::resp_body_json() %>%
     purrr::pluck(source, "version_range", "latest")
 }
+
+#' Check whether NHSN and NSSP source data is fresh enough to forecast on
+#'
+#' Builds (or confirms up to date) the `nhsn_archive_data` and
+#' `nssp_archive_data` targets for the active `targets` project (selected via
+#' `TAR_PROJECT`/`TAR_CONFIG`, see `tar_config_get()`), then checks the latest
+#' `time_value` actually present in each archive against the current date.
+#' Used by the production forecast cron/systemd job to decide whether to
+#' proceed with a forecast run or wait for newer data, rather than submitting
+#' a forecast built on stale inputs. Because these targets are `tar_change()`
+#' targets keyed on the upstream API's latest-update date, this also takes
+#' care of re-fetching them if newer data has appeared upstream.
+#'
+#' @param max_age_days Maximum allowed age, in days, of the latest time_value
+#'   before the data is considered stale.
+#' @return TRUE if both NHSN and NSSP archives have a time_value within
+#'   `max_age_days`, FALSE otherwise.
+check_data_freshness <- function(max_age_days = 7) {
+  targets::tar_make(names = targets::any_of(c("nhsn_archive_data", "nssp_archive_data")))
+  nhsn_archive <- targets::tar_read(nhsn_archive_data)
+  nssp_archive <- targets::tar_read(nssp_archive_data)
+  nhsn_latest <- max(nhsn_archive$DT$time_value)
+  nssp_latest <- max(nssp_archive$DT$time_value)
+  nhsn_age <- as.numeric(Sys.Date() - nhsn_latest)
+  nssp_age <- as.numeric(Sys.Date() - nssp_latest)
+  cli::cli_inform("NHSN latest time_value: {nhsn_latest} ({nhsn_age} days old)")
+  cli::cli_inform("NSSP latest time_value: {nssp_latest} ({nssp_age} days old)")
+  nhsn_age <= max_age_days && nssp_age <= max_age_days
+}

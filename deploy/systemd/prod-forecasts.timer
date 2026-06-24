@@ -1,0 +1,11 @@
+[Unit]
+Description=Attempt flu/covid prod forecasts every 30 minutes, 07:00-14:00, on Wednesdays
+
+[Timer]
+OnCalendar=Wed *-*-* 07..13:00/30:00
+OnCalendar=Wed *-*-* 14:00:00
+TimeZone=America/Los_Angeles
+Persistent=true
+
+[Install]
+WantedBy=timers.target
