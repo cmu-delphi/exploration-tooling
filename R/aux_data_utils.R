@@ -740,10 +740,6 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv
     arrange(geo_value, time_value, version) %>%
     distinct(geo_value, time_value, version, .keep_all = TRUE)
 
-  # covid wyoming is missing nssp data
-  if (disease == "covid") {
-    nssp_data <- nssp_data %>% filter(geo_value != "wy")
-  }
   # Complete the rest of the conversion.
   nssp_data %>%
     # End of week to midweek correction.
