@@ -1,15 +1,9 @@
 # Gates the flu/covid prod forecast run on NHSN/NSSP data freshness.
 #
-# Intended to be fired repeatedly (see prod-forecasts.timer: every 30 minutes,
-# 07:00-14:00 America/Los_Angeles, Wednesdays). On each firing:
-#   - if today's forecast already ran successfully, do nothing.
-#   - if NHSN/NSSP data is fresh (latest time_value <=7 days old), run the
-#     covid and flu prod pipelines, sync/update the report site, and deploy
-#     to netlify, then mark today as done.
-#   - if data is stale, wait for the next firing (the freshness check itself
-#     re-fetches the archive targets, so a later firing will pick up newer
-#     upstream data automatically) or, if this is the last firing of the day
-#     (>=14:00), log a CRITICAL line and give up for today.
+# Fired every 30 minutes, 07:00-14:00 America/Los_Angeles, on Wednesdays (see
+# prod-forecasts.timer). Runs the forecasts once the data is fresh, retries on
+# later firings if not, and gives up with a CRITICAL log line at the 14:00
+# cutoff.
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 log_file <- here::here("cache", "logs", "prod_forecast_freshness.log")
@@ -27,12 +21,10 @@ if (file.exists(marker)) {
   quit(status = 0)
 }
 
-check_project_freshness <- function(project) {
+fresh <- all(vapply(c("covid_hosp_prod", "flu_hosp_prod"), function(project) {
   Sys.setenv(TAR_PROJECT = project)
   check_data_freshness()
-}
-
-fresh <- check_project_freshness("covid_hosp_prod") && check_project_freshness("flu_hosp_prod")
+}, logical(1)))
 
 if (!fresh) {
   log_msg(sprintf("Data is stale (local hour=%d).", hour))
@@ -47,22 +39,20 @@ if (!fresh) {
 
 log_msg("Data is fresh, running prod forecasts.")
 
-#' Run a project's targets pipeline, appending console output to `log_path`.
-run_project_pipeline <- function(project, log_path) {
+#' Run `expr`, appending its console/message output to `log_path`. Returns 0
+#' on success, 1 if `expr` raises an error.
+run_logged_r <- function(log_path, expr) {
   dir.create(dirname(log_path), recursive = TRUE, showWarnings = FALSE)
-  store <- targets::tar_config_get("store", project = project)
-  script <- targets::tar_config_get("script", project = project)
-  dir.create(store, showWarnings = FALSE)
   con <- file(log_path, open = "a")
   sink(con, append = TRUE, split = TRUE)
   sink(con, append = TRUE, type = "message")
   result <- tryCatch(
     {
-      targets::tar_make(store = store, script = script)
+      force(expr)
       0L
     },
     error = function(e) {
-      message(sprintf("Pipeline for %s failed: %s", project, conditionMessage(e)))
+      message(conditionMessage(e))
       1L
     }
   )
@@ -82,6 +72,13 @@ run_logged <- function(command, args, log_path) {
   if (is.null(status)) 0L else status
 }
 
+run_project_pipeline <- function(project, log_path) {
+  store <- targets::tar_config_get("store", project = project)
+  script <- targets::tar_config_get("script", project = project)
+  dir.create(store, showWarnings = FALSE)
+  run_logged_r(log_path, targets::tar_make(store = store, script = script))
+}
+
 steps <- list(
   list(
     name = "covid prod pipeline",
@@ -94,33 +91,14 @@ steps <- list(
   list(
     name = "sync reports to S3",
     run = function() {
-      run_logged("aws", c("s3", "sync", "reports/", "s3://forecasting-team-data/2024/reports/"), here::here("cache", "logs", "update_site_log.txt"))
-      run_logged("aws", c("s3", "sync", "s3://forecasting-team-data/2024/reports/", "reports/"), here::here("cache", "logs", "update_site_log.txt"))
+      log_path <- here::here("cache", "logs", "update_site_log.txt")
+      run_logged("aws", c("s3", "sync", "reports/", "s3://forecasting-team-data/2024/reports/"), log_path)
+      run_logged("aws", c("s3", "sync", "s3://forecasting-team-data/2024/reports/", "reports/"), log_path)
     }
   ),
   list(
     name = "update site",
-    run = function() {
-      log_path <- here::here("cache", "logs", "update_site_log.txt")
-      dir.create(dirname(log_path), recursive = TRUE, showWarnings = FALSE)
-      con <- file(log_path, open = "a")
-      sink(con, append = TRUE, split = TRUE)
-      sink(con, append = TRUE, type = "message")
-      result <- tryCatch(
-        {
-          update_site()
-          0L
-        },
-        error = function(e) {
-          message(sprintf("update_site() failed: %s", conditionMessage(e)))
-          1L
-        }
-      )
-      sink(type = "message")
-      sink()
-      close(con)
-      result
-    }
+    run = function() run_logged_r(here::here("cache", "logs", "update_site_log.txt"), update_site())
   ),
   list(
     name = "netlify deploy",

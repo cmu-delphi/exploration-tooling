@@ -22,37 +22,19 @@ All timers carry `TimeZone=America/Los_Angeles` to match the old
 ## Forecast freshness gate
 
 `prod-forecasts.timer` fires every 30 minutes from 07:00 to 14:00 Pacific on
-Wednesdays, instead of once at 10:10. Each firing runs `make
-prod-log-if-fresh`, i.e. `Rscript scripts/run_prod_if_fresh.R`, which:
-
-1. Skips immediately if today's forecast already completed
-   (`cache/prod_forecast_done_<date>` marker).
-2. Checks NHSN/NSSP freshness by calling `check_data_freshness()` (`R/utils.R`,
-   threshold 7 days) directly via `Rscript`, once per `TAR_PROJECT` for each of
-   `covid_hosp_prod` and `flu_hosp_prod`. This builds (or confirms up to date)
-   the `nhsn_archive_data`/`nssp_archive_data` targets via `tar_make()` and
-   checks the latest `time_value` actually present in each archive — not just
-   the upstream API's self-reported "latest update" field, which has been
-   unreliable. Because these are `tar_change()` targets, the build step itself
-   re-fetches from upstream if new data is available, so no separate
-   invalidation step is needed.
-3. If fresh: runs the covid and flu prod pipelines (`tar_make()` in-process,
-   logged to `cache/logs/prod_covid`/`prod_flu`), syncs `reports/` with S3,
-   calls `update_site()`, and deploys to netlify — in that order, aborting and
-   logging `CRITICAL` on the first step that fails. On success, writes the
-   marker.
-4. If stale:
-   - before 14:00: waits for the next scheduled firing (which will re-check
-     and re-fetch).
-   - at 14:00 (last firing of the day): logs a `CRITICAL` line to
-     `cache/logs/prod_forecast_freshness.log` and gives up for the day — no
-     forecast is submitted.
+Wednesdays, instead of once at 10:10. Each firing runs
+`scripts/run_prod_if_fresh.R`, which skips if today's forecast already
+completed, checks NHSN/NSSP freshness via `check_data_freshness()`
+(`R/utils.R`), and either runs the full forecast/publish pipeline or waits for
+the next firing. At the 14:00 cutoff, if data is still stale, it logs a
+`CRITICAL` line to `cache/logs/prod_forecast_freshness.log` and skips the
+forecast for the day. See the script for the exact steps and log paths.
 
 ## Install (on the production box, as the `forecaster` user)
 
 ```sh
 mkdir -p ~/.config/systemd/user
-cp deploy/systemd/*.service deploy/systemd/*.timer ~/.config/systemd/user/
+ln -s "$(pwd)"/deploy/systemd/*.service "$(pwd)"/deploy/systemd/*.timer ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now \
   nhsn-archive-builder.timer \

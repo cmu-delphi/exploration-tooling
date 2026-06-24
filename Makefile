@@ -184,9 +184,6 @@ get-covid-prod-errors:
 get-rsv-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'rsv_hosp_prod')"
 
-prod-log-if-fresh:
-	Rscript scripts/run_prod_if_fresh.R
-
 summary-reports:
 	Rscript -e "rmarkdown::render('scripts/reports/revision_summary_report_2025.Rmd', output_file = here::here('reports', 'revision_summary_2025.html'))"; \
 	Rscript -e "rmarkdown::render('scripts/reports/decreasing_forecasters.Rmd', output_file = here::here('reports', 'decreasing_forecasters.html'))"; \
