@@ -1,0 +1,79 @@
+#!/usr/bin/env Rscript
+# Oracle compare (REFACTOR.md, Exp 0): diff two capture labels target-by-target.
+# Exact on key columns, relative tolerance on value columns. Empty diff = the
+# refactor preserved behavior. Exits non-zero if anything differs.
+#
+# Usage:
+#   distrobox enter rocker -- \
+#     Rscript scripts/oracle/compare.R flu_hosp_prod baseline refactored [tol]
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(cli)
+})
+
+args <- commandArgs(trailingOnly = TRUE)
+project <- if (length(args) >= 1) args[[1]] else "flu_hosp_prod"
+label_a <- if (length(args) >= 2) args[[2]] else "baseline"
+label_b <- if (length(args) >= 3) args[[3]] else "refactored"
+tol <- if (length(args) >= 4) as.numeric(args[[4]]) else 1e-9
+out_root <- Sys.getenv("ORACLE_OUT_DIR", "cache/oracle")
+
+dir_a <- file.path(out_root, project, label_a)
+dir_b <- file.path(out_root, project, label_b)
+
+# Columns treated as numeric measurements (tolerance); everything else is a key.
+value_cols <- c("value", "prediction", "wis", "ae_median", "oracle_value", "scale")
+
+files_a <- list.files(dir_a, pattern = "\\.parquet$")
+files_b <- list.files(dir_b, pattern = "\\.parquet$")
+only_a <- setdiff(files_a, files_b)
+only_b <- setdiff(files_b, files_a)
+if (length(only_a)) cli_alert_warning("only in {label_a}: {paste(only_a, collapse=', ')}")
+if (length(only_b)) cli_alert_warning("only in {label_b}: {paste(only_b, collapse=', ')}")
+
+any_diff <- FALSE
+for (f in intersect(files_a, files_b)) {
+  name <- sub("\\.parquet$", "", f)
+  a <- as.data.frame(nanoparquet::read_parquet(file.path(dir_a, f)))
+  b <- as.data.frame(nanoparquet::read_parquet(file.path(dir_b, f)))
+
+  if (!identical(sort(names(a)), sort(names(b)))) {
+    cli_alert_danger("{name}: column sets differ")
+    any_diff <- TRUE
+    next
+  }
+  if (nrow(a) != nrow(b)) {
+    cli_alert_danger("{name}: nrow {nrow(a)} vs {nrow(b)}")
+    any_diff <- TRUE
+    next
+  }
+
+  keys <- setdiff(names(a), value_cols)
+  a <- a %>% arrange(across(all_of(keys)))
+  b <- b %>% arrange(across(all_of(keys)))
+
+  if (!identical(a[keys], b[keys])) {
+    cli_alert_danger("{name}: key columns differ after sort")
+    any_diff <- TRUE
+    next
+  }
+
+  worst <- 0
+  for (v in intersect(value_cols, names(a))) {
+    d <- abs(a[[v]] - b[[v]])
+    rel <- d / pmax(abs(a[[v]]), 1e-12)
+    worst <- max(worst, max(rel, na.rm = TRUE), 0)
+  }
+  if (worst > tol) {
+    cli_alert_danger("{name}: max rel diff {signif(worst, 3)} > tol {tol}")
+    any_diff <- TRUE
+  } else {
+    cli_alert_success("{name}: match (max rel diff {signif(worst, 3)})")
+  }
+}
+
+if (any_diff) {
+  cli_alert_danger("DIFFERENCES FOUND")
+  quit(status = 1)
+}
+cli_alert_success("ALL MATCH")

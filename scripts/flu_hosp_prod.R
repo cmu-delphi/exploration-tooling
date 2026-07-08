@@ -56,6 +56,15 @@ if (!g_backtest_mode) {
   )
   # Every Wednesday since mid-Nov 2024
   g_forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
+  # Oracle affordance (REFACTOR.md): keep only the last N dates for a fast
+  # partial backtest. Inert when unset. Both date vectors are 1:1 aligned, so
+  # slice both by the same indices.
+  g_backtest_n_dates <- as.integer(Sys.getenv("BACKTEST_N_DATES", "0"))
+  if (!is.na(g_backtest_n_dates) && g_backtest_n_dates > 0) {
+    keep <- tail(seq_along(g_forecast_dates), g_backtest_n_dates)
+    g_forecast_dates <- g_forecast_dates[keep]
+    g_forecast_generation_dates <- g_forecast_generation_dates[keep]
+  }
 }
 
 # Forecaster grid — function definitions live in R/flu_prod_forecasters.R.
