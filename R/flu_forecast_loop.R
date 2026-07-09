@@ -1,8 +1,9 @@
-# SPIKE (REFACTOR.md Exp 4/5): the forecaster grid as a plain loop over the
-# signal-expanded grid (flu_build_prod2_grid). Each row is one (forecaster,
-# outcome_signal) config; flu_assemble builds its input (honest labels, no spoof),
-# the forecaster is called with (extra_sources, primary_source), and rows are split
-# back into forecast_nhsn_full / forecast_nssp_full by outcome_signal.
+# The flu forecaster grid as a plain loop over the signal-expanded grid
+# (flu_build_prod2_grid). Each row is one (forecaster, outcome_signal) config;
+# flu_assemble builds its input (honest labels, no spoof), the forecaster is called
+# with (extra_sources, primary_source), and rows are split back into
+# forecast_nhsn_full / forecast_nssp_full by outcome_signal. Replaces the old
+# forecast_nhsn/forecast_nssp tar_map + tar_combine in _flu_prod_shared.R.
 #
 # Seeding: a single hardcoded global seed per (cell x ahead) -- enough to make the
 # deterministic forecasters reproducible and the golden test stable. Does NOT match

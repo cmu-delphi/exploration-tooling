@@ -18,11 +18,6 @@ flu_hosp_backfill:
   store: flu_hosp_backfill
   use_crew: yes
   reporter_make: timestamp
-flu_hosp_prod2:
-  script: scripts/flu_hosp_prod2.R
-  store: flu_hosp_prod2
-  use_crew: no
-  reporter_make: timestamp
 covid_hosp_prod:
   script: scripts/covid_hosp_prod.R
   store: covid_hosp_prod

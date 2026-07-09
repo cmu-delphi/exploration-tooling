@@ -1,6 +1,6 @@
-# SPIKE (REFACTOR.md Exp 4): assemble one modeling frame with HONEST source
-# labels and HONEST exogenous column names, replacing the nhsn/nssp two-target
-# split + spoofing.
+# Assemble one modeling frame with HONEST source labels and HONEST exogenous
+# column names (REFACTOR.md Exp 4), replacing the old nhsn/nssp two-target split
+# + spoofing.
 #
 # Same slice/reshape ops as today; only the labels change and the exogenous
 # left_join moves here (out of the forecaster). The forecaster is told which
@@ -10,6 +10,46 @@
 # Reveals the one real asymmetry the spoof was hiding: an exogenous nssp column
 # is the RAW slice (cut at the forecast date), while an exogenous nhsn column is
 # the primary nhsn series (time-shifted). Preserved verbatim; flagged, not fixed.
+
+g_insufficient_data_geos_default <- c("as", "mp", "vi", "gu")
+
+# nhsn training frame + joined extra data; the primary rows for the nhsn signal.
+flu_build_full_data <- function(nhsn_archive, version_policy, generation_date, forecast_date,
+                                flu_data_substitutions, joined_latest_extra_data,
+                                insufficient_data_geos = g_insufficient_data_geos_default) {
+  train_data <- flu_slice_archive(nhsn_archive, version_policy, generation_date)
+  train_data <- train_data %>%
+    add_season_info() %>%
+    mutate(
+      geo_value = ifelse(geo_value == "usa", "us", geo_value),
+      time_value = time_value - 3,
+      source = "nhsn"
+    )
+  if (version_policy != "latest") {
+    train_data <- train_data %>%
+      data_substitutions(flu_data_substitutions, as.Date(generation_date))
+  }
+  train_data <- train_data %>% filter(geo_value %nin% insufficient_data_geos)
+  attributes(train_data)$metadata$as_of <- as.Date(forecast_date)
+  full_data <- train_data %>% bind_rows(joined_latest_extra_data)
+  attributes(full_data)$metadata$other_keys <- "source"
+  attributes(full_data)$metadata$as_of <- as.Date(forecast_date)
+  full_data
+}
+
+# Pull the archive inputs from a built targets store (default: flu_hosp_prod).
+# Dev convenience for iterating on a forecaster in the console against the same
+# inputs the pipeline uses: arch <- flu_load_archives(); flu_assemble(arch, ...).
+flu_load_archives <- function(project = "flu_hosp_prod") {
+  withr::with_envvar(c(TAR_PROJECT = project), {
+    list(
+      nhsn = targets::tar_read(nhsn_archive_data),
+      nssp = targets::tar_read(nssp_archive_data),
+      joined_latest_extra_data = targets::tar_read(joined_latest_extra_data),
+      flu_data_substitutions = targets::tar_read(flu_data_substitutions)
+    )
+  })
+}
 
 # A signal as the primary outcome frame (honest source label; nhsn carries its
 # augmentation rows, nssp does not -- matching current behavior).

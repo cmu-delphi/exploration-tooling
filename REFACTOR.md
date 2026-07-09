@@ -238,17 +238,29 @@ nondeterminism now recorded in finding 4: `cdc_baseline` / `linear` /
 `linear_no_population_scale` are stochastic, so the harness loop must reseed per cell
 (the only non-obvious prerequisite for integration; assembly itself is clean).
 
-**INTEGRATED into `flu_hosp_prod2` (spoof removed).** `flu_build_prod2_grid()` is the
-16-row signal grid (8 forecasters x {nhsn, nssp}) carrying `outcome_signal / exogenous /
-primary_source`; `flu_run_forecast_grid` assembles per row, calls the `flu2_*` adapters,
-and splits by `outcome_signal` into `forecast_nhsn_full` / `forecast_nssp_full`. The
-two-target split + spoof are gone. Console diff vs the spoof path: all 16 forecaster x
-signal combos maxdiff 0 (matched per-ahead seed). `flu_hosp_prod` left untouched as the
-reference. Caveat: a real `tar_make` prod2-vs-prod diff will still show the 3 stochastic
-forecasters differing (global seed 42 vs targets' per-target seed); the 5 deterministic
-rows match. Per-cell seeding deferred (finding 4). Remaining to finish the migration:
-`scale` / `target_name` post-processing on the grid row (the `/100` + names), then fold
-the loop into `flu_hosp_prod` itself.
+**INTEGRATED into `flu_hosp_prod` + `flu_hosp_backfill` (spoof removed, spike retired).**
+`flu_build_prod2_grid()` (R/flu_assemble.R) is the 16-row signal grid (8 forecasters x
+{nhsn, nssp}) carrying `outcome_signal / exogenous / primary_source`;
+`flu_run_forecast_grid` (R/flu_forecast_loop.R) assembles per row via `flu_assemble`,
+calls the `flu2_*` adapters, and splits by `outcome_signal` into `forecast_nhsn_full` /
+`forecast_nssp_full`. This replaced the `forecast_nhsn`/`forecast_nssp` tar_map +
+`build_combined_forecast_targets` in `build_flu_prod_pipeline()`; downstream
+(ensembles/scores/submission) is unchanged and consumes the same `forecast_*_full`
+names. Removed: `scripts/flu_hosp_prod2.R` (+ its `_targets.yaml` project),
+`R/flu_forecast_input.R` (dead spoof helpers; `flu_build_full_data` / `flu_load_archives`
+moved to `R/flu_assemble.R`), and the old `g_forecaster_params_grid` tibble (slimmed to
+`tibble(id = unique(flu_build_prod2_grid()$id))`, the only part the ensemble stage uses).
+Manifests build: flu_hosp_prod 395, flu_hosp_backfill 1414, covid_hosp_prod 395
+(unaffected -- the `primary_source` arg added to `scaled_pop_seasonal` defaults to
+"nhsn"). Console diff vs the spoof path: all 16 combos maxdiff 0 (matched per-ahead seed).
+
+**Golden must be re-baselined** (decision: accept). A real `tar_make` diff will show the
+3 stochastic forecasters (`cdc_baseline`, `linear`, `linear_no_population_scale`)
+differing -- the loop uses a global seed 42, `targets` used a per-target seed; the 5
+deterministic rows match. Not yet run against live data. Remaining, deferred: `scale` /
+`target_name` post-processing on the grid row (the `/100` + target names, still in the
+ensemble/submission stage); per-cell seeding (finding 4) if bit-exact stochastic parity
+is ever wanted.
 
 ## Exp 6 — consolidate data alignment (normalize-in / denormalize-out) (DEFERRED)
 

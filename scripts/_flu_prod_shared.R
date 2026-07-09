@@ -37,45 +37,10 @@ g_truth_data_date <- "2023-09-01"
 # set by the entry script (flu_hosp_prod.R or flu_hosp_backfill.R) before it
 # calls build_flu_prod_pipeline().
 
-# Forecaster grid — function definitions live in R/flu_prod_forecasters.R.
-ids <- c(
-  "cdc_baseline",
-  "linear",
-  "linear_no_population_scale",
-  "windowed_seasonal",
-  "windowed_seasonal_extra_sources",
-  "climate_base",
-  "climate_geo_agged",
-  "seasonal_nssp_latest"
-)
-g_forecaster_params_grid <- tibble(
-  id = ids,
-  forecaster = rlang::syms(c(
-    "g_baseline_forecaster",
-    "g_flu_linear",
-    "g_flu_linear_no_population_scale",
-    "g_flu_windowed_seasonal",
-    "g_flu_windowed_seasonal_extra_sources",
-    "g_flu_climate_base",
-    "g_flu_climate_geo_agged",
-    "g_flu_windowed_seasonal_extra_sources"
-  )),
-  params = vector("list", length(ids)),
-  param_names = vector("list", length(ids)),
-  # How each forecaster slices the archive (see flu_slice_archive). Explicit per
-  # forecaster - seasonal_nssp_latest is a "cheating" forecaster, to test the
-  # improvement possible from always using the finalized data revision.
-  version_policy = c(
-    "as_of", # cdc_baseline
-    "as_of", # linear
-    "as_of", # linear_no_population_scale
-    "as_of", # windowed_seasonal
-    "as_of", # windowed_seasonal_extra_sources
-    "as_of", # climate_base
-    "as_of", # climate_geo_agged
-    "latest" # seasonal_nssp_latest
-  )
-)
+# The forecaster set + per-signal config (forecaster fn, version_policy, exogenous,
+# primary_source) live in flu_build_prod2_grid() (R/flu_assemble.R), which the
+# forecast loop consumes. The ensemble stage only needs the list of ids.
+g_forecaster_params_grid <- tibble(id = unique(flu_build_prod2_grid()$id))
 
 
 # Build the full flu pipeline target list. Reads the g_* globals (including the
@@ -158,94 +123,30 @@ parameters_and_date_targets <- rlang::list2(
 
 
 # ================================ FORECAST TARGETS ================================
-forecast_targets <- tar_map(
-  values = tidyr::expand_grid(
-    g_forecaster_params_grid,
-    tibble(
-      forecast_date_int = g_forecast_dates,
-      forecast_generation_date_int = g_forecast_generation_dates,
-      forecast_date_chr = as.character(g_forecast_dates)
+# The forecaster grid as one loop (REFACTOR.md Exp 4/5). flu_assemble builds honest
+# per-signal input (no nhsn/nssp column/source spoof), flu_run_forecast_grid loops
+# the 16-row signal grid, and forecast_nhsn_full / forecast_nssp_full fall out by
+# outcome_signal. Replaces the old forecast_nhsn/forecast_nssp tar_map + tar_combine.
+forecast_full_targets <- rlang::list2(
+  tar_target(
+    name = forecast_full,
+    command = flu_run_forecast_grid(
+      grid = flu_build_prod2_grid(),
+      forecast_dates = g_forecast_dates,
+      forecast_generation_dates = g_forecast_generation_dates,
+      aheads = g_aheads,
+      archives = list(
+        nhsn = nhsn_archive_data,
+        nssp = nssp_archive_data,
+        joined_latest_extra_data = joined_latest_extra_data,
+        flu_data_substitutions = flu_data_substitutions
+      ),
+      insufficient_data_geos = g_insufficient_data_geos
     )
   ),
-  names = c("id", "forecast_date_chr"),
-  tar_target(
-    name = full_data,
-    command = {
-      # Train data
-      train_data <- flu_slice_archive(nhsn_archive_data, version_policy, forecast_generation_date_int)
-      train_data %<>%
-        add_season_info() %>%
-        mutate(
-          geo_value = ifelse(geo_value == "usa", "us", geo_value),
-          time_value = time_value - 3,
-          source = "nhsn"
-        )
-      if (version_policy != "latest") {
-        train_data %<>%
-          data_substitutions(
-            flu_data_substitutions,
-            as.Date(forecast_generation_date_int)
-          )
-      }
-      train_data %<>%
-        filter(geo_value %nin% g_insufficient_data_geos)
-      attributes(train_data)$metadata$as_of <- as.Date(forecast_date_int)
-      full_data <- train_data %>%
-        bind_rows(joined_latest_extra_data)
-      attributes(full_data)$metadata$other_keys <- "source"
-      attributes(full_data)$metadata$as_of <- as.Date(forecast_date_int)
-      full_data
-    }
-  ),
-  tar_target(
-    name = forecast_nssp,
-    command = {
-      nssp_data <- flu_slice_archive(nssp_archive_data, version_policy, forecast_generation_date_int)
-
-      forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
-
-      nssp_data %<>%
-        rename(value = nssp) %>%
-        mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
-        mutate(source = "nhsn") %>%
-        add_season_info()
-      attributes(nssp_data)$metadata$as_of <- as.Date(forecast_date_int)
-      attributes(nssp_data)$metadata$other_keys <- "source"
-      # spoofing the name to switch their roles
-      full_data_modified <- full_data %>%
-        rename(nssp = value) %>%
-        filter(source == "nhsn") %>%
-        select(-c(source, epiweek, epiyear, season, season_week))
-      nssp_data %>%
-        forecaster_fn(extra_data = full_data_modified) %>%
-        mutate(
-          forecaster = id,
-          geo_value = as.factor(geo_value)
-        )
-    },
-    pattern = map(aheads)
-  ),
-  tar_target(
-    name = forecast_nhsn,
-    command = {
-      # NOTE: latest cutoff is the forecast date here, not the generation date
-      # (asymmetry vs full_data / forecast_nssp), preserved from the original.
-      nssp_data <- flu_slice_archive(nssp_archive_data, version_policy, forecast_generation_date_int, latest_cutoff = forecast_date_int)
-
-      forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
-
-      full_data %>%
-        forecaster_fn(extra_data = nssp_data) %>%
-        mutate(
-          forecaster = id,
-          geo_value = as.factor(geo_value)
-        )
-    },
-    pattern = map(aheads)
-  )
+  tar_target(forecast_nhsn_full, command = forecast_full$nhsn),
+  tar_target(forecast_nssp_full, command = forecast_full$nssp)
 )
-
-combined_forecast_targets <- build_combined_forecast_targets(forecast_targets)
 
 
 # ================================ ENSEMBLE TARGETS ================================
@@ -460,9 +361,8 @@ if (g_backtest_mode) {
 
 list2(
   parameters_and_date_targets,
-  forecast_targets,
+  forecast_full_targets,
   ensemble_targets,
-  combined_forecast_targets,
   external_forecast_targets,
   combined_targets,
   joined_targets,
