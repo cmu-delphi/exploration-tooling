@@ -61,7 +61,20 @@ g_forecaster_params_grid <- tibble(
     "g_flu_windowed_seasonal_extra_sources"
   )),
   params = vector("list", length(ids)),
-  param_names = vector("list", length(ids))
+  param_names = vector("list", length(ids)),
+  # How each forecaster slices the archive (see flu_slice_archive). Explicit per
+  # forecaster - seasonal_nssp_latest is a "cheating" forecaster, to test the
+  # improvement possible from always using the finalized data revision.
+  version_policy = c(
+    "as_of", # cdc_baseline
+    "as_of", # linear
+    "as_of", # linear_no_population_scale
+    "as_of", # windowed_seasonal
+    "as_of", # windowed_seasonal_extra_sources
+    "as_of", # climate_base
+    "as_of", # climate_geo_agged
+    "latest" # seasonal_nssp_latest
+  )
 )
 
 
@@ -159,14 +172,7 @@ forecast_targets <- tar_map(
     name = full_data,
     command = {
       # Train data
-      if (grepl("latest", id)) {
-        train_data <- nhsn_archive_data %>%
-          epix_as_of(nhsn_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_generation_date_int))
-      } else {
-        train_data <- nhsn_archive_data %>%
-          epix_as_of(min(as.Date(forecast_generation_date_int), nhsn_archive_data$versions_end))
-      }
+      train_data <- flu_slice_archive(nhsn_archive_data, version_policy, forecast_generation_date_int)
       train_data %<>%
         add_season_info() %>%
         mutate(
@@ -174,7 +180,7 @@ forecast_targets <- tar_map(
           time_value = time_value - 3,
           source = "nhsn"
         )
-      if (!grepl("latest", id)) {
+      if (version_policy != "latest") {
         train_data %<>%
           data_substitutions(
             flu_data_substitutions,
@@ -194,14 +200,7 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_nssp,
     command = {
-      if (grepl("latest", id)) {
-        nssp_data <- nssp_archive_data %>%
-          epix_as_of(nssp_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_generation_date_int))
-      } else {
-        nssp_data <- nssp_archive_data %>%
-          epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
-      }
+      nssp_data <- flu_slice_archive(nssp_archive_data, version_policy, forecast_generation_date_int)
 
       forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
 
@@ -229,14 +228,9 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_nhsn,
     command = {
-      if (grepl("latest", id)) {
-        nssp_data <- nssp_archive_data %>%
-          epix_as_of(nssp_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_date_int))
-      } else {
-        nssp_data <- nssp_archive_data %>%
-          epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
-      }
+      # NOTE: latest cutoff is the forecast date here, not the generation date
+      # (asymmetry vs full_data / forecast_nssp), preserved from the original.
+      nssp_data <- flu_slice_archive(nssp_archive_data, version_policy, forecast_generation_date_int, latest_cutoff = forecast_date_int)
 
       forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
 

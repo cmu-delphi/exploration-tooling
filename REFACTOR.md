@@ -119,8 +119,18 @@ backtest** (BACKTEST_MODE=TRUE + `BACKTEST_N_DATES=<small>`), never the full
   `flu_hosp_backfill` project in `_targets.yaml`. Verified behavior-preserving:
   oracle diff ALL MATCH (max rel diff 0, all 12 targets) for both
   `flu_hosp_backfill`@N=3 vs `baseline-bt3` and prod-latest vs `baseline-latest`.
-- **Exp 3 — `as_of` extraction + `version_policy`.** One slice function; replace
-  `grepl("latest", id)`. Diff.
+- **Exp 3 — `as_of` extraction + `version_policy`.** DONE. `flu_slice_archive`
+  (R/flu_data_prep.R) is the single version-faithful slice: `as_of` →
+  `epix_as_of(min(gen_date, versions_end))`, `latest` →
+  `epix_as_of(versions_end) |> filter(time_value < cutoff)`. An explicit
+  `version_policy` column on the forecaster grid replaces the three
+  `grepl("latest", id)` branches in `full_data` / `forecast_nssp` /
+  `forecast_nhsn` (and the `data_substitutions` gate). The `forecast_nhsn`
+  latest-cutoff asymmetry (forecast date, not generation date) is preserved via
+  the `latest_cutoff` arg — flagged, not fixed (a fix is a separate experiment).
+  tar_map substitutes `version_policy` to a string literal per branch (verified).
+  Verified behavior-preserving: forecast targets re-executed (362 completed) and
+  diff ALL MATCH (max rel diff 0, all 12 targets) vs `baseline-bt3`.
 - **Exp 4 — column-select to forecaster; nhsn/nssp → grid rows.** One forecaster
   at a time; `(climate_linear, nssp, params)` row must reproduce hand-coded nssp
   `ensemble_clim_lin`. Settles the same-fn-vs-new-fn audit row by row.
