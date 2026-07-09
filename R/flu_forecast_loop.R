@@ -1,13 +1,21 @@
-# SPIKE (REFACTOR.md Exp 5): the forecaster grid as a plain loop instead of a
-# tar_map + tar_combine. Builds forecaster input via the SAME functions the
-# console uses (R/flu_forecast_input.R), so the batch path and the dev path
-# cannot drift. No caching (the open Exp 5 question); throwaway code.
+# SPIKE (REFACTOR.md Exp 4/5): the forecaster grid as a plain loop over the
+# signal-expanded grid (flu_build_prod2_grid). Each row is one (forecaster,
+# outcome_signal) config; flu_assemble builds its input (honest labels, no spoof),
+# the forecaster is called with (extra_sources, primary_source), and rows are split
+# back into forecast_nhsn_full / forecast_nssp_full by outcome_signal.
+#
+# Seeding: a single hardcoded global seed per (cell x ahead) -- enough to make the
+# deterministic forecasters reproducible and the golden test stable. Does NOT match
+# targets' per-target seed, so the three stochastic forecasters (cdc_baseline,
+# linear, linear_no_population_scale) won't match flu_hosp_prod exactly (see
+# REFACTOR.md finding 4). Per-cell seeding is deferred.
 flu_run_forecast_grid <- function(grid,
                                    forecast_dates,
                                    forecast_generation_dates,
                                    aheads,
                                    archives,
-                                   insufficient_data_geos = g_insufficient_data_geos_default) {
+                                   insufficient_data_geos = g_insufficient_data_geos_default,
+                                   seed = 42) {
   cells <- tidyr::expand_grid(
     grid,
     tibble(
@@ -16,38 +24,30 @@ flu_run_forecast_grid <- function(grid,
     )
   )
 
-  results <- purrr::pmap(cells, function(id, forecaster, params, param_names,
-                                         version_policy, forecast_date_int,
-                                         forecast_generation_date_int) {
-    forecaster_obj <- get(as.character(forecaster))
-
-    one_signal <- function(signal) {
-      inp <- flu_forecast_input(
-        forecast_date = forecast_date_int,
-        signal = signal,
-        version_policy = version_policy,
-        generation_date = forecast_generation_date_int,
-        archives = archives,
-        insufficient_data_geos = insufficient_data_geos
-      )
-      # one call per ahead (was `pattern = map(aheads)`). NULL param columns
-      # must become empty lists so set_names() in the partial applier is happy
-      # (tar_map substituted these as literals; a plain loop passes NULL).
-      params <- params %||% list()
-      param_names <- param_names %||% list()
-      purrr::map(aheads, function(ahead) {
-        forecaster_fn <- get_partially_applied_forecaster(forecaster_obj, ahead, params, param_names)
-        inp$epi_data %>%
-          forecaster_fn(extra_data = inp$extra_data) %>%
-          mutate(forecaster = id, geo_value = as.factor(geo_value))
-      }) %>% bind_rows()
-    }
-
-    list(nhsn = one_signal("nhsn"), nssp = one_signal("nssp"))
+  rows <- purrr::pmap(cells, function(id, forecaster, version_policy, outcome_signal,
+                                      exogenous, primary_source, forecast_date_int,
+                                      forecast_generation_date_int) {
+    fn <- get(forecaster)
+    frame <- flu_assemble(
+      archives,
+      outcome_signal = outcome_signal,
+      exogenous = exogenous,
+      version_policy = version_policy,
+      generation_date = forecast_generation_date_int,
+      forecast_date = forecast_date_int,
+      insufficient_data_geos = insufficient_data_geos
+    )
+    out <- purrr::map(aheads, function(ahead) {
+      set.seed(seed)
+      frame %>%
+        fn(ahead, extra_sources = exogenous, primary_source = primary_source) %>%
+        mutate(forecaster = id, geo_value = as.factor(geo_value))
+    }) %>% bind_rows()
+    list(signal = outcome_signal, out = out)
   })
 
   list(
-    nhsn = purrr::map(results, "nhsn") %>% bind_rows(),
-    nssp = purrr::map(results, "nssp") %>% bind_rows()
+    nhsn = purrr::map(purrr::keep(rows, ~ .x$signal == "nhsn"), "out") %>% bind_rows(),
+    nssp = purrr::map(purrr::keep(rows, ~ .x$signal == "nssp"), "out") %>% bind_rows()
   )
 }

@@ -52,7 +52,7 @@ forecast_full_targets <- rlang::list2(
   tar_target(
     forecast_full,
     command = flu_run_forecast_grid(
-      grid = g_forecaster_params_grid,
+      grid = flu_build_prod2_grid(),
       forecast_dates = g_forecast_dates,
       forecast_generation_dates = g_forecast_generation_dates,
       aheads = g_aheads,

@@ -43,9 +43,14 @@ partition key + a parquet cache, not a DAG scheduler.
 3. **Ensembles aren't functions yet** — they're inline `tar_target` command blocks
    (`:313–483`). Extracting them is a prerequisite for both contract-unification
    and prod/backfill sharing.
-4. **Prod is deterministic.** The prod grid (`:62`) is all `quantile_reg`. The one
-   nondeterministic trainer (`grf_quantiles`) is explore-only. ⇒ a golden-output
-   diff is a clean, near-bit-exact pass/fail oracle.
+4. **Prod is NOT fully deterministic** (corrected — see Exp 4 audit). The seasonal
+   (`quantile_reg`) and climate forecasters are deterministic, but `cdc_baseline`
+   (simulation-based quantiles) and `linear` / `linear_no_population_scale` (residual
+   sampling) are **stochastic**. The golden oracle passes on re-runs only because
+   `targets` assigns each target a deterministic seed derived from its name. ⇒ any
+   loop/harness that replaces the grid MUST reseed per `(forecaster × date × ahead)`
+   cell, or those three forecasters diff against the golden. (`grf_quantiles` remains
+   explore-only.)
 5. **Two-level cache exists:** `targets` caches forecast *outputs*;
    `epix_slide_simple` caches as_of *slices* (`R/looping.R:99`, keyed on
    hash(whole archive) × date). Any replacement must preserve both levels.
@@ -209,6 +214,73 @@ constantly ⇒ transitive code-invalidation is exactly its value. So the honest 
 are (a)+(c) for prod while **keeping `targets` for explore** — but that reintroduces the
 prod/explore divergence finding 1 warns about. Resolving this tension is the
 prerequisite for committing to Exp 5.
+
+## Exp 4 — assemble + kill the nhsn/nssp spoof (SPIKE VALIDATED, not committed)
+
+Spiked in `R/flu_assemble.R` + `R/flu_forecast_input.R`. `flu_assemble(outcome_signal,
+exogenous)` builds one modeling frame with **honest** source labels and exogenous
+column names, replacing the two-target (`forecast_nhsn`/`forecast_nssp`) split and the
+`rename(nssp = value)` / `source = "nhsn"` spoof. The forecaster takes `primary_source`
+(threaded through `scaled_pop_seasonal` → `run_workflow_and_format` →
+`get_oversized_test_data`, default `"nhsn"` so other callers are untouched) instead of
+hardcoding `"nhsn"` as "the primary series".
+
+Validated: `windowed_seasonal_extra_sources` reproduces the spoof path **bit-exactly**
+(max abs value diff 0) on *both* signals, including the nssp run with fully honest
+labels (`source="nssp"`, exogenous column `nhsn`, `primary_source="nssp"`). Remaining to
+make real: put `(outcome_signal, exogenous, primary_source, scale, target_name)` on the
+grid rows; collapse the two forecast targets into one loop.
+
+**Audit DONE (all 8 grid rows).** With equal RNG state, every forecaster reproduces the
+spoof path bit-exactly (maxdiff 0) on both signals under `flu_assemble` — seasonal with
+its `exogenous`, the other five with empty `exogenous`. The audit surfaced the
+nondeterminism now recorded in finding 4: `cdc_baseline` / `linear` /
+`linear_no_population_scale` are stochastic, so the harness loop must reseed per cell
+(the only non-obvious prerequisite for integration; assembly itself is clean).
+
+**INTEGRATED into `flu_hosp_prod2` (spoof removed).** `flu_build_prod2_grid()` is the
+16-row signal grid (8 forecasters x {nhsn, nssp}) carrying `outcome_signal / exogenous /
+primary_source`; `flu_run_forecast_grid` assembles per row, calls the `flu2_*` adapters,
+and splits by `outcome_signal` into `forecast_nhsn_full` / `forecast_nssp_full`. The
+two-target split + spoof are gone. Console diff vs the spoof path: all 16 forecaster x
+signal combos maxdiff 0 (matched per-ahead seed). `flu_hosp_prod` left untouched as the
+reference. Caveat: a real `tar_make` prod2-vs-prod diff will still show the 3 stochastic
+forecasters differing (global seed 42 vs targets' per-target seed); the 5 deterministic
+rows match. Per-cell seeding deferred (finding 4). Remaining to finish the migration:
+`scale` / `target_name` post-processing on the grid row (the `/100` + names), then fold
+the loop into `flu_hosp_prod` itself.
+
+## Exp 6 — consolidate data alignment (normalize-in / denormalize-out) (DEFERRED)
+
+Surfaced while building `flu_assemble`; **punted to its own refactor.** The Wed-centering
+(`time_value ± 3`) and the nssp `/100` scale are applied in scattered places and, for
+some sources, *twice*.
+
+- **The shift is necessary** (weekly signals on different native reference days must share
+  one axis so joins align, `ahead`-in-days is defined, and lags mean the same distance;
+  output must return to the CDC reference date). So it's a real normalize-in /
+  denormalize-out requirement — can't be deleted, only consolidated.
+- **It's inconsistent, not required-to-be-scattered.** Most sources are centered at
+  archive construction (`flu_data_targets.R:275`, using `g_time_value_adjust`), but nhsn
+  is centered *per-forecast* (`_flu_prod_shared.R:180`, hardcoded `3`). Smoking gun:
+  `aux_data_utils.R:691-695` has a comment "center the time_value on Wednesday …" next to
+  a `mutate` that only touches `version` — the intended nhsn centering was never
+  implemented at build time, so the harness patches it downstream.
+- **Output denormalize is copy-pasted per forecaster:** `target_end_date + 3` in every
+  prod forecaster, all three diseases (`flu_prod_forecasters.R:43,62`, covid, rsv), plus
+  `+ g_time_value_adjust` again in `shared_utils.R:98-99` / score / external targets. nssp
+  scale is the analogous round-trip: `/100` in (`flu_outputs.R:22`) ↔ `*100` out
+  (`score_targets.R:77,:351`).
+
+Target shape: normalize once at construction (implement the `:693` comment for nhsn —
+`time_value` only), denormalize once post-forecast in the harness (single `+3` + `/100`
+step), forecasters never see a `3` or `100`. **Version constraint:** center `time_value`
+only; leave `version` as the true report date. Do NOT copy the `version = time_value`
+pattern (`flu_data_targets.R:275`) — that's for synthetic sources without real revision
+history; applying it to nhsn corrupts as-of behavior. Behavior-preserving in aggregate
+(a round-trip) so the golden oracle guards it, but **diff final forecast frames, not
+archives** — intermediate representations change. Touches all three diseases; keep it
+separate from Exp 4 so the oracle stays clean.
 
 ## Gotchas
 
