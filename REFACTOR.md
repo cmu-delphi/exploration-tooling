@@ -97,9 +97,20 @@ backtest** (BACKTEST_MODE=TRUE + `BACKTEST_N_DATES=<small>`), never the full
   (prod-latest and partial-backtest). No production logic touched.
 - **Exp 1 — extract inline commands → functions.** Ensembles, truth, submission
   formatting (`:313–483`). Behavior-preserving; diff must be empty. Enables 2–4.
-- **Exp 2 — split prod/backfill.** Copy `flu_hosp_prod.R` → prod-latest +
-  backfill; in each replace `g_backtest_mode` with its constant and delete the
-  dead branch. Pure constant propagation. Diff each against its golden.
+- **Exp 2 — split prod/backfill.** DONE. Because this ran *before* Exp 1 (the
+  ensembles are still inline), a copy-paste split would have duplicated the whole
+  target DAG — the exact "duplicate the boilerplate" cost the merged pipeline was
+  avoiding. So instead: extract the target-list construction into
+  `build_flu_prod_pipeline()` in `scripts/_flu_prod_shared.R` (a factory reading
+  the `g_*` globals, same pattern as `create_flu_data_targets()`), plus mode-
+  independent globals. Two thin entry scripts — `flu_hosp_prod.R` (`g_backtest_mode
+  <- FALSE`, `as_of = today`) and `flu_hosp_backfill.R` (`TRUE`, historical dates
+  + `BACKTEST_N_DATES` hook) — set the mode-specific globals and call the factory.
+  `g_backtest_mode` branching stays *inside* the factory (behavior-preserving);
+  per-pipeline constant propagation of those branches is a later step. New
+  `flu_hosp_backfill` project in `_targets.yaml`. Verified behavior-preserving:
+  oracle diff ALL MATCH (max rel diff 0, all 12 targets) for both
+  `flu_hosp_backfill`@N=3 vs `baseline-bt3` and prod-latest vs `baseline-latest`.
 - **Exp 3 — `as_of` extraction + `version_policy`.** One slice function; replace
   `grepl("latest", id)`. Diff.
 - **Exp 4 — column-select to forecaster; nhsn/nssp → grid rows.** One forecaster

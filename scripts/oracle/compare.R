@@ -11,15 +11,19 @@ suppressPackageStartupMessages({
   library(cli)
 })
 
+# Each spec is "<project>:<label>" (or bare "<label>" implying flu_hosp_prod).
 args <- commandArgs(trailingOnly = TRUE)
-project <- if (length(args) >= 1) args[[1]] else "flu_hosp_prod"
-label_a <- if (length(args) >= 2) args[[2]] else "baseline"
-label_b <- if (length(args) >= 3) args[[3]] else "refactored"
-tol <- if (length(args) >= 4) as.numeric(args[[4]]) else 1e-9
+label_a <- if (length(args) >= 1) args[[1]] else "flu_hosp_prod:baseline"
+label_b <- if (length(args) >= 2) args[[2]] else "flu_hosp_prod:refactored"
+tol <- if (length(args) >= 3) as.numeric(args[[3]]) else 1e-9
 out_root <- Sys.getenv("ORACLE_OUT_DIR", "cache/oracle")
 
-dir_a <- file.path(out_root, project, label_a)
-dir_b <- file.path(out_root, project, label_b)
+spec_dir <- function(spec) {
+  parts <- strsplit(spec, ":", fixed = TRUE)[[1]]
+  if (length(parts) == 2) file.path(out_root, parts[[1]], parts[[2]]) else file.path(out_root, "flu_hosp_prod", spec)
+}
+dir_a <- spec_dir(label_a)
+dir_b <- spec_dir(label_b)
 
 # Columns treated as numeric measurements (tolerance); everything else is a key.
 value_cols <- c("value", "prediction", "wis", "ae_median", "oracle_value", "scale")
