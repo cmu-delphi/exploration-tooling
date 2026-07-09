@@ -10,6 +10,7 @@
 # tar_target calling flu_run_forecast_grid().
 suppressPackageStartupMessages(source("R/load_all.R"))
 source("scripts/_flu_prod_shared.R") # globals + g_forecaster_params_grid
+source("R/flu_forecast_input.R")
 source("R/flu_forecast_loop.R")
 
 g_backtest_mode <- FALSE
@@ -55,10 +56,12 @@ forecast_full_targets <- rlang::list2(
       forecast_dates = g_forecast_dates,
       forecast_generation_dates = g_forecast_generation_dates,
       aheads = g_aheads,
-      nhsn_archive_data = nhsn_archive_data,
-      nssp_archive_data = nssp_archive_data,
-      joined_latest_extra_data = joined_latest_extra_data,
-      flu_data_substitutions = flu_data_substitutions,
+      archives = list(
+        nhsn = nhsn_archive_data,
+        nssp = nssp_archive_data,
+        joined_latest_extra_data = joined_latest_extra_data,
+        flu_data_substitutions = flu_data_substitutions
+      ),
       insufficient_data_geos = g_insufficient_data_geos
     )
   ),
