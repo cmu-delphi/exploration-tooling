@@ -2,14 +2,14 @@
 #
 # The write/validate/render bodies are extracted verbatim from the per-date
 # ensemble targets. flu_output_targets() assembles the mode-specific tail of the
-# ensemble tar_map with the g_backtest_mode gating already resolved per pipeline
+# ensemble tar_map with the g_evaluation_mode gating already resolved per pipeline
 # (REFACTOR.md: per-pipeline constant propagation):
 #   - production writes/validates every run and renders the weekly notebook;
-#   - backfill writes/validates only on the final forecast date and renders no
-#     notebook (that render was dead in backtest mode).
+#   - evaluation writes/validates only on the final forecast date and renders no
+#     notebook (that render was dead in evaluation mode).
 # NOTE: in cache mode (g_submission_directory == "cache") these all no-op, so the
 # output oracle cannot exercise the gates; their correctness is by construction
-# (boolean constant fold of the original `!g_backtest_mode || <final date>`).
+# (boolean constant fold of the original `!g_evaluation_mode || <final date>`).
 
 flu_write_submission <- function(ensemble_mixture, forecast_date_int) {
   forecast_reference_date <- get_forecast_reference_date(forecast_date_int)
@@ -84,16 +84,16 @@ flu_render_forecast_notebook <- function(forecasts_and_ensembles, truth_data, fo
 # objects; spliced into the tar_map by build_flu_prod_pipeline(), so their
 # per-date branch references (forecast_date_int, ensemble_mixture, ...) are
 # substituted by tar_map exactly as the inline definitions were.
-flu_output_targets <- function(backtest_mode) {
-  if (backtest_mode) {
-    # Backfill: write/validate only on the final forecast date; no notebook.
+flu_output_targets <- function(evaluation_mode) {
+  if (evaluation_mode) {
+    # Evaluation: write/validate only on the final forecast date; no notebook.
     list(
       tar_target(
         name = make_submission_csv,
         command = if (g_submission_directory != "cache" && as.Date(forecast_date_int) == max(g_forecast_dates)) {
           flu_write_submission(ensemble_mixture, forecast_date_int)
         } else {
-          cli_alert_info("Not writing submission (cache dir or non-final backfill date)")
+          cli_alert_info("Not writing submission (cache dir or non-final evaluation date)")
         },
         cue = tar_cue("always")
       ),
@@ -102,7 +102,7 @@ flu_output_targets <- function(backtest_mode) {
         command = if (g_submission_directory != "cache" && as.Date(forecast_date_int) == max(g_forecast_dates)) {
           flu_write_climate_submission(forecast_filtered, forecast_date_int)
         } else {
-          cli_alert_info("Not writing climate submission (cache dir or non-final backfill date)")
+          cli_alert_info("Not writing climate submission (cache dir or non-final evaluation date)")
         },
         cue = tar_cue("always")
       ),

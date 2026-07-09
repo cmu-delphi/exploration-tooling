@@ -1,8 +1,8 @@
-# Shared config and target factory for the flu production + backfill pipelines.
+# Shared config and target factory for the flu production + evaluation pipelines.
 #
 # Sourced by scripts/flu_hosp_prod.R (production, as_of = today) and
-# scripts/flu_hosp_backfill.R (historical replay). Each entry script sources
-# R/load_all.R, sources this file, sets g_backtest_mode and the forecast-date
+# scripts/flu_hosp_evaluation.R (historical replay). Each entry script sources
+# R/load_all.R, sources this file, sets g_evaluation_mode and the forecast-date
 # globals, then calls build_flu_prod_pipeline(). Keeping the target DAG here (not
 # duplicated per entry) is the point of the split.
 
@@ -10,7 +10,7 @@
 # ================================ GLOBALS =================================
 # Variables prefixed with 'g_' are globals needed by the targets pipeline (they
 # need to persist during the actual targets run, since the commands are frozen
-# as expressions). The two mode-specific globals — g_backtest_mode and the
+# as expressions). The two mode-specific globals — g_evaluation_mode and the
 # forecast-date vectors — are set by the entry scripts, not here.
 
 # Setup targets config.
@@ -33,8 +33,8 @@ g_very_latent_locations <- list(list(
 # Date to cut the truth data off at, so we don't have too much of the past for
 # plotting.
 g_truth_data_date <- "2023-09-01"
-# NOTE: g_backtest_mode, g_forecast_dates, and g_forecast_generation_dates are
-# set by the entry script (flu_hosp_prod.R or flu_hosp_backfill.R) before it
+# NOTE: g_evaluation_mode, g_forecast_dates, and g_forecast_generation_dates are
+# set by the entry script (flu_hosp_prod.R or flu_hosp_evaluation.R) before it
 # calls build_flu_prod_pipeline().
 
 # The forecaster set + per-signal config (forecaster fn, version_policy, exogenous,
@@ -44,7 +44,7 @@ g_forecaster_params_grid <- tibble(id = unique(flu_build_prod2_grid()$id))
 
 
 # Build the full flu pipeline target list. Reads the g_* globals (including the
-# entry-set g_backtest_mode and forecast-date vectors) from the global env, the
+# entry-set g_evaluation_mode and forecast-date vectors) from the global env, the
 # same way the create_*/build_* factories do. Body intentionally left at file
 # indentation to keep this split a behavior-preserving move (no reflow).
 build_flu_prod_pipeline <- function() {
@@ -237,8 +237,8 @@ ensemble_targets <- tar_map(
     command = flu_truth_data(nhsn_archive_data, nhsn_latest_data, nssp_latest_data, forecast_generation_date_int)
   ),
   # Mode-specific submission/validation/notebook tail (defined in R/flu_outputs.R),
-  # spliced in with the g_backtest_mode gating already resolved for this pipeline.
-  flu_output_targets(g_backtest_mode)
+  # spliced in with the g_evaluation_mode gating already resolved for this pipeline.
+  flu_output_targets(g_evaluation_mode)
 )
 
 
@@ -295,7 +295,7 @@ joined_targets <- list2(
 
 combined_targets <- build_combined_targets(external_forecast_targets)
 
-if (g_backtest_mode) {
+if (g_evaluation_mode) {
   score_notebook <- build_backtest_score_targets()
 } else {
   score_notebook <- list2(

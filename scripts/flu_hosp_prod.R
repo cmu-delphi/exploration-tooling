@@ -1,13 +1,13 @@
 # The Flu Hospitalization Production Forecasting Pipeline (as_of = today).
 #
 # Entry point for the weekly production run. The target DAG lives in
-# scripts/_flu_prod_shared.R and is shared with the backfill pipeline
-# (scripts/flu_hosp_backfill.R).
+# scripts/_flu_prod_shared.R and is shared with the evaluation pipeline
+# (scripts/flu_hosp_evaluation.R).
 suppressPackageStartupMessages(source("R/load_all.R"))
 source("scripts/_flu_prod_shared.R")
 
 # Production mode: a single forecast for the current week.
-g_backtest_mode <- FALSE
+g_evaluation_mode <- FALSE
 # The as_of for the forecast. On our typical schedule this is today (a
 # Wednesday); for a delayed forecast it can be a Thursday. Used both for
 # stamping the data and for choosing the as_of when creating the forecast.

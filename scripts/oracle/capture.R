@@ -13,8 +13,8 @@
 #   ORACLE_LABEL      label subdir, e.g. baseline | refactored (default baseline)
 #   ORACLE_OUT_DIR    output root (default cache/oracle)
 #   ORACLE_SKIP_MAKE  "TRUE" to read an existing store without rebuilding
-#   BACKTEST_MODE     forwarded to the pipeline (FALSE = prod-latest)
-#   BACKTEST_N_DATES  with BACKTEST_MODE=TRUE, keep only the last N dates
+#   BACKTEST_MODE     forwarded to the covid pipeline (FALSE = prod-latest)
+#   EVALUATION_N_DATES  for the flu_hosp_evaluation project, keep only the last N dates
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 project <- Sys.getenv("TAR_RUN_PROJECT", "flu_hosp_prod")

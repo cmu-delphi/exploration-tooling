@@ -5,6 +5,16 @@ Working notes for refactoring `scripts/flu_hosp_prod.R`. Companion to
 doc is about restructuring the *existing R* pipeline in place, in small,
 behavior-preserving steps.
 
+> **Naming note (later rename).** What the experiments below call the *backfill*
+> pipeline (`flu_hosp_backfill.R`, `g_backtest_mode`, `BACKTEST_N_DATES`) is now the
+> *evaluation* pipeline (`flu_hosp_evaluation.R`, `g_evaluation_mode`,
+> `EVALUATION_N_DATES`). There was never a second pipeline — it's the one production
+> DAG (`build_flu_prod_pipeline()`) run in two modes: **latest** (forecast the current
+> week, submit) and **evaluation** (replay a season of past dates, score). "Backfill"
+> named the mechanism (past dates); the purpose is evaluation. Rename was flu-only:
+> covid/rsv keep their independent `g_backtest_mode`. Historical prose below still
+> says "backfill/backtest" — read it as "evaluation".
+
 ## The bet
 
 `targets` is good at one thing: content-addressed invalidation of an irregular
@@ -93,7 +103,7 @@ dumped via `$DT`.
 columns, relative tolerance on value columns. Empty diff = behavior preserved.
 
 Golden scope: **prod-latest** (BACKTEST_MODE=FALSE, 1 date) and a **partial
-backtest** (BACKTEST_MODE=TRUE + `BACKTEST_N_DATES=<small>`), never the full
+backtest** (BACKTEST_MODE=TRUE + `EVALUATION_N_DATES=<small>`), never the full
 80-date run.
 
 ## Experiment sequence
@@ -106,7 +116,7 @@ backtest** (BACKTEST_MODE=TRUE + `BACKTEST_N_DATES=<small>`), never the full
   `R/flu_ensembles.R`; the targets now call them with their deps as args. Trivial
   blocks (`forecast_filtered`, `geo_exclusions`, `forecasts_and_ensembles`) left
   inline. Submission targets left as-is — already function-based (`format_flusight`)
-  and entangled with the `g_backtest_mode`/`g_submission_directory` gating, which
+  and entangled with the `g_evaluation_mode`/`g_submission_directory` gating, which
   belongs to per-pipeline constant propagation, not this pass. Verified
   behavior-preserving: full re-execution (686 targets, 0 skipped) diffs ALL MATCH
   (max rel diff 0, all 12 targets) against the pre-refactor `baseline-bt3`.
@@ -116,14 +126,14 @@ backtest** (BACKTEST_MODE=TRUE + `BACKTEST_N_DATES=<small>`), never the full
   avoiding. So instead: extract the target-list construction into
   `build_flu_prod_pipeline()` in `scripts/_flu_prod_shared.R` (a factory reading
   the `g_*` globals, same pattern as `create_flu_data_targets()`), plus mode-
-  independent globals. Two thin entry scripts — `flu_hosp_prod.R` (`g_backtest_mode
-  <- FALSE`, `as_of = today`) and `flu_hosp_backfill.R` (`TRUE`, historical dates
-  + `BACKTEST_N_DATES` hook) — set the mode-specific globals and call the factory.
-  `g_backtest_mode` branching stays *inside* the factory (behavior-preserving);
+  independent globals. Two thin entry scripts — `flu_hosp_prod.R` (`g_evaluation_mode
+  <- FALSE`, `as_of = today`) and `flu_hosp_evaluation.R` (`TRUE`, historical dates
+  + `EVALUATION_N_DATES` hook) — set the mode-specific globals and call the factory.
+  `g_evaluation_mode` branching stays *inside* the factory (behavior-preserving);
   per-pipeline constant propagation of those branches is a later step. New
-  `flu_hosp_backfill` project in `_targets.yaml`. Verified behavior-preserving:
+  `flu_hosp_evaluation` project in `_targets.yaml`. Verified behavior-preserving:
   oracle diff ALL MATCH (max rel diff 0, all 12 targets) for both
-  `flu_hosp_backfill`@N=3 vs `baseline-bt3` and prod-latest vs `baseline-latest`.
+  `flu_hosp_evaluation`@N=3 vs `baseline-bt3` and prod-latest vs `baseline-latest`.
 - **Exp 3 — `as_of` extraction + `version_policy`.** DONE. `flu_slice_archive`
   (R/flu_data_prep.R) is the single version-faithful slice: `as_of` →
   `epix_as_of(min(gen_date, versions_end))`, `latest` →
@@ -145,11 +155,11 @@ backtest** (BACKTEST_MODE=TRUE + `BACKTEST_N_DATES=<small>`), never the full
   `validate_climate_result`, `notebook`) moved to `R/flu_outputs.R`: bodies
   extracted as `flu_write_submission` / `flu_write_climate_submission` /
   `flu_validate_submission` / `flu_validate_climate_submission` /
-  `flu_render_forecast_notebook`, and `flu_output_targets(backtest_mode)` emits
-  the tail with `g_backtest_mode` folded out — production gates on
+  `flu_render_forecast_notebook`, and `flu_output_targets(evaluation_mode)` emits
+  the tail with `g_evaluation_mode` folded out — production gates on
   `dir != "cache"` and renders the notebook; backfill gates on
   `dir != "cache" && final date` and drops the (dead) notebook. The factory
-  splices `flu_output_targets(g_backtest_mode)` into the ensemble tar_map.
+  splices `flu_output_targets(g_evaluation_mode)` into the ensemble tar_map.
   Manifest confirms: prod has `notebook` (1), backfill has none (0), submission
   targets present in both. CAVEAT: in cache mode these targets no-op, so the
   output oracle does not exercise the gates; gate correctness is by boolean
@@ -238,7 +248,7 @@ nondeterminism now recorded in finding 4: `cdc_baseline` / `linear` /
 `linear_no_population_scale` are stochastic, so the harness loop must reseed per cell
 (the only non-obvious prerequisite for integration; assembly itself is clean).
 
-**INTEGRATED into `flu_hosp_prod` + `flu_hosp_backfill` (spoof removed, spike retired).**
+**INTEGRATED into `flu_hosp_prod` + `flu_hosp_evaluation` (spoof removed, spike retired).**
 `flu_build_prod2_grid()` (R/flu_assemble.R) is the 16-row signal grid (8 forecasters x
 {nhsn, nssp}) carrying `outcome_signal / exogenous / primary_source`;
 `flu_run_forecast_grid` (R/flu_forecast_loop.R) assembles per row via `flu_assemble`,
@@ -250,7 +260,7 @@ names. Removed: `scripts/flu_hosp_prod2.R` (+ its `_targets.yaml` project),
 `R/flu_forecast_input.R` (dead spoof helpers; `flu_build_full_data` / `flu_load_archives`
 moved to `R/flu_assemble.R`), and the old `g_forecaster_params_grid` tibble (slimmed to
 `tibble(id = unique(flu_build_prod2_grid()$id))`, the only part the ensemble stage uses).
-Manifests build: flu_hosp_prod 395, flu_hosp_backfill 1414, covid_hosp_prod 395
+Manifests build: flu_hosp_prod 395, flu_hosp_evaluation 1414, covid_hosp_prod 395
 (unaffected -- the `primary_source` arg added to `scaled_pop_seasonal` defaults to
 "nhsn"). Console diff vs the spoof path: all 16 combos maxdiff 0 (matched per-ahead seed).
 
@@ -308,7 +318,7 @@ separate from Exp 4 so the oracle stays clean.
 
 ## Status & remaining (session ledger)
 
-**Done and integrated** (flu_hosp_prod + flu_hosp_backfill; manifests build 395 / 1414;
+**Done and integrated** (flu_hosp_prod + flu_hosp_evaluation; manifests build 395 / 1414;
 covid unaffected):
 - Exp 0-3 (oracle, ensemble extraction, prod/backfill split, `flu_slice_archive` +
   `version_policy`) — all verified empty-diff previously.
@@ -336,7 +346,7 @@ code-invalidation / per-target seeds — targets does it, no cache to hand-build
 wins kept (assemble, honest contract, grid, scale/target_name, REPL dev loop). The loop
 (`flu_run_forecast_grid` / `R/flu_forecast_loop.R`) is deleted but lives in git history if
 the loop route (option B, below) is ever wanted. Manifests: flu_hosp_prod 410,
-flu_hosp_backfill 2789 (per-cell granularity back), covid 395. Verified the `tar_map`
+flu_hosp_evaluation 2789 (per-cell granularity back), covid 395. Verified the `tar_map`
 substitutes the string fn-name (`get("flu2_...")`) and the `exogenous` list-column
 correctly (`"nhsn"` / `character(0)`); command inspection clean. Not yet run via `tar_make`.
 
