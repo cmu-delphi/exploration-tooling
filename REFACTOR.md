@@ -150,6 +150,66 @@ backtest** (BACKTEST_MODE=TRUE + `BACKTEST_N_DATES=<small>`), never the full
   output oracle does not exercise the gates; gate correctness is by boolean
   constant fold. Captured-target diff vs `baseline-bt3` ALL MATCH.
 
+## Exp 5 — the bet: drop the grid `tar_map` for a loop (PROPOSED, not committed)
+
+This is the payoff step the earlier experiments cleared the runway for. **Not yet
+decided** — gated on the caching question below.
+
+**The move.** Replace `forecast_targets` (the grid `tar_map`) and
+`build_combined_forecast_targets` (the `tar_combine`) with one target that loops
+over the grid internally and returns `forecast_nhsn_full` / `forecast_nssp_full`
+directly. The grid stops being `tar_map(values = expand_grid(...))` and becomes a
+tibble (`g_forecaster_params_grid` × dates × aheads) iterated with `pmap`. The loop
+body is the current `forecast_nssp`/`forecast_nhsn` command blocks (`flu_slice_archive`
+→ `forecaster_fn` → tag). All `tar_map`/`tar_combine`/`!!!.x`/`rlang::syms`
+metaprogramming — the unreadable part — is deleted. Archive layer stays in `targets`.
+Ensemble/score `tar_map`s are a separate, smaller follow-on (they already just filter
+`forecast_*_full` by date).
+
+**Two things `targets` gave the grid for free (must be carried, or lost):**
+
+1. **Per-cell caching + invalidation.** One target ⇒ any change reruns the whole
+   grid. Replace with a parquet cache inside the loop, keyed on
+   `(forecaster_id, date, ahead, signal, hash(inputs))` — same pattern as
+   `epix_slide_simple` (`looping.R:99`).
+2. **Parallelism.** `tar_map` cells fan out over crew. Replace with
+   `furrr::future_pmap` inside the target + BLAS pinned to 1 thread/worker (finding 6).
+   Believed recoverable.
+
+**Phasing (each oracle-checked):**
+
+- **A** — `run_forecast_grid(grid, archives, dates, aheads)` returning the two full
+  frames, added *alongside* the existing `tar_map`. Diff vs current
+  `forecast_nhsn_full`/`forecast_nssp_full`. Empty diff → loop reproduces the grid.
+- **B** — keyed parquet cache in the loop.
+- **C** — `future_pmap` + BLAS pin; measure vs crew.
+- **D** — delete `forecast_targets` + `build_combined_forecast_targets`.
+
+**DECISION GATE — cache invalidation on *code*, not just inputs.** `targets` does
+content-addressed invalidation: it statically parses each command, finds the global
+functions it calls, and hashes their bodies — *transitively*. Edit
+`g_flu_windowed_seasonal`, or a helper it calls (`scaled_pop_seasonal`), and dependent
+targets recompute. A homegrown input-hash cache does **not** see this: after editing a
+forecaster it serves stale forecasts. This is the risk that isn't obviously
+recoverable, and it won't show in an oracle run (a clean rebuild passes; only
+*incremental* reruns go stale). Options, none free:
+
+- **(a) Hash the forecaster closure** into the key (`rlang::hash` of body+formals, or
+  `deparse(body(fn))`). Catches edits to the *top-level* forecaster. Misses transitive
+  helper edits — you'd manually clear the cache after touching `scaled_pop_seasonal` &
+  co. Cheap; partial.
+- **(b) Reimplement transitive code-dep hashing** (walk the call graph like `targets`
+  does via codetools). Full fidelity; this is rebuilding the thing we're removing. Trap.
+- **(c) Live without it.** Accept manual cache-clear on code edits. Viable *only* if the
+  edit-forecaster-code loop is rare.
+
+**The asymmetry that may decide it:** prod/backfill run *frozen* code varying dates ⇒
+input-hash caching is sufficient there. Explore edits forecasters and helpers
+constantly ⇒ transitive code-invalidation is exactly its value. So the honest options
+are (a)+(c) for prod while **keeping `targets` for explore** — but that reintroduces the
+prod/explore divergence finding 1 warns about. Resolving this tension is the
+prerequisite for committing to Exp 5.
+
 ## Gotchas
 
 - Float reordering (ensemble means, `bind_rows` order) → set tolerance up front.
