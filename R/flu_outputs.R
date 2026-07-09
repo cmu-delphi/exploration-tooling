@@ -18,8 +18,8 @@ flu_write_submission <- function(ensemble_mixture, forecast_date_int) {
   nssp_submission <- ensemble_mixture$nssp %>%
     format_flusight(disease = "flu") %>%
     mutate(
-      target = "wk inc flu prop ed visits",
-      value = value / 100
+      target = flu_report_target("nssp"),
+      value = value * flu_report_scale("nssp")
     )
   bind_rows(nhsn_submission, nssp_submission) %>%
     write_submission_file(

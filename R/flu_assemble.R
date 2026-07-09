@@ -188,7 +188,26 @@ flu_build_prod2_grid <- function() {
       exogenous = purrr::pmap(list(.data$uses_extra, .data$outcome_signal), function(ue, sig) {
         if (!ue) character() else if (sig == "nhsn") "nssp" else "nhsn"
       }),
-      primary_source = .data$outcome_signal
+      primary_source = .data$outcome_signal,
+      # Reporting transform: how to take model-unit output to SUBMISSION units and
+      # what CDC target to report it under. Applied only at the reporting boundary
+      # (submission / scoring / external comparison), NOT for plotting, and separate
+      # from any internal pop/quantile normalization the forecaster does itself.
+      scale = dplyr::if_else(.data$outcome_signal == "nssp", 0.01, 1),
+      target_name = dplyr::if_else(
+        .data$outcome_signal == "nssp", "wk inc flu prop ed visits", "wk inc flu hosp"
+      )
     ) %>%
-    select(id, forecaster, version_policy, outcome_signal, exogenous, primary_source)
+    select(id, forecaster, version_policy, outcome_signal, exogenous, primary_source, scale, target_name)
+}
+
+# Per-signal reporting transform, read at the submission/scoring/external boundary.
+# Single source of truth = the grid. (Not used for plotting or inside forecasters.)
+flu_report_scale <- function(signal) {
+  g <- flu_build_prod2_grid()
+  g$scale[match(signal, g$outcome_signal)]
+}
+flu_report_target <- function(signal) {
+  g <- flu_build_prod2_grid()
+  g$target_name[match(signal, g$outcome_signal)]
 }

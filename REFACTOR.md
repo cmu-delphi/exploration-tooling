@@ -254,6 +254,18 @@ Manifests build: flu_hosp_prod 395, flu_hosp_backfill 1414, covid_hosp_prod 395
 (unaffected -- the `primary_source` arg added to `scaled_pop_seasonal` defaults to
 "nhsn"). Console diff vs the spoof path: all 16 combos maxdiff 0 (matched per-ahead seed).
 
+**`scale` + `target_name` on the grid (DONE).** Each grid row carries the reporting
+transform (`scale`: model-units -> submission-units, e.g. nssp 0.01; `target_name`: the
+CDC target string). Accessors `flu_report_scale(signal)` / `flu_report_target(signal)`
+read them, and the submission (`flu_outputs.R`), local scoring, and external-comparison
+sites in `_flu_prod_shared.R` now pull from them instead of hardcoded `100` / target
+strings. Deliberately NOT applied right after the forecaster: `forecast_*_full` must stay
+in model units so the notebook plot and scoring align with truth (`flu_truth_data`), and
+this reporting scale is separate from any internal pop/quantile normalization a
+forecaster does. Pure constant-extraction (`value/100 == value*0.01`), behavior-
+preserving; not moved into the plotting path. The scattered target-string *filters* in
+the ongoing-score notebooks were left as literals (report-gen / plotting side).
+
 **Golden must be re-baselined** (decision: accept). A real `tar_make` diff will show the
 3 stochastic forecasters (`cdc_baseline`, `linear`, `linear_no_population_scale`)
 differing -- the loop uses a global seed 42, `targets` used a per-target seed; the 5
@@ -293,6 +305,44 @@ history; applying it to nhsn corrupts as-of behavior. Behavior-preserving in agg
 (a round-trip) so the golden oracle guards it, but **diff final forecast frames, not
 archives** — intermediate representations change. Touches all three diseases; keep it
 separate from Exp 4 so the oracle stays clean.
+
+## Status & remaining (session ledger)
+
+**Done and integrated** (flu_hosp_prod + flu_hosp_backfill; manifests build 395 / 1414;
+covid unaffected):
+- Exp 0-3 (oracle, ensemble extraction, prod/backfill split, `flu_slice_archive` +
+  `version_policy`) — all verified empty-diff previously.
+- Exp 4 — spoof removed. `flu_assemble` builds honest per-signal input; `flu2_*`
+  adapters + `flu_build_prod2_grid` (16-row signal grid: `outcome_signal / exogenous /
+  primary_source / scale / target_name`); `primary_source` threaded through
+  `scaled_pop_seasonal`. `scale`/`target_name` read at the reporting boundary. Forecaster
+  is now a plain function callable in the REPL (`flu_load_archives` + `flu_assemble`).
+  Console-validated bit-exact vs the spoof path (16/16, matched seed).
+- Forecast grid collapsed from `tar_map`+`tar_combine` to one `forecast_full` loop
+  target (`flu_run_forecast_grid`). **This is the piece with a cost** (below).
+
+**The loop's cost, and that it's separable.** The Exp-4 contract win did NOT require the
+loop; the loop is an independent choice that gave up (a) per-cell output caching, (b)
+crew parallelism, (c) targets' transitive code-invalidation, and (d) reproducible
+per-target seeds (hence the stalled golden rebaseline). All of Exp 4's value lives in
+`flu_assemble`/grid/adapters, which work equally under a `tar_map`.
+
+**Remaining = one lift (incremental recompute), three ways:**
+- **A. Revert forecast-gen to a `tar_map` over the clean grid.** Restores caching /
+  parallelism / code-invalidation / per-target seeds for free (targets does it);
+  existing golden stays valid, no rebaseline. Cost: some metaprogramming back, but over
+  a clean spoof-free grid. Likely the least total work. **Recommended.**
+- **B. Keep the loop, build a cache** keyed on `paste(fn_hash, input_hash)`, where
+  `fn_hash = targets:::hash_imports(envir)` (transitive, codetools-based; the exact
+  Exp-5 gate we'd called a "reimplement-targets trap" — turns out it's one `:::` call or
+  ~5 vendored fns: `tar_deparse_safe` -> `mask_pointers` -> `graph_envir` via `tar_deps`
+  -> `secretbase::siphash13`). Cost: `:::` version fragility (pin/vendor), you own the
+  cache. Plus the seed rebaseline.
+- **C. Keep the loop, no cache, add `furrr`.** Parallel-only, full recompute each run.
+  Fine *iff* backfill is re-run rarely after code edits. Deciding question for B-vs-C.
+
+Backtest dates are already handled by the loop (takes the date vector; backfill passes
+all dates) — not a separate remaining item; untested with >1 date though.
 
 ## Gotchas
 

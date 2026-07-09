@@ -222,7 +222,7 @@ joined_targets <- list2(
   tar_target(
     name = local_scores_nhsn,
     command = {
-      score_forecasts(nhsn_latest_data, local_forecasts_and_ensembles_nhsn, "wk inc flu hosp")
+      score_forecasts(nhsn_latest_data, local_forecasts_and_ensembles_nhsn, flu_report_target("nhsn"))
     }
   ),
   tar_target(
@@ -231,7 +231,7 @@ joined_targets <- list2(
       nssp_latest_data %>%
         rename(value = nssp) %>%
         mutate(time_value = ceiling_date(time_value, unit = "week") - 1) %>%
-        score_forecasts(local_forecasts_and_ensembles_nssp %>% mutate(value = value / 100), "wk inc flu prop ed visits")
+        score_forecasts(local_forecasts_and_ensembles_nssp %>% mutate(value = value * flu_report_scale("nssp")), flu_report_target("nssp"))
     }
   ),
   tar_combine(
@@ -239,7 +239,7 @@ joined_targets <- list2(
     ensemble_targets[["forecasts_and_ensembles"]],
     command = filter_shared_geo_dates(
       purrr::map(list(!!!.x), "nhsn") %>% dplyr::bind_rows(),
-      external_forecasts_full %>% filter(target == "wk inc flu hosp") %>% select(-target),
+      external_forecasts_full %>% filter(target == flu_report_target("nhsn")) %>% select(-target),
       min_locations = 52,
       min_dates = 40
     )
@@ -249,7 +249,7 @@ joined_targets <- list2(
     ensemble_targets[["forecasts_and_ensembles"]],
     command = filter_shared_geo_dates(
       purrr::map(list(!!!.x), "nssp") %>% dplyr::bind_rows(),
-      external_forecasts_full %>% filter(target == "wk inc flu prop ed visits") %>% select(-target) %>% mutate(value = value * 100),
+      external_forecasts_full %>% filter(target == flu_report_target("nssp")) %>% select(-target) %>% mutate(value = value / flu_report_scale("nssp")),
       min_locations = 50,
       min_dates = 14
     )

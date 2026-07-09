@@ -27,7 +27,9 @@ flu_run_forecast_grid <- function(grid,
 
   rows <- purrr::pmap(cells, function(id, forecaster, version_policy, outcome_signal,
                                       exogenous, primary_source, forecast_date_int,
-                                      forecast_generation_date_int) {
+                                      forecast_generation_date_int, ...) {
+    # `...` absorbs reporting-only grid columns (scale, target_name); they're
+    # applied downstream at the reporting boundary, not during forecasting.
     fn <- get(forecaster)
     frame <- flu_assemble(
       archives,
