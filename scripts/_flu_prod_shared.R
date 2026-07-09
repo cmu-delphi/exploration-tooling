@@ -123,29 +123,66 @@ parameters_and_date_targets <- rlang::list2(
 
 
 # ================================ FORECAST TARGETS ================================
-# The forecaster grid as one loop (REFACTOR.md Exp 4/5). flu_assemble builds honest
-# per-signal input (no nhsn/nssp column/source spoof), flu_run_forecast_grid loops
-# the 16-row signal grid, and forecast_nhsn_full / forecast_nssp_full fall out by
-# outcome_signal. Replaces the old forecast_nhsn/forecast_nssp tar_map + tar_combine.
-forecast_full_targets <- rlang::list2(
-  tar_target(
-    name = forecast_full,
-    command = flu_run_forecast_grid(
-      grid = flu_build_prod2_grid(),
-      forecast_dates = g_forecast_dates,
-      forecast_generation_dates = g_forecast_generation_dates,
-      aheads = g_aheads,
-      archives = list(
-        nhsn = nhsn_archive_data,
-        nssp = nssp_archive_data,
-        joined_latest_extra_data = joined_latest_extra_data,
-        flu_data_substitutions = flu_data_substitutions
-      ),
-      insufficient_data_geos = g_insufficient_data_geos
+# tar_map over the signal grid (REFACTOR.md Exp 4, option A): one forecast target per
+# (forecaster x outcome_signal x date). flu_assemble builds honest per-signal input
+# (no nhsn/nssp column/source spoof) and the flu2_* adapter runs it. Kept in tar_map
+# (not a plain loop) so targets still provides per-cell caching, crew parallelism,
+# code-invalidation, and per-target seeds. tar_combine splits the branches back into
+# forecast_{nhsn,nssp}_full by outcome_signal.
+forecast_targets <- tar_map(
+  values = tidyr::expand_grid(
+    flu_build_prod2_grid(),
+    tibble(
+      forecast_date_int = g_forecast_dates,
+      forecast_generation_date_int = g_forecast_generation_dates,
+      forecast_date_chr = as.character(g_forecast_dates)
     )
   ),
-  tar_target(forecast_nhsn_full, command = forecast_full$nhsn),
-  tar_target(forecast_nssp_full, command = forecast_full$nssp)
+  names = c("id", "outcome_signal", "forecast_date_chr"),
+  tar_target(
+    name = forecast,
+    command = {
+      forecaster_fn <- get(forecaster)
+      flu_assemble(
+        archives = list(
+          nhsn = nhsn_archive_data,
+          nssp = nssp_archive_data,
+          joined_latest_extra_data = joined_latest_extra_data,
+          flu_data_substitutions = flu_data_substitutions
+        ),
+        outcome_signal = outcome_signal,
+        exogenous = exogenous,
+        version_policy = version_policy,
+        generation_date = forecast_generation_date_int,
+        forecast_date = forecast_date_int,
+        insufficient_data_geos = g_insufficient_data_geos
+      ) %>%
+        forecaster_fn(ahead = aheads, extra_sources = exogenous, primary_source = primary_source) %>%
+        mutate(
+          forecaster = id,
+          outcome_signal = outcome_signal,
+          geo_value = as.factor(geo_value)
+        )
+    },
+    pattern = map(aheads)
+  )
+)
+
+combined_forecast_targets <- list(
+  tar_combine(
+    name = forecast_nhsn_full,
+    forecast_targets[["forecast"]],
+    command = dplyr::bind_rows(!!!.x) %>%
+      dplyr::filter(outcome_signal == "nhsn") %>%
+      dplyr::select(-outcome_signal)
+  ),
+  tar_combine(
+    name = forecast_nssp_full,
+    forecast_targets[["forecast"]],
+    command = dplyr::bind_rows(!!!.x) %>%
+      dplyr::filter(outcome_signal == "nssp") %>%
+      dplyr::select(-outcome_signal)
+  )
 )
 
 
@@ -361,7 +398,8 @@ if (g_backtest_mode) {
 
 list2(
   parameters_and_date_targets,
-  forecast_full_targets,
+  forecast_targets,
+  combined_forecast_targets,
   ensemble_targets,
   external_forecast_targets,
   combined_targets,

@@ -327,22 +327,29 @@ crew parallelism, (c) targets' transitive code-invalidation, and (d) reproducibl
 per-target seeds (hence the stalled golden rebaseline). All of Exp 4's value lives in
 `flu_assemble`/grid/adapters, which work equally under a `tar_map`.
 
-**Remaining = one lift (incremental recompute), three ways:**
-- **A. Revert forecast-gen to a `tar_map` over the clean grid.** Restores caching /
-  parallelism / code-invalidation / per-target seeds for free (targets does it);
-  existing golden stays valid, no rebaseline. Cost: some metaprogramming back, but over
-  a clean spoof-free grid. Likely the least total work. **Recommended.**
-- **B. Keep the loop, build a cache** keyed on `paste(fn_hash, input_hash)`, where
-  `fn_hash = targets:::hash_imports(envir)` (transitive, codetools-based; the exact
-  Exp-5 gate we'd called a "reimplement-targets trap" — turns out it's one `:::` call or
-  ~5 vendored fns: `tar_deparse_safe` -> `mask_pointers` -> `graph_envir` via `tar_deps`
-  -> `secretbase::siphash13`). Cost: `:::` version fragility (pin/vendor), you own the
-  cache. Plus the seed rebaseline.
-- **C. Keep the loop, no cache, add `furrr`.** Parallel-only, full recompute each run.
-  Fine *iff* backfill is re-run rarely after code edits. Deciding question for B-vs-C.
+**Chosen: option A (DONE).** Forecast generation reverted from the single `forecast_full`
+loop to a `tar_map` over `flu_build_prod2_grid()` x dates — one `forecast_<id>_<signal>_
+<date>` target per cell (`pattern = map(aheads)`), each calling `flu_assemble` + the
+`flu2_*` adapter with honest labels, then `tar_combine` split into `forecast_{nhsn,nssp}_
+full` by an `outcome_signal` tag. This restores per-cell caching / crew parallelism /
+code-invalidation / per-target seeds — targets does it, no cache to hand-build. All Exp-4
+wins kept (assemble, honest contract, grid, scale/target_name, REPL dev loop). The loop
+(`flu_run_forecast_grid` / `R/flu_forecast_loop.R`) is deleted but lives in git history if
+the loop route (option B, below) is ever wanted. Manifests: flu_hosp_prod 410,
+flu_hosp_backfill 2789 (per-cell granularity back), covid 395. Verified the `tar_map`
+substitutes the string fn-name (`get("flu2_...")`) and the `exogenous` list-column
+correctly (`"nhsn"` / `character(0)`); command inspection clean. Not yet run via `tar_make`.
 
-Backtest dates are already handled by the loop (takes the date vector; backfill passes
-all dates) — not a separate remaining item; untested with >1 date though.
+Golden: the `tar_map` gives *new* target names (`forecast_<id>_<signal>_<date>` vs the old
+`forecast_nssp_<id>_<date>`), so the 3 stochastic forecasters get different per-target
+seeds -> not bit-exact vs the old golden. Deterministic forecasters + everything derived
+from them stay exact. Fix is a one-command re-capture (capture.R with a new label), NOT
+the seed-injection dance; equivalence is already console-proven. (If literal old-golden
+bit-exactness were required, keep the original two-family `forecast_nhsn`/`forecast_nssp`
+target names instead of the signal-expanded grid — declined as not worth it.)
+
+Not pursued: **B** (keep loop + `targets:::hash_imports`-keyed cache) — recorded above if
+the loop is ever revived; **C** (loop + `furrr`, no cache).
 
 ## Gotchas
 
