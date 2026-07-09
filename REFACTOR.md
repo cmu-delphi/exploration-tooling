@@ -125,6 +125,21 @@ backtest** (BACKTEST_MODE=TRUE + `BACKTEST_N_DATES=<small>`), never the full
   at a time; `(climate_linear, nssp, params)` row must reproduce hand-coded nssp
   `ensemble_clim_lin`. Settles the same-fn-vs-new-fn audit row by row.
 
+- **Per-pipeline constant propagation.** DONE. The mode-specific ensemble-map
+  tail (`make_submission_csv`, `make_climate_submission_csv`, `validate_result`,
+  `validate_climate_result`, `notebook`) moved to `R/flu_outputs.R`: bodies
+  extracted as `flu_write_submission` / `flu_write_climate_submission` /
+  `flu_validate_submission` / `flu_validate_climate_submission` /
+  `flu_render_forecast_notebook`, and `flu_output_targets(backtest_mode)` emits
+  the tail with `g_backtest_mode` folded out — production gates on
+  `dir != "cache"` and renders the notebook; backfill gates on
+  `dir != "cache" && final date` and drops the (dead) notebook. The factory
+  splices `flu_output_targets(g_backtest_mode)` into the ensemble tar_map.
+  Manifest confirms: prod has `notebook` (1), backfill has none (0), submission
+  targets present in both. CAVEAT: in cache mode these targets no-op, so the
+  output oracle does not exercise the gates; gate correctness is by boolean
+  constant fold. Captured-target diff vs `baseline-bt3` ALL MATCH.
+
 ## Gotchas
 
 - Float reordering (ensemble means, `bind_rows` order) → set tolerance up front.

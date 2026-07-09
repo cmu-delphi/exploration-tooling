@@ -301,112 +301,12 @@ ensemble_targets <- tar_map(
     )
   ),
   tar_target(
-    name = make_submission_csv,
-    command = {
-      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
-        forecast_reference_date <- get_forecast_reference_date(forecast_date_int)
-        nhsn_submission <- ensemble_mixture$nhsn %>%
-          format_flusight(disease = "flu")
-        nssp_submission <- ensemble_mixture$nssp %>%
-          format_flusight(disease = "flu") %>%
-          mutate(
-            target = "wk inc flu prop ed visits",
-            value = value / 100
-          )
-        bind_rows(nhsn_submission, nssp_submission) %>%
-          write_submission_file(
-            forecast_reference_date,
-            file.path(g_submission_directory, "model-output/CMU-TimeSeries")
-          )
-      } else {
-        cli_alert_info("Not making submission csv because we're in backtest mode or submission directory is cache")
-      }
-    },
-    cue = tar_cue("always")
-  ),
-  tar_target(
-    name = make_climate_submission_csv,
-    command = {
-      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
-        forecast_filtered$nhsn %>%
-          filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
-          group_by(geo_value, target_end_date, quantile) %>%
-          summarize(forecast_date = as.Date(forecast_date_int), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
-          ungroup() %>%
-          filter(!(geo_value %in% g_excluded_geos)) %>%
-          format_flusight(disease = "flu") %>%
-          filter(location %nin% c("60", "66", "78")) %>%
-          write_submission_file(
-            get_forecast_reference_date(forecast_date_int),
-            file.path(g_submission_directory, "model-output/CMU-climate_baseline"),
-            file_name = "CMU-climate_baseline"
-          )
-      } else {
-        cli_alert_info(
-          "Not making climate submission csv because we're in backtest mode or submission directory is cache"
-        )
-      }
-    },
-    cue = tar_cue("always")
-  ),
-  tar_target(
-    name = validate_result,
-    command = {
-      make_submission_csv
-      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
-        validate_submission(
-          g_submission_directory,
-          file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(forecast_date_int))
-        )
-      } else {
-        "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
-      }
-    }
-  ),
-  tar_target(
-    name = validate_climate_result,
-    command = {
-      make_climate_submission_csv
-      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
-        validate_submission(
-          g_submission_directory,
-          file_path = sprintf(
-            "CMU-climate_baseline/%s-CMU-climate_baseline.csv",
-            get_forecast_reference_date(forecast_date_int)
-          )
-        )
-      } else {
-        "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
-      }
-    }
-  ),
-  tar_target(
     name = truth_data,
     command = flu_truth_data(nhsn_archive_data, nhsn_latest_data, nssp_latest_data, forecast_generation_date_int)
   ),
-  tar_target(
-    notebook,
-    command = {
-      if (!g_backtest_mode) {
-        if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
-        rmarkdown::render(
-          forecast_report_rmd,
-          output_file = here::here(
-            "reports",
-            sprintf("%s_flu_prod_on_%s.html", as.Date(forecast_date_int), as.Date(Sys.Date()))
-          ),
-          params = list(
-            disease = "flu",
-            forecast_nhsn = forecasts_and_ensembles$nhsn %>% ungroup() %>% filter(forecaster %in% c("cdc_baseline", "climate_linear", "ensemble_mix", "windowed_seasonal", "windowed_seasonal_extra_sources")),
-            forecast_nssp = forecasts_and_ensembles$nssp %>% ungroup() %>% filter(forecaster %in% c("cdc_baseline", "climate_linear", "ensemble_mix", "windowed_seasonal", "windowed_seasonal_extra_sources")),
-            forecast_date = as.Date(forecast_date_int),
-            truth_data_nhsn = truth_data$nhsn,
-            truth_data_nssp = truth_data$nssp
-          )
-        )
-      }
-    }
-  )
+  # Mode-specific submission/validation/notebook tail (defined in R/flu_outputs.R),
+  # spliced in with the g_backtest_mode gating already resolved for this pipeline.
+  flu_output_targets(g_backtest_mode)
 )
 
 
