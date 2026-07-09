@@ -95,8 +95,16 @@ backtest** (BACKTEST_MODE=TRUE + `BACKTEST_N_DATES=<small>`), never the full
 
 - **Exp 0 — oracle.** capture + compare scripts; capture baseline goldens
   (prod-latest and partial-backtest). No production logic touched.
-- **Exp 1 — extract inline commands → functions.** Ensembles, truth, submission
-  formatting (`:313–483`). Behavior-preserving; diff must be empty. Enables 2–4.
+- **Exp 1 — extract inline commands → functions.** Moved the five complex
+  ensemble-map command blocks (`geo_weights`, `ensemble_clim_lin`, `ens_ar_only`,
+  `ensemble_mixture`, `truth_data`) verbatim into `flu_*` functions in
+  `R/flu_ensembles.R`; the targets now call them with their deps as args. Trivial
+  blocks (`forecast_filtered`, `geo_exclusions`, `forecasts_and_ensembles`) left
+  inline. Submission targets left as-is — already function-based (`format_flusight`)
+  and entangled with the `g_backtest_mode`/`g_submission_directory` gating, which
+  belongs to per-pipeline constant propagation, not this pass. Verified
+  behavior-preserving: full re-execution (686 targets, 0 skipped) diffs ALL MATCH
+  (max rel diff 0, all 12 targets) against the pre-refactor `baseline-bt3`.
 - **Exp 2 — split prod/backfill.** DONE. Because this ran *before* Exp 1 (the
   ensembles are still inline), a copy-paste split would have duplicated the whole
   target DAG — the exact "duplicate the boilerplate" cost the merged pipeline was
