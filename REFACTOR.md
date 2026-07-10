@@ -205,17 +205,23 @@ Diffing against `as-of-bt3` (Exp 3) yields *digit-identical* numbers to diffing 
    correctly; switching the exogenous path to `floor+3` changes nothing. Unlike #1 (the
    *cutoff* asymmetry) this never bites — no differencing experiment needed.
 
-   **Proposed fix (Exp 6, low-risk):** collapse to one named helper, e.g.
-   `align_epiweek_wednesday(d) <- floor_date(d, "week", week_start = 7) + 3`, and call it at
-   every alignment site. It is verified-equivalent to all three current spellings, so it is
-   a pure readability change with no numeric effect. The real smell it removes: the
-   exogenous-nssp branch (`R/flu_assemble.R:114`) applies *no* transform and silently relies
-   on the raw archive being Wednesday-stamped — a signal that changed its reporting day, or a
-   different exogenous signal, would misalign the join to all-NA with no error. The magic
-   `-3` (assumes Saturday input) is likewise fragile. The `floor+3` idiom is already
-   copy-pasted ~9× (`R/flu_assemble.R:92`, `R/utils.R:185`, `R/aux_data_utils.R:746,770`,
-   `scripts/covid_hosp_prod.R:176,223,236`) plus two hardcoded `-3` sites
-   (`R/flu_assemble.R:50`, `R/aux_data_utils.R:736`) — all candidates for the shared helper.
+   **Fix (partial — flu_assemble done, rest pending Exp 6):** collapse to one named helper
+   `flu_align_epiweek_wednesday(d) <- floor_date(d, "week", week_start = 7) + 3` and call it at
+   every alignment site. Verified-equivalent to all three current spellings, so it is a pure
+   readability change with no numeric effect (re-checked post-fix against prod archives:
+   byte-identical output, primary↔exogenous nssp still row-for-row identical). The real smell
+   it removes: the exogenous-nssp branch applied *no* transform and silently relied on the raw
+   archive being Wednesday-stamped — a signal that changed its reporting day, or a different
+   exogenous signal, would have misaligned the join to all-NA with no error. The magic `-3`
+   (assumes Saturday input) was likewise fragile.
+
+   - **Done:** the three `flu_assemble.R` sites now route through the helper (nhsn `-3`,
+     nssp-primary `floor+3`, and the exogenous-nssp passthrough).
+   - **Remaining (Exp 6):** the same idiom is still copy-pasted elsewhere — `R/utils.R:185`,
+     `R/aux_data_utils.R:746,770` plus a hardcoded `-3` at `R/aux_data_utils.R:736`, and
+     `scripts/covid_hosp_prod.R:176,223,236`. These live outside the flu assembly path (covid
+     harness, aux-data builders) so they're folded into the broader Exp 6 consolidation rather
+     than this change. No shared home for the helper across pipelines yet.
 4. **`sort_by_quantile()` is applied inconsistently.** Explore applies it to flu forecaster
    output (`R/targets/shared_utils.R:68`, "TODO: Hack fix because whitening has edge
    cases"); `covid_hosp_prod.R:312` applies it; **flu prod does not** — it only sorts inside

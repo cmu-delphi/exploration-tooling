@@ -13,6 +13,16 @@
 
 g_insufficient_data_geos_default <- c("as", "mp", "vi", "gu")
 
+# Snap any date to the Wednesday of its epiweek (weeks start Sunday). Idempotent on
+# Wednesday input, and equal to `time_value - 3` on Saturday input -- the single
+# alignment convention every flu signal is normalized to before joining. Using it
+# everywhere (rather than a hardcoded `- 3` or an implicit reliance on the raw archive
+# stamp) keeps the exogenous join from silently misaligning if a source changes its
+# reporting day. See REFACTOR.md discrepancy #3.
+flu_align_epiweek_wednesday <- function(time_value) {
+  floor_date(time_value, "week", week_start = 7) + 3
+}
+
 # Version-faithful slicing of an epi_archive for a forecast (REFACTOR.md Exp 3).
 # Replaces the per-target `grepl("latest", id)` branching with an explicit
 # version_policy carried on the forecaster grid.
@@ -47,7 +57,7 @@ flu_build_full_data <- function(nhsn_archive, version_policy, generation_date, f
     add_season_info() %>%
     mutate(
       geo_value = ifelse(geo_value == "usa", "us", geo_value),
-      time_value = time_value - 3,
+      time_value = flu_align_epiweek_wednesday(time_value),
       source = "nhsn"
     )
   if (version_policy != "latest") {
@@ -89,7 +99,7 @@ flu_primary_frame <- function(archives, signal, version_policy, generation_date,
     nssp <- flu_slice_archive(archives$nssp, version_policy, generation_date)
     nssp <- nssp %>%
       rename(value = nssp) %>%
-      mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
+      mutate(time_value = flu_align_epiweek_wednesday(time_value)) %>%
       mutate(source = "nssp") %>% # honest (was spoofed "nhsn")
       add_season_info()
     attributes(nssp)$metadata$as_of <- as.Date(forecast_date)
@@ -112,7 +122,7 @@ flu_exogenous_column <- function(archives, signal, version_policy, generation_da
     # except on delayed off-Wednesday runs (~5% of dates), so this only bites there, on a
     # forecaster that ships nowhere. Benign; see REFACTOR.md discrepancy #1.
     flu_slice_archive(archives$nssp, version_policy, generation_date, latest_cutoff = forecast_date) %>%
-      transmute(geo_value, time_value, nssp)
+      transmute(geo_value, time_value = flu_align_epiweek_wednesday(time_value), nssp)
   } else if (signal == "nhsn") {
     flu_build_full_data(
       archives$nhsn, version_policy, generation_date, forecast_date,
