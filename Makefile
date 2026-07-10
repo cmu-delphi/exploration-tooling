@@ -1,7 +1,14 @@
 .PHONY: all test test-forecasters run sync download upload dashboard \
-	prod-rsv prod-rsv-log prod-rsv-backtest prune-rsv-prod \
+	prod-rsv prod-rsv-backtest prune-rsv-prod \
 	commit-rsv submit-rsv submit-rsv-dry \
-	pull-rsv-prod push-rsv-prod get-rsv-prod-errors
+	pull-rsv-prod push-rsv-prod get-rsv-prod-errors \
+	eval-flu prune-flu-evaluation \
+	pull-flu-evaluation push-flu-evaluation get-flu-evaluation-errors
+
+# Long-running recipes tee to cache/logs/. pipefail so a failing Rscript isn't
+# masked by tee's exit status.
+SHELL := /bin/bash
+.SHELLFLAGS := -o pipefail -c
 
 current_date:=$(shell date +%F)
 
@@ -14,38 +21,32 @@ test:
 run:
 	Rscript scripts/run.R
 
-prod-covid-log:
-	export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R >> cache/logs/prod_covid 2>&1
+cache/logs:
+	mkdir -p cache/logs
 
-prod-covid:
-	export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
+prod-covid: | cache/logs
+	export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_covid
 
-prod-flu-log:
-	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R >> cache/logs/prod_flu 2>&1
+prod-flu: | cache/logs
+	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_flu
 
-prod-flu:
-	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R
-
-prod-rsv-log:
-	export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R >> cache/logs/prod_rsv 2>&1
-
-prod-rsv:
-	export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R
+prod-rsv: | cache/logs
+	export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_rsv
 
 prod: prod-covid prod-flu update-site netlify
-
-prod-log: prod-covid-log prod-flu-log update-site-log netlify-log
 
 prod-covid-backtest:
 	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
 
-prod-flu-backtest:
-	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R
-
 prod-rsv-backtest:
 	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R
 
-prod-backtest: prod-covid-backtest prod-flu-backtest prod-rsv-backtest
+prod-backtest: prod-covid-backtest prod-rsv-backtest
+
+# Flu's historical replay is its own project, not a BACKTEST_MODE flag on prod.
+# Set EVALUATION_N_DATES=<n> to replay only the last n forecast dates.
+eval-flu: | cache/logs
+	export TAR_RUN_PROJECT=flu_hosp_evaluation; Rscript scripts/run.R 2>&1 | tee -a cache/logs/eval_flu
 
 explore-covid:
 	export TAR_RUN_PROJECT=covid_hosp_explore; Rscript scripts/run.R
@@ -55,13 +56,16 @@ explore-flu:
 
 explore: explore-covid explore-flu update-site netlify
 
-prune: prune-covid-prod prune-flu-prod prune-rsv-prod prune-covid-explore prune-flu-explore
+prune: prune-covid-prod prune-flu-prod prune-flu-evaluation prune-rsv-prod prune-covid-explore prune-flu-explore
 
 prune-covid-prod:
 	export TAR_PROJECT=covid_hosp_prod; export BACKTEST_MODE=TRUE; Rscript -e "targets::tar_prune()"
 
 prune-flu-prod:
-	export TAR_PROJECT=flu_hosp_prod; export BACKTEST_MODE=TRUE; Rscript -e "targets::tar_prune()"
+	export TAR_PROJECT=flu_hosp_prod; Rscript -e "targets::tar_prune()"
+
+prune-flu-evaluation:
+	export TAR_PROJECT=flu_hosp_evaluation; Rscript -e "targets::tar_prune()"
 
 prune-rsv-prod:
 	export TAR_PROJECT=rsv_hosp_prod; export BACKTEST_MODE=TRUE; Rscript -e "targets::tar_prune()"
@@ -124,6 +128,9 @@ pull-covid-prod:
 pull-flu-prod:
 	aws s3 sync s3://forecasting-team-data/2024/flu_hosp_prod/ flu_hosp_prod/ --delete
 
+pull-flu-evaluation:
+	aws s3 sync s3://forecasting-team-data/2024/flu_hosp_evaluation/ flu_hosp_evaluation/ --delete
+
 pull-rsv-prod:
 	aws s3 sync s3://forecasting-team-data/2024/rsv_hosp_prod/ rsv_hosp_prod/ --delete
 
@@ -133,7 +140,7 @@ pull-covid-explore:
 pull-flu-explore:
 	aws s3 sync s3://forecasting-team-data/2024/flu_hosp_explore/ flu_hosp_explore/ --delete
 
-pull: pull-aux-data pull-covid-prod pull-flu-prod pull-rsv-prod pull-covid-explore pull-flu-explore
+pull: pull-aux-data pull-covid-prod pull-flu-prod pull-flu-evaluation pull-rsv-prod pull-covid-explore pull-flu-explore
 
 download: pull
 
@@ -142,6 +149,9 @@ push-covid-prod:
 
 push-flu-prod:
 	aws s3 sync flu_hosp_prod/ s3://forecasting-team-data/2024/flu_hosp_prod/ --delete
+
+push-flu-evaluation:
+	aws s3 sync flu_hosp_evaluation/ s3://forecasting-team-data/2024/flu_hosp_evaluation/ --delete
 
 push-rsv-prod:
 	aws s3 sync rsv_hosp_prod/ s3://forecasting-team-data/2024/rsv_hosp_prod/ --delete
@@ -152,7 +162,7 @@ push-covid-explore:
 push-flu-explore:
 	aws s3 sync flu_hosp_explore/ s3://forecasting-team-data/2024/flu_hosp_explore/ --delete
 
-push: push-covid-prod push-flu-prod push-rsv-prod push-covid-explore push-flu-explore
+push: push-covid-prod push-flu-prod push-flu-evaluation push-rsv-prod push-covid-explore push-flu-explore
 
 upload: push
 
@@ -163,20 +173,17 @@ sync-reports:
 	aws s3 sync reports/ s3://forecasting-team-data/2024/reports/; \
 	aws s3 sync s3://forecasting-team-data/2024/reports/ reports/
 
-update-site: sync-reports
-	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()"
+update-site: sync-reports | cache/logs
+	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()" 2>&1 | tee -a cache/logs/update_site
 
-update-site-log: sync-reports
-	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()" >> cache/logs/update_site_log.txt 2>&1
-
-netlify-log:
-	netlify deploy --dir=reports --prod >> cache/prod_netlify 2>&1
-
-netlify:
-	netlify deploy --dir=reports --prod
+netlify: | cache/logs
+	netlify deploy --dir=reports --prod 2>&1 | tee -a cache/logs/netlify
 
 get-flu-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'flu_hosp_prod')"
+
+get-flu-evaluation-errors:
+	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'flu_hosp_evaluation')"
 
 get-covid-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'covid_hosp_prod')"

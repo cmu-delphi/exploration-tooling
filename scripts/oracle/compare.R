@@ -26,7 +26,13 @@ dir_a <- spec_dir(label_a)
 dir_b <- spec_dir(label_b)
 
 # Columns treated as numeric measurements (tolerance); everything else is a key.
-value_cols <- c("value", "prediction", "wis", "ae_median", "oracle_value", "scale")
+# Miss one and it becomes a sort key: a tiny numeric change then scrambles row
+# alignment and surfaces as a bogus "key columns differ" instead of a value diff.
+value_cols <- c(
+  "value", "prediction", "oracle_value", "scale",
+  # scoringutils metrics
+  "wis", "ae_median", "interval_coverage_50", "interval_coverage_90"
+)
 
 files_a <- list.files(dir_a, pattern = "\\.parquet$")
 files_b <- list.files(dir_b, pattern = "\\.parquet$")
@@ -57,7 +63,18 @@ for (f in intersect(files_a, files_b)) {
   b <- b %>% arrange(across(all_of(keys)))
 
   if (!identical(a[keys], b[keys])) {
-    cli_alert_danger("{name}: key columns differ after sort")
+    # Name the offending columns: "key columns differ" alone forces a manual bisect.
+    bad <- keys[!vapply(keys, function(k) identical(a[[k]], b[[k]]), logical(1))]
+    cli_alert_danger("{name}: key columns differ after sort: {paste(bad, collapse=', ')}")
+    for (k in bad) {
+      ua <- setdiff(unique(as.character(a[[k]])), unique(as.character(b[[k]])))
+      ub <- setdiff(unique(as.character(b[[k]])), unique(as.character(a[[k]])))
+      if (length(ua) || length(ub)) {
+        cli_alert_info("  {k}: only in {label_a}: [{paste(head(ua, 5), collapse=', ')}]; only in {label_b}: [{paste(head(ub, 5), collapse=', ')}]")
+      } else {
+        cli_alert_info("  {k}: same value set, different row alignment")
+      }
+    }
     any_diff <- TRUE
     next
   }

@@ -13,7 +13,7 @@ original crontab.
 | `build_nhsn_archive.R` every 5 min | `nhsn-archive-builder.{service,timer}` |
 | `build_nssp_archive.R` every 5 min | `nssp-archive-builder.{service,timer}` |
 | `get_forecast_data.R` Tue 09:00 | `get-forecast-data.{service,timer}` |
-| `make prod-log` Wed 10:10 | `prod-forecasts.{service,timer}` (see below) |
+| `make prod` (was `prod-log`) Wed 10:10 | `prod-forecasts.{service,timer}` (see below) |
 | `nwss_download_script.py` daily 06:25 | `nwss-download.{service,timer}` |
 
 All timers carry `TimeZone=America/Los_Angeles` to match the old
