@@ -18,9 +18,27 @@ label_b <- if (length(args) >= 2) args[[2]] else "flu_hosp_prod:refactored"
 tol <- if (length(args) >= 3) as.numeric(args[[3]]) else 1e-9
 out_root <- Sys.getenv("ORACLE_OUT_DIR", "cache/oracle")
 
+# Capture folders are named "<label>-<rev>" (capture.R), where <rev> is a jj
+# change_id ([k-z]{8,}) or a git short hash ([0-9a-f]{7,}, optionally "-dirty").
+# Resolve a bare label by exact match, else strip a rev-shaped suffix and match the
+# remainder exactly, so callers keep passing the label and never type the revision.
+# The two rev alphabets are disjoint, and anchoring on the rev shape (not a bare
+# prefix) keeps a label that is a prefix of another -- e.g. "refactored-bt3" vs
+# "refactored-bt3-exp1" -- unambiguous.
+resolve_label_dir <- function(project, label) {
+  base <- file.path(out_root, project)
+  exact <- file.path(base, label)
+  if (dir.exists(exact)) return(exact)
+  cands <- list.dirs(base, recursive = FALSE, full.names = FALSE)
+  hits <- cands[sub("-([0-9a-f]{7,}(-dirty)?|[k-z]{8,})$", "", cands) == label]
+  if (length(hits) == 1) return(file.path(base, hits))
+  if (length(hits) == 0) stop("no oracle dir for label '", label, "' under ", base)
+  stop("ambiguous label '", label, "' matches: ", paste(hits, collapse = ", "))
+}
+
 spec_dir <- function(spec) {
   parts <- strsplit(spec, ":", fixed = TRUE)[[1]]
-  if (length(parts) == 2) file.path(out_root, parts[[1]], parts[[2]]) else file.path(out_root, "flu_hosp_prod", spec)
+  if (length(parts) == 2) resolve_label_dir(parts[[1]], parts[[2]]) else resolve_label_dir("flu_hosp_prod", spec)
 }
 dir_a <- spec_dir(label_a)
 dir_b <- spec_dir(label_b)

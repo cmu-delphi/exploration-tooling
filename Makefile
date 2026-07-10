@@ -3,7 +3,8 @@
 	commit-rsv submit-rsv submit-rsv-dry \
 	pull-rsv-prod push-rsv-prod get-rsv-prod-errors \
 	eval-flu prune-flu-evaluation \
-	pull-flu-evaluation push-flu-evaluation get-flu-evaluation-errors
+	pull-flu-evaluation push-flu-evaluation get-flu-evaluation-errors \
+	oracle-capture oracle-compare
 
 # Long-running recipes tee to cache/logs/. pipefail so a failing Rscript isn't
 # masked by tee's exit status.
@@ -55,6 +56,31 @@ explore-flu:
 	export TAR_RUN_PROJECT=flu_hosp_explore; Rscript scripts/run.R
 
 explore: explore-covid explore-flu update-site netlify
+
+# ---- Oracle (REFACTOR.md): behavior-preserving golden capture + compare ----
+# Pinned reference date so captures are reproducible week-to-week instead of
+# tracking Sys.Date(). Must be >= 2025-12-31 (evaluation date-vector alignment).
+ORACLE_REFERENCE_DATE := 2026-06-24
+
+# Capture a golden. project=<targets project> label=<subdir>. For the evaluation
+# project also pass n=<EVALUATION_N_DATES> to replay only the last n dates.
+# e.g. make oracle-capture project=flu_hosp_prod label=refactored
+oracle-capture: | cache/logs
+	@if [ -z "$(project)" ] || [ -z "$(label)" ]; then \
+		echo "Usage: make oracle-capture project=flu_hosp_prod label=refactored [n=3]"; exit 1; fi
+	export TAR_RUN_PROJECT=$(project); export ORACLE_LABEL=$(label); \
+	export FORECAST_REFERENCE_DATE=$(ORACLE_REFERENCE_DATE); export EVALUATION_N_DATES=$(n); \
+	Rscript scripts/oracle/capture.R 2>&1 | tee -a cache/logs/oracle_capture
+
+# Diff two captured labels of one project. project=<p> a=<label> b=<label>.
+# NOTE: exits non-zero when anything differs -- that is the signal, not an error.
+# For the seeding change expect exactly linear/cdc_baseline/linear_no_population_scale
+# to move and the other 5 forecasters to be bit-zero.
+# e.g. make oracle-compare project=flu_hosp_prod a=baseline b=refactored
+oracle-compare:
+	@if [ -z "$(project)" ] || [ -z "$(a)" ] || [ -z "$(b)" ]; then \
+		echo "Usage: make oracle-compare project=flu_hosp_prod a=baseline b=refactored"; exit 1; fi
+	Rscript scripts/oracle/compare.R $(project):$(a) $(project):$(b)
 
 prune: prune-covid-prod prune-flu-prod prune-flu-evaluation prune-rsv-prod prune-covid-explore prune-flu-explore
 

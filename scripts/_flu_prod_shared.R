@@ -37,6 +37,16 @@ g_truth_data_date <- "2023-09-01"
 # set by the entry script (flu_hosp_prod.R or flu_hosp_evaluation.R) before it
 # calls build_flu_prod_pipeline().
 
+# The pipeline's notion of "today", read once here so the whole run can be pinned
+# for reproducible oracle captures (REFACTOR.md gotcha: forecast dates otherwise
+# move with the calendar). Unset -> Sys.Date(), i.e. current production behavior.
+# Both entry scripts derive their forecast-date vectors from this, and the latest
+# as-of slice uses it, so pinning it turns prod-"latest" into a reproducible as-of.
+g_forecast_reference_date <- function() {
+  raw <- Sys.getenv("FORECAST_REFERENCE_DATE", "")
+  if (nzchar(raw)) as.Date(raw) else Sys.Date()
+}
+
 # The forecaster set + per-signal config (forecaster fn, version_policy, exogenous,
 # primary_source) live in flu_build_prod2_grid() (R/flu_assemble.R), which the
 # forecast loop consumes. The ensemble stage only needs the list of ids.
@@ -101,7 +111,7 @@ parameters_and_date_targets <- rlang::list2(
     name = nhsn_latest_data,
     command = {
       nhsn_archive_data %>%
-        epix_as_of(min(Sys.Date(), nhsn_archive_data$versions_end)) %>%
+        epix_as_of(min(g_forecast_reference_date(), nhsn_archive_data$versions_end)) %>%
         filter(geo_value %nin% g_insufficient_data_geos)
     }
   ),
@@ -116,7 +126,7 @@ parameters_and_date_targets <- rlang::list2(
     name = nssp_latest_data,
     command = {
       nssp_archive_data %>%
-        epix_as_of(min(Sys.Date(), nssp_archive_data$versions_end))
+        epix_as_of(min(g_forecast_reference_date(), nssp_archive_data$versions_end))
     }
   )
 )

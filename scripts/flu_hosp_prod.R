@@ -11,12 +11,12 @@ g_evaluation_mode <- FALSE
 # The as_of for the forecast. On our typical schedule this is today (a
 # Wednesday); for a delayed forecast it can be a Thursday. Used both for
 # stamping the data and for choosing the as_of when creating the forecast.
-g_forecast_generation_dates <- Sys.Date()
+g_forecast_generation_dates <- g_forecast_reference_date()
 # Usually the forecast_date equals the generation date, but it can be
 # overridden. It should be a Wednesday.
 g_forecast_dates <- round_date(g_forecast_generation_dates, "weeks", week_start = 3)
 # The forecast is actually for the Wednesday beforehand on these days.
-if (Sys.Date() %in% as.Date(c("2025-12-29"))) {
+if (g_forecast_generation_dates %in% as.Date(c("2025-12-29"))) {
   g_forecast_dates <- as.Date("2025-12-24")
 }
 

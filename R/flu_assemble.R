@@ -23,9 +23,10 @@ g_insufficient_data_geos_default <- c("as", "mp", "vi", "gu")
 #   "latest" - newest available data, truncated to before latest_cutoff; used by
 #              the *_latest forecasters that intentionally peek at current data.
 #
-# latest_cutoff defaults to generation_date. forecast_nhsn overrides it to the
-# forecast date instead of the generation date -- a long-standing asymmetry vs
-# its siblings (full_data, forecast_nssp), preserved here verbatim.
+# latest_cutoff defaults to generation_date. The exogenous nssp column
+# (flu_exogenous_column) is the sole caller that overrides it to forecast_date, and
+# only under version_policy == "latest" (the non-prod seasonal_nssp_latest forecaster).
+# See that call site and REFACTOR.md discrepancy #1.
 flu_slice_archive <- function(archive, version_policy, generation_date, latest_cutoff = generation_date) {
   if (version_policy == "latest") {
     archive %>%
@@ -103,6 +104,13 @@ flu_primary_frame <- function(archives, signal, version_policy, generation_date,
 flu_exogenous_column <- function(archives, signal, version_policy, generation_date, forecast_date,
                                  insufficient_data_geos = g_insufficient_data_geos_default) {
   if (signal == "nssp") {
+    # DIVERGENCE: exogenous nssp is cut at forecast_date; every other slice cuts at
+    # generation_date. This is only reachable via version_policy == "latest" -- the
+    # non-prod `seasonal_nssp_latest` "cheating" forecaster, which peeks at the newest
+    # data revision purely to measure the performance gain from doing so, and is never
+    # ensembled, submitted, or shown in the notebook. generation_date == forecast_date
+    # except on delayed off-Wednesday runs (~5% of dates), so this only bites there, on a
+    # forecaster that ships nowhere. Benign; see REFACTOR.md discrepancy #1.
     flu_slice_archive(archives$nssp, version_policy, generation_date, latest_cutoff = forecast_date) %>%
       transmute(geo_value, time_value, nssp)
   } else if (signal == "nhsn") {

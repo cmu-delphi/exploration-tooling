@@ -15,26 +15,78 @@
 #   ORACLE_SKIP_MAKE  "TRUE" to read an existing store without rebuilding
 #   BACKTEST_MODE     forwarded to the covid pipeline (FALSE = prod-latest)
 #   EVALUATION_N_DATES  for the flu_hosp_evaluation project, keep only the last N dates
+#   FORECAST_REFERENCE_DATE  pins the flu pipeline's "today" (forecast dates + the
+#                     prod-latest as-of slice). MUST be set for a reproducible
+#                     capture; unset falls back to Sys.Date() (calendar-dependent).
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 project <- Sys.getenv("TAR_RUN_PROJECT", "flu_hosp_prod")
 label <- Sys.getenv("ORACLE_LABEL", "baseline")
 out_root <- Sys.getenv("ORACLE_OUT_DIR", "cache/oracle")
 skip_make <- toupper(Sys.getenv("ORACLE_SKIP_MAKE", "FALSE")) %in% c("TRUE", "1", "YES")
+reference_date_raw <- Sys.getenv("FORECAST_REFERENCE_DATE", "")
+reference_date <- if (nzchar(reference_date_raw)) reference_date_raw else as.character(Sys.Date())
+
+# Revision that produced this golden (oracle provenance).
+# jj users get the working-copy commit's change_id: it is stable across the
+# amend/squash that finalize a change, and jj auto-snapshots so there is no
+# dirty/clean ambiguity (re-capturing the same change intentionally overwrites).
+# Plain-git users get the short HEAD hash + a `-dirty` flag for uncommitted work.
+# NB: in a colocated jj repo `git rev-parse HEAD` reports @'s *parent* and always
+# looks dirty, so the jj path is the honest one -- but jj must be on PATH inside
+# whatever container runs this; absent it we fall back to git.
+source_rev <- tryCatch(
+  {
+    # Prefer standard `jj`; fall back to `jj-musl`, the static binary added to the
+    # rocker container under a distinct name so it does not shadow a host jj on the
+    # shared PATH (rocker/tidyverse has no system jj; the host does).
+    jj_bin <- Sys.which("jj")
+    if (!nzchar(jj_bin)) jj_bin <- Sys.which("jj-musl")
+    jj_id <- if (nzchar(jj_bin)) {
+      suppressWarnings(system2(
+        # system2 runs args through a shell; shQuote the template so its parens
+        # are not parsed by sh (unquoted, jj gets mangled args and returns nothing).
+        jj_bin, c("log", "--no-graph", "-r", "@", "-T", shQuote("change_id.shortest(8)")),
+        stdout = TRUE, stderr = FALSE
+      ))
+    } else {
+      character(0)
+    }
+    if (length(jj_id) == 1 && grepl("^[k-z]{8,}$", jj_id)) {
+      jj_id
+    } else {
+      rev <- system2("git", c("rev-parse", "--short=7", "HEAD"), stdout = TRUE, stderr = FALSE)
+      dirty <- length(system2("git", c("status", "--porcelain"), stdout = TRUE, stderr = FALSE)) > 0
+      if (length(rev) == 1 && nzchar(rev)) paste0(rev, if (dirty) "-dirty" else "") else NA_character_
+    }
+  },
+  error = function(e) NA_character_
+)
 
 store <- targets::tar_config_get("store", project = project)
 script <- targets::tar_config_get("script", project = project)
-out_dir <- file.path(out_root, project, label)
+# Folder carries the revision so provenance survives without reading the log.
+# compare.R resolves a bare label back to this folder.
+label_dir <- if (!is.na(source_rev)) paste0(label, "-", source_rev) else label
+out_dir <- file.path(out_root, project, label_dir)
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 cli::cli_inform(c(
   "i" = "Oracle capture",
-  "*" = "project   = {project}",
-  "*" = "store     = {store}",
-  "*" = "label     = {label}",
-  "*" = "out_dir   = {out_dir}",
-  "*" = "skip_make = {skip_make}"
+  "*" = "project        = {project}",
+  "*" = "store          = {store}",
+  "*" = "label          = {label}",
+  "*" = "source_rev     = {if (is.na(source_rev)) '<unknown>' else source_rev}",
+  "*" = "out_dir        = {out_dir}",
+  "*" = "skip_make      = {skip_make}",
+  "*" = "reference_date = {reference_date}"
 ))
+if (!nzchar(reference_date_raw)) {
+  cli::cli_alert_warning(paste(
+    "FORECAST_REFERENCE_DATE unset: capture uses Sys.Date() ({reference_date}) and",
+    "is NOT reproducible across weeks. Pin it to compare captures over time."
+  ))
+}
 
 if (!skip_make) {
   cli::cli_alert_info("Building pipeline (hits the network; may take a while)...")
@@ -99,5 +151,7 @@ for (name in snapshot_targets) {
 }
 
 man <- dplyr::bind_rows(manifest)
+man$reference_date <- reference_date
+man$source_rev <- source_rev
 readr::write_csv(man, file.path(out_dir, "_manifest.csv"))
-cli::cli_alert_success("Captured {nrow(man)} target(s) to {out_dir}")
+cli::cli_alert_success("Captured {nrow(man)} target(s) to {out_dir} (reference_date {reference_date})")

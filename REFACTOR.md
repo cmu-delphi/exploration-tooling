@@ -69,9 +69,18 @@ the golden faithfully reproduces current bugs.
 
 - `scripts/oracle/capture.R` — `tar_make` a project, dump archives (frozen inputs) +
   forecast/ensemble/score frames (golden outputs) to
-  `cache/oracle/<project>/<label>/<target>.parquet`.
+  `cache/oracle/<project>/<label>-<rev>/<target>.parquet`. The `<rev>` suffix stamps
+  source provenance into the folder name: a jj `change_id` (`[k-z]`, stable across the
+  amend/squash that finalize a change) when jj is on `PATH`, else the git short hash
+  (`[0-9a-f]`, plus `-dirty` for uncommitted work). `compare.R` resolves a bare `<label>`
+  back to the folder, so callers never type the rev. capture.R looks up `jj` then `jj-musl`
+  (a static jj binary in `~/.local/bin`; rocker/tidyverse has no system jj, so it's kept
+  under a distinct name to avoid shadowing the host jj on the shared PATH).
 - `scripts/oracle/compare.R` — diff two labels: exact on key columns, relative tolerance on
   value columns. Usage: `compare.R <project>:<label> <project>:<label> [tol]`.
+- `make oracle-capture project=<p> label=<l> [n=<N>]` / `make oracle-compare project=<p> a=<l>
+  b=<l>` wrap both, pinning `FORECAST_REFERENCE_DATE` (`ORACLE_REFERENCE_DATE` in the Makefile)
+  so captures are reproducible week-to-week.
 
 Golden scope: prod-latest (1 date) and a partial evaluation run (`EVALUATION_N_DATES=3`),
 never the full ~80-date run.
@@ -125,12 +134,25 @@ deterministic path. Re-capture the baseline after landing.
 
 Manifests: `flu_hosp_prod` 410, `flu_hosp_evaluation` 2789, `covid_hosp_prod` 395.
 
-## Golden status (2026-07-09)
+## Golden status (2026-07-10)
 
-Reference: **`cache/oracle/flu_hosp_prod/baseline-bt3`** — the pre-refactor baseline from the
-oracle commit `e8d582e`, *before* Exp 2 created the `flu_hosp_backfill` project. Current:
-`cache/oracle/flu_hosp_evaluation/postA-bt3` (`EVALUATION_N_DATES=3`). Verified a real
-rebuild: all 240 grid cells (8 × 2 × 3 dates × 5 aheads) written during the run, per
+**New canonical baseline: `cache/oracle/flu_hosp_prod/baseline-pinned-9fb2cb8`** (label
+`baseline-pinned`), captured on
+current code (post-Exp 7) at the pinned `FORECAST_REFERENCE_DATE=2026-06-24` via
+`make oracle-capture project=flu_hosp_prod label=baseline-pinned`. All future checks compare
+to it: `make oracle-compare project=flu_hosp_prod a=baseline-pinned b=<label>`. Rebaselining
+here is justified because Exp 1–4 + the tar_map revert were already verified bit-exact vs main
+for the 5 deterministic forecasters (below), and Exp 7's seeding is a deliberate, understood
+change; so current code is trusted parity + a known reseed. **Bonus:** because seeding is now
+stable across renames, the new baseline makes *all 8* forecasters diff-checkable across future
+refactors, not just the 5 deterministic ones.
+
+Historical reference (pre-pinning): **`cache/oracle/flu_hosp_prod/baseline-bt3-e8d582e`** — the
+pre-refactor baseline from oracle commit `e8d582e`, *before* Exp 2 created the
+`flu_hosp_backfill` project; and `cache/oracle/flu_hosp_evaluation/postA-bt3`
+(`EVALUATION_N_DATES=3`), which is **no longer comparable** (captured on a Sys.Date()-relative
+window that has since rolled — re-baseline evaluation at the pinned date if needed). Verified a
+real rebuild: all 240 grid cells (8 × 2 × 3 dates × 5 aheads) written during the run, per
 `tar_meta(store=)`.
 
 **Result: Exp 1–4 + the tar_map revert are bit-exact vs main for all 5 deterministic
@@ -153,20 +175,47 @@ Diffing against `as-of-bt3` (Exp 3) yields *digit-identical* numbers to diffing 
 
 ### Correctness questions (investigate; each needs its own explicitly-differing experiment)
 
-1. **`forecast_nhsn` latest-cutoff asymmetry.** The `latest` slice for nhsn cuts at
-   `forecast_date_int`; siblings (`full_data`, `forecast_nssp`) cut at
-   `forecast_generation_date_int`. Preserved verbatim via the `latest_cutoff` arg of
-   `flu_slice_archive` (`R/flu_assemble.R:29`). Only reachable from
-   `version_policy == "latest"`, i.e. `seasonal_nssp_latest`. Intentional peeking, or typo?
+1. ~~**latest-cutoff asymmetry.**~~ **Downgraded 2026-07-10: benign, non-shipped.** The
+   exogenous nssp slice cuts at `forecast_date` while every sibling cuts at `generation_date`
+   (`flu_exogenous_column`, `R/flu_assemble.R:106`). Only reachable via
+   `version_policy == "latest"` — the `seasonal_nssp_latest` "cheating" forecaster, which
+   peeks at the newest data revision purely to measure the gain from doing so and is **never
+   ensembled, submitted, or shown in the notebook** (ensembles/submission keep only
+   `climate_*`/`linear`/`windowed_seasonal*`). Investigated: `generation_date ==
+   forecast_date` on 80/84 evaluation dates — they differ only on holiday-delayed
+   off-Wednesday runs (gen always *later*, +1d ×3, +5d ×1), and on those 4 dates the slice
+   differs by exactly one week (the forecast-reference-week nssp, 52 geos). A Sat(nhsn)/Wed(nssp)
+   reference-day mismatch means neither cutoff aligns both signals across all delayed dates, so
+   this is a symptom of the scattered alignment **Exp 6** consolidates, not an independent bug.
+   Not worth a standalone experiment; subsumed by Exp 6.
 2. ~~**3 of 8 forecasters are stochastic** (finding 3).~~ **Done for flu prod (Exp 7).**
    Remaining: port to `covid_hosp_prod.R` / rsv, whose harness has a different shape
    (separate nhsn/nssp targets, `get_partially_applied_forecaster`, `aheads` passed as a
    vector rather than mapped) so the semantic key differs. No rsv oracle exists.
-3. **Exogenous column asymmetry.** An exogenous `nssp` column is the RAW slice cut at the
-   forecast date; an exogenous `nhsn` column is the primary nhsn series, which is
-   time-shifted (`time_value - 3`). The spoof concealed this; `flu_exogenous_column`
-   (`R/flu_assemble.R:103`) preserves both branches verbatim. Two different alignment
-   conventions for nominally the same kind of column — at most one can be right.
+3. ~~**Exogenous column asymmetry.**~~ **Downgraded 2026-07-10: benign code smell, no
+   data difference.** An exogenous `nssp` column is the RAW slice (no time transform); an
+   exogenous `nhsn` column is time-shifted (`time_value - 3`), and primary `nssp` is
+   `floor_date(week_start=7) + 3`. Three spellings, but they all resolve to the same
+   Wednesday grid on the actual data: raw nssp is stored 100% on Wednesday (prod and
+   evaluation stores, 24,360 rows), raw nhsn 100% on Saturday. Verified empirically:
+   `floor+3` is a no-op on Wednesday input and reproduces `-3` on every nhsn Saturday
+   (`all(floor+3 == raw-3)` TRUE); the exogenous-nssp column and the primary-nssp column
+   join on `(geo_value, time_value)` with **all 6069 rows matched, values byte-identical**.
+   So the production `windowed_seasonal` join (nhsn primary + nssp exogenous) aligns
+   correctly; switching the exogenous path to `floor+3` changes nothing. Unlike #1 (the
+   *cutoff* asymmetry) this never bites — no differencing experiment needed.
+
+   **Proposed fix (Exp 6, low-risk):** collapse to one named helper, e.g.
+   `align_epiweek_wednesday(d) <- floor_date(d, "week", week_start = 7) + 3`, and call it at
+   every alignment site. It is verified-equivalent to all three current spellings, so it is
+   a pure readability change with no numeric effect. The real smell it removes: the
+   exogenous-nssp branch (`R/flu_assemble.R:114`) applies *no* transform and silently relies
+   on the raw archive being Wednesday-stamped — a signal that changed its reporting day, or a
+   different exogenous signal, would misalign the join to all-NA with no error. The magic
+   `-3` (assumes Saturday input) is likewise fragile. The `floor+3` idiom is already
+   copy-pasted ~9× (`R/flu_assemble.R:92`, `R/utils.R:185`, `R/aux_data_utils.R:746,770`,
+   `scripts/covid_hosp_prod.R:176,223,236`) plus two hardcoded `-3` sites
+   (`R/flu_assemble.R:50`, `R/aux_data_utils.R:736`) — all candidates for the shared helper.
 4. **`sort_by_quantile()` is applied inconsistently.** Explore applies it to flu forecaster
    output (`R/targets/shared_utils.R:68`, "TODO: Hack fix because whitening has edge
    cases"); `covid_hosp_prod.R:312` applies it; **flu prod does not** — it only sorts inside
@@ -188,8 +237,15 @@ Diffing against `as-of-bt3` (Exp 3) yields *digit-identical* numbers to diffing 
 - **Forecaster output shape.** `(geo_value, forecast_date, target_end_date, quantile, value)`;
   quantiles monotone; no NAs; non-negative. Asserting this settles (4).
 - **Units.** Partly done (`scale` / `target_name` on grid rows). The rest is Exp 6 below.
-- **Oracle provenance.** `capture.R` records no revision, so picking the right reference
-  requires reading `git log`. Stamp the jj/git revision into `_manifest.csv` (~10 lines).
+- ~~**Oracle provenance.**~~ **Done.** `capture.R` stamps `reference_date` **and** a source
+  revision (`source_rev`) into `_manifest.csv`, and names the capture folder `<label>-<rev>`:
+  a jj `change_id` when jj is available (stable across amend/squash; re-capturing the same
+  change intentionally overwrites), else the git short hash + `-dirty`. `compare.R` resolves a
+  bare `<label>` to that folder. Backfilled folders use best-guess **git** revs (REFACTOR.md's
+  explicit mappings + folder mtimes vs commit order); low-confidence guesses:
+  `refactored-latest`→`88b7d1f`, `refactored-bt3`→`b8e55b5`, `postA-bt3`→`c1ad910`.
+  A static `jj-musl` binary lives in `~/.local/bin` so captures from rocker stamp change_ids;
+  it is not declared anywhere, so a future Dockerfile/distrobox-assemble should install jj.
 
 ### Exp 6 — consolidate data alignment (normalize-in / denormalize-out)
 
@@ -291,7 +347,12 @@ params**. Each becomes a one-line grid change once the cell is shared.
 - **Miss a metric in `compare.R`'s `value_cols` and it becomes a sort key** — a tiny numeric
   change then scrambles row alignment and surfaces as a bogus "key columns differ".
   (`interval_coverage_50` / `_90` were missing; fixed.)
-- **`EVALUATION_N_DATES=N` selects the tail of `seq.Date("2024-11-20", Sys.Date(), by = 7L)`**
-  (`flu_hosp_evaluation.R:23`), so the dates **move with the calendar**. `postA-bt3` was
-  captured on a week whose last date is 2026-07-08; a capture taken on/after the next Wednesday
-  selects different dates and is NOT comparable. Pin dates explicitly if this matters.
+- **`EVALUATION_N_DATES=N` selects the tail of `seq.Date("2024-11-20", <ref>, by = 7L)`**
+  (`flu_hosp_evaluation.R:23`). Historically `<ref>` was `Sys.Date()`, so the dates **moved
+  with the calendar** and captures a week apart were not comparable. **Now pinnable:** set
+  `FORECAST_REFERENCE_DATE` (an ISO date) to fix `<ref>` for both pipelines — evaluation's
+  window becomes a pure function of `(ref, N)`, and prod-"latest" forecasts as-of `ref`
+  (`epix_as_of(min(ref, versions_end))`, `_flu_prod_shared.R:104,119`). Unset → `Sys.Date()`
+  (current behavior). `capture.R` stamps the effective `reference_date` into `_manifest.csv`
+  and warns when unset. Constraint: `ref >= 2025-12-31` so evaluation's trailing hand-written
+  `seq.Date()` segments stay non-empty and 1:1 aligned.
