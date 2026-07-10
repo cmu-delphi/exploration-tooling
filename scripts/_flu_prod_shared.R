@@ -127,7 +127,7 @@ parameters_and_date_targets <- rlang::list2(
 # (forecaster x outcome_signal x date). flu_assemble builds honest per-signal input
 # (no nhsn/nssp column/source spoof) and the flu2_* adapter runs it. Kept in tar_map
 # (not a plain loop) so targets still provides per-cell caching, crew parallelism,
-# code-invalidation, and per-target seeds. tar_combine splits the branches back into
+# and code-invalidation. tar_combine splits the branches back into
 # forecast_{nhsn,nssp}_full by outcome_signal.
 forecast_targets <- tar_map(
   values = tidyr::expand_grid(
@@ -142,6 +142,15 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast,
     command = {
+      # Seed from the semantic cell key, not the target name. `targets` otherwise
+      # derives each target's seed from its name, so renaming a target silently
+      # moves the forecast for the stochastic forecasters (linear, cdc_baseline,
+      # linear_no_population_scale). Seeded here rather than inside the
+      # forecasters because only the harness knows (signal, date, ahead), and so
+      # the set of stochastic forecasters doesn't have to be tracked by hand.
+      set.seed(targets::tar_seed_create(
+        paste(id, outcome_signal, forecast_date_chr, aheads, sep = "/")
+      ))
       forecaster_fn <- get(forecaster)
       flu_assemble(
         archives = list(

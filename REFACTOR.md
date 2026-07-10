@@ -39,6 +39,8 @@ We tried removing `targets` from the grid (a plain loop) and **reverted** — se
    because `targets` derives each target's seed from its *name* — so renaming a target
    changes the forecast. Any harness replacing the grid must reseed per
    `(forecaster × signal × date × ahead)`. (`grf_quantiles` is explore-only.)
+   **Fixed for flu prod in Exp 7** — the seed is now derived from that semantic key, not
+   the target name. Still true for covid/rsv.
 4. **Two-level cache:** `targets` caches forecast *outputs*; `epix_slide_simple` caches
    as-of *slices* (`R/looping.R:99`, keyed on hash(archive) × date). Preserve both.
 5. **Parallelism worry is likely BLAS oversubscription** — crew spawns `detectCores()-4`
@@ -87,6 +89,7 @@ Verified empty-diff (or explained-diff) at each step; see "Golden status".
 | **Const-prop** | Mode-specific submission/validation/notebook tail moved to `R/flu_outputs.R`; `flu_output_targets(evaluation_mode)` emits it with `g_evaluation_mode` folded out. |
 | **Exp 4** | **Killed the nhsn/nssp spoof.** `flu_assemble()` builds one modeling frame with honest source labels and exogenous column names, replacing the `forecast_nhsn`/`forecast_nssp` split and the `rename(nssp = value)` / `source = "nhsn"` lie. `flu_build_prod2_grid()` is the 16-row signal grid (8 forecasters × {nhsn, nssp}) carrying `outcome_signal / exogenous / primary_source / version_policy / scale / target_name`. `primary_source` threaded through `scaled_pop_seasonal` (defaults `"nhsn"`, so covid/rsv are untouched). |
 | **scale/target_name** | Reporting transform (`scale`: model→submission units; `target_name`: CDC target string) lives on grid rows, read via `flu_report_scale()` / `flu_report_target()` at the submission/scoring/external boundary only. Deliberately **not** applied right after the forecaster — `forecast_*_full` must stay in model units so notebook plots and scoring align with truth. |
+| **Exp 7** | **Semantic seeding.** `set.seed(tar_seed_create(paste(id, outcome_signal, forecast_date_chr, aheads, sep = "/")))` at the top of the forecast command (`_flu_prod_shared.R:144`). The **only deliberately behavior-changing** step so far: it moves the 3 stochastic forecasters and must not be diffed for an empty golden. See below. |
 
 **Loop vs tar_map (resolved).** Exp 5 replaced the grid `tar_map` with one target looping
 internally. That gave up per-cell caching, crew parallelism, `targets`' transitive
@@ -96,6 +99,29 @@ over `flu_build_prod2_grid()` × dates: one `forecast_<id>_<signal>_<date>` per 
 (`pattern = map(aheads)`), then `tar_combine` split by `outcome_signal` into
 `forecast_{nhsn,nssp}_full`. `R/flu_forecast_loop.R` is deleted but lives in git history.
 Not pursued: keeping the loop with a `targets:::hash_imports`-keyed cache, or with `furrr`.
+
+**Exp 7 — semantic seeding (behavior-changing, by design).** Rejected the first proposal
+(an env var read inside each stochastic forecaster, set only by `capture.R`, seeding 42) on
+three grounds: it validates a code path prod never runs, so prod stays name-seeded and the
+brittleness is hidden rather than fixed; it doesn't address the actual defect, which is not
+run-to-run variation (there is none) but that the seed derives from *a string refactors
+change*; and one constant seed gives every `(date, ahead, signal)` cell the *same* RNG
+stream, replacing `targets`' independent per-cell streams with perfectly correlated Monte
+Carlo error across horizons — a modeling change smuggled in as a test fix.
+
+Instead: seed unconditionally in the harness from the semantic cell key, reusing
+`targets::tar_seed_create` (exported; string → valid integer seed) so `targets`' own seed
+derivation is preserved but fed a stable key. `targets` sets its name-derived seed *before*
+evaluating the command, so a `set.seed` inside the command cleanly overrides it. Seeded in
+the harness, not the forecasters, because (a) a forecaster can't see its date/signal/ahead,
+and (b) it removes the need to track *which* forecasters are stochastic — a set that isn't
+stable, since swapping `quantile_reg()` for `rand_forest()` in `g_flu_windowed_seasonal`
+would silently make a deterministic forecaster stochastic. Seeding all 8 costs nothing.
+
+Consequence: **this is the one step whose golden diff must NOT be empty.** Expected shape —
+nonzero for exactly `linear`, `cdc_baseline`, `linear_no_population_scale`; bit-zero for the
+other 5 on both signals. That's the self-check that seeding didn't leak into the
+deterministic path. Re-capture the baseline after landing.
 
 Manifests: `flu_hosp_prod` 410, `flu_hosp_evaluation` 2789, `covid_hosp_prod` 395.
 
@@ -132,9 +158,10 @@ Diffing against `as-of-bt3` (Exp 3) yields *digit-identical* numbers to diffing 
    `forecast_generation_date_int`. Preserved verbatim via the `latest_cutoff` arg of
    `flu_slice_archive` (`R/flu_assemble.R:29`). Only reachable from
    `version_policy == "latest"`, i.e. `seasonal_nssp_latest`. Intentional peeking, or typo?
-2. **3 of 8 forecasters are stochastic** (finding 3). Reproducibility is an accident of
-   `targets` seeding from target names. Decide: explicit per-cell seeding on
-   `(forecaster, signal, date, ahead)`, or accept and document.
+2. ~~**3 of 8 forecasters are stochastic** (finding 3).~~ **Done for flu prod (Exp 7).**
+   Remaining: port to `covid_hosp_prod.R` / rsv, whose harness has a different shape
+   (separate nhsn/nssp targets, `get_partially_applied_forecaster`, `aheads` passed as a
+   vector rather than mapped) so the semantic key differs. No rsv oracle exists.
 3. **Exogenous column asymmetry.** An exogenous `nssp` column is the RAW slice cut at the
    forecast date; an exogenous `nhsn` column is the primary nhsn series, which is
    time-shifted (`time_value - 3`). The spoof concealed this; `flu_exogenous_column`
