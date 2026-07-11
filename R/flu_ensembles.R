@@ -1,6 +1,6 @@
 # Ensemble, weighting, and truth-data computations for the flu production and
 # evaluation pipelines. Extracted verbatim from the per-date ensemble targets in
-# scripts/_flu_prod_shared.R (REFACTOR.md Exp 1) so the logic is testable and no
+# scripts/flu_hosp_prod.R (REFACTOR.md Exp 1) so the logic is testable and no
 # longer duplicated as frozen target-command blocks. Each function is pure in its
 # arguments; the g_* it reads (g_forecaster_params_grid, g_truth_data_date,
 # g_insufficient_data_geos) are pipeline config globals, same as elsewhere.

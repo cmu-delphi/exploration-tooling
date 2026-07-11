@@ -1,15 +1,10 @@
 # Submission, validation, and report-notebook outputs for the flu pipelines.
 #
 # The write/validate/render bodies are extracted verbatim from the per-date
-# ensemble targets. flu_output_targets() assembles the mode-specific tail of the
-# ensemble tar_map with the g_evaluation_mode gating already resolved per pipeline
-# (REFACTOR.md: per-pipeline constant propagation):
-#   - production writes/validates every run and renders the weekly notebook;
-#   - evaluation writes/validates only on the final forecast date and renders no
-#     notebook (that render was dead in evaluation mode).
-# NOTE: in cache mode (g_submission_directory == "cache") these all no-op, so the
-# output oracle cannot exercise the gates; their correctness is by construction
-# (boolean constant fold of the original `!g_evaluation_mode || <final date>`).
+# ensemble targets in scripts/flu_hosp_prod.R, which gates them by mode
+# (production: every run; evaluation: only the final forecast date, no notebook).
+# NOTE: in cache mode (g_submission_directory == "cache") the callers no-op, so
+# the output oracle cannot exercise the mode gates.
 
 flu_write_submission <- function(ensemble_mixture, forecast_date_int) {
   forecast_reference_date <- get_forecast_reference_date(forecast_date_int)
@@ -80,102 +75,3 @@ flu_render_forecast_notebook <- function(forecasts_and_ensembles, truth_data, fo
   )
 }
 
-# Mode-specific tail of the ensemble tar_map. Returns a list of tar_target
-# objects; spliced into the tar_map by build_flu_prod_pipeline(), so their
-# per-date branch references (forecast_date_int, ensemble_mixture, ...) are
-# substituted by tar_map exactly as the inline definitions were.
-flu_output_targets <- function(evaluation_mode) {
-  if (evaluation_mode) {
-    # Evaluation: write/validate only on the final forecast date; no notebook.
-    list(
-      tar_target(
-        name = make_submission_csv,
-        command = if (g_submission_directory != "cache" && as.Date(forecast_date_int) == max(g_forecast_dates)) {
-          flu_write_submission(ensemble_mixture, forecast_date_int)
-        } else {
-          cli_alert_info("Not writing submission (cache dir or non-final evaluation date)")
-        },
-        cue = tar_cue("always")
-      ),
-      tar_target(
-        name = make_climate_submission_csv,
-        command = if (g_submission_directory != "cache" && as.Date(forecast_date_int) == max(g_forecast_dates)) {
-          flu_write_climate_submission(forecast_filtered, forecast_date_int)
-        } else {
-          cli_alert_info("Not writing climate submission (cache dir or non-final evaluation date)")
-        },
-        cue = tar_cue("always")
-      ),
-      tar_target(
-        name = validate_result,
-        command = {
-          make_submission_csv
-          if (g_submission_directory != "cache" && as.Date(forecast_date_int) == max(g_forecast_dates)) {
-            flu_validate_submission(forecast_date_int)
-          } else {
-            "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
-          }
-        }
-      ),
-      tar_target(
-        name = validate_climate_result,
-        command = {
-          make_climate_submission_csv
-          if (g_submission_directory != "cache" && as.Date(forecast_date_int) == max(g_forecast_dates)) {
-            flu_validate_climate_submission(forecast_date_int)
-          } else {
-            "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
-          }
-        }
-      )
-    )
-  } else {
-    # Production: write/validate every run, render the weekly report notebook.
-    list(
-      tar_target(
-        name = make_submission_csv,
-        command = if (g_submission_directory != "cache") {
-          flu_write_submission(ensemble_mixture, forecast_date_int)
-        } else {
-          cli_alert_info("Not writing submission (cache dir)")
-        },
-        cue = tar_cue("always")
-      ),
-      tar_target(
-        name = make_climate_submission_csv,
-        command = if (g_submission_directory != "cache") {
-          flu_write_climate_submission(forecast_filtered, forecast_date_int)
-        } else {
-          cli_alert_info("Not writing climate submission (cache dir)")
-        },
-        cue = tar_cue("always")
-      ),
-      tar_target(
-        name = validate_result,
-        command = {
-          make_submission_csv
-          if (g_submission_directory != "cache") {
-            flu_validate_submission(forecast_date_int)
-          } else {
-            "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
-          }
-        }
-      ),
-      tar_target(
-        name = validate_climate_result,
-        command = {
-          make_climate_submission_csv
-          if (g_submission_directory != "cache") {
-            flu_validate_climate_submission(forecast_date_int)
-          } else {
-            "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
-          }
-        }
-      ),
-      tar_target(
-        name = notebook,
-        command = flu_render_forecast_notebook(forecasts_and_ensembles, truth_data, forecast_date_int, forecast_report_rmd)
-      )
-    )
-  }
-}
