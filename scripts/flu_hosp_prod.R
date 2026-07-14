@@ -128,8 +128,9 @@ g_forecaster_params_grid <- list(
     forecaster = "climatological_model",
     geo_agg = TRUE
   ),
-  seasonal_nssp_latest = tidyr::expand_grid(
-    id = "seasonal_nssp_latest",
+  # Cheats by always using the latest available data revision (as a limit test).
+  seasonal_nssp_cheating = tidyr::expand_grid(
+    id = "seasonal_nssp_cheating",
     forecaster = "scaled_pop_seasonal",
     outcome = "value",
     extra_sources = "nssp",
@@ -147,7 +148,7 @@ g_forecaster_params_grid <- list(
 
 # Explicit columns for the per-forecaster wrapping that used to be smuggled in id
 # strings and closure bodies. run_prod_forecaster() reads these (see step 1c):
-#   as_of_policy      "asof"/"latest": whether train data is as-of the generation
+#   as_of_policy      "asof"/"cheating": whether train data is as-of the generation
 #                     date or the latest available (replaces grepl("latest", id)).
 #   ahead_units       "weeks"/"days": forecaster's expected ahead unit; "days"
 #                     multiplies the ahead by 7.
@@ -161,9 +162,9 @@ g_forecaster_params_grid <- g_forecaster_params_grid %>%
     tibble(
       id = c(
         "cdc_baseline", "linear", "linear_no_population_scale", "windowed_seasonal",
-        "windowed_seasonal_extra_sources", "climate_base", "climate_geo_agged", "seasonal_nssp_latest"
+        "windowed_seasonal_extra_sources", "climate_base", "climate_geo_agged", "seasonal_nssp_cheating"
       ),
-      as_of_policy = c("asof", "asof", "asof", "asof", "asof", "asof", "asof", "latest"),
+      as_of_policy = c("asof", "asof", "asof", "asof", "asof", "asof", "asof", "cheating"),
       ahead_units = c("weeks", "weeks", "weeks", "days", "days", "weeks", "weeks", "days"),
       target_date_shift = c(0L, 0L, 0L, 3L, 3L, 0L, 0L, 3L),
       join_extra_data = c(FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE),
@@ -267,7 +268,7 @@ forecast_targets <- tar_map(
     name = full_data,
     command = {
       # Train data
-      if (as_of_policy == "latest") {
+      if (as_of_policy == "cheating") {
         train_data <- nhsn_archive_data %>%
           epix_as_of(nhsn_archive_data$versions_end) %>%
           filter(time_value < as.Date(forecast_generation_date_int))
@@ -282,7 +283,7 @@ forecast_targets <- tar_map(
           time_value = time_value - 3,
           source = "nhsn"
         )
-      if (as_of_policy != "latest") {
+      if (as_of_policy != "cheating") {
         train_data %<>%
           data_substitutions(
             flu_data_substitutions,
@@ -302,7 +303,7 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_nssp,
     command = {
-      if (as_of_policy == "latest") {
+      if (as_of_policy == "cheating") {
         nssp_data <- nssp_archive_data %>%
           epix_as_of(nssp_archive_data$versions_end) %>%
           filter(time_value < as.Date(forecast_generation_date_int))
@@ -333,7 +334,7 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_nhsn,
     command = {
-      if (as_of_policy == "latest") {
+      if (as_of_policy == "cheating") {
         nssp_data <- nssp_archive_data %>%
           epix_as_of(nssp_archive_data$versions_end) %>%
           filter(time_value < as.Date(forecast_date_int))
