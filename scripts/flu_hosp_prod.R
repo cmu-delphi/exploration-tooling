@@ -316,21 +316,13 @@ forecast_targets <- tar_map(
       # As-of slice of the canonical archive (season info, geo rename, Wednesday
       # shift, source stamp, insufficient-geo drop, and the ILI+/flusurv extras
       # are already baked in). Only the version-dependent steps remain here.
-      if (as_of_policy == "cheating") {
-        full_data <- nhsn_prod_archive %>%
-          epix_as_of(nhsn_prod_archive$versions_end) %>%
-          filter(time_value < as.Date(forecast_generation_date_int))
-      } else {
-        full_data <- nhsn_prod_archive %>%
-          epix_as_of(min(as.Date(forecast_generation_date_int), nhsn_prod_archive$versions_end)) %>%
-          data_substitutions(
-            flu_data_substitutions,
-            as.Date(forecast_generation_date_int)
-          )
-      }
-      attributes(full_data)$metadata$other_keys <- "source"
-      attributes(full_data)$metadata$as_of <- as.Date(forecast_date_int)
-      full_data
+      make_forecast_snapshot(
+        nhsn_prod_archive,
+        forecast_date = forecast_date_int,
+        generation_date = forecast_generation_date_int,
+        as_of_policy = as_of_policy,
+        substitutions = flu_data_substitutions
+      )
     }
   ),
   tar_target(
@@ -338,16 +330,12 @@ forecast_targets <- tar_map(
     command = {
       # As-of slice of the canonical nssp-as-target archive (rename, week-align,
       # source stamp, season info already baked in).
-      if (as_of_policy == "cheating") {
-        nssp_data <- nssp_target_archive %>%
-          epix_as_of(nssp_target_archive$versions_end) %>%
-          filter(time_value < as.Date(forecast_generation_date_int))
-      } else {
-        nssp_data <- nssp_target_archive %>%
-          epix_as_of(min(as.Date(forecast_generation_date_int), nssp_target_archive$versions_end))
-      }
-      attributes(nssp_data)$metadata$as_of <- as.Date(forecast_date_int)
-      attributes(nssp_data)$metadata$other_keys <- "source"
+      nssp_data <- make_forecast_snapshot(
+        nssp_target_archive,
+        forecast_date = forecast_date_int,
+        generation_date = forecast_generation_date_int,
+        as_of_policy = as_of_policy
+      )
       # spoofing the name to switch their roles
       full_data_modified <- full_data %>%
         rename(nssp = value) %>%
