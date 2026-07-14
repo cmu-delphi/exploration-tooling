@@ -309,24 +309,32 @@ forecast_targets <- tar_map(
       )
     }
   ),
+  # As-of slice of the canonical nssp-as-target archive (rename, week-align,
+  # source stamp, season info already baked in). Hoisted into its own snapshot
+  # target so forecast_nssp mirrors forecast_nhsn: one snapshot target feeding a
+  # single run_forecaster call, with only the exogenous extra_data prep inline.
   tar_target(
-    name = forecast_nssp,
+    name = nssp_forecast_data,
     command = {
-      # As-of slice of the canonical nssp-as-target archive (rename, week-align,
-      # source stamp, season info already baked in).
-      nssp_data <- make_forecast_snapshot(
+      make_forecast_snapshot(
         nssp_target_archive,
         forecast_date = forecast_date_int,
         generation_date = forecast_generation_date_int,
         as_of_policy = as_of_policy
       )
-      # spoofing the name to switch their roles
+    }
+  ),
+  tar_target(
+    name = forecast_nssp,
+    command = {
+      # Exogenous input: full_data (nhsn) spoofed into the `nssp` column to switch
+      # its role from target to predictor for the nssp-as-target forecast.
       full_data_modified <- full_data %>%
         rename(nssp = value) %>%
         filter(source == "nhsn") %>%
         select(-c(source, epiweek, epiyear, season, season_week))
       run_forecaster(
-        snapshot = nssp_data, forecaster = forecaster, aheads = aheads * ahead_multiplier,
+        snapshot = nssp_forecast_data, forecaster = forecaster, aheads = aheads * ahead_multiplier,
         params = params, param_names = param_names, id = id,
         target_date_shift = target_date_shift,
         join_extra_data = join_extra_data, extra_data = full_data_modified,
