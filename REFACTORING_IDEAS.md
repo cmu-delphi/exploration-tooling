@@ -181,6 +181,44 @@ per project and land it as its own commit.
   flusurv/ILI+ extend into the backtest window (difference is small and more
   honest if so).
 
+### Phase 0 status (landed 2026-07-13, commit 00c5ba11 / stuvtpur)
+
+Flu prod done: `nhsn_prod_archive` (season info, usa->us, Wednesday shift,
+source stamp, geo drop, ILI+/flusurv extras folded in as `version =
+time_value` rows) and `nssp_target_archive` (nssp-as-outcome spoofing built
+once). `joined_latest_extra_data` deleted. `full_data`/`forecast_nssp` are
+now as-of slice + substitutions + metadata stamping. Raw archives kept on
+purpose for `nhsn_latest_data`/`nssp_latest_data`/`truth_data` (Saturday
+convention, raw column names for scoring/truth) and for `forecast_nhsn`'s
+exogenous nssp (needs the `nssp` column name).
+
+Behavior-preservation verified empirically against the cached store
+(2026-07-13):
+
+- Extras are strictly historical: ILI+ time_values end 2024-07-24, flusurv
+  ends 2020-04-22 — both before the earliest forecast date (2024-11-20). So
+  the cheating path's `time_value < generation_date` filter and the
+  substitutions join are no-ops on the extras; the fold-in reproduces the
+  old unconditional `versions_end` bind exactly.
+- `flu_data_substitutions.csv` dates span 2025-01-01..2026-02-11 — no
+  (geo, time) collision with the extras.
+- Note for future agents: `aux_data/` and the `flu_hosp_prod` store ARE
+  materialized locally (`make pull`), so cached upstream targets can be
+  inspected with `tar_read(..., store = "flu_hosp_prod")` without network.
+  Only `nhsn_archive_data`/`nssp_archive_data` (cue = always) refetch on
+  `tar_make`, and that fetch is cheap (same as the 5-min polling scripts).
+  Use `distrobox enter rocker --` for R.
+
+Backtest verification (2026-07-14): full `make prod-flu-backtest` ran clean
+post-refactor (9051 targets, 0 errors, 30m). Compared against the
+pre-refactor store (backed up at `_local/flu_hosp_prod_pre_phase0_backup`):
+all 51 shared targets — every `full_data_*`, `forecast_nhsn_*`, and
+`forecast_nssp_*` per-(forecaster, date) target from the last three weekly
+prod runs — are identical (row-order/attribute-insensitive compare). The
+only diffs were the `forecast_*_full` tar_combine aggregates, trivially
+larger because the backtest covers all dates while the old store held three
+weeks. Phase 0 is behavior-preserving; the backup can be deleted.
+
 ### Open decisions
 
 - Score-time population-column sniffing (review 5) rides along in phase 2 as
