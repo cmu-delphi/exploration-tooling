@@ -39,7 +39,11 @@ g_forecaster_parameter_combinations <- get_flu_forecaster_params()
 # Targets-readable object used for running the pipeline.
 g_forecaster_params_grid <- g_forecaster_parameter_combinations %>%
   imap(\(x, i) make_forecaster_grid(x, i)) %>%
-  bind_rows()
+  bind_rows() %>%
+  # Spec columns read by run_forecaster()/scoring (previously a disease grep and a
+  # score-time population-column sniff). Flu forecasts are per-100k (rescaled to
+  # counts at scoring) and get the quantile-whitening workaround.
+  mutate(sort_quantiles = TRUE, output_scale = "per100k")
 
 # used after forecast_targets, this rescales them to be on a counts basis
 custom_targets <- list2(

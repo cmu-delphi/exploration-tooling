@@ -34,7 +34,11 @@ g_forecaster_parameter_combinations <- get_covid_forecaster_params()
 # Targets-readable object used for running the pipeline.
 g_forecaster_params_grid <- g_forecaster_parameter_combinations %>%
   imap(\(x, i) make_forecaster_grid(x, i)) %>%
-  bind_rows()
+  bind_rows() %>%
+  # Spec columns read by run_forecaster()/scoring (previously a disease grep and a
+  # score-time population-column sniff). Covid forecasts are scored as-is (no
+  # rescale; hhs_evaluation_data has no population column) and are not whitened.
+  mutate(sort_quantiles = FALSE, output_scale = "count")
 
 # Create targets
 # parameter_targets creates
