@@ -298,6 +298,35 @@ Known gaps made explicit rather than fixed (outputs preserved):
   `make_forecast_snapshot` until the asof/cheating branches agree on which
   date governs.
 
+### Phase 3 status (landed 2026-07-14, commits pppxoxus + oymnnwmr)
+
+Spec columns unified in `make_forecaster_grid()` via a
+`FORECASTER_SPEC_DEFAULTS` constant in `R/utils.R` (`as_of_policy = "asof"`,
+`ahead_multiplier = 1L`, `target_date_shift = 0L`, `join_extra_data = FALSE`,
+`filter_sources = NULL`, `excluded_geos = NULL`, `sort_quantiles = FALSE`,
+`output_scale = "count"`). Prod's separate metadata `left_join` table is
+deleted — each flu prod forecaster tibble declares overrides inline. Explore
+per-script `mutate` stamping deleted: covid rides the defaults; flu declares
+`sort_quantiles = TRUE` / `output_scale = "per100k"` in
+`get_flu_forecaster_params()` after `add_id` (spec columns stay out of the
+id hash; ids unchanged).
+
+Deviation: the sketch's "standardize aheads on days, retire ahead_units" is
+not achievable byte-identically — prod mixes week-native forecasters
+(baseline/linear/climate compute `target_end_date = reference + ahead*7`)
+with day-native ones, and the weekly `aheads` target `-1:3` is also consumed
+by the ensembles (`seq(min,max)`, `/7`). Instead: per-forecaster
+`ahead_multiplier` (1 or 7) applied at the call site
+(`aheads * ahead_multiplier`), and `run_forecaster` dropped `ahead_units`
+entirely — the runner is unit-agnostic, honoring the sketch's intent.
+
+Verified: tests at baseline (80 PASS) after each commit; grid-information
+equivalence old-vs-new for flu prod + flu/covid explore (rows, ids, params,
+spec columns; all three manifests still build); old-vs-new runner
+byte-identical incl. `target_end_date` on cached snapshots for shift-0,
+shift-3, and cheating+extra-join forecasters; explore recompute maxd=0 vs
+cache (crushing.papillon, 2 dates). Backtest skipped as redundant.
+
 ### Open decisions
 
 - (resolved in phase 2) Score-time population-column sniffing is now the
