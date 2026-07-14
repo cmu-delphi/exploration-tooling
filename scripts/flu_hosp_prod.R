@@ -97,7 +97,7 @@ g_forecaster_params_grid <- list(
     no_intercept = TRUE,
     population_scale = FALSE
   ),
-  windowed_seasonal = tidyr::expand_grid(
+  windowed_seasonal = tibble(
     id = "windowed_seasonal",
     forecaster = "scaled_pop_seasonal",
     outcome = "value",
@@ -107,7 +107,7 @@ g_forecaster_params_grid <- list(
     lags = list(c(0, 7)),
     keys_to_ignore = g_very_latent_locations
   ),
-  windowed_seasonal_extra_sources = tidyr::expand_grid(
+  windowed_seasonal_extra_sources = tibble(
     id = "windowed_seasonal_extra_sources",
     forecaster = "scaled_pop_seasonal",
     outcome = "value",
@@ -129,7 +129,7 @@ g_forecaster_params_grid <- list(
     geo_agg = TRUE
   ),
   # Cheats by always using the latest available data revision (as a limit test).
-  seasonal_nssp_cheating = tidyr::expand_grid(
+  seasonal_nssp_cheating = tibble(
     id = "seasonal_nssp_cheating",
     forecaster = "scaled_pop_seasonal",
     outcome = "value",
