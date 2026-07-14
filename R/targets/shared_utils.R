@@ -60,10 +60,12 @@ create_forecast_targets <- function() {
       command = {
         # Same runner as prod: snapshot the archive as-of each forecast date and
         # forecast. Explore is the degenerate case of run_forecaster's wrapping
-        # (asof policy, ahead already in days so ahead_units = "weeks", no source
-        # filter/extra join/geo exclusion). `sort_quantiles` is a spec column
-        # (was a `g_disease == "flu"` grep). target_end_date stays Wednesday here;
-        # the Wednesday->Saturday shift is applied downstream (score/combine).
+        # (asof policy, no source filter/extra join/geo exclusion). Explore's
+        # aheads are already in days and its forecasters are day-native, so
+        # ahead_multiplier is 1 (the make_forecaster_grid default). `sort_quantiles`
+        # is a spec column (was a `g_disease == "flu"` grep). target_end_date stays
+        # Wednesday here; the Wednesday->Saturday shift is applied downstream
+        # (score/combine).
         map(forecast_dates, function(fdate) {
           run_forecaster(
             snapshot = make_forecast_snapshot(
@@ -73,7 +75,7 @@ create_forecast_targets <- function() {
               cache_key = "joined_archive_data"
             ),
             forecaster = forecaster,
-            aheads = aheads,
+            aheads = aheads * ahead_multiplier,
             params = params,
             param_names = param_names,
             id = id,
