@@ -210,27 +210,55 @@ parameters_and_date_targets <- rlang::list2(
   ),
   create_flu_data_targets(),
   tar_target(
-    joined_latest_extra_data,
-    command = {
-      joined_archive_data %>%
-        epix_as_of(joined_archive_data$versions_end) %>%
-        mutate(epiweek = epiweek(time_value), epiyear = epiyear(time_value)) %>%
-        filter((agg_level == "state") | (agg_level == "nation")) %>%
-        select(geo_value, source, time_value, hhs, season, season_week, epiweek, epiyear) %>%
-        rename(value = hhs) %>%
-        filter(source != "nhsn")
-    }
-  ),
-  tar_target(
     name = nhsn_archive_data,
     command = {
       get_nhsn_data_archive("flu")
     },
     cue = tar_cue("always")
   ),
+  # Canonical training archive: the version-independent munging that used to run
+  # per (forecaster x date) inside full_data, hoisted here so it runs once. The
+  # per-date full_data target is now just an as-of slice + data substitutions +
+  # metadata stamping.
+  tar_target(
+    name = nhsn_prod_archive,
+    command = {
+      # season info is computed on the Saturday-labeled time_values (matching the
+      # old order) *before* the Wednesday shift, so the season columns are
+      # identical to the previous per-date computation.
+      nhsn_dt <- nhsn_archive_data$DT %>%
+        add_season_info() %>%
+        mutate(
+          geo_value = ifelse(geo_value == "usa", "us", geo_value),
+          time_value = time_value - 3,
+          source = "nhsn"
+        ) %>%
+        filter(geo_value %nin% g_insufficient_data_geos)
+      # ILI+/flusurv historical augmentation rows (static, finalized data for the
+      # seasonal forecasters). Previously bound at joined_archive_data's
+      # versions_end into every full_data snapshot. Folded in here as faux-
+      # versioned rows with version = time_value: these are historical seasons
+      # (time_values predate the forecast window), so every as-of slice includes
+      # all of them exactly as the old unconditional bind did, while keeping the
+      # archive honestly versioned like the explore pipeline.
+      extra_dt <- joined_archive_data %>%
+        epix_as_of(joined_archive_data$versions_end) %>%
+        mutate(epiweek = epiweek(time_value), epiyear = epiyear(time_value)) %>%
+        filter((agg_level == "state") | (agg_level == "nation")) %>%
+        select(geo_value, source, time_value, hhs, season, season_week, epiweek, epiyear) %>%
+        rename(value = hhs) %>%
+        filter(source != "nhsn") %>%
+        mutate(version = time_value)
+      bind_rows(nhsn_dt, extra_dt) %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+    }
+  ),
   tar_target(
     name = nhsn_latest_data,
     command = {
+      # Uses the *raw* archive on purpose: truth_data and scoring want
+      # Saturday-labeled time_values and the raw `value`/geo names, not the
+      # canonical Wednesday-shifted archive.
       nhsn_archive_data %>%
         epix_as_of(min(g_reference_date, nhsn_archive_data$versions_end)) %>%
         filter(geo_value %nin% g_insufficient_data_geos)
@@ -243,9 +271,27 @@ parameters_and_date_targets <- rlang::list2(
     },
     cue = tar_cue("always")
   ),
+  # Canonical nssp-as-target archive: the version-independent "spoofing"
+  # transforms (rename nssp -> value, week-align to Wednesday, stamp source,
+  # add season info) hoisted out of the per-date forecast_nssp target.
+  tar_target(
+    name = nssp_target_archive,
+    command = {
+      nssp_archive_data$DT %>%
+        rename(value = nssp) %>%
+        mutate(
+          time_value = floor_date(time_value, "week", week_start = 7) + 3,
+          source = "nhsn"
+        ) %>%
+        add_season_info() %>%
+        as_epi_archive(other_keys = "source", compactify = TRUE)
+    }
+  ),
   tar_target(
     name = nssp_latest_data,
     command = {
+      # Raw archive on purpose (see nhsn_latest_data): keeps the `nssp` column and
+      # Saturday time_values for truth_data / scoring.
       nssp_archive_data %>%
         epix_as_of(min(g_reference_date, nssp_archive_data$versions_end))
     }
@@ -267,34 +313,21 @@ forecast_targets <- tar_map(
   tar_target(
     name = full_data,
     command = {
-      # Train data
+      # As-of slice of the canonical archive (season info, geo rename, Wednesday
+      # shift, source stamp, insufficient-geo drop, and the ILI+/flusurv extras
+      # are already baked in). Only the version-dependent steps remain here.
       if (as_of_policy == "cheating") {
-        train_data <- nhsn_archive_data %>%
-          epix_as_of(nhsn_archive_data$versions_end) %>%
+        full_data <- nhsn_prod_archive %>%
+          epix_as_of(nhsn_prod_archive$versions_end) %>%
           filter(time_value < as.Date(forecast_generation_date_int))
       } else {
-        train_data <- nhsn_archive_data %>%
-          epix_as_of(min(as.Date(forecast_generation_date_int), nhsn_archive_data$versions_end))
-      }
-      train_data %<>%
-        add_season_info() %>%
-        mutate(
-          geo_value = ifelse(geo_value == "usa", "us", geo_value),
-          time_value = time_value - 3,
-          source = "nhsn"
-        )
-      if (as_of_policy != "cheating") {
-        train_data %<>%
+        full_data <- nhsn_prod_archive %>%
+          epix_as_of(min(as.Date(forecast_generation_date_int), nhsn_prod_archive$versions_end)) %>%
           data_substitutions(
             flu_data_substitutions,
             as.Date(forecast_generation_date_int)
           )
       }
-      train_data %<>%
-        filter(geo_value %nin% g_insufficient_data_geos)
-      attributes(train_data)$metadata$as_of <- as.Date(forecast_date_int)
-      full_data <- train_data %>%
-        bind_rows(joined_latest_extra_data)
       attributes(full_data)$metadata$other_keys <- "source"
       attributes(full_data)$metadata$as_of <- as.Date(forecast_date_int)
       full_data
@@ -303,20 +336,16 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_nssp,
     command = {
+      # As-of slice of the canonical nssp-as-target archive (rename, week-align,
+      # source stamp, season info already baked in).
       if (as_of_policy == "cheating") {
-        nssp_data <- nssp_archive_data %>%
-          epix_as_of(nssp_archive_data$versions_end) %>%
+        nssp_data <- nssp_target_archive %>%
+          epix_as_of(nssp_target_archive$versions_end) %>%
           filter(time_value < as.Date(forecast_generation_date_int))
       } else {
-        nssp_data <- nssp_archive_data %>%
-          epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
+        nssp_data <- nssp_target_archive %>%
+          epix_as_of(min(as.Date(forecast_generation_date_int), nssp_target_archive$versions_end))
       }
-
-      nssp_data %<>%
-        rename(value = nssp) %>%
-        mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
-        mutate(source = "nhsn") %>%
-        add_season_info()
       attributes(nssp_data)$metadata$as_of <- as.Date(forecast_date_int)
       attributes(nssp_data)$metadata$other_keys <- "source"
       # spoofing the name to switch their roles
@@ -334,6 +363,8 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_nhsn,
     command = {
+      # nssp here is an exogenous source (extra_sources = "nssp"), so keep the raw
+      # archive with its `nssp` column rather than the renamed target archive.
       if (as_of_policy == "cheating") {
         nssp_data <- nssp_archive_data %>%
           epix_as_of(nssp_archive_data$versions_end) %>%

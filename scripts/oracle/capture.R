@@ -102,7 +102,8 @@ snapshot_targets <- c(
   "nssp_archive_data",
   "nhsn_latest_data",
   "nssp_latest_data",
-  "joined_latest_extra_data",
+  "nhsn_prod_archive",
+  "nssp_target_archive",
   # forecasts + ensembles
   "forecast_nhsn_full",
   "forecast_nssp_full",
