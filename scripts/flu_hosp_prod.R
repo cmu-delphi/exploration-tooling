@@ -145,6 +145,38 @@ g_forecaster_params_grid <- list(
   bind_rows() %>%
   select(-family)
 
+# Explicit columns for the per-forecaster wrapping that used to be smuggled in id
+# strings and closure bodies. run_prod_forecaster() reads these (see step 1c):
+#   as_of_policy      "asof"/"latest": whether train data is as-of the generation
+#                     date or the latest available (replaces grepl("latest", id)).
+#   ahead_units       "weeks"/"days": forecaster's expected ahead unit; "days"
+#                     multiplies the ahead by 7.
+#   target_date_shift days added to target_end_date after forecasting (Wed->Sat).
+#   join_extra_data   whether to left-join extra_data before forecasting (and drop
+#                     the resulting source column after).
+#   filter_sources    if non-NULL, keep only these sources in the input data.
+#   excluded_geos     geos dropped from the output.
+g_forecaster_params_grid <- g_forecaster_params_grid %>%
+  left_join(
+    tibble(
+      id = c(
+        "cdc_baseline", "linear", "linear_no_population_scale", "windowed_seasonal",
+        "windowed_seasonal_extra_sources", "climate_base", "climate_geo_agged", "seasonal_nssp_latest"
+      ),
+      as_of_policy = c("asof", "asof", "asof", "asof", "asof", "asof", "asof", "latest"),
+      ahead_units = c("weeks", "weeks", "weeks", "days", "days", "weeks", "weeks", "days"),
+      target_date_shift = c(0L, 0L, 0L, 3L, 3L, 0L, 0L, 3L),
+      join_extra_data = c(FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE),
+      filter_sources = list(
+        NULL, c("nhsn", "nssp"), NULL, NULL, NULL, c("nhsn", "nssp"), c("nhsn", "nssp"), NULL
+      ),
+      excluded_geos = list(
+        NULL, NULL, NULL, NULL, c("mo", "wy"), NULL, NULL, c("mo", "wy")
+      )
+    ),
+    by = "id"
+  )
+
 
 # ================================ PARAMETERS AND DATA TARGETS ================================
 parameters_and_date_targets <- rlang::list2(
