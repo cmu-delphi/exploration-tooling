@@ -327,6 +327,37 @@ byte-identical incl. `target_end_date` on cached snapshots for shift-0,
 shift-3, and cheating+extra-join forecasters; explore recompute maxd=0 vs
 cache (crushing.papillon, 2 dates). Backtest skipped as redundant.
 
+### Phase 4 status (landed 2026-07-14, commits mvmmzvzl + wxnolmzv)
+
+Flu prod now has the target shape the sketch asked for: one snapshot target
+per input feeding a single `run_forecaster` call. `nssp_forecast_data` (as-of
+slice of `nssp_target_archive` via `make_forecast_snapshot`) was hoisted out
+of `forecast_nssp`, mirroring `full_data`/`forecast_nhsn`; the only inline
+prep left in the forecast targets is exogenous `extra_data` wrangling (the
+nhsn-spoofed-as-nssp rename, and `forecast_nhsn`'s raw nssp slice with its
+deliberate `cheating_cutoff = forecast_date` divergence — see phase 1/2
+notes). Explore's side was already in this shape since phase 2
+(`create_forecast_targets` maps `make_forecast_snapshot |> run_forecaster`
+over dates). Branching shapes unchanged, per the sketch. A README section
+documents the shared spec/runner wiring for forecaster authors.
+
+Verified (2026-07-14): full `make prod-flu-backtest` post-refactor ran clean
+(10,416 targets, 0 errors) and was compared against the pre-phase-4 store
+backup (`_local/flu_hosp_prod_pre_phase4_backup`): all 7,764 shared
+forecast-family targets (`full_data_*`, `forecast_nhsn_*`, `forecast_nssp_*`,
+ensembles/aggregates) are hash-identical. The 688 only-new targets are
+exactly the hoisted `nssp_forecast_data_*` (8 forecasters × 86 dates). The
+317 differing targets are all downstream of the cue-always archive refetch,
+not the refactor: `nhsn_latest_data` (same row count, 790 revised values —
+routine NHSN history revisions), `truth_data_*`/scores (inherit those
+revisions; forecasts unchanged), and `make_*submission_csv_*` (cue-always
+no-op in backtest mode; stores a cli message id). The backup can be deleted.
+
+Remaining from the plan's "order of work": covid prod (still pre-phase-0:
+`Sys.Date()`, in-target munging, no canonical archives) and rsv prod (no
+script yet) each need their own phase-0 canonicalization before adopting the
+shared snapshot/runner.
+
 ### Open decisions
 
 - (resolved in phase 2) Score-time population-column sniffing is now the
