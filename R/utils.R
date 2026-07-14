@@ -68,11 +68,41 @@ get_single_id <- function(param_list) {
     paste(sep = ".", collapse = ".")
 }
 
+# Per-forecaster wrapping/metadata read by run_forecaster() and scoring rather
+# than passed to the forecaster as a modeling parameter. Declared inline in the
+# parameter tibbles; make_forecaster_grid() separates them from the params
+# list-column and fills these defaults for whatever a forecaster omits, so both
+# explore and prod grids carry them uniformly (replacing prod's metadata
+# left_join and explore's per-script column stamping).
+#   as_of_policy      "asof"/"cheating": train on as-of-generation-date data or
+#                     the latest available revision.
+#   ahead_multiplier  factor the (weekly) ahead is multiplied by before it
+#                     reaches the forecaster: 1 for week-native forecasters
+#                     (cdc/linear/climate), 7 for day-native ones (scaled_pop*).
+#   target_date_shift days added to target_end_date after forecasting (Wed->Sat).
+#   join_extra_data   left-join extra_data before forecasting (drop source after).
+#   filter_sources    if non-NULL, keep only these sources in the input data.
+#   excluded_geos     geos dropped from the output.
+#   sort_quantiles    enforce quantile monotonicity (the flu whitening workaround).
+#   output_scale      "count"/"per100k": whether scoring rescales to counts.
+FORECASTER_SPEC_DEFAULTS <- list(
+  as_of_policy = "asof",
+  ahead_multiplier = 1L,
+  target_date_shift = 0L,
+  join_extra_data = FALSE,
+  filter_sources = NULL,
+  excluded_geos = NULL,
+  sort_quantiles = FALSE,
+  output_scale = "count"
+)
+
 #' Make a forecaster grid.
 #'
 #' Convert a tibble of forecasters and their parameters to a specific format
 #' that we can iterate over in targets. Currently only `forecaster` and
-#' `trainer` can be symbols.
+#' `trainer` can be symbols. Any of the columns in `FORECASTER_SPEC_DEFAULTS`
+#' are treated as per-forecaster spec/metadata (kept as top-level grid columns,
+#' filled with defaults when absent) rather than forecaster parameters.
 #'
 #' @param tib the tibble of parameters. Must have the forecaster and trainer
 #' columns, everything else is optional.
@@ -82,9 +112,10 @@ make_forecaster_grid <- function(tib, family) {
   if ("trainer" %in% colnames(tib)) {
     tib$trainer <- rlang::syms(tib$trainer)
   }
-  # turns a tibble into a list of named lists
+  spec_names <- names(FORECASTER_SPEC_DEFAULTS)
+  # turns a tibble into a list of named lists (spec columns are not params)
   params_list <- tib %>%
-    select(-forecaster, -id) %>%
+    select(-any_of(c("forecaster", "id", spec_names))) %>%
     split(seq_len(nrow(.))) %>%
     unname() %>%
     lapply(as.list)
@@ -112,6 +143,20 @@ make_forecaster_grid <- function(tib, family) {
       params = params_list,
       param_names = map(params_list, names)
     )
+  }
+
+  # Attach spec columns, taking each forecaster's inline override when present
+  # and the shared default otherwise.
+  for (col in spec_names) {
+    default <- FORECASTER_SPEC_DEFAULTS[[col]]
+    if (col %in% colnames(tib)) {
+      out[[col]] <- tib[[col]]
+    } else if (is.null(default)) {
+      # list-valued spec (filter_sources / excluded_geos): default is NULL
+      out[[col]] <- rep(list(NULL), nrow(out))
+    } else {
+      out[[col]] <- rep(default, nrow(out))
+    }
   }
 
   return(out)

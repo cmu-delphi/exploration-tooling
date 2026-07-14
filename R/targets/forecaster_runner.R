@@ -11,7 +11,8 @@
 # calls it once per (forecaster, date) target.
 #
 # @param snapshot          an as-of epi_df from make_forecast_snapshot().
-# @param ahead_units       "weeks" (ahead as-is) or "days" (ahead * 7).
+# @param ahead_multiplier  factor applied to ahead before forecasting: 1 for
+#                          week-native forecasters, 7 for day-native ones.
 # @param target_date_shift days added to target_end_date after forecasting.
 # @param join_extra_data   left-join extra_data before forecasting and drop the
 #                          resulting source column afterwards.
@@ -26,13 +27,11 @@
 #   as_of); each pipeline aligns it downstream as it needs.
 run_forecaster <- function(
   snapshot, forecaster, aheads, params, param_names, id,
-  ahead_units = "weeks", target_date_shift = 0L,
+  ahead_multiplier = 1L, target_date_shift = 0L,
   join_extra_data = FALSE, extra_data = NULL,
   filter_sources = NULL, excluded_geos = NULL,
   sort_quantiles = FALSE
 ) {
-  ahead_multiplier <- if (ahead_units == "days") 7 else 1
-
   if (!is.null(filter_sources) && "source" %in% colnames(snapshot)) {
     snapshot <- snapshot %>% filter(source %in% filter_sources)
   }

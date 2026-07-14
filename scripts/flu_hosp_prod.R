@@ -72,11 +72,13 @@ if (!g_backtest_mode) {
 }
 
 # Forecaster grid — behavior is defined by (id, bare forecaster function,
-# params). Per-forecaster wrapping that isn't yet a parameter (ahead-unit
-# conversion, target-date shift, extra-source join, source/geo filtering, as-of
-# policy) is applied by run_forecaster(). Each row is built via
-# make_forecaster_grid() so the params list-column matches the exploration
-# convention (trainer stored as a symbol, lags unwrapped).
+# params). Per-forecaster wrapping that isn't a modeling parameter (ahead
+# multiplier, target-date shift, extra-source join, source/geo filtering, as-of
+# policy) is declared inline as spec columns and applied by run_forecaster();
+# make_forecaster_grid() separates them from the params list-column and fills
+# defaults (see FORECASTER_SPEC_DEFAULTS) for whatever a forecaster omits. Each
+# row is built via make_forecaster_grid() so the params list-column matches the
+# exploration convention (trainer stored as a symbol, lags unwrapped).
 g_forecaster_params_grid <- list(
   cdc_baseline = tibble(
     id = "cdc_baseline",
@@ -87,7 +89,8 @@ g_forecaster_params_grid <- list(
     forecaster = "forecaster_baseline_linear",
     residual_tail = 0.99,
     residual_center = 0.35,
-    no_intercept = TRUE
+    no_intercept = TRUE,
+    filter_sources = list(c("nhsn", "nssp"))
   ),
   linear_no_population_scale = tibble(
     id = "linear_no_population_scale",
@@ -105,7 +108,9 @@ g_forecaster_params_grid <- list(
     seasonal_method = "window",
     pop_scaling = FALSE,
     lags = list(c(0, 7)),
-    keys_to_ignore = g_very_latent_locations
+    keys_to_ignore = g_very_latent_locations,
+    ahead_multiplier = 7L,
+    target_date_shift = 3L
   ),
   windowed_seasonal_extra_sources = tibble(
     id = "windowed_seasonal_extra_sources",
@@ -117,16 +122,22 @@ g_forecaster_params_grid <- list(
     drop_non_seasons = TRUE,
     pop_scaling = FALSE,
     lags = list(list(c(0, 7), c(0, 7))),
-    keys_to_ignore = g_very_latent_locations
+    keys_to_ignore = g_very_latent_locations,
+    ahead_multiplier = 7L,
+    target_date_shift = 3L,
+    join_extra_data = TRUE,
+    excluded_geos = list(c("mo", "wy"))
   ),
   climate_base = tibble(
     id = "climate_base",
-    forecaster = "climatological_model"
+    forecaster = "climatological_model",
+    filter_sources = list(c("nhsn", "nssp"))
   ),
   climate_geo_agged = tibble(
     id = "climate_geo_agged",
     forecaster = "climatological_model",
-    geo_agg = TRUE
+    geo_agg = TRUE,
+    filter_sources = list(c("nhsn", "nssp"))
   ),
   # Cheats by always using the latest available data revision (as a limit test).
   seasonal_nssp_cheating = tibble(
@@ -139,44 +150,17 @@ g_forecaster_params_grid <- list(
     drop_non_seasons = TRUE,
     pop_scaling = FALSE,
     lags = list(list(c(0, 7), c(0, 7))),
-    keys_to_ignore = g_very_latent_locations
+    keys_to_ignore = g_very_latent_locations,
+    as_of_policy = "cheating",
+    ahead_multiplier = 7L,
+    target_date_shift = 3L,
+    join_extra_data = TRUE,
+    excluded_geos = list(c("mo", "wy"))
   )
 ) %>%
   imap(\(tib, family) make_forecaster_grid(tib, family)) %>%
   bind_rows() %>%
   select(-family)
-
-# Explicit columns for the per-forecaster wrapping that used to be smuggled in id
-# strings and closure bodies. run_forecaster() reads these (see step 1c):
-#   as_of_policy      "asof"/"cheating": whether train data is as-of the generation
-#                     date or the latest available (replaces grepl("latest", id)).
-#   ahead_units       "weeks"/"days": forecaster's expected ahead unit; "days"
-#                     multiplies the ahead by 7.
-#   target_date_shift days added to target_end_date after forecasting (Wed->Sat).
-#   join_extra_data   whether to left-join extra_data before forecasting (and drop
-#                     the resulting source column after).
-#   filter_sources    if non-NULL, keep only these sources in the input data.
-#   excluded_geos     geos dropped from the output.
-g_forecaster_params_grid <- g_forecaster_params_grid %>%
-  left_join(
-    tibble(
-      id = c(
-        "cdc_baseline", "linear", "linear_no_population_scale", "windowed_seasonal",
-        "windowed_seasonal_extra_sources", "climate_base", "climate_geo_agged", "seasonal_nssp_cheating"
-      ),
-      as_of_policy = c("asof", "asof", "asof", "asof", "asof", "asof", "asof", "cheating"),
-      ahead_units = c("weeks", "weeks", "weeks", "days", "days", "weeks", "weeks", "days"),
-      target_date_shift = c(0L, 0L, 0L, 3L, 3L, 0L, 0L, 3L),
-      join_extra_data = c(FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE),
-      filter_sources = list(
-        NULL, c("nhsn", "nssp"), NULL, NULL, NULL, c("nhsn", "nssp"), c("nhsn", "nssp"), NULL
-      ),
-      excluded_geos = list(
-        NULL, NULL, NULL, NULL, c("mo", "wy"), NULL, NULL, c("mo", "wy")
-      )
-    ),
-    by = "id"
-  )
 
 
 # ================================ PARAMETERS AND DATA TARGETS ================================
@@ -344,7 +328,7 @@ forecast_targets <- tar_map(
       run_forecaster(
         snapshot = nssp_data, forecaster = forecaster, aheads = aheads,
         params = params, param_names = param_names, id = id,
-        ahead_units = ahead_units, target_date_shift = target_date_shift,
+        ahead_multiplier = ahead_multiplier, target_date_shift = target_date_shift,
         join_extra_data = join_extra_data, extra_data = full_data_modified,
         filter_sources = filter_sources, excluded_geos = excluded_geos
       )
@@ -379,7 +363,7 @@ forecast_targets <- tar_map(
       run_forecaster(
         snapshot = full_data, forecaster = forecaster, aheads = aheads,
         params = params, param_names = param_names, id = id,
-        ahead_units = ahead_units, target_date_shift = target_date_shift,
+        ahead_multiplier = ahead_multiplier, target_date_shift = target_date_shift,
         join_extra_data = join_extra_data, extra_data = nssp_data,
         filter_sources = filter_sources, excluded_geos = excluded_geos
       )
