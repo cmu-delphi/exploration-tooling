@@ -254,7 +254,51 @@ Notes for later phases:
   prod script yet. Each needs its own phase-0 canonicalization before
   adopting the shared snapshot/runner.
 
+### Phase 2 status (landed 2026-07-14, commits ywsoqrvx + nmmkwvuv)
+
+`run_prod_forecaster` → `run_forecaster(snapshot, forecaster, aheads, params,
+param_names, id, ahead_units = "weeks", target_date_shift = 0L,
+join_extra_data = FALSE, extra_data = NULL, filter_sources = NULL,
+excluded_geos = NULL, sort_quantiles = FALSE)` in
+`R/targets/forecaster_runner.R` (renamed file). Both pipelines call it: flu
+prod `forecast_nhsn`/`forecast_nssp` with named args; explore inside
+`create_forecast_targets`, mapped over dates via `make_forecast_snapshot`.
+New grid spec columns in both explore scripts: `sort_quantiles` (flu TRUE,
+covid FALSE — replaces the `g_disease == "flu"` grep) and `output_scale`
+(flu "per100k", covid "count" — replaces the score-time population-column
+sniff; empirically equivalent).
+
+Deviations from the sketch, on purpose:
+
+- The `g_time_value_adjust` shifts in `create_forecast_targets` are KEPT —
+  they perform the real Wednesday→Saturday alignment for explore's
+  scores/forecasts; deleting them changes verified outputs.
+  `ensemble_targets` never referenced `g_time_value_adjust` (the plan's
+  mention was speculative). Net: zero usages deleted.
+- Runner output is intentionally NOT uniformly Saturday: prod's
+  `target_date_shift` is per-forecaster (cdc_baseline/linear/climate use 0,
+  seasonal/day-unit forecasters use 3), matching cached prod values. Explore
+  uses the default 0 and shifts downstream as before.
+
+Verified: unit tests at baseline (80 PASS); prod runner reproduces cached
+`forecast_nhsn_*` exactly for deterministic forecasters (incl. extra-join +
+geo-exclusion cases; stochastic ones match under same seed); explore
+function-level maxd=0 on forecasts and scores for 2 flu + 1 covid forecasters
+× 3 dates against cached explore stores. Backtest skipped as redundant.
+
+Known gaps made explicit rather than fixed (outputs preserved):
+
+- `output_scale` is per-disease, so like the old sniff it unscales ALL flu
+  forecasters at scoring, including `pop_scaling = FALSE` ones — future fix
+  is per-forecaster values.
+- `forecast_nhsn`'s exogenous nssp slice stays inline with an explicit
+  `cheating_cutoff = forecast_date` local + comment: judged a mild latent
+  bug (cheating cutoff at nominal date vs `full_data`'s generation date;
+  differs only on holiday weeks). Can't route through
+  `make_forecast_snapshot` until the asof/cheating branches agree on which
+  date governs.
+
 ### Open decisions
 
-- Score-time population-column sniffing (review 5) rides along in phase 2 as
-  a spec column (`output_scale`).
+- (resolved in phase 2) Score-time population-column sniffing is now the
+  `output_scale` spec column; per-forecaster values remain a future fix.
