@@ -218,6 +218,26 @@ add your forecaster under a new heading in
 `g_forecaster_parameter_combinations`, it will get a new report notebook in
 `reports/` (such as `reports/flu-notebook-new_forecaster.html`).
 
+Exploration and production share one runner. A forecaster is a bare function
+`fn(epi_data, outcome, ahead, ...)`; everything that is a cross-cutting
+convention rather than a modeling parameter is declared as a *spec column* on
+its grid row and applied uniformly by `run_forecaster()` (in `map()` over dates
+for explore, once per `(forecaster, date)` target for prod). The spec columns
+and their defaults live in `FORECASTER_SPEC_DEFAULTS` (`R/utils.R`):
+`as_of_policy` (`"asof"` real-time vs `"cheating"` finalized-with-cutoff),
+`ahead_multiplier` (1 for day-native, 7 for week-native forecasters),
+`target_date_shift`, `join_extra_data`, `filter_sources`, `excluded_geos`,
+`sort_quantiles` (the flu quantile-whitening workaround), and `output_scale`
+(`"count"` vs `"per100k"`, controlling whether scoring rescales to counts).
+`make_forecaster_grid()` splits these off from the params list-column and fills
+defaults, so a grid row omits whatever it doesn't need; explore rides the
+defaults while prod forecasters declare their overrides inline in
+`g_forecaster_params_grid` (see `scripts/flu_hosp_prod.R`). Because both
+pipelines consume the same grid and runner, a forecaster that works in an
+exploration sweep runs verbatim in backtesting and prod — there is no separate
+per-disease prod closure to keep in sync. (Covid and RSV prod are still on the
+older per-disease wiring pending their own migration.)
+
 ### Some handy utilities
 
 We have a few utility functions that are useful for developing new forecasters.
