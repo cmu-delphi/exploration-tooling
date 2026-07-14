@@ -267,7 +267,7 @@ forecast_targets <- tar_map(
     name = full_data,
     command = {
       # Train data
-      if (grepl("latest", id)) {
+      if (as_of_policy == "latest") {
         train_data <- nhsn_archive_data %>%
           epix_as_of(nhsn_archive_data$versions_end) %>%
           filter(time_value < as.Date(forecast_generation_date_int))
@@ -282,7 +282,7 @@ forecast_targets <- tar_map(
           time_value = time_value - 3,
           source = "nhsn"
         )
-      if (!grepl("latest", id)) {
+      if (as_of_policy != "latest") {
         train_data %<>%
           data_substitutions(
             flu_data_substitutions,
@@ -302,7 +302,7 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_nssp,
     command = {
-      if (grepl("latest", id)) {
+      if (as_of_policy == "latest") {
         nssp_data <- nssp_archive_data %>%
           epix_as_of(nssp_archive_data$versions_end) %>%
           filter(time_value < as.Date(forecast_generation_date_int))
@@ -323,14 +323,17 @@ forecast_targets <- tar_map(
         rename(nssp = value) %>%
         filter(source == "nhsn") %>%
         select(-c(source, epiweek, epiyear, season, season_week))
-      run_prod_forecaster(nssp_data, full_data_modified, forecaster, aheads, params, param_names, id)
+      run_prod_forecaster(
+        nssp_data, full_data_modified, forecaster, aheads, params, param_names, id,
+        ahead_units, target_date_shift, join_extra_data, filter_sources, excluded_geos
+      )
     },
     pattern = map(aheads)
   ),
   tar_target(
     name = forecast_nhsn,
     command = {
-      if (grepl("latest", id)) {
+      if (as_of_policy == "latest") {
         nssp_data <- nssp_archive_data %>%
           epix_as_of(nssp_archive_data$versions_end) %>%
           filter(time_value < as.Date(forecast_date_int))
@@ -339,7 +342,10 @@ forecast_targets <- tar_map(
           epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
       }
 
-      run_prod_forecaster(full_data, nssp_data, forecaster, aheads, params, param_names, id)
+      run_prod_forecaster(
+        full_data, nssp_data, forecaster, aheads, params, param_names, id,
+        ahead_units, target_date_shift, join_extra_data, filter_sources, excluded_geos
+      )
     },
     pattern = map(aheads)
   )
