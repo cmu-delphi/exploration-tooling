@@ -18,6 +18,9 @@ g_time_value_adjust <- 3
 g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
 g_disease <- "flu"
 g_s3_prefix <- "exploration"
+# Trainer used by the seasonal forecasters; stored as a global and referenced by
+# symbol in the grid params so tar_map embeds the symbol, not the model_spec.
+g_quantreg <- epipredict::quantile_reg()
 g_external_object_name <- glue::glue("2024/2024-2025_{g_disease}_hosp_forecasts.parquet")
 # needed for windowed_seasonal
 g_very_latent_locations <- list(list(
@@ -68,32 +71,79 @@ if (!g_backtest_mode) {
   g_forecast_dates <- seq.Date(as.Date("2024-11-20"), g_reference_date, by = 7L)
 }
 
-# Forecaster grid — function definitions live in R/flu_prod_forecasters.R.
-ids <- c(
-  "cdc_baseline",
-  "linear",
-  "linear_no_population_scale",
-  "windowed_seasonal",
-  "windowed_seasonal_extra_sources",
-  "climate_base",
-  "climate_geo_agged",
-  "seasonal_nssp_latest"
-)
-g_forecaster_params_grid <- tibble(
-  id = ids,
-  forecaster = rlang::syms(c(
-    "g_baseline_forecaster",
-    "g_flu_linear",
-    "g_flu_linear_no_population_scale",
-    "g_flu_windowed_seasonal",
-    "g_flu_windowed_seasonal_extra_sources",
-    "g_flu_climate_base",
-    "g_flu_climate_geo_agged",
-    "g_flu_windowed_seasonal_extra_sources"
-  )),
-  params = vector("list", length(ids)),
-  param_names = vector("list", length(ids))
-)
+# Forecaster grid — behavior is defined by (id, bare forecaster function,
+# params). Per-forecaster wrapping that isn't yet a parameter (ahead-unit
+# conversion, target-date shift, extra-source join, source/geo filtering, as-of
+# policy) is applied by run_prod_forecaster(). Each row is built via
+# make_forecaster_grid() so the params list-column matches the exploration
+# convention (trainer stored as a symbol, lags unwrapped).
+g_forecaster_params_grid <- list(
+  cdc_baseline = tibble(
+    id = "cdc_baseline",
+    forecaster = "g_baseline_forecaster"
+  ),
+  linear = tibble(
+    id = "linear",
+    forecaster = "forecaster_baseline_linear",
+    residual_tail = 0.99,
+    residual_center = 0.35,
+    no_intercept = TRUE
+  ),
+  linear_no_population_scale = tibble(
+    id = "linear_no_population_scale",
+    forecaster = "forecaster_baseline_linear",
+    residual_tail = 0.99,
+    residual_center = 0.35,
+    no_intercept = TRUE,
+    population_scale = FALSE
+  ),
+  windowed_seasonal = tidyr::expand_grid(
+    id = "windowed_seasonal",
+    forecaster = "scaled_pop_seasonal",
+    outcome = "value",
+    trainer = "g_quantreg",
+    seasonal_method = "window",
+    pop_scaling = FALSE,
+    lags = list(c(0, 7)),
+    keys_to_ignore = g_very_latent_locations
+  ),
+  windowed_seasonal_extra_sources = tidyr::expand_grid(
+    id = "windowed_seasonal_extra_sources",
+    forecaster = "scaled_pop_seasonal",
+    outcome = "value",
+    extra_sources = "nssp",
+    trainer = "g_quantreg",
+    seasonal_method = "window",
+    drop_non_seasons = TRUE,
+    pop_scaling = FALSE,
+    lags = list(list(c(0, 7), c(0, 7))),
+    keys_to_ignore = g_very_latent_locations
+  ),
+  climate_base = tibble(
+    id = "climate_base",
+    forecaster = "climatological_model"
+  ),
+  climate_geo_agged = tibble(
+    id = "climate_geo_agged",
+    forecaster = "climatological_model",
+    geo_agg = TRUE
+  ),
+  seasonal_nssp_latest = tidyr::expand_grid(
+    id = "seasonal_nssp_latest",
+    forecaster = "scaled_pop_seasonal",
+    outcome = "value",
+    extra_sources = "nssp",
+    trainer = "g_quantreg",
+    seasonal_method = "window",
+    drop_non_seasons = TRUE,
+    pop_scaling = FALSE,
+    lags = list(list(c(0, 7), c(0, 7))),
+    keys_to_ignore = g_very_latent_locations
+  )
+) %>%
+  imap(\(tib, family) make_forecaster_grid(tib, family)) %>%
+  bind_rows() %>%
+  select(-family)
 
 
 # ================================ PARAMETERS AND DATA TARGETS ================================
@@ -229,8 +279,6 @@ forecast_targets <- tar_map(
           epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
       }
 
-      forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
-
       nssp_data %<>%
         rename(value = nssp) %>%
         mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
@@ -243,12 +291,7 @@ forecast_targets <- tar_map(
         rename(nssp = value) %>%
         filter(source == "nhsn") %>%
         select(-c(source, epiweek, epiyear, season, season_week))
-      nssp_data %>%
-        forecaster_fn(extra_data = full_data_modified) %>%
-        mutate(
-          forecaster = id,
-          geo_value = as.factor(geo_value)
-        )
+      run_prod_forecaster(nssp_data, full_data_modified, forecaster, aheads, params, param_names, id)
     },
     pattern = map(aheads)
   ),
@@ -264,14 +307,7 @@ forecast_targets <- tar_map(
           epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
       }
 
-      forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
-
-      full_data %>%
-        forecaster_fn(extra_data = nssp_data) %>%
-        mutate(
-          forecaster = id,
-          geo_value = as.factor(geo_value)
-        )
+      run_prod_forecaster(full_data, nssp_data, forecaster, aheads, params, param_names, id)
     },
     pattern = map(aheads)
   )
