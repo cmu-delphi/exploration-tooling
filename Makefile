@@ -1,7 +1,8 @@
 .PHONY: all test test-forecasters run sync download upload dashboard \
 	prod-rsv prod-rsv-log prod-rsv-backtest prune-rsv-prod \
 	commit-rsv submit-rsv submit-rsv-dry \
-	pull-rsv-prod push-rsv-prod get-rsv-prod-errors
+	pull-rsv-prod push-rsv-prod get-rsv-prod-errors \
+	oracle-capture oracle-compare
 
 current_date:=$(shell date +%F)
 
@@ -54,6 +55,35 @@ explore-flu:
 	export TAR_RUN_PROJECT=flu_hosp_explore; Rscript scripts/run.R
 
 explore: explore-covid explore-flu update-site netlify
+
+# ---- Oracle: behavior-preserving golden capture + compare ----
+# Pinned reference date so captures are reproducible week-to-week instead of
+# tracking Sys.Date(). Requires FORECAST_REFERENCE_DATE support in the pipeline.
+ORACLE_REFERENCE_DATE := 2026-06-24
+
+cache/logs:
+	mkdir -p cache/logs
+
+# Capture a golden. project=<targets project> label=<subdir>.
+# e.g. make oracle-capture project=flu_hosp_prod label=refactored
+# set -o pipefail so a failing Rscript isn't masked by tee's exit status
+# (needs bash; scoped to this target to leave other recipes on the default shell).
+oracle-capture: SHELL := /bin/bash
+oracle-capture: | cache/logs
+	@if [ -z "$(project)" ] || [ -z "$(label)" ]; then \
+		echo "Usage: make oracle-capture project=flu_hosp_prod label=refactored"; exit 1; fi
+	set -o pipefail; \
+	export TAR_RUN_PROJECT=$(project); export ORACLE_LABEL=$(label); \
+	export FORECAST_REFERENCE_DATE=$(ORACLE_REFERENCE_DATE); \
+	Rscript scripts/oracle/capture.R 2>&1 | tee -a cache/logs/oracle_capture
+
+# Diff two captured labels of one project. project=<p> a=<label> b=<label>.
+# NOTE: exits non-zero when anything differs -- that is the signal, not an error.
+# e.g. make oracle-compare project=flu_hosp_prod a=baseline b=refactored
+oracle-compare:
+	@if [ -z "$(project)" ] || [ -z "$(a)" ] || [ -z "$(b)" ]; then \
+		echo "Usage: make oracle-compare project=flu_hosp_prod a=baseline b=refactored"; exit 1; fi
+	Rscript scripts/oracle/compare.R $(project):$(a) $(project):$(b)
 
 prune: prune-covid-prod prune-flu-prod prune-rsv-prod prune-covid-explore prune-flu-explore
 
