@@ -219,6 +219,41 @@ only diffs were the `forecast_*_full` tar_combine aggregates, trivially
 larger because the backtest covers all dates while the old store held three
 weeks. Phase 0 is behavior-preserving; the backup can be deleted.
 
+### Phase 1 status (landed 2026-07-14, commits ztvpnwqv + utpnlmrn)
+
+`make_forecast_snapshot(archive, forecast_date, generation_date, as_of_policy
+= "asof", substitutions = NULL, extra_latest = NULL, cache_key = NULL, before
+= Inf)` in `R/looping.R` — the extracted body of `epix_slide_simple`, which
+now is `map(dates, make_forecast_snapshot) |> map(fn) |> bind_rows` (parquet
+slide cache preserved, byte-identical cache files at the same path). Flu
+prod's `full_data` (asof+substitutions / cheating) and `forecast_nssp`'s nssp
+slice consume it. `before` was added beyond the sketch signature to preserve
+explore's `min_time_value` and cache-path key. The `as_of` stamp was unified
+as `min(forecast_date, versions_end)` — reproduces old prod (`forecast_date`)
+and old explore (epix_as_of natural) since `forecast_date <= versions_end`
+for all real dates (verified against the cached store). `other_keys` is
+captured from the fresh slice, not hardcoded to `"source"`.
+
+Verified: unit tests pass (80 PASS / 0 FAIL); ~12 (forecast_date,
+generation_date) pairs including substitution-active and holiday weeks match
+the old inline logic and the actual cached `full_data_*` targets under both
+policies, with matching metadata; explore old-vs-new identical for 3 dates,
+cached and uncached, finite and Inf `before`. Full backtest skipped as
+redundant with the store comparison.
+
+Notes for later phases:
+
+- `forecast_nhsn`'s exogenous nssp slice (raw `nssp_archive_data`) was left
+  inline: its cheating branch cuts off at the nominal `forecast_date`, not
+  `generation_date`, and stamps no `as_of`/`other_keys` metadata — a real
+  divergence from the other slices on holiday weeks. Reconcile in phase 2
+  when routing exogenous sources through the shared snapshot (decide whether
+  the old cutoff was a bug).
+- Covid prod (`scripts/covid_hosp_prod.R`) is still pre-phase-0 (uses
+  `Sys.Date()`, in-target munging, no canonical archives); there is no rsv
+  prod script yet. Each needs its own phase-0 canonicalization before
+  adopting the shared snapshot/runner.
+
 ### Open decisions
 
 - Score-time population-column sniffing (review 5) rides along in phase 2 as
