@@ -74,7 +74,7 @@ if (!g_backtest_mode) {
 # Forecaster grid — behavior is defined by (id, bare forecaster function,
 # params). Per-forecaster wrapping that isn't yet a parameter (ahead-unit
 # conversion, target-date shift, extra-source join, source/geo filtering, as-of
-# policy) is applied by run_prod_forecaster(). Each row is built via
+# policy) is applied by run_forecaster(). Each row is built via
 # make_forecaster_grid() so the params list-column matches the exploration
 # convention (trainer stored as a symbol, lags unwrapped).
 g_forecaster_params_grid <- list(
@@ -147,7 +147,7 @@ g_forecaster_params_grid <- list(
   select(-family)
 
 # Explicit columns for the per-forecaster wrapping that used to be smuggled in id
-# strings and closure bodies. run_prod_forecaster() reads these (see step 1c):
+# strings and closure bodies. run_forecaster() reads these (see step 1c):
 #   as_of_policy      "asof"/"cheating": whether train data is as-of the generation
 #                     date or the latest available (replaces grepl("latest", id)).
 #   ahead_units       "weeks"/"days": forecaster's expected ahead unit; "days"
@@ -341,9 +341,12 @@ forecast_targets <- tar_map(
         rename(nssp = value) %>%
         filter(source == "nhsn") %>%
         select(-c(source, epiweek, epiyear, season, season_week))
-      run_prod_forecaster(
-        nssp_data, full_data_modified, forecaster, aheads, params, param_names, id,
-        ahead_units, target_date_shift, join_extra_data, filter_sources, excluded_geos
+      run_forecaster(
+        snapshot = nssp_data, forecaster = forecaster, aheads = aheads,
+        params = params, param_names = param_names, id = id,
+        ahead_units = ahead_units, target_date_shift = target_date_shift,
+        join_extra_data = join_extra_data, extra_data = full_data_modified,
+        filter_sources = filter_sources, excluded_geos = excluded_geos
       )
     },
     pattern = map(aheads)
@@ -353,18 +356,32 @@ forecast_targets <- tar_map(
     command = {
       # nssp here is an exogenous source (extra_sources = "nssp"), so keep the raw
       # archive with its `nssp` column rather than the renamed target archive.
+      #
+      # NB: this exogenous slice is intentionally NOT routed through
+      # make_forecast_snapshot. Under the "cheating" policy it cuts off future data
+      # at the *nominal* forecast_date, whereas make_forecast_snapshot's cheating
+      # branch (used by full_data) cuts at the generation_date. On holiday/delayed
+      # weeks (generation_date != forecast_date) these differ. The choice is made
+      # explicit below via `cheating_cutoff` and preserved as-is so outputs stay
+      # byte-identical; see the phase-1 note in REFACTORING_IDEAS.md. It is likely
+      # a latent inconsistency (generation_date would match full_data), but harmless
+      # in practice: forecast_date == generation_date on all non-holiday weeks.
+      cheating_cutoff <- as.Date(forecast_date_int)
       if (as_of_policy == "cheating") {
         nssp_data <- nssp_archive_data %>%
           epix_as_of(nssp_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_date_int))
+          filter(time_value < cheating_cutoff)
       } else {
         nssp_data <- nssp_archive_data %>%
           epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
       }
 
-      run_prod_forecaster(
-        full_data, nssp_data, forecaster, aheads, params, param_names, id,
-        ahead_units, target_date_shift, join_extra_data, filter_sources, excluded_geos
+      run_forecaster(
+        snapshot = full_data, forecaster = forecaster, aheads = aheads,
+        params = params, param_names = param_names, id = id,
+        ahead_units = ahead_units, target_date_shift = target_date_shift,
+        join_extra_data = join_extra_data, extra_data = nssp_data,
+        filter_sources = filter_sources, excluded_geos = excluded_geos
       )
     },
     pattern = map(aheads)
