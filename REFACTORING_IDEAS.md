@@ -358,6 +358,88 @@ Remaining from the plan's "order of work": covid prod (still pre-phase-0:
 script yet) each need their own phase-0 canonicalization before adopting the
 shared snapshot/runner.
 
+### Carried over from ds/refactor (2026-07-15)
+
+The earlier `ds/refactor` branch (abandoned) explored a different architecture
+(`flu_assemble` + an `outcome_signal` grid dimension, honest per-signal input
+with no nhsn/nssp spoof, an R-loop replacing `tar_map` — the last reverted on
+that branch itself). Its `REFACTOR.md` retrospective is condensed here; the
+generally useful changes were ported as commits on this branch:
+
+- Semantic seeding (the one deliberate behavior change): flu prod targets now
+  `set.seed(tar_seed_create(paste(id, signal, date, ahead, sep = "/")))` so
+  renaming a target no longer silently moves the stochastic forecasters
+  (linear, cdc_baseline, linear_no_population_scale). Self-check for any
+  reseed: the 5 deterministic forecasters must stay bit-zero. TODO: port to
+  covid (rsv has no prod script yet).
+- `primary_source` arg on `scaled_pop_seasonal` (default `"nhsn"`,
+  behavior-preserving): removes the hardcoded `source == "nhsn"` filters and
+  threads to `run_workflow_and_format(source_value=)`. Enables a future
+  de-spoof: stamp `source = "nssp"` honestly in `nssp_target_archive` and pass
+  `primary_source = "nssp"` — a visible output change (the `source` column
+  currently reproduces the lie), so do it as its own verified step.
+- Flu evaluation is its own targets project/store (`flu_hosp_evaluation`,
+  same script, dispatch on project name via TAR_RUN_PROJECT falling back to
+  TAR_PROJECT): replays can't invalidate the weekly prod cache, retiring the
+  `_local/*_backup` store-copy dance used in phases 0/4. `make eval-flu`
+  replaces `make prod-flu-backtest`; `EVALUATION_N_DATES=<n>` replays only the
+  last n dates (used by oracle captures). BACKTEST_MODE remains covid/rsv-only.
+  NB: earlier phase notes saying `make prod-flu-backtest` now mean
+  `make eval-flu`, and old replay targets still sit in the `flu_hosp_prod`
+  store until it is pruned or re-pulled.
+- Makefile: `*-log` recipe duplicates folded into tee'd recipes with global
+  pipefail (deploy calls `tar_make` directly, so nothing depended on
+  `prod-log`). Gotcha found while porting: a repo `.Renviron` overrides
+  shell-exported `TAR_PROJECT` when Rscript starts (here it pins
+  `flu_hosp_explore`) — recipes that must select a project reliably need
+  `Sys.setenv(TAR_PROJECT=)` inside the R call or TAR_RUN_PROJECT (not in
+  .Renviron); the flu prune recipes do this, the covid/rsv/explore prune
+  recipes still have the latent footgun.
+
+Durable findings from the retrospective still worth acting on:
+
+- `sort_by_quantile()` is applied inconsistently: explore sorts all forecaster
+  output (now the `sort_quantiles` spec column), covid prod sorts, flu prod
+  sorts only inside ensembles and `forecaster_climatological`. Either flu prod
+  ships crossing quantiles or the workaround is unnecessary — resolve by
+  asserting monotonicity at the forecaster output boundary.
+- Alignment consolidation (their "Exp 6"): phase 0 centered flu prod's
+  archives, but covid prod still applies the Wednesday shift and `/100` scale
+  in scattered places, and the output denormalize (`target_end_date + 3`) is
+  copy-pasted per forecaster across diseases. Normalize once at archive
+  construction (`time_value` only — never `version = time_value` for sources
+  with real revisions), denormalize once post-forecast.
+- Contracts to enforce: version faithfulness (no assembled row with
+  `version > generation_date`, asserted for as-of rows only — cheating
+  intentionally peeks); a `validate_model_frame()` at the snapshot boundary
+  instead of raw `attributes()<-`; forecaster output shape (keys, monotone
+  quantiles, no NAs, non-negative).
+- `targets` metaprogramming truths (verified against targets 1.11.4): tar_map
+  does NOT strip names from list-columns, so the parallel `param_names` grid
+  column is deletable; the real wall is `tar_target`'s default
+  `tidy_eval = TRUE` (a bare `!!!params` splices at build time — set
+  `tidy_eval = FALSE` to defer); PR #169 broke caching because commands
+  dereferenced a grid *global* at run time, making the whole grid a dependency
+  of every branch — `tar_map(values=)` substituting each row as a literal is
+  the safe form; `rlang::syms` on the trainer column is load-bearing.
+- Explore/prod unification: the data layer and (since phase 2-3) the
+  runner/grid are shared; fan-out stays different on purpose (prod: one target
+  per cell for caching/crew/seeds; explore: dates batched inside a target via
+  the slide cache). "Share the cell, keep two fan-out strategies." Remaining
+  gap: per-source version policies for explore-style multi-source snapshots.
+- Prod parallelism worry is likely BLAS oversubscription (crew spawns
+  `detectCores()-4` workers while BLAS may also multithread) — pin BLAS to one
+  thread per worker and measure before restructuring.
+- Oracle practice: success for a behavior-preserving step is an empty golden
+  diff; never mix a refactor with a bug fix (the golden faithfully reproduces
+  current bugs). Cheap companion for pure code moves: diff
+  `targets::tar_manifest()` between revisions — byte-identical commands mean
+  no invalidation. Compare-script gotchas: relative diffs explode when the
+  baseline is 0 (read the absolute diff); a metric missing from `value_cols`
+  silently becomes a sort key and scrambles row alignment. Old capture labels
+  under `cache/oracle/` predate this branch's target renames — re-baseline
+  before relying on them.
+
 ### Open decisions
 
 - (resolved in phase 2) Score-time population-column sniffing is now the

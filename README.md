@@ -20,8 +20,6 @@ EPIDATR_USE_CACHE=true
 EPIDATR_CACHE_MAX_AGE_DAYS=42
 # Controls whether all forecasters are replaced with a dummy. This is useful for testing a new pipeline.
 DUMMY_MODE=false
-# Set to the project you want targets to use by default. The options can be found in `_targets.yaml`.
-TAR_PROJECT=covid_hosp_explore
 # If you're on a production machine, set these to the path of the directory where you want to save the submission.
 FLU_SUBMISSION_DIRECTORY=cache
 COVID_SUBMISSION_DIRECTORY=cache
