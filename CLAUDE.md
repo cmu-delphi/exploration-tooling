@@ -18,7 +18,7 @@ make prod-covid           # covid production pipeline
 make prod-rsv             # rsv production pipeline
 make explore-flu          # flu exploration sweep (~3h)
 make explore-covid        # covid exploration sweep (~3h)
-make prod-flu-backtest    # BACKTEST_MODE=TRUE: historical forecasts + scoring, no weekly report
+make eval-flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n dates. Covid/rsv still use BACKTEST_MODE=TRUE on the prod store (prod-covid-backtest, prod-rsv-backtest)
 make pull / make push     # sync aux_data, targets stores, and forecasts with S3 (forecasting-team-data bucket)
 make update-site && make netlify   # rebuild report index and deploy
 make submit-flu           # commit forecast to ../FluSight-forecast-hub and open PR (also: submit-covid, submit-rsv, *-dry)
@@ -39,7 +39,7 @@ get_targets_errors("covid_hosp_prod", top_n = 10)
 forecaster_lookup("surprised.tarantula")  # map code name -> parameter settings
 ```
 
-Key env vars (`.Renviron`): `TAR_PROJECT` (REPL default project), `TAR_RUN_PROJECT` (used by `scripts/run.R` because the shell overwrites `TAR_PROJECT`), `BACKTEST_MODE`, `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
+Key env vars (`.Renviron`): `TAR_PROJECT` (REPL default project), `TAR_RUN_PROJECT` (used by `scripts/run.R` because the shell overwrites `TAR_PROJECT`), `BACKTEST_MODE` (covid/rsv only; flu evaluation mode dispatches on the project name), `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
 
 ## Architecture
 

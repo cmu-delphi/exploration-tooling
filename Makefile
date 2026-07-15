@@ -2,6 +2,8 @@
 	prod-rsv prod-rsv-log prod-rsv-backtest prune-rsv-prod \
 	commit-rsv submit-rsv submit-rsv-dry \
 	pull-rsv-prod push-rsv-prod get-rsv-prod-errors \
+	eval-flu prune-flu-evaluation \
+	pull-flu-evaluation push-flu-evaluation get-flu-evaluation-errors \
 	oracle-capture oracle-compare
 
 current_date:=$(shell date +%F)
@@ -40,13 +42,16 @@ prod-log: prod-covid-log prod-flu-log update-site-log netlify-log
 prod-covid-backtest:
 	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
 
-prod-flu-backtest:
-	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R
-
 prod-rsv-backtest:
 	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R
 
-prod-backtest: prod-covid-backtest prod-flu-backtest prod-rsv-backtest
+prod-backtest: prod-covid-backtest prod-rsv-backtest
+
+# Flu's historical replay is its own targets project (separate store), not a
+# BACKTEST_MODE flag on prod. Set EVALUATION_N_DATES=<n> to replay only the
+# last n forecast dates.
+eval-flu:
+	export TAR_RUN_PROJECT=flu_hosp_evaluation; Rscript scripts/run.R
 
 explore-covid:
 	export TAR_RUN_PROJECT=covid_hosp_explore; Rscript scripts/run.R
@@ -64,17 +69,19 @@ ORACLE_REFERENCE_DATE := 2026-06-24
 cache/logs:
 	mkdir -p cache/logs
 
-# Capture a golden. project=<targets project> label=<subdir>.
+# Capture a golden. project=<targets project> label=<subdir>. For the
+# flu_hosp_evaluation project also pass n=<EVALUATION_N_DATES> to replay only
+# the last n dates.
 # e.g. make oracle-capture project=flu_hosp_prod label=refactored
 # set -o pipefail so a failing Rscript isn't masked by tee's exit status
 # (needs bash; scoped to this target to leave other recipes on the default shell).
 oracle-capture: SHELL := /bin/bash
 oracle-capture: | cache/logs
 	@if [ -z "$(project)" ] || [ -z "$(label)" ]; then \
-		echo "Usage: make oracle-capture project=flu_hosp_prod label=refactored"; exit 1; fi
+		echo "Usage: make oracle-capture project=flu_hosp_prod label=refactored [n=3]"; exit 1; fi
 	set -o pipefail; \
 	export TAR_RUN_PROJECT=$(project); export ORACLE_LABEL=$(label); \
-	export FORECAST_REFERENCE_DATE=$(ORACLE_REFERENCE_DATE); \
+	export FORECAST_REFERENCE_DATE=$(ORACLE_REFERENCE_DATE); export EVALUATION_N_DATES=$(n); \
 	Rscript scripts/oracle/capture.R 2>&1 | tee -a cache/logs/oracle_capture
 
 # Diff two captured labels of one project. project=<p> a=<label> b=<label>.
@@ -85,13 +92,22 @@ oracle-compare:
 		echo "Usage: make oracle-compare project=flu_hosp_prod a=baseline b=refactored"; exit 1; fi
 	Rscript scripts/oracle/compare.R $(project):$(a) $(project):$(b)
 
-prune: prune-covid-prod prune-flu-prod prune-rsv-prod prune-covid-explore prune-flu-explore
+prune: prune-covid-prod prune-flu-prod prune-flu-evaluation prune-rsv-prod prune-covid-explore prune-flu-explore
 
 prune-covid-prod:
 	export TAR_PROJECT=covid_hosp_prod; export BACKTEST_MODE=TRUE; Rscript -e "targets::tar_prune()"
 
+# NB: the flu script ignores BACKTEST_MODE (mode dispatches on the project
+# name), so pruning flu_hosp_prod drops any historical replay targets left in
+# the prod store from the pre-split era — they belong to flu_hosp_evaluation now.
+# TAR_PROJECT is set via Sys.setenv because a repo .Renviron overrides
+# shell-exported TAR_PROJECT when Rscript starts; TAR_RUN_PROJECT (not in
+# .Renviron) drives the script's prod/evaluation dispatch.
 prune-flu-prod:
-	export TAR_PROJECT=flu_hosp_prod; export BACKTEST_MODE=TRUE; Rscript -e "targets::tar_prune()"
+	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript -e "Sys.setenv(TAR_PROJECT = 'flu_hosp_prod'); targets::tar_prune()"
+
+prune-flu-evaluation:
+	export TAR_RUN_PROJECT=flu_hosp_evaluation; Rscript -e "Sys.setenv(TAR_PROJECT = 'flu_hosp_evaluation'); targets::tar_prune()"
 
 prune-rsv-prod:
 	export TAR_PROJECT=rsv_hosp_prod; export BACKTEST_MODE=TRUE; Rscript -e "targets::tar_prune()"
@@ -154,6 +170,9 @@ pull-covid-prod:
 pull-flu-prod:
 	aws s3 sync s3://forecasting-team-data/2024/flu_hosp_prod/ flu_hosp_prod/ --delete
 
+pull-flu-evaluation:
+	aws s3 sync s3://forecasting-team-data/2024/flu_hosp_evaluation/ flu_hosp_evaluation/ --delete
+
 pull-rsv-prod:
 	aws s3 sync s3://forecasting-team-data/2024/rsv_hosp_prod/ rsv_hosp_prod/ --delete
 
@@ -163,7 +182,7 @@ pull-covid-explore:
 pull-flu-explore:
 	aws s3 sync s3://forecasting-team-data/2024/flu_hosp_explore/ flu_hosp_explore/ --delete
 
-pull: pull-aux-data pull-covid-prod pull-flu-prod pull-rsv-prod pull-covid-explore pull-flu-explore
+pull: pull-aux-data pull-covid-prod pull-flu-prod pull-flu-evaluation pull-rsv-prod pull-covid-explore pull-flu-explore
 
 download: pull
 
@@ -172,6 +191,9 @@ push-covid-prod:
 
 push-flu-prod:
 	aws s3 sync flu_hosp_prod/ s3://forecasting-team-data/2024/flu_hosp_prod/ --delete
+
+push-flu-evaluation:
+	aws s3 sync flu_hosp_evaluation/ s3://forecasting-team-data/2024/flu_hosp_evaluation/ --delete
 
 push-rsv-prod:
 	aws s3 sync rsv_hosp_prod/ s3://forecasting-team-data/2024/rsv_hosp_prod/ --delete
@@ -182,7 +204,7 @@ push-covid-explore:
 push-flu-explore:
 	aws s3 sync flu_hosp_explore/ s3://forecasting-team-data/2024/flu_hosp_explore/ --delete
 
-push: push-covid-prod push-flu-prod push-rsv-prod push-covid-explore push-flu-explore
+push: push-covid-prod push-flu-prod push-flu-evaluation push-rsv-prod push-covid-explore push-flu-explore
 
 upload: push
 
@@ -207,6 +229,9 @@ netlify:
 
 get-flu-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'flu_hosp_prod')"
+
+get-flu-evaluation-errors:
+	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'flu_hosp_evaluation')"
 
 get-covid-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'covid_hosp_prod')"

@@ -13,6 +13,13 @@ flu_hosp_prod:
   store: flu_hosp_prod
   use_crew: yes
   reporter_make: timestamp
+flu_hosp_evaluation:
+  # Same script as flu_hosp_prod; it dispatches on the project name. Separate
+  # store so evaluation runs don't invalidate the production cache.
+  script: scripts/flu_hosp_prod.R
+  store: flu_hosp_evaluation
+  use_crew: yes
+  reporter_make: timestamp
 covid_hosp_prod:
   script: scripts/covid_hosp_prod.R
   store: covid_hosp_prod

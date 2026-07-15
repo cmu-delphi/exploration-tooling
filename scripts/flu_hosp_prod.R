@@ -1,4 +1,11 @@
 # The Flu Hospitalization Production Forecasting Pipeline.
+#
+# Two targets projects share this script (see _targets.yaml):
+#   flu_hosp_prod        - weekly production run, as_of = today
+#   flu_hosp_evaluation  - historical replay over past forecast dates, scored
+#                          against latest truth
+# Dispatch is on the project name; each project keeps its own store, so an
+# evaluation run cannot invalidate the production cache.
 suppressPackageStartupMessages(source("R/load_all.R"))
 
 
@@ -30,13 +37,15 @@ g_very_latent_locations <- list(list(
 # Date to cut the truth data off at, so we don't have too much of the past for
 # plotting.
 g_truth_data_date <- "2023-09-01"
-# Whether we're running in backtest mode.
-# If TRUE, we don't run the report notebook, which is (a) slow and (b) should be
-# preserved as an ASOF snapshot of our production results for that week.
-# If TRUE, we run a scoring notebook, which scores the historical forecasts
-# against the truth data and compares them to the ensemble.
-# If FALSE, we run the weekly report notebook.
-g_backtest_mode <- as.logical(Sys.getenv("BACKTEST_MODE", FALSE))
+# Whether we're running in evaluation (historical replay) mode. Dispatch is on
+# the targets project name: scripts/run.R and the oracle pass TAR_RUN_PROJECT;
+# direct tar_* invocations (e.g. make prune-flu-evaluation) set TAR_PROJECT.
+# TAR_RUN_PROJECT wins so a stale TAR_PROJECT in the shell can't flip the mode.
+# If TRUE, we skip the weekly report notebook (each week's report is preserved
+# as an ASOF snapshot) and instead run the scoring notebook, which scores the
+# historical forecasts against the truth data and compares them to the ensemble.
+g_evaluation_mode <-
+  Sys.getenv("TAR_RUN_PROJECT", Sys.getenv("TAR_PROJECT", "flu_hosp_prod")) == "flu_hosp_evaluation"
 # The pipeline's notion of "today", read once here so a whole run can be pinned
 # for reproducible oracle captures (scripts/oracle/capture.R): forecast dates
 # and the "cheating" as-of slices otherwise move with the calendar. Unset ->
@@ -45,7 +54,7 @@ g_reference_date <- {
   raw <- Sys.getenv("FORECAST_REFERENCE_DATE", "")
   if (nzchar(raw)) as.Date(raw) else Sys.Date()
 }
-if (!g_backtest_mode) {
+if (!g_evaluation_mode) {
   # This is the as_of for the forecast. If run on our typical schedule, it's
   # today, which is a Wednesday. Sometimes, if we're doing a delayed forecast,
   # it's a Thursday. It's used for stamping the data and for determining the
@@ -59,7 +68,7 @@ if (!g_backtest_mode) {
     g_forecast_dates <- as.Date("2025-12-24")
   }
 } else {
-  # Pin FORECAST_REFERENCE_DATE for a reproducible backtest window; must be
+  # Pin FORECAST_REFERENCE_DATE for a reproducible evaluation window; must be
   # >= 2025-12-31 so the trailing seq.Date() stays non-empty.
   g_forecast_generation_dates <- c(
     as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")),
@@ -69,6 +78,15 @@ if (!g_backtest_mode) {
   )
   # Every Wednesday since mid-Nov 2024
   g_forecast_dates <- seq.Date(as.Date("2024-11-20"), g_reference_date, by = 7L)
+  # Optional: keep only the last N dates for a fast partial evaluation
+  # (scripts/oracle/capture.R). Inert when unset. Both date vectors are 1:1
+  # aligned, so slice both by the same indices.
+  g_evaluation_n_dates <- as.integer(Sys.getenv("EVALUATION_N_DATES", "0"))
+  if (!is.na(g_evaluation_n_dates) && g_evaluation_n_dates > 0) {
+    keep <- tail(seq_along(g_forecast_dates), g_evaluation_n_dates)
+    g_forecast_dates <- g_forecast_dates[keep]
+    g_forecast_generation_dates <- g_forecast_generation_dates[keep]
+  }
 }
 
 # Forecaster grid — behavior is defined by (id, bare forecaster function,
@@ -500,7 +518,7 @@ ensemble_targets <- tar_map(
   tar_target(
     name = make_submission_csv,
     command = {
-      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+      if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
         forecast_reference_date <- get_forecast_reference_date(forecast_date_int)
         nhsn_submission <- ensemble_mixture$nhsn %>%
           format_flusight(disease = "flu")
@@ -524,7 +542,7 @@ ensemble_targets <- tar_map(
   tar_target(
     name = make_climate_submission_csv,
     command = {
-      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+      if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
         forecast_filtered$nhsn %>%
           filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
           group_by(geo_value, target_end_date, quantile) %>%
@@ -550,7 +568,7 @@ ensemble_targets <- tar_map(
     name = validate_result,
     command = {
       make_submission_csv
-      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+      if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
         validate_submission(
           g_submission_directory,
           file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(forecast_date_int))
@@ -564,7 +582,7 @@ ensemble_targets <- tar_map(
     name = validate_climate_result,
     command = {
       make_climate_submission_csv
-      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+      if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
         validate_submission(
           g_submission_directory,
           file_path = sprintf(
@@ -611,7 +629,7 @@ ensemble_targets <- tar_map(
   tar_target(
     notebook,
     command = {
-      if (!g_backtest_mode) {
+      if (!g_evaluation_mode) {
         if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
         rmarkdown::render(
           forecast_report_rmd,
@@ -687,7 +705,7 @@ joined_targets <- list2(
 
 combined_targets <- build_combined_targets(external_forecast_targets)
 
-if (g_backtest_mode) {
+if (g_evaluation_mode) {
   score_notebook <- build_backtest_score_targets()
 } else {
   score_notebook <- list2(
