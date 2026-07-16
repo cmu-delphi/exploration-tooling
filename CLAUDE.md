@@ -39,7 +39,7 @@ get_targets_errors("covid_hosp_prod", top_n = 10)
 forecaster_lookup("surprised.tarantula")  # map code name -> parameter settings
 ```
 
-Key env vars (`.Renviron`): `TAR_PROJECT` (REPL default project), `TAR_RUN_PROJECT` (used by `scripts/run.R` because the shell overwrites `TAR_PROJECT`), `BACKTEST_MODE` (covid/rsv only; flu evaluation mode dispatches on the project name), `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
+Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in a REPL — never in `.Renviron`, which overrides the shell env on every Rscript start), `TAR_RUN_PROJECT` (how make recipes/`scripts/run.R` select the project, immune to `.Renviron`), `BACKTEST_MODE` (covid/rsv only; flu evaluation mode dispatches on the project name), `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
 
 ## Architecture
 

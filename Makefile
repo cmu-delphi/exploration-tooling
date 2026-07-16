@@ -84,29 +84,29 @@ oracle-compare:
 
 prune: prune-covid-prod prune-flu-prod prune-flu-evaluation prune-rsv-prod prune-covid-explore prune-flu-explore
 
-prune-covid-prod:
-	export TAR_PROJECT=covid_hosp_prod; export BACKTEST_MODE=TRUE; Rscript -e "targets::tar_prune()"
-
+# scripts/prune.R selects the project via TAR_RUN_PROJECT (like run.R): an
+# .Renviron that sets TAR_PROJECT overrides shell exports on every R start,
+# so `export TAR_PROJECT=...` is not a reliable way to pick a project.
 # NB: the flu script ignores BACKTEST_MODE (mode dispatches on the project
 # name), so pruning flu_hosp_prod drops any historical replay targets left in
 # the prod store from the pre-split era — they belong to flu_hosp_evaluation now.
-# TAR_PROJECT is set via Sys.setenv because a repo .Renviron overrides
-# shell-exported TAR_PROJECT when Rscript starts; TAR_RUN_PROJECT (not in
-# .Renviron) drives the script's prod/evaluation dispatch.
+prune-covid-prod:
+	export TAR_RUN_PROJECT=covid_hosp_prod; export BACKTEST_MODE=TRUE; Rscript scripts/prune.R
+
 prune-flu-prod:
-	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript -e "Sys.setenv(TAR_PROJECT = 'flu_hosp_prod'); targets::tar_prune()"
+	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/prune.R
 
 prune-flu-evaluation:
-	export TAR_RUN_PROJECT=flu_hosp_evaluation; Rscript -e "Sys.setenv(TAR_PROJECT = 'flu_hosp_evaluation'); targets::tar_prune()"
+	export TAR_RUN_PROJECT=flu_hosp_evaluation; Rscript scripts/prune.R
 
 prune-rsv-prod:
-	export TAR_PROJECT=rsv_hosp_prod; export BACKTEST_MODE=TRUE; Rscript -e "targets::tar_prune()"
+	export TAR_RUN_PROJECT=rsv_hosp_prod; export BACKTEST_MODE=TRUE; Rscript scripts/prune.R
 
 prune-covid-explore:
-	export TAR_PROJECT=covid_hosp_explore; Rscript -e "targets::tar_prune()"
+	export TAR_RUN_PROJECT=covid_hosp_explore; Rscript scripts/prune.R
 
 prune-flu-explore:
-	export TAR_PROJECT=flu_hosp_explore; Rscript -e "targets::tar_prune()"
+	export TAR_RUN_PROJECT=flu_hosp_explore; Rscript scripts/prune.R
 
 commit-covid:
 	./scripts/commit-script.sh '../covid19-forecast-hub'

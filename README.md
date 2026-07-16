@@ -29,6 +29,13 @@ AWS_S3_PREFIX=exploration
 AUX_DATA_PATH=aux_data
 ```
 
+Do NOT set `TAR_PROJECT` in `.Renviron`: R re-loads `.Renviron` on every
+`Rscript` start (including the callr subprocess `tar_make` spawns), and its
+values override the shell environment — a default here silently redirects any
+invocation that selects a project via `export TAR_PROJECT=...`. Make recipes
+select projects via `TAR_RUN_PROJECT` (see `scripts/run.R`); in a REPL, start
+with `Sys.setenv(TAR_PROJECT = "<project>")` (options in `_targets.yaml`).
+
 Run the pipeline using:
 
 ```sh
