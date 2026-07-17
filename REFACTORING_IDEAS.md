@@ -249,6 +249,9 @@ Notes for later phases:
   divergence from the other slices on holiday weeks. Reconcile in phase 2
   when routing exogenous sources through the shared snapshot (decide whether
   the old cutoff was a bug).
+  (resolved 2026-07-16: cutoff unified on generation_date — it was the bug —
+  and the slice hoisted to its own `nssp_exogenous_data` target routed through
+  `make_forecast_snapshot`.)
 - Covid prod (`scripts/covid_hosp_prod.R`) is still pre-phase-0 (uses
   `Sys.Date()`, in-target munging, no canonical archives); there is no rsv
   prod script yet. Each needs its own phase-0 canonicalization before
@@ -297,6 +300,12 @@ Known gaps made explicit rather than fixed (outputs preserved):
   differs only on holiday weeks). Can't route through
   `make_forecast_snapshot` until the asof/cheating branches agree on which
   date governs.
+  (resolved 2026-07-16: the cheating cutoff was unified on generation_date and
+  the slice hoisted to its own `nssp_exogenous_data` target — one snapshot per
+  (forecaster, date) instead of the old per-ahead recompute — routed through
+  `make_forecast_snapshot`. Only affects `seasonal_nssp_cheating` on holiday
+  weeks; the asof branch is unchanged since `before = Inf` applies no
+  `min_time_value` bound and `substitutions = NULL` applies none.)
 
 ### Phase 3 status (landed 2026-07-14, commits pppxoxus + oymnnwmr)
 

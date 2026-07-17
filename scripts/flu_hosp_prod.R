@@ -372,6 +372,21 @@ forecast_targets <- tar_map(
     },
     pattern = map(aheads)
   ),
+  # As-of slice of the raw nssp archive used as an exogenous predictor
+  # (extra_sources = "nssp"). Keeps the `nssp` column, unlike nssp_forecast_data
+  # (the renamed nssp-as-target archive). Routed through make_forecast_snapshot
+  # so the cheating cutoff is generation_date, matching full_data.
+  tar_target(
+    name = nssp_exogenous_data,
+    command = {
+      make_forecast_snapshot(
+        nssp_archive_data,
+        forecast_date = forecast_date_int,
+        generation_date = forecast_generation_date_int,
+        as_of_policy = as_of_policy
+      )
+    }
+  ),
   tar_target(
     name = forecast_nhsn,
     command = {
@@ -379,33 +394,11 @@ forecast_targets <- tar_map(
       set.seed(targets::tar_seed_create(
         paste(id, "nhsn", forecast_date_chr, aheads, sep = "/")
       ))
-      # nssp here is an exogenous source (extra_sources = "nssp"), so keep the raw
-      # archive with its `nssp` column rather than the renamed target archive.
-      #
-      # NB: this exogenous slice is intentionally NOT routed through
-      # make_forecast_snapshot. Under the "cheating" policy it cuts off future data
-      # at the *nominal* forecast_date, whereas make_forecast_snapshot's cheating
-      # branch (used by full_data) cuts at the generation_date. On holiday/delayed
-      # weeks (generation_date != forecast_date) these differ. The choice is made
-      # explicit below via `cheating_cutoff` and preserved as-is so outputs stay
-      # byte-identical; see the phase-1 note in REFACTORING_IDEAS.md. It is likely
-      # a latent inconsistency (generation_date would match full_data), but harmless
-      # in practice: forecast_date == generation_date on all non-holiday weeks.
-      cheating_cutoff <- as.Date(forecast_date_int)
-      if (as_of_policy == "cheating") {
-        nssp_data <- nssp_archive_data %>%
-          epix_as_of(nssp_archive_data$versions_end) %>%
-          filter(time_value < cheating_cutoff)
-      } else {
-        nssp_data <- nssp_archive_data %>%
-          epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
-      }
-
       run_forecaster(
         snapshot = full_data, forecaster = forecaster, aheads = aheads * ahead_multiplier,
         params = params, param_names = param_names, id = id,
         target_date_shift = target_date_shift,
-        join_extra_data = join_extra_data, extra_data = nssp_data,
+        join_extra_data = join_extra_data, extra_data = nssp_exogenous_data,
         filter_sources = filter_sources, excluded_geos = excluded_geos
       )
     },
