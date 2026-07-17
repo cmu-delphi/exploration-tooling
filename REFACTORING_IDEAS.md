@@ -387,6 +387,12 @@ generally useful changes were ported as commits on this branch:
   de-spoof: stamp `source = "nssp"` honestly in `nssp_target_archive` and pass
   `primary_source = "nssp"` — a visible output change (the `source` column
   currently reproduces the lie), so do it as its own verified step.
+  (done 2026-07-16: `nssp_target_archive` now stamps `source = "nssp"`;
+  `run_forecaster` gained an optional `primary_source` that is injected only for
+  forecasters whose formals accept it, passed as `"nssp"` at the `forecast_nssp`
+  call site. Verified against the cached store: windowed_seasonal/climate_base
+  nssp forecasts are bit-identical except the `source` column flips
+  `"nhsn" -> "nssp"` where present.)
 - Flu evaluation is its own targets project/store (`flu_hosp_evaluation`,
   same script, dispatch on project name via TAR_RUN_PROJECT falling back to
   TAR_PROJECT): replays can't invalidate the weekly prod cache, retiring the

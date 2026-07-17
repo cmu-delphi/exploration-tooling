@@ -282,9 +282,11 @@ parameters_and_date_targets <- rlang::list2(
     },
     cue = tar_cue("always")
   ),
-  # Canonical nssp-as-target archive: the version-independent "spoofing"
-  # transforms (rename nssp -> value, week-align to Wednesday, stamp source,
-  # add season info) hoisted out of the per-date forecast_nssp target.
+  # Canonical nssp-as-target archive: the version-independent transforms (rename
+  # nssp -> value so nssp plays the target role, week-align to Wednesday, stamp
+  # source honestly, add season info) hoisted out of the per-date forecast_nssp
+  # target. The forecaster is pointed at these `nssp`-stamped rows via
+  # run_forecaster(primary_source = "nssp") rather than mislabeling them "nhsn".
   tar_target(
     name = nssp_target_archive,
     command = {
@@ -292,7 +294,7 @@ parameters_and_date_targets <- rlang::list2(
         rename(value = nssp) %>%
         mutate(
           time_value = floor_date(time_value, "week", week_start = 7) + 3,
-          source = "nhsn"
+          source = "nssp"
         ) %>%
         add_season_info() %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
@@ -367,7 +369,9 @@ forecast_targets <- tar_map(
         params = params, param_names = param_names, id = id,
         target_date_shift = target_date_shift,
         join_extra_data = join_extra_data, extra_data = full_data_modified,
-        filter_sources = filter_sources, excluded_geos = excluded_geos
+        filter_sources = filter_sources, excluded_geos = excluded_geos,
+        # nssp is the target here; snapshot rows are stamped source = "nssp".
+        primary_source = "nssp"
       )
     },
     pattern = map(aheads)

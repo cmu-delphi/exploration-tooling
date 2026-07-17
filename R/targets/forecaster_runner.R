@@ -20,6 +20,13 @@
 # @param extra_data        exogenous data to join when join_extra_data is TRUE.
 # @param filter_sources    if non-NULL, keep only these sources in the input.
 # @param excluded_geos     geos dropped from the output (NULL keeps all).
+# @param primary_source    if non-NULL, injected as the forecaster's
+#                          `primary_source` param (the source acting as the
+#                          forecast target) -- but only for forecasters that
+#                          accept it. Lets the nssp-as-target path point
+#                          scaled_pop_seasonal at its honestly-stamped `nssp`
+#                          rows without making it a grid param (the same grid row
+#                          drives both the nhsn and nssp forecasts).
 # @param sort_quantiles    if TRUE, enforce quantile monotonicity on the output
 #                          (the flu whitening workaround; a no-op elsewhere).
 # @return a forecast tibble on hub convention: the forecaster's core columns
@@ -31,10 +38,17 @@ run_forecaster <- function(
   target_date_shift = 0L,
   join_extra_data = FALSE, extra_data = NULL,
   filter_sources = NULL, excluded_geos = NULL,
+  primary_source = NULL,
   sort_quantiles = FALSE
 ) {
   if (!is.null(filter_sources) && "source" %in% colnames(snapshot)) {
     snapshot <- snapshot %>% filter(source %in% filter_sources)
+  }
+  # Inject primary_source only for forecasters that accept it; others route it
+  # through ... into default_args_list(), which errors on unknown args.
+  if (!is.null(primary_source) && "primary_source" %in% names(formals(forecaster))) {
+    params <- c(params, list(primary_source))
+    param_names <- c(param_names, "primary_source")
   }
   if (join_extra_data) {
     snapshot <- snapshot %>% left_join(extra_data, by = join_by(geo_value, time_value))
