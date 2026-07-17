@@ -80,10 +80,7 @@ create_forecast_targets <- function() {
             param_names = param_names,
             id = id,
             sort_quantiles = sort_quantiles
-          ) %>%
-            # run_forecaster factors geo_value (a prod convention); explore keeps it
-            # a character. Coerce per-date so bind_rows doesn't warn on factor levels.
-            mutate(geo_value = as.character(geo_value))
+          )
         }) %>%
           bind_rows() %>%
           mutate(ahead = as.numeric(target_end_date - forecast_date))

@@ -51,5 +51,5 @@ run_forecaster <- function(
   out %>%
     mutate(target_end_date = target_end_date + target_date_shift) %>%
     filter(geo_value %nin% excluded_geos) %>%
-    mutate(forecaster = id, geo_value = as.factor(geo_value))
+    mutate(forecaster = id)
 }
