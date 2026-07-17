@@ -91,8 +91,8 @@ slide_forecaster <- function(
 #'
 #' The one place both pipelines build the data a forecaster sees. Explore's
 #' `epix_slide_simple` maps this over dates (the degenerate case: policy "asof",
-#' generation == forecast date, no substitutions/extras, but keeping the parquet
-#' slide cache). Prod's per-(forecaster, date) `full_data` / nssp-target slices
+#' generation == forecast date, no substitutions, but keeping the parquet slide
+#' cache). Prod's per-(forecaster, date) `full_data` / nssp-target slices
 #' are single calls with a "cheating" policy and/or data substitutions.
 #'
 #' @param archive          an epi_archive.
@@ -101,15 +101,20 @@ slide_forecaster <- function(
 #' @param generation_date  date the forecast is actually generated; the as-of
 #'   version to slice at (and, under "cheating", the future-data cutoff).
 #' @param as_of_policy     "asof": slice as-of `generation_date` (real-time
-#'   data). "cheating": slice the finalized data (versions_end) but drop rows
-#'   with `time_value >= generation_date`.
+#'   data), honoring `substitutions`, `cache_key`, and `before`. "cheating":
+#'   slice the finalized data (versions_end) but drop rows with
+#'   `time_value >= generation_date`; `substitutions`, `cache_key`, and `before`
+#'   don't apply (finalized data needs no real-time corrections and isn't cached).
 #' @param substitutions    optional path/df of manual data corrections applied
-#'   via `data_substitutions()` (only under the "asof" policy).
-#' @param extra_latest     optional rows bound in after slicing.
+#'   via `data_substitutions()`. Only under the "asof" policy: substitutions
+#'   correct real-time reporting artifacts, so finalized ("cheating") data
+#'   ignores them.
 #' @param cache_key        if non-NULL, cache the raw slice to a parquet file
-#'   keyed on this plus the archive hash (used by the explore slide).
+#'   keyed on this plus the archive hash (used by the explore slide). Ignored
+#'   under "cheating".
 #' @param before           training-window bound: `min_time_value` of the slice
-#'   is `generation_date - before` (Inf keeps all history).
+#'   is `generation_date - before` (Inf keeps all history). Ignored under
+#'   "cheating".
 #' @return an epi_df with `as_of` stamped to the forecast date and `other_keys`
 #'   preserved from the archive.
 make_forecast_snapshot <- function(
@@ -118,7 +123,6 @@ make_forecast_snapshot <- function(
   generation_date,
   as_of_policy = "asof",
   substitutions = NULL,
-  extra_latest = NULL,
   cache_key = NULL,
   before = Inf
 ) {
@@ -126,6 +130,11 @@ make_forecast_snapshot <- function(
   generation_date <- as.Date(generation_date)
 
   if (as_of_policy == "cheating") {
+    # Warn on args the cheating branch can't honor (substitutions is passed
+    # unconditionally by design, so warning on it would be per-run noise).
+    if (!is.null(cache_key) || is.finite(before)) {
+      cli::cli_warn("make_forecast_snapshot(): {.arg cache_key}/{.arg before} are ignored under the \"cheating\" policy.")
+    }
     # Finalized data, but drop anything the real-time run couldn't have seen.
     snapshot <- archive %>% epix_as_of(archive$versions_end)
     other_keys <- attributes(snapshot)$metadata$other_keys
@@ -155,13 +164,9 @@ make_forecast_snapshot <- function(
     }
   }
 
-  if (!is.null(extra_latest)) {
-    snapshot <- bind_rows(snapshot, extra_latest)
-  }
-
-  # data_substitutions()/bind_rows() drop the epi_df metadata; restore other_keys
-  # and stamp the nominal forecast date as the as_of. The min() clamp is a no-op
-  # for real forecast dates and reproduces epix_as_of's as_of for the explore case.
+  # data_substitutions() drops the epi_df metadata; restore other_keys and stamp
+  # the nominal forecast date as the as_of. The min() clamp is a no-op for real
+  # forecast dates and reproduces epix_as_of's as_of for the explore case.
   attributes(snapshot)$metadata$other_keys <- other_keys
   attributes(snapshot)$metadata$as_of <- min(forecast_date, archive$versions_end)
   snapshot
