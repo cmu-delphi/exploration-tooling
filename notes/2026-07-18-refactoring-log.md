@@ -1,4 +1,7 @@
-# Refactoring Ideas
+# Refactoring log: shared explore/prod forecaster stack
+
+Historical log of the spec/runner unification refactor (2026-07-12 .. 2026-07-16), moved here from REFACTORING_IDEAS.md on 2026-07-18. The distilled architecture vision and remaining roadmap live in CLAUDE.md ("Shared forecaster architecture"); this file preserves the original plan, per-phase statuses, and verification details.
+
 
 Five independent reviews (Claude agents, 2026-07-12) each asked for one
 non-cosmetic refactoring idea that would make the code structure easier to

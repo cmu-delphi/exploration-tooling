@@ -6,8 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Delphi (CMU) epidemic forecasting monorepo for COVID, flu, and RSV hospitalization forecasts submitted to the CDC forecast hubs as "CMU-TimeSeries". It is organized as several [targets](https://docs.ropensci.org/targets/) pipeline projects (declared in `_targets.yaml`) sharing one R codebase, plus a report site deployed to Netlify (https://delphi-forecasting-reports.netlify.app/).
 
-Note: this is a Jujutsu (`.jj/`) colocated repo — use `jj` commands, not git.
-
 ## Common commands
 
 ```sh
@@ -43,7 +41,7 @@ Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in 
 
 ## Architecture
 
-Each project in `_targets.yaml` maps a pipeline script to a store directory of the same name: `covid_hosp_explore`, `flu_hosp_explore`, `covid_hosp_prod`, `flu_hosp_prod`, `rsv_hosp_prod`. Explore projects sweep many forecaster/parameter combinations to find good settings; prod projects generate the weekly submission and reports. Store directories (targets caches) are synced to/from S3 rather than recomputed.
+Each project in `_targets.yaml` maps a pipeline script to a store directory of the same name: `covid_hosp_explore`, `flu_hosp_explore`, `covid_hosp_prod`, `flu_hosp_prod`, `rsv_hosp_prod`, plus `flu_hosp_evaluation` (same script as flu prod, separate store, for historical replays). Explore projects sweep many forecaster/parameter combinations to find good settings; prod projects generate the weekly submission and reports. Store directories (targets caches) are synced to/from S3 rather than recomputed.
 
 - `scripts/<project>.R` — pipeline definitions. Globals are prefixed `g_` and must be top-level (targets freezes commands as expressions, so function arguments can't carry them). `g_forecast_dates` are the nominal (Wednesday) forecast dates; `g_forecast_generation_dates` are when forecasts actually ran (differ on holiday/outage delays) and serve as the data `as_of`.
 - `g_forecaster_parameter_combinations` — human-readable tibble of forecasters × parameter settings; `g_forecaster_params_grid` is the same data reshaped for targets' dynamic branching. Each heading in the combinations tibble gets its own report notebook in `reports/`.
@@ -54,6 +52,82 @@ Each project in `_targets.yaml` maps a pipeline script to a store directory of t
 - `aux_data/` — non-public input data, synced from S3.
 
 Forecaster functions follow the signature `function(epi_data, outcome, ahead = 1, ...)` with `extra_sources` (exogenous columns) and `filter_source` (select source from a joined multi-source archive; `""` means use augmented data from all sources). Extra `...` args flow to `default_args_list` (epipredict training/prediction control). To add one, copy `R/forecasters/forecaster_scaled_pop.R`, register it in `g_forecaster_parameter_combinations`, and iterate with most other forecasters commented out and few forecast dates. See README.md "Adding a new forecaster".
+
+## Shared forecaster architecture (vision & status)
+
+Goal: one declarative forecaster spec — core function + parameter grid + spec
+metadata — consumed identically by exploration sweeps, backtesting, and prod,
+so explore results transfer to prod verbatim and the prod copy of "the same"
+forecaster can't silently drift from what exploration evaluated. Three layers,
+all landed for flu (see `notes/2026-07-18-refactoring-log.md` for the phase
+log and verification details):
+
+1. **Canonical archives**: version-independent munging (geo renames,
+   Wednesday↔Saturday shift, season info, source stamping, folding in static
+   historical extras) is applied once at archive construction
+   (`nhsn_prod_archive`, `nssp_target_archive`), never per forecaster × date.
+   Rule: normalize `time_value` at archive build, denormalize once
+   post-forecast; never fake `version = time_value` for sources with real
+   revisions.
+2. **Shared snapshot**: `make_forecast_snapshot()` (`R/looping.R`) — archive +
+   forecast/generation dates + as-of policy (`"asof"` real-time vs
+   `"cheating"` finalized-with-cutoff) + substitutions → `epi_df` with correct
+   `as_of`/`other_keys` metadata. `epix_slide_simple` is now
+   `map(dates, make_forecast_snapshot) |> map(fn) |> bind_rows`, keeping its
+   parquet snapshot cache.
+3. **Shared runner + grid**: `run_forecaster()`
+   (`R/targets/forecaster_runner.R`) owns cross-cutting conventions (ahead
+   scaling, source filtering, extra-data join, target-date shift, geo
+   exclusions, id stamping, quantile sorting). Conventions are declared as
+   spec columns with defaults in `FORECASTER_SPEC_DEFAULTS` (`R/utils.R`),
+   split from modeling params by the shared `make_forecaster_grid()`.
+
+Fan-out stays deliberately different — "share the cell, keep two fan-out
+strategies": prod is `tar_map` per (forecaster, date) for caching/crew/seeds;
+explore batches dates inside one target per forecaster via the slide cache.
+
+Status: flu prod and flu/covid explore are on the shared stack. Covid prod is
+not yet canonicalized (`Sys.Date()`, in-target munging, no canonical
+archives); rsv prod has no pipeline script yet (Makefile/`_targets.yaml`
+entries point at a not-yet-written `scripts/rsv_hosp_prod.R`). Each needs its
+own archive-canonicalization pass before adopting the shared snapshot/runner.
+
+Roadmap:
+
+- Migrate covid prod (canonical archives → shared snapshot → shared runner),
+  then write rsv prod directly on the shared stack. Port semantic seeding to
+  covid (`tar_seed_create(paste(id, signal, date, ahead, sep = "/"))` — target
+  renames must not move stochastic forecasters; deterministic ones must stay
+  bit-zero on any reseed).
+- Enforce contracts: version faithfulness (no as-of row with
+  `version > generation_date`), `validate_model_frame()` at the snapshot
+  boundary instead of raw `attributes()<-`, and forecaster output shape (keys,
+  monotone quantiles, no NAs, non-negative). The monotonicity assertion also
+  settles the inconsistent `sort_by_quantile()` usage (explore sorts all
+  output via the `sort_quantiles` spec column; flu prod sorts only ensembles
+  and `forecaster_climatological`).
+- Make `output_scale` per-forecaster; it is per-disease today, so scoring
+  unscales all flu forecasters including `pop_scaling = FALSE` ones.
+- Per-source version policies for explore-style multi-source snapshots.
+- Prod parallelism: suspected BLAS oversubscription (crew workers × BLAS
+  threads) — pin BLAS to one thread per worker and measure before
+  restructuring.
+- Minor: the `param_names` grid column is deletable (`tar_map` does not strip
+  names from list-columns).
+
+Refactoring practice: a behavior-preserving step succeeds when its golden diff
+is empty — replay with `make eval-flu` (separate `flu_hosp_evaluation` store,
+so replays can't invalidate the weekly prod cache; `EVALUATION_N_DATES=<n>`
+limits scope) and compare via oracle captures (`scripts/oracle/capture.R`).
+Never mix a refactor with a bug fix; the golden faithfully reproduces current
+bugs. For pure code moves, diff `targets::tar_manifest()` between revisions —
+byte-identical commands mean no cache invalidation. `targets` metaprogramming
+gotchas: `tar_map(values=)` substituting each grid row as a literal is the
+safe form (commands that dereference a grid *global* at run time make the
+whole grid a dependency of every branch); `tar_target`'s default
+`tidy_eval = TRUE` splices a bare `!!!params` at build time (set
+`tidy_eval = FALSE` to defer); `rlang::syms` on the trainer column is
+load-bearing.
 
 ## Conventions
 

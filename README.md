@@ -1,8 +1,15 @@
 # Exploration Tooling
 
-This repo is for exploring forecasting methods and tools for both COVID and Flu.
-The repo is structured as a [targets](https://docs.ropensci.org/targets/) project, which means that it is easy to run things in parallel and to cache results.
-The repo is also structured as an R package, which means that it is easy to share code between different targets.
+This repo produces Delphi's COVID, flu, and RSV hospitalization forecasts
+(submitted to the CDC forecast hubs as "CMU-TimeSeries") and hosts the
+exploration sweeps used to develop them. It is organized as several
+[targets](https://docs.ropensci.org/targets/) pipeline projects sharing one R
+codebase, which makes it easy to run things in parallel and cache results.
+
+This README is the human-facing guide: setup, weekly production operation,
+exploration runs, and how to add a forecaster. `CLAUDE.md` holds the terse
+working reference (command cheatsheet, REPL debugging, architecture map, and
+the refactor roadmap); `notes/` holds dated work logs.
 
 
 ## Production Usage 2024-2025
@@ -54,20 +61,24 @@ make pull
 # Make forecasts
 make prod-flu
 make prod-covid
+make prod-rsv
 
-# If there are errors, you can view the top n with the following command (replace with appropriate project)
-source("scripts/targets-common.R");
-get_targets_errors("covid_hosp_prod", top_n = 10)
+# If there are errors, view the top n with (in an R session; replace with appropriate project):
+#   suppressPackageStartupMessages(source("R/load_all.R"))
+#   get_targets_errors("covid_hosp_prod", top_n = 10)
+# or use the make shortcut, e.g.
+make get-flu-prod-errors
 
 # Automatically append the new reports to the site index and host the site on netlify
 # (this requires the netlify CLI to be installed and configured, talk to Dmitry about this)
-make update_site && make netlify
+make update-site && make netlify
 
 # Update weights until satisfied using *_geo_exclusions.csv, rerun the make command above
 # Submit (makes a commit, pushes to our fork, and makes a PR; this requires a GitHub token
 # and the gh CLI to be installed and configured, talk to Dmitry about this)
 make submit-flu
 make submit-covid
+make submit-rsv
 
 # Push your forecasts to the AWS bucket (requires AWS CLI)
 make push
@@ -95,29 +106,26 @@ nohup make explore-covid &
 
 ## Development Overview
 
-This repo is organized as a monorepo with multiple `targets` projects.
-The four targets projects are:
+This repo is organized as a monorepo with multiple `targets` projects,
+declared in `_targets.yaml`. Each project maps a pipeline script in `scripts/`
+to a store directory (targets cache) of the same name:
 
-- `covid_hosp_explore`: for exploring covid hospitalization forecasters
-- `flu_hosp_explore`: for exploring flu hospitalization forecasters
-- `covid_hosp_prod`: for predicting covid hospitalizations
-- `flu_hosp_prod`: for predicting flu hospitalizations
-
-Each of these projects has its own script file that defines the pipeline.
-These are in the `scripts/` directory.
+- `covid_hosp_explore`, `flu_hosp_explore`: exploration sweeps over many
+  forecaster/parameter combinations
+- `covid_hosp_prod`, `flu_hosp_prod`, `rsv_hosp_prod`: weekly production
+  forecasts and reports (the rsv pipeline script is not yet written)
+- `flu_hosp_evaluation`: historical replay + scoring; same script as flu prod
+  but a separate store, so replays don't invalidate the production cache
 
 ### Directory Layout
 
-- `run.R` and `Makefile`: the main entrypoint for all pipelines
+- `scripts/run.R` and `Makefile`: the main entrypoints for all pipelines
 - `R/`: reusable R code for forecasters, targets, and data processing functions
-- `scripts/`: entry-points for target pipelines, one-off data processing
-  scripts, and report generation scripts
+- `scripts/`: pipeline definitions (one per project), archive-building and
+  data-processing scripts, and report generation scripts
 - `tests/`: package tests
-- `covid_hosp_explore/` and `scripts/covid_hosp_explore.R`: a `targets` project for exploring covid hospitalization forecasters
-- `flu_hosp_explore/` and `scripts/flu_hosp_explore.R`: a `targets` project for exploring flu hospitalization forecasters
-- `covid_hosp_prod/` and `scripts/covid_hosp_prod.R`: a `targets` project for predicting covid hospitalizations
-- `flu_hosp_prod/` and `scripts/flu_hosp_prod.R`: a `targets` project for predicting flu hospitalizations
-- `forecaster_testing/` and `scripts/forecaster_testing.R`: a `targets` project for testing forecasters
+- `notes/`: dated work logs
+- `deploy/`: systemd units for the archive pollers and scheduled prod runs
 
 ### Pipeline Structure
 
@@ -154,27 +162,9 @@ Some general tips:
 
 ### Running and debugging pipelines
 
-You can run these pipelines as described above, but you can also run them in the R REPL.
-
-```r
-suppressPackageStartupMessages(source("R/load_all.R"))
-
-# Make sure to set the project to the one you want to run
-Sys.setenv(TAR_PROJECT = "covid_hosp_explore")
-
-# Run the pipeline
-tar_make()
-```
-
-Frequently, you will want to run and debug a single target. First place a
-`browser()` statement in the target function. Then run the following command:
-
-```r
-tar_make(target_name, callr_function = NULL, use_crew = FALSE)
-```
-
-This will run the pipeline up to and including the target you specified and drop
-you into the R debugger.
+Pipelines can also be run and debugged interactively from the R REPL
+(single-target debugging with `browser()`, error inspection, forecaster
+lookup): see "REPL workflow" in `CLAUDE.md`.
 
 ### Adding a new forecaster
 
@@ -241,7 +231,8 @@ defaults while prod forecasters declare their overrides inline in
 pipelines consume the same grid and runner, a forecaster that works in an
 exploration sweep runs verbatim in backtesting and prod — there is no separate
 per-disease prod closure to keep in sync. (Covid and RSV prod are still on the
-older per-disease wiring pending their own migration.)
+older per-disease wiring pending their own migration; see "Shared forecaster
+architecture" in `CLAUDE.md` for status and roadmap.)
 
 ### Some handy utilities
 
