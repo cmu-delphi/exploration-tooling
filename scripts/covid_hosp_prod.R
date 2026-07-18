@@ -350,6 +350,14 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_nhsn,
     command = {
+      # Seed from the semantic cell key, not the target name. `targets` otherwise
+      # derives each target's seed from its name, so renaming a target silently
+      # moves the forecast for the stochastic forecasters (linear,
+      # linear_no_population_scale, cdc_baseline). Seeded here rather than inside
+      # the forecasters because only the harness knows (signal, date, ahead).
+      set.seed(targets::tar_seed_create(
+        paste(id, "nhsn", forecast_date_chr, aheads, sep = "/")
+      ))
       snapshot <- full_data
       if (!is.null(min_train_date)) {
         snapshot <- snapshot %>% filter(time_value >= min_train_date)
@@ -368,6 +376,10 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_nssp,
     command = {
+      # See forecast_nhsn: seed from the semantic cell key, not the target name.
+      set.seed(targets::tar_seed_create(
+        paste(id, "nssp", forecast_date_chr, aheads, sep = "/")
+      ))
       # Exogenous input: full_data (nhsn) spoofed into the `nssp` column to
       # switch its role from target to predictor for the nssp-as-target
       # forecast. Selected down to the join columns so the extra join adds only
