@@ -230,9 +230,34 @@ parameters_and_date_targets <- rlang::list2(
     },
     cue = tar_cue("always")
   ),
+  # Canonical training archive: the version-independent munging that used to run
+  # per (forecaster x date) inside forecast_nhsn, hoisted here so it runs once.
+  # Unlike flu there are no augmentation extras to fold in, and no source column
+  # is stamped: the covid archives are single-source and the forecasters'
+  # missing-source fallback labels rows "nhsn" exactly as the old per-date data
+  # did (stamping here would change output schemas; revisit alongside an honest
+  # nssp de-spoof like flu's).
+  tar_target(
+    name = nhsn_prod_archive,
+    command = {
+      # season info is computed on the Saturday-labeled time_values (matching
+      # the old per-date order) *before* the Wednesday shift, so the season
+      # columns are identical to the previous per-date computation.
+      nhsn_archive_data$DT %>%
+        add_season_info() %>%
+        mutate(
+          geo_value = ifelse(geo_value == "usa", "us", geo_value),
+          time_value = floor_date(time_value, "week", week_start = 7) + 3
+        ) %>%
+        filter(geo_value %nin% g_insufficient_data_geos) %>%
+        as_epi_archive(compactify = TRUE)
+    }
+  ),
   tar_target(
     name = nhsn_latest_data,
     command = {
+      # Uses the *raw* archive on purpose: truth_data and scoring want the raw
+      # time labels and geo set, not the canonical Wednesday-shifted archive.
       nhsn_archive_data %>%
         epix_as_of(min(g_reference_date, nhsn_archive_data$versions_end)) %>%
         filter(geo_value %nin% g_insufficient_data_geos)
@@ -245,9 +270,31 @@ parameters_and_date_targets <- rlang::list2(
     },
     cue = tar_cue("always")
   ),
+  # Canonical nssp-as-target archive: rename nssp -> value so nssp plays the
+  # target role, season info, geo normalization/drops -- hoisted out of the
+  # per-date forecast_nssp target. The raw covid nssp archive is already
+  # Wednesday-aligned, so the week-align mutate is kept verbatim as a no-op
+  # guard. Ordering (rename -> season info -> mutate -> filter) matches the old
+  # in-target code.
+  tar_target(
+    name = nssp_target_archive,
+    command = {
+      nssp_archive_data$DT %>%
+        rename(value = nssp) %>%
+        add_season_info() %>%
+        mutate(
+          geo_value = ifelse(geo_value == "usa", "us", geo_value),
+          time_value = floor_date(time_value, "week", week_start = 7) + 3
+        ) %>%
+        filter(geo_value %nin% g_insufficient_data_geos_nssp) %>%
+        as_epi_archive(compactify = TRUE)
+    }
+  ),
   tar_target(
     name = nssp_latest_data,
     command = {
+      # Raw archive on purpose (see nhsn_latest_data): keeps the `nssp` column
+      # for truth_data / scoring.
       nssp_archive_data %>%
         epix_as_of(min(g_reference_date, nssp_archive_data$versions_end))
     }
@@ -260,42 +307,58 @@ forecast_targets <- tar_map(
   values = tidyr::expand_grid(g_forecaster_params_grid, g_forecast_schedule),
   names = c("id", "forecast_date_chr"),
   tar_target(
+    name = full_data,
+    command = {
+      # As-of slice of the canonical archive (season info, geo normalization,
+      # Wednesday shift, insufficient-geo drop already baked in). Only the
+      # version-dependent steps remain here.
+      make_forecast_snapshot(
+        nhsn_prod_archive,
+        forecast_date = forecast_date_int,
+        generation_date = forecast_generation_date_int,
+        as_of_policy = as_of_policy,
+        substitutions = covid_data_substitutions
+      )
+    }
+  ),
+  # As-of slice of the canonical nssp-as-target archive.
+  tar_target(
+    name = nssp_forecast_data,
+    command = {
+      make_forecast_snapshot(
+        nssp_target_archive,
+        forecast_date = forecast_date_int,
+        generation_date = forecast_generation_date_int,
+        as_of_policy = as_of_policy
+      )
+    }
+  ),
+  # As-of slice of the raw nssp archive used as an exogenous predictor
+  # (extra_sources = "nssp"). Keeps the `nssp` column, unlike nssp_forecast_data
+  # (the renamed nssp-as-target archive).
+  tar_target(
+    name = nssp_exogenous_data,
+    command = {
+      make_forecast_snapshot(
+        nssp_archive_data,
+        forecast_date = forecast_date_int,
+        generation_date = forecast_generation_date_int,
+        as_of_policy = as_of_policy
+      )
+    }
+  ),
+  tar_target(
     name = forecast_nhsn,
     command = {
-      # "cheating" forecasters train on the most up to date version of the data
-      if (as_of_policy == "cheating") {
-        nhsn_data <- nhsn_archive_data %>%
-          epix_as_of(nhsn_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_generation_date_int))
-        nssp_data <- nssp_archive_data %>%
-          epix_as_of(nssp_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_generation_date_int))
-      } else {
-        nhsn_data <- nhsn_archive_data %>%
-          epix_as_of(min(as.Date(forecast_generation_date_int), nhsn_archive_data$versions_end))
-        nssp_data <- nssp_archive_data %>%
-          epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
-      }
-      nhsn_data <- nhsn_data %>%
-        add_season_info() %>%
-        mutate(
-          geo_value = ifelse(geo_value == "usa", "us", geo_value),
-          time_value = floor_date(time_value, "week", week_start = 7) + 3
-        ) %>%
-        filter(geo_value %nin% g_insufficient_data_geos)
-      if (as_of_policy != "cheating") {
-        nhsn_data %<>%
-          data_substitutions(covid_data_substitutions, as.Date(forecast_generation_date_int))
-      }
-      attributes(nhsn_data)$metadata$as_of <- as.Date(forecast_date_int)
+      snapshot <- full_data
       if (!is.null(min_train_date)) {
-        nhsn_data <- nhsn_data %>% filter(time_value >= min_train_date)
+        snapshot <- snapshot %>% filter(time_value >= min_train_date)
       }
       run_forecaster(
-        snapshot = nhsn_data, forecaster = forecaster, aheads = aheads * ahead_multiplier,
+        snapshot = snapshot, forecaster = forecaster, aheads = aheads * ahead_multiplier,
         params = params, param_names = param_names, id = id,
         target_date_shift = target_date_shift,
-        join_extra_data = join_extra_data, extra_data = nssp_data,
+        join_extra_data = join_extra_data, extra_data = nssp_exogenous_data,
         filter_sources = filter_sources, excluded_geos = excluded_geos,
         sort_quantiles = sort_quantiles
       )
@@ -305,50 +368,22 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_nssp,
     command = {
-      # "cheating" forecasters train on the most up to date version of the data
-      if (as_of_policy == "cheating") {
-        nhsn_data <- nhsn_archive_data %>%
-          epix_as_of(nhsn_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_generation_date_int))
-        nssp_data <- nssp_archive_data %>%
-          epix_as_of(nssp_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_generation_date_int))
-      } else {
-        nhsn_data <- nhsn_archive_data %>%
-          epix_as_of(min(as.Date(forecast_generation_date_int), nhsn_archive_data$versions_end))
-        nssp_data <- nssp_archive_data %>%
-          epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
-      }
-      nssp_data <- nssp_data %>%
-        rename(value = nssp) %>%
-        add_season_info() %>%
-        mutate(
-          geo_value = ifelse(geo_value == "usa", "us", geo_value),
-          time_value = floor_date(time_value, "week", week_start = 7) + 3
-        ) %>%
-        filter(geo_value %nin% g_insufficient_data_geos_nssp)
-
-      if (as_of_policy != "cheating") {
-        nhsn_data %<>%
-          data_substitutions(covid_data_substitutions, as.Date(forecast_generation_date_int))
-      }
-
-      # Exogenous input: nhsn spoofed into the `nssp` column to switch its role
-      # from target to predictor for the nssp-as-target forecast.
-      nhsn_data %<>%
+      # Exogenous input: full_data (nhsn) spoofed into the `nssp` column to
+      # switch its role from target to predictor for the nssp-as-target
+      # forecast. Selected down to the join columns so the extra join adds only
+      # `nssp` (the old extra data carried no season columns).
+      full_data_modified <- full_data %>%
         rename(nssp = value) %>%
-        mutate(
-          time_value = floor_date(time_value, "week", week_start = 7) + 3
-        )
-      attributes(nssp_data)$metadata$as_of <- as.Date(forecast_date_int)
+        select(geo_value, time_value, nssp)
+      snapshot <- nssp_forecast_data
       if (!is.null(min_train_date)) {
-        nssp_data <- nssp_data %>% filter(time_value >= min_train_date)
+        snapshot <- snapshot %>% filter(time_value >= min_train_date)
       }
       run_forecaster(
-        snapshot = nssp_data, forecaster = forecaster, aheads = aheads * ahead_multiplier,
+        snapshot = snapshot, forecaster = forecaster, aheads = aheads * ahead_multiplier,
         params = params, param_names = param_names, id = id,
         target_date_shift = target_date_shift,
-        join_extra_data = join_extra_data, extra_data = nhsn_data,
+        join_extra_data = join_extra_data, extra_data = full_data_modified,
         filter_sources = filter_sources, excluded_geos = excluded_geos,
         sort_quantiles = sort_quantiles
       )
