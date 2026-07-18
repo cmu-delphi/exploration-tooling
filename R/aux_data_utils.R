@@ -509,6 +509,15 @@ generate_flusurv_adjusted <- function(day_of_week = 1) {
     as_tibble() %>%
     mutate(start_year = as.numeric(substr(season, 1, 4)))
   adj_factor <- calculate_burden_adjustment(flusurv_all_latest)
+  # This drop_na() is the *effective* time bound on flusurv, not the live
+  # pub_flusurv() fetch above: adj_factor only exists for the seasons covered by
+  # the static aux_data/flusion_data/flu_burden.csv + us_pop.csv (2011-2020), so
+  # every flusurv row outside those seasons is dropped here (max time_value ends
+  # up ~2020-04-22). Downstream (nhsn_prod_archive in flu_hosp_prod.R) folds these
+  # rows into the training archive as faux-versioned history and asserts they
+  # predate the forecast window. That assertion is really guarding against
+  # someone extending flu_burden.csv past 2020 -- new flusurv issues alone can't
+  # push data into the window while this cap holds.
   flusurv_lat <- flusurv_all$DT %>%
     left_join(adj_factor, by = "season") %>%
     drop_na() %>%

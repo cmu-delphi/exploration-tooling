@@ -260,6 +260,11 @@ parameters_and_date_targets <- rlang::list2(
         rename(value = hhs) %>%
         filter(source != "nhsn") %>%
         mutate(version = time_value)
+      # The faux-versioning above is only equivalent to the old unconditional
+      # bind if no augmentation row lands inside the forecast window (flusurv is
+      # a live fetch, currently bounded at 2020 by the burden-estimate join;
+      # ILI+ ends mid-2024). Fail loudly if that ever drifts.
+      stopifnot(max(extra_dt$time_value) < min(as.Date(g_forecast_generation_dates)))
       bind_rows(nhsn_dt, extra_dt) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
     }
