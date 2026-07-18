@@ -85,6 +85,9 @@ get_single_id <- function(param_list) {
 #   excluded_geos     geos dropped from the output.
 #   sort_quantiles    enforce quantile monotonicity (the flu whitening workaround).
 #   output_scale      "count"/"per100k": whether scoring rescales to counts.
+#   min_train_date    if non-NULL (declare as list(as.Date(...))), drop training
+#                     rows before this absolute date at the snapshot boundary
+#                     (covid cdc_baseline uses it to bound quantile spread).
 FORECASTER_SPEC_DEFAULTS <- list(
   as_of_policy = "asof",
   ahead_multiplier = 1L,
@@ -93,7 +96,8 @@ FORECASTER_SPEC_DEFAULTS <- list(
   filter_sources = NULL,
   excluded_geos = NULL,
   sort_quantiles = FALSE,
-  output_scale = "count"
+  output_scale = "count",
+  min_train_date = NULL
 )
 
 #' Make a forecaster grid.

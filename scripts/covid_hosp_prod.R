@@ -85,34 +85,115 @@ if (g_evaluation_mode) {
 g_forecast_dates <- g_forecast_schedule$forecast_date_int
 g_forecast_generation_dates <- g_forecast_schedule$forecast_generation_date_int
 
-# Forecaster grid — function definitions live in R/covid_prod_forecasters.R.
-ids <- c(
-  "cdc_baseline",
-  "linear",
-  "linear_no_population_scale",
-  "windowed_seasonal",
-  "windowed_seasonal_extra_sources",
-  "climate_base",
-  "climate_geo_agged",
-  "windowed_seasonal_latest",
-  "seasonal_nssp_latest"
-)
-g_forecaster_params_grid <- tibble(
-  id = ids,
-  forecaster = rlang::syms(c(
-    "g_baseline_forecaster",
-    "g_covid_linear",
-    "g_covid_linear_no_population_scale",
-    "g_covid_windowed_seasonal",
-    "g_covid_windowed_seasonal_extra_sources",
-    "g_covid_climate_base",
-    "g_covid_climate_geo_agged",
-    "g_covid_windowed_seasonal",
-    "g_covid_windowed_seasonal_extra_sources"
-  )),
-  params = vector("list", length(ids)),
-  param_names = vector("list", length(ids))
-)
+# Trainer used by the seasonal forecasters; stored as a global and referenced by
+# symbol in the grid params so tar_map embeds the symbol, not the model_spec.
+g_quantreg <- epipredict::quantile_reg()
+
+# Forecaster grid — behavior is defined by (id, bare forecaster function,
+# params). Per-forecaster wrapping that isn't a modeling parameter is declared
+# inline as spec columns and applied by run_forecaster()/the data targets;
+# make_forecaster_grid() separates them from the params list-column and fills
+# defaults (see FORECASTER_SPEC_DEFAULTS). The *_latest forecasters are the
+# base rows plus as_of_policy = "cheating" (train on the latest revision as a
+# limit test). The scaled_pop_seasonal family opts into sort_quantiles: its
+# whitening step has edge cases that emit crossing quantiles (~12% of tasks on
+# the 2026-06-24 replay), which validate_forecast_output() would otherwise
+# reject; monotone-by-construction forecasters stay unsorted so a crossing
+# there surfaces as an error.
+g_forecaster_params_grid <- list(
+  cdc_baseline = tibble(
+    id = "cdc_baseline",
+    forecaster = "g_baseline_forecaster",
+    min_train_date = list(as.Date("2024-11-09"))
+  ),
+  linear = tibble(
+    id = "linear",
+    forecaster = "forecaster_baseline_linear",
+    residual_tail = 0.97,
+    residual_center = 0.097,
+    no_intercept = TRUE
+  ),
+  linear_no_population_scale = tibble(
+    id = "linear_no_population_scale",
+    forecaster = "forecaster_baseline_linear",
+    residual_tail = 0.97,
+    residual_center = 0.097,
+    no_intercept = TRUE,
+    population_scale = FALSE
+  ),
+  windowed_seasonal = tibble(
+    id = "windowed_seasonal",
+    forecaster = "scaled_pop_seasonal",
+    outcome = "value",
+    trainer = "g_quantreg",
+    seasonal_method = "none",
+    drop_non_seasons = TRUE,
+    pop_scaling = FALSE,
+    lags = list(c(0, 7)),
+    ahead_multiplier = 7L,
+    target_date_shift = 3L,
+    sort_quantiles = TRUE
+  ),
+  windowed_seasonal_extra_sources = tibble(
+    id = "windowed_seasonal_extra_sources",
+    forecaster = "scaled_pop_seasonal",
+    outcome = "value",
+    extra_sources = "nssp",
+    trainer = "g_quantreg",
+    seasonal_method = "window",
+    drop_non_seasons = TRUE,
+    pop_scaling = FALSE,
+    lags = list(list(c(0, 7), c(0, 7))),
+    ahead_multiplier = 7L,
+    target_date_shift = 3L,
+    join_extra_data = TRUE,
+    excluded_geos = list(c("mo", "wy")),
+    sort_quantiles = TRUE
+  ),
+  climate_base = tibble(
+    id = "climate_base",
+    forecaster = "climatological_model"
+  ),
+  climate_geo_agged = tibble(
+    id = "climate_geo_agged",
+    forecaster = "climatological_model",
+    geo_agg = TRUE
+  ),
+  windowed_seasonal_latest = tibble(
+    id = "windowed_seasonal_latest",
+    forecaster = "scaled_pop_seasonal",
+    outcome = "value",
+    trainer = "g_quantreg",
+    seasonal_method = "none",
+    drop_non_seasons = TRUE,
+    pop_scaling = FALSE,
+    lags = list(c(0, 7)),
+    as_of_policy = "cheating",
+    ahead_multiplier = 7L,
+    target_date_shift = 3L,
+    sort_quantiles = TRUE
+  ),
+  seasonal_nssp_latest = tibble(
+    id = "seasonal_nssp_latest",
+    forecaster = "scaled_pop_seasonal",
+    outcome = "value",
+    extra_sources = "nssp",
+    trainer = "g_quantreg",
+    seasonal_method = "window",
+    drop_non_seasons = TRUE,
+    pop_scaling = FALSE,
+    lags = list(list(c(0, 7), c(0, 7))),
+    as_of_policy = "cheating",
+    ahead_multiplier = 7L,
+    target_date_shift = 3L,
+    join_extra_data = TRUE,
+    excluded_geos = list(c("mo", "wy")),
+    sort_quantiles = TRUE
+  )
+) %>%
+  imap(\(tib, family) make_forecaster_grid(tib, family)) %>%
+  bind_rows() %>%
+  select(-family)
 
 
 # ================================ PARAMETERS AND DATA TARGETS ================================
@@ -181,9 +262,8 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_nhsn,
     command = {
-      # if the forecaster is named latest, it should use the most up to date
-      # version of the data
-      if (grepl("latest", id)) {
+      # "cheating" forecasters train on the most up to date version of the data
+      if (as_of_policy == "cheating") {
         nhsn_data <- nhsn_archive_data %>%
           epix_as_of(nhsn_archive_data$versions_end) %>%
           filter(time_value < as.Date(forecast_date_int))
@@ -203,33 +283,30 @@ forecast_targets <- tar_map(
           time_value = floor_date(time_value, "week", week_start = 7) + 3
         ) %>%
         filter(geo_value %nin% g_insufficient_data_geos)
-      if (!grepl("latest", id)) {
+      if (as_of_policy != "cheating") {
         nhsn_data %<>%
           data_substitutions(covid_data_substitutions, as.Date(forecast_generation_date_int))
       }
       attributes(nhsn_data)$metadata$as_of <- as.Date(forecast_date_int)
-
-      # trim the cdc_baseline data to avoid larger quantile data
-      if (id == "cdc_baseline") {
-        nhsn_data <- nhsn_data %>% filter(time_value >= as.Date("2024-11-09"))
+      if (!is.null(min_train_date)) {
+        nhsn_data <- nhsn_data %>% filter(time_value >= min_train_date)
       }
-
-      forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
-
-      forecaster_fn(nhsn_data, extra_data = nssp_data) %>%
-        mutate(
-          forecaster = id,
-          geo_value = as.factor(geo_value)
-        )
+      run_forecaster(
+        snapshot = nhsn_data, forecaster = forecaster, aheads = aheads * ahead_multiplier,
+        params = params, param_names = param_names, id = id,
+        target_date_shift = target_date_shift,
+        join_extra_data = join_extra_data, extra_data = nssp_data,
+        filter_sources = filter_sources, excluded_geos = excluded_geos,
+        sort_quantiles = sort_quantiles
+      )
     },
     pattern = map(aheads)
   ),
   tar_target(
     name = forecast_nssp,
     command = {
-      # if the forecaster is named latest, it should use the most up to date
-      # version of the data
-      if (grepl("latest", id)) {
+      # "cheating" forecasters train on the most up to date version of the data
+      if (as_of_policy == "cheating") {
         nhsn_data <- nhsn_archive_data %>%
           epix_as_of(nhsn_archive_data$versions_end) %>%
           filter(time_value < as.Date(forecast_date_int))
@@ -251,31 +328,30 @@ forecast_targets <- tar_map(
         ) %>%
         filter(geo_value %nin% g_insufficient_data_geos_nssp)
 
-      if (!grepl("latest", id)) {
+      if (as_of_policy != "cheating") {
         nhsn_data %<>%
           data_substitutions(covid_data_substitutions, as.Date(forecast_generation_date_int))
       }
 
-      # jank renaming to avoid hard-coded variable name problems
+      # Exogenous input: nhsn spoofed into the `nssp` column to switch its role
+      # from target to predictor for the nssp-as-target forecast.
       nhsn_data %<>%
         rename(nssp = value) %>%
         mutate(
           time_value = floor_date(time_value, "week", week_start = 7) + 3
         )
       attributes(nssp_data)$metadata$as_of <- as.Date(forecast_date_int)
-
-      # trim the cdc_baseline data to avoid larger quantile data
-      if (id == "cdc_baseline") {
-        nssp_data <- nssp_data %>% filter(time_value >= as.Date("2024-11-09"))
+      if (!is.null(min_train_date)) {
+        nssp_data <- nssp_data %>% filter(time_value >= min_train_date)
       }
-
-      forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
-
-      forecaster_fn(nssp_data, extra_data = nhsn_data) %>%
-        mutate(
-          forecaster = id,
-          geo_value = as.factor(geo_value)
-        )
+      run_forecaster(
+        snapshot = nssp_data, forecaster = forecaster, aheads = aheads * ahead_multiplier,
+        params = params, param_names = param_names, id = id,
+        target_date_shift = target_date_shift,
+        join_extra_data = join_extra_data, extra_data = nhsn_data,
+        filter_sources = filter_sources, excluded_geos = excluded_geos,
+        sort_quantiles = sort_quantiles
+      )
     },
     pattern = map(aheads)
   )
