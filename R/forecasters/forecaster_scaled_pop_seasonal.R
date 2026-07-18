@@ -88,11 +88,12 @@ scaled_pop_seasonal <- function(
     )
     return(null_result)
   }
-  # this is to deal with grouping by source in tests that don't include it
+  # this is to deal with grouping by source in tests that don't include it;
+  # stamp primary_source so the source filters below still match
   adding_source <- FALSE
   if (!("source" %in% names(epi_data))) {
     adding_source <- TRUE
-    epi_data$source <- c("nhsn")
+    epi_data$source <- primary_source
     attributes(epi_data)$metadata$other_keys <- "source"
   }
   args_input[["ahead"]] <- ahead
