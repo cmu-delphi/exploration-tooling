@@ -747,7 +747,16 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv
     ) %>%
     # Ensure uniqueness and convert to epi_archive
     arrange(geo_value, time_value, version) %>%
-    distinct(geo_value, time_value, version, .keep_all = TRUE)
+    distinct(geo_value, time_value, version, .keep_all = TRUE) %>%
+    # NSSP publishes explicit NA values for non-reporting geos (wy through
+    # version 2026-01-07, backfilled with real values on 2026-01-14). An NA
+    # observation is not an observation: keeping the rows makes historical
+    # as-of slices serve NAs that crash NA-intolerant forecasters
+    # (cdc_baseline via propagate_samples) on replay, while dropping them makes
+    # the geo absent for that period -- matching the pre-2026-06-24 behavior of
+    # excluding wy outright. Current-date slices are unaffected (later real
+    # versions supersede).
+    filter(!is.na(nssp))
 
   # Complete the rest of the conversion.
   nssp_data %>%
