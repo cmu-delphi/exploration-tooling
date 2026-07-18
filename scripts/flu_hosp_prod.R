@@ -127,6 +127,11 @@ g_forecaster_params_grid <- list(
     no_intercept = TRUE,
     population_scale = FALSE
   ),
+  # The scaled_pop_seasonal family opts into sort_quantiles: its whitening step
+  # has edge cases that emit crossing quantiles, and explore evaluates these
+  # forecasters sorted, so shipping them unsorted would drift from what was
+  # validated. Forecasters that are monotone by construction stay unsorted so
+  # a crossing there surfaces as an error (validate_forecast_output).
   windowed_seasonal = tibble(
     id = "windowed_seasonal",
     forecaster = "scaled_pop_seasonal",
@@ -137,7 +142,8 @@ g_forecaster_params_grid <- list(
     lags = list(c(0, 7)),
     keys_to_ignore = g_very_latent_locations,
     ahead_multiplier = 7L,
-    target_date_shift = 3L
+    target_date_shift = 3L,
+    sort_quantiles = TRUE
   ),
   windowed_seasonal_extra_sources = tibble(
     id = "windowed_seasonal_extra_sources",
@@ -153,7 +159,8 @@ g_forecaster_params_grid <- list(
     ahead_multiplier = 7L,
     target_date_shift = 3L,
     join_extra_data = TRUE,
-    excluded_geos = list(c("mo", "wy"))
+    excluded_geos = list(c("mo", "wy")),
+    sort_quantiles = TRUE
   ),
   climate_base = tibble(
     id = "climate_base",
@@ -182,7 +189,8 @@ g_forecaster_params_grid <- list(
     ahead_multiplier = 7L,
     target_date_shift = 3L,
     join_extra_data = TRUE,
-    excluded_geos = list(c("mo", "wy"))
+    excluded_geos = list(c("mo", "wy")),
+    sort_quantiles = TRUE
   )
 ) %>%
   imap(\(tib, family) make_forecaster_grid(tib, family)) %>%
@@ -375,6 +383,7 @@ forecast_targets <- tar_map(
         target_date_shift = target_date_shift,
         join_extra_data = join_extra_data, extra_data = full_data_modified,
         filter_sources = filter_sources, excluded_geos = excluded_geos,
+        sort_quantiles = sort_quantiles,
         # nssp is the target here; snapshot rows are stamped source = "nssp".
         primary_source = "nssp"
       )
@@ -408,7 +417,8 @@ forecast_targets <- tar_map(
         params = params, param_names = param_names, id = id,
         target_date_shift = target_date_shift,
         join_extra_data = join_extra_data, extra_data = nssp_exogenous_data,
-        filter_sources = filter_sources, excluded_geos = excluded_geos
+        filter_sources = filter_sources, excluded_geos = excluded_geos,
+        sort_quantiles = sort_quantiles
       )
     },
     pattern = map(aheads)
