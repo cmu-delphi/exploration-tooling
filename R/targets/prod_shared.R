@@ -4,9 +4,11 @@
 
 g_baseline_forecaster <- function(epi_data, ahead, extra_data, ...) {
   if (ahead < 3) {
+    # Same schema as the populated path below: the old `quantile_value` name
+    # here leaked a spurious all-NA column into forecast_*_full via bind_rows.
     return(tibble(
       geo_value = character(), forecast_date = Date(),
-      target_end_date = Date(), quantile_value = numeric(), value = numeric()
+      target_end_date = Date(), quantile = numeric(), value = numeric()
     ))
   }
   real_forecast_date <- attributes(epi_data)$metadata$as_of
