@@ -66,13 +66,15 @@ create_forecast_targets <- function() {
         # is a spec column (was a `g_disease == "flu"` grep). target_end_date stays
         # Wednesday here; the Wednesday->Saturday shift is applied downstream
         # (score/combine).
+        archive_hash <- rlang::hash(joined_archive_data)
         map(forecast_dates, function(fdate) {
           run_forecaster(
             snapshot = make_forecast_snapshot(
               joined_archive_data,
               forecast_date = fdate,
               generation_date = fdate,
-              cache_key = "joined_archive_data"
+              cache_key = "joined_archive_data",
+              archive_hash = archive_hash
             ),
             forecaster = forecaster,
             aheads = aheads * ahead_multiplier,

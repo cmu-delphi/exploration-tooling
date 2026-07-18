@@ -112,6 +112,9 @@ slide_forecaster <- function(
 #' @param cache_key        if non-NULL, cache the raw slice to a parquet file
 #'   keyed on this plus the archive hash (used by the explore slide). Ignored
 #'   under "cheating".
+#' @param archive_hash     precomputed `rlang::hash(archive)`, so per-date
+#'   callers can hash the archive once instead of on every call. Computed here
+#'   when NULL; only used when `cache_key` is set.
 #' @param before           training-window bound: `min_time_value` of the slice
 #'   is `generation_date - before` (Inf keeps all history). Ignored under
 #'   "cheating".
@@ -124,7 +127,8 @@ make_forecast_snapshot <- function(
   as_of_policy = "asof",
   substitutions = NULL,
   cache_key = NULL,
-  before = Inf
+  before = Inf,
+  archive_hash = NULL
 ) {
   forecast_date <- as.Date(forecast_date)
   generation_date <- as.Date(generation_date)
@@ -148,7 +152,7 @@ make_forecast_snapshot <- function(
       snapshot <- read_slice()
     } else {
       # hash the archive so changing the object without renaming it doesn't pull a stale cache
-      cache_hash <- rlang::hash(archive)
+      cache_hash <- archive_hash %||% rlang::hash(archive)
       dir.create("cache/slide_cache", showWarnings = FALSE, recursive = TRUE)
       file_path <- glue::glue("cache/slide_cache/{cache_key}_{cache_hash}_{before}_{generation_date}.parquet")
       if (file.exists(file_path)) {
@@ -174,6 +178,8 @@ make_forecast_snapshot <- function(
 
 
 epix_slide_simple <- function(epi_archive, forecaster, ref_time_values, before = Inf, cache_key = NULL) {
+  # hash once here rather than per ref_time_value inside make_forecast_snapshot
+  archive_hash <- if (!is.null(cache_key)) rlang::hash(epi_archive)
   out <- purrr::map(ref_time_values, function(tv) {
     make_forecast_snapshot(
       epi_archive,
@@ -181,7 +187,8 @@ epix_slide_simple <- function(epi_archive, forecaster, ref_time_values, before =
       generation_date = tv,
       as_of_policy = "asof",
       cache_key = cache_key,
-      before = before
+      before = before,
+      archive_hash = archive_hash
     ) %>%
       forecaster()
   }) %>%
