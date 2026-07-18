@@ -132,6 +132,12 @@ make_forecast_snapshot <- function(
 ) {
   forecast_date <- as.Date(forecast_date)
   generation_date <- as.Date(generation_date)
+  if (forecast_date > generation_date) {
+    cli::cli_abort(
+      "make_forecast_snapshot(): forecast_date ({forecast_date}) is after generation_date ({generation_date});
+       generation can be delayed past the nominal date, never precede it."
+    )
+  }
 
   if (as_of_policy == "cheating") {
     # Warn on args the cheating branch can't honor (substitutions is passed
@@ -165,6 +171,19 @@ make_forecast_snapshot <- function(
     other_keys <- attributes(snapshot)$metadata$other_keys
     if (!is.null(substitutions)) {
       snapshot <- snapshot %>% data_substitutions(substitutions, generation_date)
+    }
+    # Version faithfulness: an as-of snapshot must contain nothing observed
+    # after the generation date. epix_as_of bounds versions, but rows published
+    # ahead of their observation date (e.g. faux-versioned augmentation rows
+    # stamped version < time_value) slip through that bound, so assert on the
+    # assembled rows. The cheating branch peeks at finalized values on purpose;
+    # its time_value filter above enforces the same bound.
+    leaked <- snapshot$time_value > generation_date
+    if (any(leaked)) {
+      cli::cli_abort(
+        "make_forecast_snapshot(): {sum(leaked)} row{?s} with time_value after generation_date ({generation_date}),
+         e.g. time_value {max(snapshot$time_value[leaked])}: an as-of snapshot leaked future observations."
+      )
     }
   }
 
