@@ -101,13 +101,17 @@ Roadmap:
   Port semantic seeding to covid (`tar_seed_create(paste(id, signal, date, ahead, sep = "/"))` — target
   renames must not move stochastic forecasters; deterministic ones must stay
   bit-zero on any reseed).
-- Enforce contracts: version faithfulness (no as-of row with
-  `version > generation_date`), `validate_model_frame()` at the snapshot
-  boundary instead of raw `attributes()<-`, and forecaster output shape (keys,
-  monotone quantiles, no NAs, non-negative). The monotonicity assertion also
-  settles the inconsistent `sort_by_quantile()` usage (explore sorts all
-  output via the `sort_quantiles` spec column; flu prod sorts only ensembles
-  and `forecaster_climatological`).
+- Contracts (landed 2026-07-18): version faithfulness is asserted in
+  `make_forecast_snapshot()` (no as-of row observed after the generation
+  date) and output shape in `validate_forecast_output()` at the
+  `run_forecaster()` boundary (keys present, no NAs, non-negative, monotone
+  quantiles). The monotonicity assert settled the `sort_by_quantile()`
+  question: flu prod's seasonal family (`scaled_pop_seasonal`) really was
+  shipping crossing quantiles (~18% of its tasks) and now opts into
+  `sort_quantiles = TRUE`, matching what explore evaluated; monotone-by-
+  construction forecasters stay unsorted so a crossing errors. Still open: a
+  `validate_model_frame()`-style check at the snapshot *input* boundary
+  replacing the raw `attributes()<-` metadata handling.
 - Make `output_scale` per-forecaster; it is per-disease today, so scoring
   unscales all flu forecasters including `pop_scaling = FALSE` ones.
 - Per-source version policies for explore-style multi-source snapshots.

@@ -462,3 +462,55 @@ Durable findings from the retrospective still worth acting on:
 
 - (resolved in phase 2) Score-time population-column sniffing is now the
   `output_scale` spec column; per-forecaster values remain a future fix.
+
+## Session 2026-07-18: golden confirmation + contracts
+
+State vs goldens confirmed. `main@origin` is still `bcd7501` (06-24, the
+pre-refactor baseline); the whole refactor lives on this branch. A fresh
+single-date eval capture (`flu_hosp_evaluation`, pinned reference date
+2026-06-24, `EVALUATION_N_DATES=1`, label `head-nxpuszrv`) was diffed against
+the last golden (`refactored-yopxxtmx`, 07-13). Verdict: in line. The four
+deterministic non-cheating forecasters (climate_base, climate_geo_agged,
+windowed_seasonal, windowed_seasonal_extra_sources) are bit-identical; all
+other diffs are the documented intentional changes — semantic seeds on the
+three stochastic forecasters (07-15), the nssp `source` de-spoof (07-16) — or
+finalized-data drift on `seasonal_nssp_cheating` (its "cheating" policy reads
+versions_end, which moved with the archive refetch; wis diffs in the 5th
+decimal). `scores_nssp`/`nhsn_latest_data` matched where data allowed.
+
+Contracts landed (each its own commit, verified by eval replay + capture
+diff `head` vs `contracts` with archives bit-identical between runs):
+
+- `wrvskmro` version faithfulness: `make_forecast_snapshot()` asof branch
+  aborts if any assembled row has `time_value > generation_date` (catches
+  faux-versioned rows published "before" their observation date, which
+  epix_as_of's version bound lets through), plus forecast_date >
+  generation_date is rejected. Tests in test-forecast-snapshot.R.
+- `tpqontyt` output shape: `validate_forecast_output()` at the end of
+  `run_forecaster()` — storage-format keys present, no NAs, non-negative,
+  quantiles monotone per (geo, forecast_date, target_end_date). Asserted,
+  not silently re-sorted, so crossings surface unless the grid row opts into
+  `sort_quantiles`. Tests in test-forecaster-runner.R.
+
+The contracts immediately caught two real defects:
+
+- `rtqptkow`: `g_baseline_forecaster`'s `ahead < 3` early return named its
+  column `quantile_value` instead of `quantile`, injecting a spurious all-NA
+  `quantile_value` column into `forecast_*_full` via bind_rows (visible in
+  every capture's schema; gone now — frames are 8 cols, not 9).
+- `nnqsptrt`: flu prod WAS shipping crossing quantiles — the open question
+  from the ds/refactor retrospective, now answered empirically: 369/2037
+  nhsn tasks and 367/2008 nssp tasks (~18% of the seasonal family:
+  seasonal_nssp_cheating, windowed_seasonal_extra_sources, and a few
+  windowed_seasonal) crossed on the 2026-06-24 replay. Fixed by opting the
+  `scaled_pop_seasonal` family into `sort_quantiles = TRUE` in the prod grid
+  (and threading `sort_quantiles` through the prod `run_forecaster` calls,
+  which had omitted it) — matching what explore evaluated. Verified: every
+  changed value is a pure within-task permutation (multisets identical), and
+  the contracts capture is monotone everywhere. NB this is a visible output
+  change: component forecasts and the ensembles built from them
+  (ensemble_mix, ens_ar_only) shift on previously-crossing tasks.
+
+Also: rsv prod is now explicitly marked as a stub (docs, Makefile,
+`_targets.yaml`) — not a priority. The new baseline capture for future
+refactors is `flu_hosp_evaluation:contracts` (`contracts-nnqsptrt`).
