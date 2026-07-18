@@ -27,29 +27,47 @@ g_truth_data_date <- "2023-09-01"
 # against the truth data and compares them to the ensemble.
 # If FALSE, we run the weekly report notebook.
 g_backtest_mode <- as.logical(Sys.getenv("BACKTEST_MODE", FALSE))
+# The pipeline's notion of "today", read once here so a whole run can be pinned
+# for reproducible oracle captures (scripts/oracle/capture.R): forecast dates
+# and the latest-data as-of slices otherwise move with the calendar. Unset ->
+# Sys.Date(), i.e. current production behavior.
+g_reference_date <- {
+  raw <- Sys.getenv("FORECAST_REFERENCE_DATE", "")
+  if (nzchar(raw)) as.Date(raw) else Sys.Date()
+}
+# The forecast schedule, held as one tibble so forecast_date / generation_date
+# stay row-aligned by construction (see flu_hosp_prod.R for column docs).
 if (!g_backtest_mode) {
-  # This is the as_of for the forecast. If run on our typical schedule, it's
-  # today, which is a Wednesday. Sometimes, if we're doing a delayed forecast,
-  # it's a Thursday. It's used for stamping the data and for determining the
-  # appropriate as_of when creating the forecast.
-  g_forecast_generation_dates <- Sys.Date()
-  # Usually, the forecast_date is the same as the generation date, but you can
-  # override this. It should be a Wednesday.
-  g_forecast_dates <- round_date(g_forecast_generation_dates, "weeks", week_start = 3)
+  # generation_date is the as_of for the forecast. If run on our typical
+  # schedule, it's today, a Wednesday; on a delayed forecast it's a Thursday.
+  # It's used for stamping the data and picking the as_of. Usually forecast_date
+  # equals it, but forecast_date can be overridden and should be a Wednesday.
+  gen_dates <- g_reference_date
+  fc_dates <- round_date(gen_dates, "weeks", week_start = 3)
   # the forecast is actually for the wednesday beforehand for these days
-  if (Sys.Date() %in% as.Date(c("2025-12-29"))) {
-    g_forecast_dates <- as.Date("2025-12-24")
+  if (gen_dates %in% as.Date(c("2025-12-29"))) {
+    fc_dates <- as.Date("2025-12-24")
   }
 } else {
-  g_forecast_generation_dates <- c(
+  # Pin FORECAST_REFERENCE_DATE for a reproducible replay window; must be
+  # >= 2025-12-31 so the trailing seq.Date() stays non-empty.
+  gen_dates <- c(
     as.Date(c("2024-11-20", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")),
     seq.Date(as.Date("2025-01-08"), as.Date("2025-12-17"), by = 7L),
     as.Date(c("2025-12-29")),
-    seq.Date(as.Date("2025-12-31"), Sys.Date(), by = 7L)
+    seq.Date(as.Date("2025-12-31"), g_reference_date, by = 7L)
   )
   # Every Wednesday since mid-Nov 2024
-  g_forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
+  fc_dates <- seq.Date(as.Date("2024-11-20"), g_reference_date, by = 7L)
 }
+g_forecast_schedule <- tibble(
+  forecast_date_int = fc_dates,
+  forecast_generation_date_int = gen_dates,
+  forecast_date_chr = as.character(fc_dates)
+)
+# Thin derived views; shared R/ code and other targets here consume these.
+g_forecast_dates <- g_forecast_schedule$forecast_date_int
+g_forecast_generation_dates <- g_forecast_schedule$forecast_generation_date_int
 
 # Forecaster grid — function definitions live in R/covid_prod_forecasters.R.
 ids <- c(
@@ -119,7 +137,7 @@ parameters_and_date_targets <- rlang::list2(
     name = nhsn_latest_data,
     command = {
       nhsn_archive_data %>%
-        epix_as_of(min(Sys.Date(), nhsn_archive_data$versions_end)) %>%
+        epix_as_of(min(g_reference_date, nhsn_archive_data$versions_end)) %>%
         filter(geo_value %nin% g_insufficient_data_geos)
     }
   ),
@@ -134,7 +152,7 @@ parameters_and_date_targets <- rlang::list2(
     name = nssp_latest_data,
     command = {
       nssp_archive_data %>%
-        epix_as_of(min(Sys.Date(), nssp_archive_data$versions_end))
+        epix_as_of(min(g_reference_date, nssp_archive_data$versions_end))
     }
   )
 )
@@ -142,14 +160,7 @@ parameters_and_date_targets <- rlang::list2(
 
 # ================================ FORECAST TARGETS ================================
 forecast_targets <- tar_map(
-  values = tidyr::expand_grid(
-    g_forecaster_params_grid,
-    tibble(
-      forecast_date_int = g_forecast_dates,
-      forecast_generation_date_int = g_forecast_generation_dates,
-      forecast_date_chr = as.character(g_forecast_dates)
-    )
-  ),
+  values = tidyr::expand_grid(g_forecaster_params_grid, g_forecast_schedule),
   names = c("id", "forecast_date_chr"),
   tar_target(
     name = forecast_nhsn,
@@ -259,11 +270,7 @@ combined_forecast_targets <- build_combined_forecast_targets(forecast_targets)
 
 # ================================ ENSEMBLE TARGETS ================================
 ensemble_targets <- tar_map(
-  values = tibble(
-    forecast_date_int = g_forecast_dates,
-    forecast_generation_date_int = g_forecast_generation_dates,
-    forecast_date_chr = as.character(g_forecast_dates)
-  ),
+  values = g_forecast_schedule,
   names = "forecast_date_chr",
   tar_target(
     name = forecast_filtered,
