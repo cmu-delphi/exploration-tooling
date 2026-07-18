@@ -6,10 +6,11 @@
 	pull-flu-evaluation push-flu-evaluation get-flu-evaluation-errors \
 	oracle-capture oracle-compare
 
-# Long-running recipes tee to cache/logs/. pipefail so a failing Rscript isn't
-# masked by tee's exit status.
+# Long-running recipes tee to cache/logs/ and set pipefail inline so a failing
+# Rscript isn't masked by tee's exit status. bash is needed for pipefail; keep
+# pipefail out of global .SHELLFLAGS so fail-soft pipelines (e.g.
+# check-socrata-updates) keep their sh semantics.
 SHELL := /bin/bash
-.SHELLFLAGS := -o pipefail -c
 
 current_date:=$(shell date +%F)
 
@@ -26,13 +27,13 @@ cache/logs:
 	mkdir -p cache/logs
 
 prod-covid: | cache/logs
-	export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_covid
+	set -o pipefail; export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_covid
 
 prod-flu: | cache/logs
-	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_flu
+	set -o pipefail; export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_flu
 
 prod-rsv: | cache/logs
-	export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_rsv
+	set -o pipefail; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_rsv
 
 prod: prod-covid prod-flu update-site netlify
 
@@ -48,7 +49,7 @@ prod-backtest: prod-covid-backtest prod-rsv-backtest
 # BACKTEST_MODE flag on prod. Set EVALUATION_N_DATES=<n> to replay only the
 # last n forecast dates.
 eval-flu: | cache/logs
-	export TAR_RUN_PROJECT=flu_hosp_evaluation; Rscript scripts/run.R 2>&1 | tee -a cache/logs/eval_flu
+	set -o pipefail; export TAR_RUN_PROJECT=flu_hosp_evaluation; Rscript scripts/run.R 2>&1 | tee -a cache/logs/eval_flu
 
 explore-covid:
 	export TAR_RUN_PROJECT=covid_hosp_explore; Rscript scripts/run.R
@@ -72,7 +73,7 @@ oracle-capture: | cache/logs
 		echo "Usage: make oracle-capture project=flu_hosp_prod label=refactored [n=3]"; exit 1; fi
 	export TAR_RUN_PROJECT=$(project); export ORACLE_LABEL=$(label); \
 	export FORECAST_REFERENCE_DATE=$(ORACLE_REFERENCE_DATE); export EVALUATION_N_DATES=$(n); \
-	Rscript scripts/oracle/capture.R 2>&1 | tee -a cache/logs/oracle_capture
+	set -o pipefail; Rscript scripts/oracle/capture.R 2>&1 | tee -a cache/logs/oracle_capture
 
 # Diff two captured labels of one project. project=<p> a=<label> b=<label>.
 # NOTE: exits non-zero when anything differs -- that is the signal, not an error.
