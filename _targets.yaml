@@ -26,6 +26,7 @@ covid_hosp_prod:
   use_crew: yes
   reporter_make: timestamp
 rsv_hosp_prod:
+  # STUB: scripts/rsv_hosp_prod.R is not written yet (not a priority).
   script: scripts/rsv_hosp_prod.R
   store: rsv_hosp_prod
   use_crew: yes

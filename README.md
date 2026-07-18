@@ -61,7 +61,7 @@ make pull
 # Make forecasts
 make prod-flu
 make prod-covid
-make prod-rsv
+# (make prod-rsv is a stub: scripts/rsv_hosp_prod.R is not written yet)
 
 # If there are errors, view the top n with (in an R session; replace with appropriate project):
 #   suppressPackageStartupMessages(source("R/load_all.R"))
@@ -78,7 +78,6 @@ make update-site && make netlify
 # and the gh CLI to be installed and configured, talk to Dmitry about this)
 make submit-flu
 make submit-covid
-make submit-rsv
 
 # Push your forecasts to the AWS bucket (requires AWS CLI)
 make push
@@ -112,8 +111,9 @@ to a store directory (targets cache) of the same name:
 
 - `covid_hosp_explore`, `flu_hosp_explore`: exploration sweeps over many
   forecaster/parameter combinations
-- `covid_hosp_prod`, `flu_hosp_prod`, `rsv_hosp_prod`: weekly production
-  forecasts and reports (the rsv pipeline script is not yet written)
+- `covid_hosp_prod`, `flu_hosp_prod`: weekly production forecasts and reports
+- `rsv_hosp_prod`: a stub — its Makefile recipes and `_targets.yaml` entry
+  point at a not-yet-written `scripts/rsv_hosp_prod.R` (not a priority)
 - `flu_hosp_evaluation`: historical replay + scoring; same script as flu prod
   but a separate store, so replays don't invalidate the production cache
 

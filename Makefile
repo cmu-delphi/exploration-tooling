@@ -32,6 +32,9 @@ prod-covid: | cache/logs
 prod-flu: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_flu
 
+# STUB: the rsv recipes (prod-rsv, prod-rsv-backtest, prune-rsv-prod,
+# commit/submit-rsv) point at scripts/rsv_hosp_prod.R, which is not written
+# yet (not a priority) — they fail if run.
 prod-rsv: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_rsv
 

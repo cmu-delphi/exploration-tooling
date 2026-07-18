@@ -13,7 +13,7 @@ make install              # renv::restore() R dependencies (R 4.4.1)
 make test                 # testthat::test_dir('tests/testthat')
 make prod-flu             # run flu production pipeline (TAR_RUN_PROJECT=flu_hosp_prod)
 make prod-covid           # covid production pipeline
-make prod-rsv             # rsv production pipeline
+make prod-rsv             # STUB: scripts/rsv_hosp_prod.R does not exist yet; recipe fails if run
 make explore-flu          # flu exploration sweep (~3h)
 make explore-covid        # covid exploration sweep (~3h)
 make eval-flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n dates. Covid/rsv still use BACKTEST_MODE=TRUE on the prod store (prod-covid-backtest, prod-rsv-backtest)
@@ -41,7 +41,7 @@ Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in 
 
 ## Architecture
 
-Each project in `_targets.yaml` maps a pipeline script to a store directory of the same name: `covid_hosp_explore`, `flu_hosp_explore`, `covid_hosp_prod`, `flu_hosp_prod`, `rsv_hosp_prod`, plus `flu_hosp_evaluation` (same script as flu prod, separate store, for historical replays). Explore projects sweep many forecaster/parameter combinations to find good settings; prod projects generate the weekly submission and reports. Store directories (targets caches) are synced to/from S3 rather than recomputed.
+Each project in `_targets.yaml` maps a pipeline script to a store directory of the same name: `covid_hosp_explore`, `flu_hosp_explore`, `covid_hosp_prod`, `flu_hosp_prod`, `rsv_hosp_prod` (a stub — see below), plus `flu_hosp_evaluation` (same script as flu prod, separate store, for historical replays). Explore projects sweep many forecaster/parameter combinations to find good settings; prod projects generate the weekly submission and reports. Store directories (targets caches) are synced to/from S3 rather than recomputed.
 
 - `scripts/<project>.R` — pipeline definitions. Globals are prefixed `g_` and must be top-level (targets freezes commands as expressions, so function arguments can't carry them). `g_forecast_dates` are the nominal (Wednesday) forecast dates; `g_forecast_generation_dates` are when forecasts actually ran (differ on holiday/outage delays) and serve as the data `as_of`.
 - `g_forecaster_parameter_combinations` — human-readable tibble of forecasters × parameter settings; `g_forecaster_params_grid` is the same data reshaped for targets' dynamic branching. Each heading in the combinations tibble gets its own report notebook in `reports/`.
@@ -88,15 +88,17 @@ explore batches dates inside one target per forecaster via the slide cache.
 
 Status: flu prod and flu/covid explore are on the shared stack. Covid prod is
 not yet canonicalized (`Sys.Date()`, in-target munging, no canonical
-archives); rsv prod has no pipeline script yet (Makefile/`_targets.yaml`
-entries point at a not-yet-written `scripts/rsv_hosp_prod.R`). Each needs its
-own archive-canonicalization pass before adopting the shared snapshot/runner.
+archives). Rsv prod is a **stub and not a priority**: every rsv reference
+(Makefile recipes, the `_targets.yaml` entry, `RSV_SUBMISSION_DIRECTORY`)
+points at a not-yet-written `scripts/rsv_hosp_prod.R` and will fail if run.
+Covid needs its own archive-canonicalization pass before adopting the shared
+snapshot/runner; rsv should be written directly on the shared stack whenever
+it is picked up.
 
 Roadmap:
 
-- Migrate covid prod (canonical archives → shared snapshot → shared runner),
-  then write rsv prod directly on the shared stack. Port semantic seeding to
-  covid (`tar_seed_create(paste(id, signal, date, ahead, sep = "/"))` — target
+- Migrate covid prod (canonical archives → shared snapshot → shared runner).
+  Port semantic seeding to covid (`tar_seed_create(paste(id, signal, date, ahead, sep = "/"))` — target
   renames must not move stochastic forecasters; deterministic ones must stay
   bit-zero on any reseed).
 - Enforce contracts: version faithfulness (no as-of row with
