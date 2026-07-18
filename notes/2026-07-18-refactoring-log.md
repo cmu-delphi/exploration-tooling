@@ -514,3 +514,65 @@ The contracts immediately caught two real defects:
 Also: rsv prod is now explicitly marked as a stub (docs, Makefile,
 `_targets.yaml`) — not a priority. The new baseline capture for future
 refactors is `flu_hosp_evaluation:contracts` (`contracts-nnqsptrt`).
+
+## Session 2026-07-18 (later): covid prod migration to the shared stack
+
+Covid prod caught up to flu's refactors, one verified commit per step
+(`qvmolqum` → `yprtznnv`), goldens via a new `covid_hosp_evaluation`
+project/store (`make eval-covid`; BACKTEST_MODE now rsv-stub-only):
+
+- `qvmolqum` FORECAST_REFERENCE_DATE pinning + `g_forecast_schedule` tibble
+  (behavior-identical when env unset).
+- `wtpmqmxu` covid_hosp_evaluation project/store split + Makefile plumbing
+  (eval/prune/pull/push/errors recipes). Gotcha: targets' fresh store
+  `.gitignore` re-includes `meta/meta` (`!meta/meta`), unlike the hand-edited
+  flu one — jj auto-tracked the store meta and it leaked into 5 commits;
+  history was rewritten to strip it and the `.gitignore` now comments the
+  re-include out (matching flu_hosp_evaluation).
+- Baseline golden `covid_hosp_evaluation:baseline` (old code, pinned
+  2026-06-24, n=1). Pre-check on it: covid also ships crossing quantiles —
+  ~12% of seasonal-family tasks (windowed_seasonal[_latest],
+  windowed_seasonal_extra_sources, seasonal_nssp_latest).
+- `orknoplo` grid + runner: closures in R/covid_prod_forecasters.R dissolved
+  into make_forecaster_grid rows with params/spec columns; `grepl("latest")`
+  dispatch → `as_of_policy = "cheating"`; the cdc_baseline input trim → new
+  `min_train_date` spec column (FORECASTER_SPEC_DEFAULTS; declare as
+  `list(as.Date(...))`); seasonal family opts into sort_quantiles (matching
+  the flu decision); geo_value factor stamp dropped (runner standardizes on
+  character; parquet-invisible). Verified vs baseline: 5 non-seasonal
+  forecasters bit-zero (target names unchanged ⇒ seeds unchanged), seasonal
+  diffs are pure within-task permutations (multisets identical).
+- `nxvqulyz` cheating + nssp-asof cutoffs unified on generation_date
+  (mirrors flu's b467d81; differs on holiday weeks only). Verified
+  bit-identical at the pinned non-holiday date; holiday-week footprint is
+  analysis-verified (replay there is blocked by the NaN crash below).
+- `yvkntmtz` canonical archives (`nhsn_prod_archive`, `nssp_target_archive` —
+  season info, usa→us, week-align, geo drops at archive build; no source
+  stamp on purpose: covid archives are single-source and the forecaster
+  fallback labels rows "nhsn" exactly as before; honest nssp de-spoof left as
+  follow-up) + hoisted `full_data`/`nssp_forecast_data`/`nssp_exogenous_data`
+  snapshot targets via make_forecast_snapshot; forecast targets shrink to
+  seed + optional min_train_date trim + run_forecaster. Verified: ALL MATCH
+  vs the cutoffs capture (archives bit-identical between runs).
+- `yprtznnv` semantic seeding (`tar_seed_create(paste(id, signal, date,
+  ahead, sep = "/"))`). Self-check: only cdc_baseline/linear/
+  linear_no_population_scale moved; all 6 deterministic forecasters bit-zero.
+- Multi-date verification (no usable cached covid_hosp_prod store — nearly
+  empty locally): old-code (`wtpmqmxu`) vs head 4-date replay
+  (2026-06-03..24, archives bit-identical between runs): climate_base/
+  climate_geo_agged bit-zero everywhere; seasonal family multiset-identical
+  permutations; stochastic three changed (seeding); nothing unexplained.
+
+Pre-existing findings (not caused by the migration):
+
+- Covid replay crashes at `forecast_nssp_cdc_baseline` for winter dates
+  (2025-12-31, 2026-01-07 tested): NaNs in the *current* nssp archive's
+  historical as-ofs blow up `propagate_samples`/`quantile`. The original live
+  runs used since-rebuilt archives. This blocked replaying the
+  substitution-active window (2026-01/02), so the substitutions path is
+  verified only by code identity with flu's (same make_forecast_snapshot
+  arguments) plus its no-op execution on recent dates. Diagnose to unblock
+  full eval-covid replays.
+- The eval store from these captures is at `covid_hosp_evaluation` with
+  goldens under `cache/oracle/covid_hosp_evaluation/` (`multibase`/`multihead`
+  are the 4-date pair; `seeded-yprtznnv` is the current single-date head).

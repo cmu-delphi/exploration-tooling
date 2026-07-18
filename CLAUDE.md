@@ -16,7 +16,7 @@ make prod-covid           # covid production pipeline
 make prod-rsv             # STUB: scripts/rsv_hosp_prod.R does not exist yet; recipe fails if run
 make explore-flu          # flu exploration sweep (~3h)
 make explore-covid        # covid exploration sweep (~3h)
-make eval-flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n dates. Covid/rsv still use BACKTEST_MODE=TRUE on the prod store (prod-covid-backtest, prod-rsv-backtest)
+make eval-flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n dates. Also: eval-covid. BACKTEST_MODE survives only for the rsv stub (prod-rsv-backtest)
 make pull / make push     # sync aux_data, targets stores, and forecasts with S3 (forecasting-team-data bucket)
 make update-site && make netlify   # rebuild report index and deploy
 make submit-flu           # commit forecast to ../FluSight-forecast-hub and open PR (also: submit-covid, submit-rsv, *-dry)
@@ -37,11 +37,11 @@ get_targets_errors("covid_hosp_prod", top_n = 10)
 forecaster_lookup("surprised.tarantula")  # map code name -> parameter settings
 ```
 
-Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in a REPL — never in `.Renviron`, which overrides the shell env on every Rscript start), `TAR_RUN_PROJECT` (how make recipes/`scripts/run.R` select the project, immune to `.Renviron`), `BACKTEST_MODE` (covid/rsv only; flu evaluation mode dispatches on the project name), `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
+Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in a REPL — never in `.Renviron`, which overrides the shell env on every Rscript start), `TAR_RUN_PROJECT` (how make recipes/`scripts/run.R` select the project, immune to `.Renviron`), `BACKTEST_MODE` (rsv stub only; flu/covid evaluation mode dispatches on the project name), `FORECAST_REFERENCE_DATE` (pins the pipeline's "today" for reproducible replays/captures), `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
 
 ## Architecture
 
-Each project in `_targets.yaml` maps a pipeline script to a store directory of the same name: `covid_hosp_explore`, `flu_hosp_explore`, `covid_hosp_prod`, `flu_hosp_prod`, `rsv_hosp_prod` (a stub — see below), plus `flu_hosp_evaluation` (same script as flu prod, separate store, for historical replays). Explore projects sweep many forecaster/parameter combinations to find good settings; prod projects generate the weekly submission and reports. Store directories (targets caches) are synced to/from S3 rather than recomputed.
+Each project in `_targets.yaml` maps a pipeline script to a store directory of the same name: `covid_hosp_explore`, `flu_hosp_explore`, `covid_hosp_prod`, `flu_hosp_prod`, `rsv_hosp_prod` (a stub — see below), plus `flu_hosp_evaluation` / `covid_hosp_evaluation` (same scripts as the prod projects, separate stores, for historical replays). Explore projects sweep many forecaster/parameter combinations to find good settings; prod projects generate the weekly submission and reports. Store directories (targets caches) are synced to/from S3 rather than recomputed.
 
 - `scripts/<project>.R` — pipeline definitions. Globals are prefixed `g_` and must be top-level (targets freezes commands as expressions, so function arguments can't carry them). `g_forecast_dates` are the nominal (Wednesday) forecast dates; `g_forecast_generation_dates` are when forecasts actually ran (differ on holiday/outage delays) and serve as the data `as_of`.
 - `g_forecaster_parameter_combinations` — human-readable tibble of forecasters × parameter settings; `g_forecaster_params_grid` is the same data reshaped for targets' dynamic branching. Each heading in the combinations tibble gets its own report notebook in `reports/`.
@@ -86,21 +86,25 @@ Fan-out stays deliberately different — "share the cell, keep two fan-out
 strategies": prod is `tar_map` per (forecaster, date) for caching/crew/seeds;
 explore batches dates inside one target per forecaster via the slide cache.
 
-Status: flu prod and flu/covid explore are on the shared stack. Covid prod is
-not yet canonicalized (`Sys.Date()`, in-target munging, no canonical
-archives). Rsv prod is a **stub and not a priority**: every rsv reference
-(Makefile recipes, the `_targets.yaml` entry, `RSV_SUBMISSION_DIRECTORY`)
-points at a not-yet-written `scripts/rsv_hosp_prod.R` and will fail if run.
-Covid needs its own archive-canonicalization pass before adopting the shared
-snapshot/runner; rsv should be written directly on the shared stack whenever
-it is picked up.
+Status: flu prod, covid prod, and flu/covid explore are on the shared stack
+(covid migrated 2026-07-18: canonical archives, shared snapshot/runner/grid,
+semantic seeding, evaluation project). Rsv prod is a **stub and not a
+priority**: every rsv reference (Makefile recipes, the `_targets.yaml` entry,
+`RSV_SUBMISSION_DIRECTORY`) points at a not-yet-written
+`scripts/rsv_hosp_prod.R` and will fail if run; write it directly on the
+shared stack whenever it is picked up.
 
 Roadmap:
 
-- Migrate covid prod (canonical archives → shared snapshot → shared runner).
-  Port semantic seeding to covid (`tar_seed_create(paste(id, signal, date, ahead, sep = "/"))` — target
-  renames must not move stochastic forecasters; deterministic ones must stay
-  bit-zero on any reseed).
+- Covid replay is broken for winter dates independent of the refactor:
+  `forecast_nssp_cdc_baseline` crashes on NaNs in the current nssp archive's
+  historical as-ofs (`propagate_samples` → `quantile`), e.g. 2025-12-31 and
+  2026-01-07 — the original live runs used since-rebuilt archives. Diagnose
+  the nssp NaNs (or make cdc_baseline NaN-tolerant) to unblock full
+  `eval-covid` replays.
+- The covid nssp-as-target archive still spoofs sourcelessly (forecaster
+  fallback labels everything "nhsn"); do the honest `source = "nssp"` +
+  `primary_source` de-spoof like flu's, as its own schema-change commit.
 - Contracts (landed 2026-07-18): version faithfulness is asserted in
   `make_forecast_snapshot()` (no as-of row observed after the generation
   date) and output shape in `validate_forecast_output()` at the
