@@ -65,5 +65,40 @@ run_forecaster <- function(
   out %>%
     mutate(target_end_date = target_end_date + target_date_shift) %>%
     filter(geo_value %nin% excluded_geos) %>%
-    mutate(forecaster = id)
+    mutate(forecaster = id) %>%
+    validate_forecast_output(id)
+}
+
+# Output-shape contract for everything run_forecaster ships: the storage-format
+# key columns present and NA-free, non-negative values, and quantiles monotone
+# within each (geo, forecast_date, target) task. Monotonicity is asserted here
+# (not silently re-sorted) so a forecaster with crossing quantiles surfaces as
+# an error unless its grid row opts into the sort_quantiles workaround.
+validate_forecast_output <- function(forecast, id = "<unknown>") {
+  required <- c("geo_value", "forecast_date", "target_end_date", "quantile", "value")
+  missing_cols <- setdiff(required, colnames(forecast))
+  if (length(missing_cols) > 0) {
+    cli::cli_abort("forecaster {id}: output is missing column{?s} {.field {missing_cols}}.")
+  }
+  na_cols <- required[vapply(forecast[required], anyNA, logical(1))]
+  if (length(na_cols) > 0) {
+    cli::cli_abort("forecaster {id}: output has NA values in {.field {na_cols}}.")
+  }
+  if (any(forecast$value < 0)) {
+    cli::cli_abort("forecaster {id}: output has {sum(forecast$value < 0)} negative value{?s}.")
+  }
+  crossed <- forecast %>%
+    arrange(quantile) %>%
+    group_by(geo_value, forecast_date, target_end_date) %>%
+    summarize(crossed = is.unsorted(value), .groups = "drop") %>%
+    filter(crossed)
+  if (nrow(crossed) > 0) {
+    example <- crossed[1, ]
+    cli::cli_abort(
+      "forecaster {id}: quantiles cross in {nrow(crossed)} task{?s},
+       e.g. ({example$geo_value}, {example$forecast_date}, {example$target_end_date}).
+       Fix the forecaster or set sort_quantiles = TRUE on its grid row."
+    )
+  }
+  forecast
 }
