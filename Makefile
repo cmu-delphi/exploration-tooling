@@ -3,6 +3,8 @@
 	commit-rsv submit-rsv submit-rsv-dry \
 	pull-rsv-prod push-rsv-prod get-rsv-prod-errors \
 	eval-flu prune-flu-evaluation \
+	eval-covid prune-covid-evaluation \
+	pull-covid-evaluation push-covid-evaluation get-covid-evaluation-errors \
 	pull-flu-evaluation push-flu-evaluation get-flu-evaluation-errors \
 	oracle-capture oracle-compare
 
@@ -40,19 +42,19 @@ prod-rsv: | cache/logs
 
 prod: prod-covid prod-flu update-site netlify
 
-prod-covid-backtest:
-	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R
-
 prod-rsv-backtest:
 	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R
 
-prod-backtest: prod-covid-backtest prod-rsv-backtest
+prod-backtest: prod-rsv-backtest
 
-# Flu's historical replay is its own targets project (separate store), not a
-# BACKTEST_MODE flag on prod. Set EVALUATION_N_DATES=<n> to replay only the
-# last n forecast dates.
+# Historical replays are their own targets projects (separate stores), not a
+# BACKTEST_MODE flag on prod (BACKTEST_MODE remains only for the rsv stub).
+# Set EVALUATION_N_DATES=<n> to replay only the last n forecast dates.
 eval-flu: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=flu_hosp_evaluation; Rscript scripts/run.R 2>&1 | tee -a cache/logs/eval_flu
+
+eval-covid: | cache/logs
+	set -o pipefail; export TAR_RUN_PROJECT=covid_hosp_evaluation; Rscript scripts/run.R 2>&1 | tee -a cache/logs/eval_covid
 
 explore-covid:
 	export TAR_RUN_PROJECT=covid_hosp_explore; Rscript scripts/run.R
@@ -86,7 +88,7 @@ oracle-compare:
 		echo "Usage: make oracle-compare project=flu_hosp_prod a=baseline b=refactored"; exit 1; fi
 	Rscript scripts/oracle/compare.R $(project):$(a) $(project):$(b)
 
-prune: prune-covid-prod prune-flu-prod prune-flu-evaluation prune-rsv-prod prune-covid-explore prune-flu-explore
+prune: prune-covid-prod prune-covid-evaluation prune-flu-prod prune-flu-evaluation prune-rsv-prod prune-covid-explore prune-flu-explore
 
 # scripts/prune.R selects the project via TAR_RUN_PROJECT (like run.R): an
 # .Renviron that sets TAR_PROJECT overrides shell exports on every R start,
@@ -95,7 +97,10 @@ prune: prune-covid-prod prune-flu-prod prune-flu-evaluation prune-rsv-prod prune
 # name), so pruning flu_hosp_prod drops any historical replay targets left in
 # the prod store from the pre-split era — they belong to flu_hosp_evaluation now.
 prune-covid-prod:
-	export TAR_RUN_PROJECT=covid_hosp_prod; export BACKTEST_MODE=TRUE; Rscript scripts/prune.R
+	export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/prune.R
+
+prune-covid-evaluation:
+	export TAR_RUN_PROJECT=covid_hosp_evaluation; Rscript scripts/prune.R
 
 prune-flu-prod:
 	export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/prune.R
@@ -167,6 +172,9 @@ pull-flu-prod:
 pull-flu-evaluation:
 	aws s3 sync s3://forecasting-team-data/2024/flu_hosp_evaluation/ flu_hosp_evaluation/ --delete
 
+pull-covid-evaluation:
+	aws s3 sync s3://forecasting-team-data/2024/covid_hosp_evaluation/ covid_hosp_evaluation/ --delete
+
 pull-rsv-prod:
 	aws s3 sync s3://forecasting-team-data/2024/rsv_hosp_prod/ rsv_hosp_prod/ --delete
 
@@ -176,7 +184,7 @@ pull-covid-explore:
 pull-flu-explore:
 	aws s3 sync s3://forecasting-team-data/2024/flu_hosp_explore/ flu_hosp_explore/ --delete
 
-pull: pull-aux-data pull-covid-prod pull-flu-prod pull-flu-evaluation pull-rsv-prod pull-covid-explore pull-flu-explore
+pull: pull-aux-data pull-covid-prod pull-flu-prod pull-flu-evaluation pull-covid-evaluation pull-rsv-prod pull-covid-explore pull-flu-explore
 
 download: pull
 
@@ -189,6 +197,9 @@ push-flu-prod:
 push-flu-evaluation:
 	aws s3 sync flu_hosp_evaluation/ s3://forecasting-team-data/2024/flu_hosp_evaluation/ --delete
 
+push-covid-evaluation:
+	aws s3 sync covid_hosp_evaluation/ s3://forecasting-team-data/2024/covid_hosp_evaluation/ --delete
+
 push-rsv-prod:
 	aws s3 sync rsv_hosp_prod/ s3://forecasting-team-data/2024/rsv_hosp_prod/ --delete
 
@@ -198,7 +209,7 @@ push-covid-explore:
 push-flu-explore:
 	aws s3 sync flu_hosp_explore/ s3://forecasting-team-data/2024/flu_hosp_explore/ --delete
 
-push: push-covid-prod push-flu-prod push-flu-evaluation push-rsv-prod push-covid-explore push-flu-explore
+push: push-covid-prod push-flu-prod push-flu-evaluation push-covid-evaluation push-rsv-prod push-covid-explore push-flu-explore
 
 upload: push
 
@@ -223,6 +234,9 @@ get-flu-evaluation-errors:
 
 get-covid-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'covid_hosp_prod')"
+
+get-covid-evaluation-errors:
+	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'covid_hosp_evaluation')"
 
 get-rsv-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'rsv_hosp_prod')"

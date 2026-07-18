@@ -1,4 +1,11 @@
 # The COVID Hospitalization Production Forecasting Pipeline.
+#
+# Two targets projects share this script (see _targets.yaml):
+#   covid_hosp_prod        - weekly production run, as_of = today
+#   covid_hosp_evaluation  - historical replay over past forecast dates, scored
+#                            against latest truth
+# Dispatch is on the project name; each project keeps its own store, so an
+# evaluation run cannot invalidate the production cache.
 suppressPackageStartupMessages(source("R/load_all.R"))
 
 
@@ -20,13 +27,14 @@ g_s3_prefix <- "exploration"
 g_external_object_name <- glue::glue("exploration/2024-2025_{g_disease}_hosp_forecasts.parquet")
 # date to cut the truth data off at, so we don't have too much of the past
 g_truth_data_date <- "2023-09-01"
-# Whether we're running in backtest mode.
-# If TRUE, we don't run the report notebook, which is (a) slow and (b) should be
-# preserved as an ASOF snapshot of our production results for that week.
-# If TRUE, we run a scoring notebook, which scores the historical forecasts
-# against the truth data and compares them to the ensemble.
-# If FALSE, we run the weekly report notebook.
-g_backtest_mode <- as.logical(Sys.getenv("BACKTEST_MODE", FALSE))
+# Whether we're running in evaluation (historical replay) mode. Dispatch is on
+# the targets project name (see flu_hosp_prod.R for the full rationale);
+# TAR_RUN_PROJECT wins so a stale TAR_PROJECT in the shell can't flip the mode.
+# If TRUE, we skip the weekly report notebook (each week's report is preserved
+# as an ASOF snapshot) and instead run the scoring notebook, which scores the
+# historical forecasts against the truth data and compares them to the ensemble.
+g_evaluation_mode <-
+  Sys.getenv("TAR_RUN_PROJECT", Sys.getenv("TAR_PROJECT", "covid_hosp_prod")) == "covid_hosp_evaluation"
 # The pipeline's notion of "today", read once here so a whole run can be pinned
 # for reproducible oracle captures (scripts/oracle/capture.R): forecast dates
 # and the latest-data as-of slices otherwise move with the calendar. Unset ->
@@ -37,7 +45,7 @@ g_reference_date <- {
 }
 # The forecast schedule, held as one tibble so forecast_date / generation_date
 # stay row-aligned by construction (see flu_hosp_prod.R for column docs).
-if (!g_backtest_mode) {
+if (!g_evaluation_mode) {
   # generation_date is the as_of for the forecast. If run on our typical
   # schedule, it's today, a Wednesday; on a delayed forecast it's a Thursday.
   # It's used for stamping the data and picking the as_of. Usually forecast_date
@@ -65,6 +73,14 @@ g_forecast_schedule <- tibble(
   forecast_generation_date_int = gen_dates,
   forecast_date_chr = as.character(fc_dates)
 )
+if (g_evaluation_mode) {
+  # Optional: keep only the last N dates for a fast partial evaluation
+  # (scripts/oracle/capture.R). Inert when unset.
+  g_evaluation_n_dates <- as.integer(Sys.getenv("EVALUATION_N_DATES", "0"))
+  if (!is.na(g_evaluation_n_dates) && g_evaluation_n_dates > 0) {
+    g_forecast_schedule <- slice_tail(g_forecast_schedule, n = g_evaluation_n_dates)
+  }
+}
 # Thin derived views; shared R/ code and other targets here consume these.
 g_forecast_dates <- g_forecast_schedule$forecast_date_int
 g_forecast_generation_dates <- g_forecast_schedule$forecast_generation_date_int
@@ -366,7 +382,7 @@ ensemble_targets <- tar_map(
   tar_target(
     name = make_submission_csv,
     command = {
-      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+      if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
         forecast_reference_date <- get_forecast_reference_date(forecast_date_int)
         nhsn_submission <- ensemble_mixture$nhsn %>%
           format_flusight(disease = "covid")
@@ -390,7 +406,7 @@ ensemble_targets <- tar_map(
   tar_target(
     name = make_climate_submission_csv,
     command = {
-      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+      if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
         forecast_filtered$nhsn %>%
           filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
           group_by(geo_value, target_end_date, quantile) %>%
@@ -415,7 +431,7 @@ ensemble_targets <- tar_map(
     name = validate_result,
     command = {
       make_submission_csv
-      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+      if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
         validate_submission(
           g_submission_directory,
           file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(forecast_date_int))
@@ -429,7 +445,7 @@ ensemble_targets <- tar_map(
     name = validate_climate_result,
     command = {
       make_climate_submission_csv
-      if (g_submission_directory != "cache" && (!g_backtest_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+      if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
         validate_submission(
           g_submission_directory,
           file_path = sprintf(
@@ -476,7 +492,7 @@ ensemble_targets <- tar_map(
   tar_target(
     notebook,
     command = {
-      if (!g_backtest_mode) {
+      if (!g_evaluation_mode) {
         if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
         rmarkdown::render(
           forecast_report_rmd,
@@ -532,7 +548,7 @@ joined_targets <- list2(
 
 combined_targets <- build_combined_targets(external_forecast_targets)
 
-if (g_backtest_mode) {
+if (g_evaluation_mode) {
   score_notebook <- build_backtest_score_targets()
 } else {
   # Only render the report if there is only one forecast date
