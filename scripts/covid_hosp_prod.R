@@ -266,10 +266,10 @@ forecast_targets <- tar_map(
       if (as_of_policy == "cheating") {
         nhsn_data <- nhsn_archive_data %>%
           epix_as_of(nhsn_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_date_int))
+          filter(time_value < as.Date(forecast_generation_date_int))
         nssp_data <- nssp_archive_data %>%
           epix_as_of(nssp_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_date_int))
+          filter(time_value < as.Date(forecast_generation_date_int))
       } else {
         nhsn_data <- nhsn_archive_data %>%
           epix_as_of(min(as.Date(forecast_generation_date_int), nhsn_archive_data$versions_end))
@@ -309,15 +309,15 @@ forecast_targets <- tar_map(
       if (as_of_policy == "cheating") {
         nhsn_data <- nhsn_archive_data %>%
           epix_as_of(nhsn_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_date_int))
+          filter(time_value < as.Date(forecast_generation_date_int))
         nssp_data <- nssp_archive_data %>%
           epix_as_of(nssp_archive_data$versions_end) %>%
-          filter(time_value < as.Date(forecast_date_int))
+          filter(time_value < as.Date(forecast_generation_date_int))
       } else {
         nhsn_data <- nhsn_archive_data %>%
-          epix_as_of(min(as.Date(forecast_date_int), nhsn_archive_data$versions_end))
+          epix_as_of(min(as.Date(forecast_generation_date_int), nhsn_archive_data$versions_end))
         nssp_data <- nssp_archive_data %>%
-          epix_as_of(min(as.Date(forecast_date_int), nssp_archive_data$versions_end))
+          epix_as_of(min(as.Date(forecast_generation_date_int), nssp_archive_data$versions_end))
       }
       nssp_data <- nssp_data %>%
         rename(value = nssp) %>%
