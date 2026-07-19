@@ -53,12 +53,13 @@ Each project in `_targets.yaml` maps a pipeline script to a store directory of t
 
 Forecaster functions follow the signature `function(epi_data, outcome, ahead = 1, ...)` with `extra_sources` (exogenous columns) and `filter_source` (select source from a joined multi-source archive; `""` means use augmented data from all sources). Extra `...` args flow to `default_args_list` (epipredict training/prediction control). To add one, copy `R/forecasters/forecaster_scaled_pop.R`, register it in `g_forecaster_parameter_combinations`, and iterate with most other forecasters commented out and few forecast dates. See README.md "Adding a new forecaster".
 
-## Shared forecaster architecture (vision & status)
+## Shared forecaster & ensemble architecture
 
-Goal: one declarative forecaster spec — core function + parameter grid + spec
-metadata — consumed identically by exploration sweeps, backtesting, and prod,
-so explore results transfer to prod verbatim and the prod copy of "the same"
-forecaster can't silently drift from what exploration evaluated. Three layers:
+Principle: one declarative spec per forecaster (core function + parameter grid
++ spec metadata) consumed identically by exploration sweeps, backtesting, and
+prod, so explore results transfer to prod verbatim and the prod copy of "the
+same" forecaster can't silently drift from what exploration evaluated. Flu
+prod, covid prod, and flu/covid explore are all on this stack. Three layers:
 
 1. **Canonical archives**: version-independent munging (geo renames,
    Wednesday↔Saturday shift, season info, source stamping, folding in static
@@ -70,9 +71,7 @@ forecaster can't silently drift from what exploration evaluated. Three layers:
 2. **Shared snapshot**: `make_forecast_snapshot()` (`R/looping.R`) — archive +
    forecast/generation dates + as-of policy (`"asof"` real-time vs
    `"cheating"` finalized-with-cutoff) + substitutions → `epi_df` with correct
-   `as_of`/`other_keys` metadata. `epix_slide_simple` is now
-   `map(dates, make_forecast_snapshot) |> map(fn) |> bind_rows`, keeping its
-   parquet snapshot cache.
+   `as_of`/`other_keys` metadata, with a parquet snapshot cache.
 3. **Shared runner + grid**: `run_forecaster()`
    (`R/targets/forecaster_runner.R`) owns cross-cutting conventions (ahead
    scaling, source filtering, extra-data join, target-date shift, geo
@@ -80,45 +79,64 @@ forecaster can't silently drift from what exploration evaluated. Three layers:
    spec columns with defaults in `FORECASTER_SPEC_DEFAULTS` (`R/utils.R`),
    split from modeling params by the shared `make_forecaster_grid()`.
 
-Two contracts guard the boundaries: `make_forecast_snapshot()` asserts version
+The prod ensemble layer mirrors this: `build_prod_ensemble_targets()`
+(`R/targets/prod_shared.R`) builds both diseases' ensemble targets from a
+declarative per-disease `g_ensemble_specs` (in `scripts/*_hosp_prod.R`;
+per-disease asymmetries are spec fields or factory arguments, never forked
+code), executed by `run_ensemble()` (`R/targets/ensemble_runner.R`): component
+presence asserted loudly, method dispatch (`climate_linear`/`mean`/`weighted`),
+geo-exclusion filtering, id stamping, output validation. The hand-edited
+`scripts/*_geo_exclusions.csv` weights files are schema-validated inside
+`parse_prod_weights()` (`R/utils.R`; retired-but-inert forecaster ids are
+whitelisted via `LEGACY_PROD_WEIGHT_FORECASTER_IDS`).
+
+Contracts guard the boundaries: `make_forecast_snapshot()` asserts version
 faithfulness (no as-of row observed after the generation date), and
-`validate_forecast_output()` at the end of `run_forecaster()` asserts output
-shape (keys present, no NAs, non-negative, monotone quantiles). Forecasters
-whose quantiles can cross (the `scaled_pop_seasonal` family) opt into the
-`sort_quantiles` spec column; monotone-by-construction forecasters stay
-unsorted so a crossing surfaces as an error.
+`validate_forecast_output()` at the end of `run_forecaster()`/`run_ensemble()`
+asserts output shape (keys present, no NAs, non-negative, monotone quantiles).
+Forecasters whose quantiles can cross (the `scaled_pop_seasonal` family) opt
+into the `sort_quantiles` spec column; monotone-by-construction forecasters
+stay unsorted so a crossing surfaces as an error.
 
 Fan-out stays deliberately different — "share the cell, keep two fan-out
 strategies": prod is `tar_map` per (forecaster, date) for caching/crew/seeds;
 explore batches dates inside one target per forecaster via the slide cache.
 
-Status: flu prod, covid prod, and flu/covid explore are on the shared stack.
 Rsv prod is a **stub and not a priority**: every rsv reference (Makefile
 recipes, the `_targets.yaml` entry, `RSV_SUBMISSION_DIRECTORY`) points at a
 not-yet-written `scripts/rsv_hosp_prod.R` and will fail if run; write it
-directly on the shared stack whenever it is picked up. Dated work logs with
-per-step verification details live in `notes/`.
+directly on the shared stack whenever it is picked up.
 
-Roadmap:
+History lives in `notes/`: dated work logs with per-step verification details
+and design scouts. CLAUDE.md describes only the current state and open threads.
 
-- A `validate_model_frame()`-style check at the snapshot *input* boundary,
-  replacing the raw `attributes()<-` metadata handling.
-- `output_scale` is per-disease today (flu explore blankets `"per100k"`,
-  covid defaults `"count"`). This is NOT a live scoring bug: flu training
-  `hhs` is per100k at archive build (`flu_data_targets.R`), so every current
-  flu explore forecaster — including the `pop_scaling = FALSE` ones — really
-  does output per100k, and the blanket unscale is correct (verified by
-  magnitude 2026-07-19). Making it per-forecaster is only footgun-removal for
-  a future count-output flu forecaster, and must be done as explicit per-family
-  declarations (all `"per100k"` today) — deriving it from `pop_scaling` would
-  wrongly flip these to `"count"` and multiply flu scores by ~pop/1e5. Low
-  priority; behavior-preserving if done.
-- Per-source version policies for explore-style multi-source snapshots.
-- Prod parallelism: suspected BLAS oversubscription (crew workers × BLAS
-  threads) — pin BLAS to one thread per worker and measure before
-  restructuring.
+## Open threads
 
-Refactoring practice: a behavior-preserving step succeeds when its golden diff
+- **E2 — sweep the shipped prod ensembles in explore**: exploration never
+  evaluates the `run_ensemble()` path prod actually submits. Full design
+  (atomic component family, sweep grid, uniform-vs-prod-csv weights question,
+  correctness landmines) in `notes/2026-07-19-e2-explore-ensemble-design.md`.
+  Deferred; the highest-value open item.
+- **Snapshot input validator**: replace trust-based metadata handling at the
+  `make_forecast_snapshot()` boundary with an explicit
+  `validate_forecast_snapshot()`. Design (and confirmation that epipredict
+  reads `metadata$as_of` at training time via `step_adjust_latency`, so the
+  as-of override is load-bearing policy) in
+  `notes/2026-07-19-validate-snapshot-design.md`.
+- **Per-forecaster `output_scale`**: per-disease today and NOT a live scoring
+  bug (verified by magnitude 2026-07-19; see the ensemble-layer log). If ever
+  done, must be explicit per-family declarations — deriving it from
+  `pop_scaling` would corrupt flu scores by ~pop/1e5. Low priority.
+- **Per-source version policies** for explore-style multi-source snapshots.
+- **Prod parallelism / BLAS**: measured 2026-07-19
+  (`notes/2026-07-19-blas-timing.md`): pinning BLAS to 1 thread saves ~7%
+  CPU-seconds consistently but wall time is unchanged at evaluation scale
+  (16 targets / 12 workers). Not the clear win hypothesized; re-measure at
+  prod scale before restructuring anything.
+
+## Refactoring practice
+
+A behavior-preserving step succeeds when its golden diff
 is empty — replay with `make eval-flu` (separate `flu_hosp_evaluation` store,
 so replays can't invalidate the weekly prod cache; `EVALUATION_N_DATES=<n>`
 limits scope) and compare via oracle captures (`scripts/oracle/capture.R`).
