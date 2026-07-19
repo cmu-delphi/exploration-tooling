@@ -58,9 +58,7 @@ Forecaster functions follow the signature `function(epi_data, outcome, ahead = 1
 Goal: one declarative forecaster spec — core function + parameter grid + spec
 metadata — consumed identically by exploration sweeps, backtesting, and prod,
 so explore results transfer to prod verbatim and the prod copy of "the same"
-forecaster can't silently drift from what exploration evaluated. Three layers,
-all landed for flu (see `notes/2026-07-18-refactoring-log.md` for the phase
-log and verification details):
+forecaster can't silently drift from what exploration evaluated. Three layers:
 
 1. **Canonical archives**: version-independent munging (geo renames,
    Wednesday↔Saturday shift, season info, source stamping, folding in static
@@ -82,39 +80,31 @@ log and verification details):
    spec columns with defaults in `FORECASTER_SPEC_DEFAULTS` (`R/utils.R`),
    split from modeling params by the shared `make_forecaster_grid()`.
 
+Two contracts guard the boundaries: `make_forecast_snapshot()` asserts version
+faithfulness (no as-of row observed after the generation date), and
+`validate_forecast_output()` at the end of `run_forecaster()` asserts output
+shape (keys present, no NAs, non-negative, monotone quantiles). Forecasters
+whose quantiles can cross (the `scaled_pop_seasonal` family) opt into the
+`sort_quantiles` spec column; monotone-by-construction forecasters stay
+unsorted so a crossing surfaces as an error.
+
 Fan-out stays deliberately different — "share the cell, keep two fan-out
 strategies": prod is `tar_map` per (forecaster, date) for caching/crew/seeds;
 explore batches dates inside one target per forecaster via the slide cache.
 
-Status: flu prod, covid prod, and flu/covid explore are on the shared stack
-(covid migrated 2026-07-18: canonical archives, shared snapshot/runner/grid,
-semantic seeding, evaluation project). Rsv prod is a **stub and not a
-priority**: every rsv reference (Makefile recipes, the `_targets.yaml` entry,
-`RSV_SUBMISSION_DIRECTORY`) points at a not-yet-written
-`scripts/rsv_hosp_prod.R` and will fail if run; write it directly on the
-shared stack whenever it is picked up.
+Status: flu prod, covid prod, and flu/covid explore are on the shared stack.
+Rsv prod is a **stub and not a priority**: every rsv reference (Makefile
+recipes, the `_targets.yaml` entry, `RSV_SUBMISSION_DIRECTORY`) points at a
+not-yet-written `scripts/rsv_hosp_prod.R` and will fail if run; write it
+directly on the shared stack whenever it is picked up. Dated work logs with
+per-step verification details live in `notes/`.
 
 Roadmap:
 
-- Covid replay is broken for winter dates independent of the refactor:
-  `forecast_nssp_cdc_baseline` crashes on NaNs in the current nssp archive's
-  historical as-ofs (`propagate_samples` → `quantile`), e.g. 2025-12-31 and
-  2026-01-07 — the original live runs used since-rebuilt archives. Diagnose
-  the nssp NaNs (or make cdc_baseline NaN-tolerant) to unblock full
-  `eval-covid` replays.
 - The covid nssp-as-target archive still spoofs sourcelessly (forecaster
   fallback labels everything "nhsn"); do the honest `source = "nssp"` +
   `primary_source` de-spoof like flu's, as its own schema-change commit.
-- Contracts (landed 2026-07-18): version faithfulness is asserted in
-  `make_forecast_snapshot()` (no as-of row observed after the generation
-  date) and output shape in `validate_forecast_output()` at the
-  `run_forecaster()` boundary (keys present, no NAs, non-negative, monotone
-  quantiles). The monotonicity assert settled the `sort_by_quantile()`
-  question: flu prod's seasonal family (`scaled_pop_seasonal`) really was
-  shipping crossing quantiles (~18% of its tasks) and now opts into
-  `sort_quantiles = TRUE`, matching what explore evaluated; monotone-by-
-  construction forecasters stay unsorted so a crossing errors. Still open: a
-  `validate_model_frame()`-style check at the snapshot *input* boundary
+- A `validate_model_frame()`-style check at the snapshot *input* boundary,
   replacing the raw `attributes()<-` metadata handling.
 - Make `output_scale` per-forecaster; it is per-disease today, so scoring
   unscales all flu forecasters including `pop_scaling = FALSE` ones.

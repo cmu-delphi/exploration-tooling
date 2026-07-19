@@ -576,3 +576,44 @@ Pre-existing findings (not caused by the migration):
 - The eval store from these captures is at `covid_hosp_evaluation` with
   goldens under `cache/oracle/covid_hosp_evaluation/` (`multibase`/`multihead`
   are the 4-date pair; `seeded-yprtznnv` is the current single-date head).
+
+## Session 2026-07-18 (autonomous follow-up): nssp NA fix + covid winter-window verification
+
+Root cause of the covid replay crash pinned down precisely: NSSP published
+explicit NA values for Wyoming (wy) from mid-2024 through version 2026-01-07,
+then backfilled real values on 2026-01-14. Old code excluded wy from the covid
+nssp archive outright; main's tip commit bcd7501 ("add nssp wy", 2026-06-24)
+removed the exclusion when wy came online — correct for weekly prod (recent
+slices are clean) but it re-exposed the NA *version history* to replays.
+cdc_baseline (no NA tolerance) crashes on covid, where the min_train_date trim
+leaves wy an all-NA series; flu survives (wy has real pre-2023 history) but was
+silently emitting wy cdc_baseline forecasts derived from NA data in replays.
+
+- `vlnyvwnp` fix: `filter(!is.na(nssp))` at archive build in
+  up_to_date_nssp_state_archive. An NA observation is not an observation;
+  dropping the rows makes wy absent for the outage period (matching the
+  pre-bcd7501 exclusion) and leaves current-date slices untouched (later real
+  versions supersede).
+- Flu footprint (probe at 2026-01-07, pre/post): nhsn side bit-zero; nssp side
+  loses exactly the 92 wy cdc_baseline garbage rows; the pooled
+  windowed_seasonal_extra_sources shifts (its window no longer ingests wy NAs,
+  max 41 on shared rows, wis ±0.35); everything else bit-zero.
+- Covid winter window (blocked before the fix): old-code+fix (scratch commit
+  on wtpmqmxu, abandoned after capture: multibase9) vs head+fix (multihead9),
+  9 dates 2025-12-24..2026-02-18 covering the holiday week and both
+  substitution dates. Attribution:
+  - climate: bit-zero everywhere except nssp at 2025-12-24 (0.42 — the
+    intentional asof-slice cutoff change, forecast_date -> generation_date).
+  - cdc_baseline at 2025-12-24 nssp: 1150 fewer rows — the corrected slice has
+    lower latency, so fewer propagated aheads (intentional cutoff change).
+  - seasonal family: pure within-task sort permutations everywhere except
+    (a) 2025-12-24 (intentional cutoff change) and (b)
+    windowed_seasonal_extra_sources nssp on exactly 2026-01-28 and 2026-02-18
+    — a latent old-code bug surfaced: covid applied substitutions to the
+    nssp-side exogenous nhsn data *before* the Wednesday shift, so the
+    Wednesday-floored substitution rows never matched and substitutions
+    silently never reached that path. The migrated code (extra = substituted
+    full_data, flu's design) fixes this; diffs are small (<=0.64 on the nssp
+    percent scale).
+  - stochastic three: semantic seeds (intentional), all dates.
+- The full covid eval replay is now unblocked end-to-end.
