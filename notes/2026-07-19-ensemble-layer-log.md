@@ -292,3 +292,29 @@ Verification:
     `run_forecaster()`. This pattern is identical to flu's post-de-spoof
     output schema (verified by code inspection, not a fresh flu replay, since
     flu's manifest is untouched).
+
+## output_scale investigation (no code change; docs only, `zmoyxqkw`)
+
+Looked at the roadmap "make output_scale per-forecaster" item since scoring
+allegedly unscales flu `pop_scaling = FALSE` forecasters wrongly. Empirically
+it does NOT: flu training `hhs` is per100k at archive build
+(`R/targets/flu_data_targets.R:36`, `hhs = hhs / population * 1e5`), so every
+current flu explore forecaster outputs per100k regardless of `pop_scaling`
+(which here means "no *additional* scaling", not "counts"). Magnitude check
+against the flu_hosp_explore store: raw median forecast ~1.4-1.9;
+`pred * pop / 1e5` ~55-73, matching count-truth median 63 across the
+scaled_pop_season, climate_linear, and scaled_pop_exogenous families. So the
+blanket `x$output_scale <- "per100k"` (`R/targets/flu_forecaster_config.R:318`)
+is correct today. Covid input is never per100k-converted; covid config omits
+output_scale (defaults "count"); covid forecasters output counts — also correct.
+output_scale is consumed only by the explore `score` target
+(`R/targets/shared_utils.R:99`), not prod scoring.
+
+Conclusion: not a live bug. The naive "fix" (derive output_scale from
+`pop_scaling`/`population_scale`) would flip correctly-per100k forecasters to
+"count" and multiply flu scores by ~pop/1e5 — strictly worse. The only
+honest form of "per-forecaster output_scale" is explicit per-family
+declarations (all "per100k" for flu today), which is behavior-preserving and
+only removes the footgun for a future count-output flu forecaster (e.g. the
+E2 prod-component family). Deferred as low priority; CLAUDE.md roadmap wording
+corrected to match. Also dropped the now-done covid de-spoof roadmap bullet.

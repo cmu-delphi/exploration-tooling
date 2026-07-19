@@ -101,13 +101,18 @@ per-step verification details live in `notes/`.
 
 Roadmap:
 
-- The covid nssp-as-target archive still spoofs sourcelessly (forecaster
-  fallback labels everything "nhsn"); do the honest `source = "nssp"` +
-  `primary_source` de-spoof like flu's, as its own schema-change commit.
 - A `validate_model_frame()`-style check at the snapshot *input* boundary,
   replacing the raw `attributes()<-` metadata handling.
-- Make `output_scale` per-forecaster; it is per-disease today, so scoring
-  unscales all flu forecasters including `pop_scaling = FALSE` ones.
+- `output_scale` is per-disease today (flu explore blankets `"per100k"`,
+  covid defaults `"count"`). This is NOT a live scoring bug: flu training
+  `hhs` is per100k at archive build (`flu_data_targets.R`), so every current
+  flu explore forecaster — including the `pop_scaling = FALSE` ones — really
+  does output per100k, and the blanket unscale is correct (verified by
+  magnitude 2026-07-19). Making it per-forecaster is only footgun-removal for
+  a future count-output flu forecaster, and must be done as explicit per-family
+  declarations (all `"per100k"` today) — deriving it from `pop_scaling` would
+  wrongly flip these to `"count"` and multiply flu scores by ~pop/1e5. Low
+  priority; behavior-preserving if done.
 - Per-source version policies for explore-style multi-source snapshots.
 - Prod parallelism: suspected BLAS oversubscription (crew workers × BLAS
   threads) — pin BLAS to one thread per worker and measure before
