@@ -232,11 +232,11 @@ parameters_and_date_targets <- rlang::list2(
   ),
   # Canonical training archive: the version-independent munging that used to run
   # per (forecaster x date) inside forecast_nhsn, hoisted here so it runs once.
-  # Unlike flu there are no augmentation extras to fold in, and no source column
-  # is stamped: the covid archives are single-source and the forecasters'
-  # missing-source fallback labels rows "nhsn" exactly as the old per-date data
-  # did (stamping here would change output schemas; revisit alongside an honest
-  # nssp de-spoof like flu's).
+  # Unlike flu there are no augmentation extras to fold in. Source is stamped
+  # honestly here (matching flu) rather than relying on the forecasters'
+  # missing-source fallback, which used to mislabel these rows "nhsn" as a
+  # side effect of not declaring a source at all -- true here too, but now
+  # explicit.
   tar_target(
     name = nhsn_prod_archive,
     command = {
@@ -247,10 +247,11 @@ parameters_and_date_targets <- rlang::list2(
         add_season_info() %>%
         mutate(
           geo_value = ifelse(geo_value == "usa", "us", geo_value),
-          time_value = floor_date(time_value, "week", week_start = 7) + 3
+          time_value = floor_date(time_value, "week", week_start = 7) + 3,
+          source = "nhsn"
         ) %>%
         filter(geo_value %nin% g_insufficient_data_geos) %>%
-        as_epi_archive(compactify = TRUE)
+        as_epi_archive(other_keys = "source", compactify = TRUE)
     }
   ),
   tar_target(
@@ -275,7 +276,10 @@ parameters_and_date_targets <- rlang::list2(
   # per-date forecast_nssp target. The raw covid nssp archive is already
   # Wednesday-aligned, so the week-align mutate is kept verbatim as a no-op
   # guard. Ordering (rename -> season info -> mutate -> filter) matches the old
-  # in-target code.
+  # in-target code. Source is stamped honestly as "nssp" (like flu's
+  # nssp_target_archive) rather than left for the forecasters' missing-source
+  # fallback to mislabel "nhsn"; forecast_nssp points scaled_pop_seasonal at
+  # these rows via run_forecaster(primary_source = "nssp").
   tar_target(
     name = nssp_target_archive,
     command = {
@@ -284,10 +288,11 @@ parameters_and_date_targets <- rlang::list2(
         add_season_info() %>%
         mutate(
           geo_value = ifelse(geo_value == "usa", "us", geo_value),
-          time_value = floor_date(time_value, "week", week_start = 7) + 3
+          time_value = floor_date(time_value, "week", week_start = 7) + 3,
+          source = "nssp"
         ) %>%
         filter(geo_value %nin% g_insufficient_data_geos_nssp) %>%
-        as_epi_archive(compactify = TRUE)
+        as_epi_archive(other_keys = "source", compactify = TRUE)
     }
   ),
   tar_target(
@@ -397,7 +402,9 @@ forecast_targets <- tar_map(
         target_date_shift = target_date_shift,
         join_extra_data = join_extra_data, extra_data = full_data_modified,
         filter_sources = filter_sources, excluded_geos = excluded_geos,
-        sort_quantiles = sort_quantiles
+        sort_quantiles = sort_quantiles,
+        # nssp is the target here; snapshot rows are stamped source = "nssp".
+        primary_source = "nssp"
       )
     },
     pattern = map(aheads)
