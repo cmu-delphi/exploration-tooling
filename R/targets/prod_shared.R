@@ -89,11 +89,12 @@ build_external_forecast_targets <- function() {
 # via tar_map values, so no run-time global carries them):
 # - geo_exclusions_file / nssp_geo_exclusions_file: bare target names (strings)
 #   of the hand-edited weights csv file targets.
-# - clim_lin_max_weights_nhsn / _nssp: c(ahead, quantile) caps on the climate
-#   weight in ensemble_climate_linear. Flu nhsn historically passed no caps,
-#   i.e. the function defaults c(0.9, 1).
-# - ar_drop_negative_aheads: signals ("nhsn"/"nssp") whose AR components drop
-#   negative aheads before entering ensemble_mixture.
+# - ensemble_spec: named list of the three ensemble rows (climate_linear,
+#   ens_ar_only, ensemble_mix; see g_ensemble_specs in scripts/*_hosp_prod.R
+#   and run_ensemble() in R/targets/ensemble_runner.R for the field meanings).
+#   Spliced whole as a list-column, same as the other per-disease values here:
+#   it is disease-constant (not per forecast-date), so this embeds it as a
+#   literal in every branch's frozen command rather than a run-time global.
 # - climate_submission_excluded_geos: geos dropped from the standalone
 #   CMU-climate_baseline submission (flu only; historically g_excluded_geos).
 build_prod_ensemble_targets <- function(
@@ -101,9 +102,7 @@ build_prod_ensemble_targets <- function(
   disease,
   geo_exclusions_file,
   nssp_geo_exclusions_file,
-  clim_lin_max_weights_nhsn,
-  clim_lin_max_weights_nssp,
-  ar_drop_negative_aheads,
+  ensemble_spec,
   climate_submission_excluded_geos = character(0)
 ) {
   values <- forecast_schedule %>%
@@ -111,12 +110,7 @@ build_prod_ensemble_targets <- function(
       disease = .env$disease,
       geo_exclusions_file = rlang::syms(.env$geo_exclusions_file),
       nssp_geo_exclusions_file = rlang::syms(.env$nssp_geo_exclusions_file),
-      clim_max_ahead_nhsn = .env$clim_lin_max_weights_nhsn[[1]],
-      clim_max_quantile_nhsn = .env$clim_lin_max_weights_nhsn[[2]],
-      clim_max_ahead_nssp = .env$clim_lin_max_weights_nssp[[1]],
-      clim_max_quantile_nssp = .env$clim_lin_max_weights_nssp[[2]],
-      ar_drop_neg_nhsn = "nhsn" %in% .env$ar_drop_negative_aheads,
-      ar_drop_neg_nssp = "nssp" %in% .env$ar_drop_negative_aheads,
+      ensemble_spec = list(.env$ensemble_spec),
       climate_excluded_geos = list(.env$climate_submission_excluded_geos)
     )
   tar_map(
@@ -159,56 +153,60 @@ build_prod_ensemble_targets <- function(
     tar_target(
       name = ensemble_clim_lin,
       command = {
-        make_clim_lin <- function(forecasts, weights, max_ahead_weight, max_quantile_weight) {
-          forecasts %>%
-            ensemble_climate_linear(
-              aheads,
-              other_weights = weights,
-              max_climate_ahead_weight = max_ahead_weight,
-              max_climate_quantile_weight = max_quantile_weight
-            ) %>%
-            filter(geo_value %nin% geo_exclusions) %>%
-            ungroup() %>%
-            sort_by_quantile() %>%
-            mutate(forecaster = "climate_linear")
+        spec <- ensemble_spec$climate_linear
+        run_clim_lin <- function(forecasts, signal, weights) {
+          run_ensemble(
+            method = spec$method,
+            id = spec$id,
+            forecasts = forecasts,
+            components = spec$components[[signal]],
+            aheads = aheads,
+            weights = weights,
+            climate_caps = spec$climate_caps[[signal]],
+            geo_exclusions = if (spec$apply_geo_exclusions) geo_exclusions else NULL,
+            sort_quantiles = spec$sort_quantiles
+          )
         }
         list(
-          nhsn = make_clim_lin(forecast_filtered$nhsn, geo_weights$nhsn, clim_max_ahead_nhsn, clim_max_quantile_nhsn),
-          nssp = make_clim_lin(forecast_filtered$nssp, geo_weights$nssp, clim_max_ahead_nssp, clim_max_quantile_nssp)
+          nhsn = run_clim_lin(forecast_filtered$nhsn, "nhsn", geo_weights$nhsn),
+          nssp = run_clim_lin(forecast_filtered$nssp, "nssp", geo_weights$nssp)
         )
       }
     ),
     tar_target(
       name = ens_ar_only,
       command = {
-        forecast_filtered$nhsn %>%
-          filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources")) %>%
-          group_by(geo_value, forecast_date, target_end_date, quantile) %>%
-          summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
-          sort_by_quantile() %>%
-          mutate(forecaster = "ens_ar_only")
+        spec <- ensemble_spec$ar_only
+        run_ensemble(
+          method = spec$method,
+          id = spec$id,
+          forecasts = forecast_filtered$nhsn,
+          components = spec$components$nhsn,
+          geo_exclusions = if (spec$apply_geo_exclusions) geo_exclusions else NULL,
+          sort_quantiles = spec$sort_quantiles
+        )
       }
     ),
     tar_target(
       name = ensemble_mixture,
       command = {
-        make_ar <- function(forecasts, drop_negative_aheads) {
-          ar <- forecasts %>%
-            filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources"))
-          if (drop_negative_aheads) {
-            ar <- ar %>% filter(forecast_date < target_end_date)
-          }
-          ar
+        spec <- ensemble_spec$ensemble_mix
+        run_mix <- function(forecasts, signal, weights, clim_lin) {
+          run_ensemble(
+            method = spec$method,
+            id = spec$id,
+            forecasts = forecasts,
+            components = spec$components[[signal]],
+            weights = weights,
+            geo_exclusions = if (spec$apply_geo_exclusions) geo_exclusions else NULL,
+            drop_negative_aheads = spec$drop_negative_aheads[[signal]],
+            extra_forecasts = clim_lin,
+            sort_quantiles = spec$sort_quantiles
+          )
         }
         list(
-          nhsn = ensemble_clim_lin$nhsn %>%
-            bind_rows(make_ar(forecast_filtered$nhsn, ar_drop_neg_nhsn)) %>%
-            ensemble_weighted(geo_weights$nhsn) %>%
-            mutate(forecaster = "ensemble_mix"),
-          nssp = ensemble_clim_lin$nssp %>%
-            bind_rows(make_ar(forecast_filtered$nssp, ar_drop_neg_nssp)) %>%
-            ensemble_weighted(geo_weights$nssp) %>%
-            mutate(forecaster = "ensemble_mix")
+          nhsn = run_mix(forecast_filtered$nhsn, "nhsn", geo_weights$nhsn, ensemble_clim_lin$nhsn),
+          nssp = run_mix(forecast_filtered$nssp, "nssp", geo_weights$nssp, ensemble_clim_lin$nssp)
         )
       }
     ),

@@ -408,16 +408,48 @@ combined_forecast_targets <- build_combined_forecast_targets(forecast_targets)
 
 
 # ================================ ENSEMBLE TARGETS ================================
-# Shared with flu (build_prod_ensemble_targets in R/targets/prod_shared.R);
-# the per-disease asymmetries are the named arguments below.
+# Shared with flu (build_prod_ensemble_targets / run_ensemble in
+# R/targets/prod_shared.R, R/targets/ensemble_runner.R); per-disease asymmetries
+# are the spec values below. AR components are windowed_seasonal(_extra_sources);
+# climate_linear's declared components are used only for run_ensemble()'s
+# presence assert, not to pre-filter (see run_ensemble() doc for why).
+g_ensemble_specs <- list(
+  climate_linear = list(
+    id = "climate_linear",
+    method = "climate_linear",
+    components = list(
+      nhsn = c("climate_base", "climate_geo_agged", "linear"),
+      nssp = c("climate_base", "climate_geo_agged", "linear_no_population_scale")
+    ),
+    climate_caps = list(nhsn = c(0.6, 0.6), nssp = c(0.6, 0.6)),
+    apply_geo_exclusions = TRUE,
+    sort_quantiles = TRUE
+  ),
+  ar_only = list(
+    id = "ens_ar_only",
+    method = "mean",
+    components = list(nhsn = c("windowed_seasonal", "windowed_seasonal_extra_sources")),
+    apply_geo_exclusions = FALSE,
+    sort_quantiles = TRUE
+  ),
+  ensemble_mix = list(
+    id = "ensemble_mix",
+    method = "weighted",
+    components = list(
+      nhsn = c("windowed_seasonal", "windowed_seasonal_extra_sources"),
+      nssp = c("windowed_seasonal", "windowed_seasonal_extra_sources")
+    ),
+    drop_negative_aheads = list(nhsn = TRUE, nssp = FALSE),
+    apply_geo_exclusions = FALSE,
+    sort_quantiles = FALSE
+  )
+)
 ensemble_targets <- build_prod_ensemble_targets(
   g_forecast_schedule,
   disease = "covid",
   geo_exclusions_file = "covid_geo_exclusions",
   nssp_geo_exclusions_file = "covid_nssp_geo_exclusions",
-  clim_lin_max_weights_nhsn = c(0.6, 0.6),
-  clim_lin_max_weights_nssp = c(0.6, 0.6),
-  ar_drop_negative_aheads = "nhsn"
+  ensemble_spec = g_ensemble_specs
 )
 
 
