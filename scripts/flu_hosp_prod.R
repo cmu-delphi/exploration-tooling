@@ -378,7 +378,7 @@ forecast_targets <- tar_map(
         select(-c(source, epiweek, epiyear, season, season_week))
       run_forecaster(
         snapshot = nssp_forecast_data, forecaster = forecaster, aheads = aheads * ahead_multiplier,
-        params = params, param_names = param_names, id = id,
+        params = params, id = id,
         target_date_shift = target_date_shift,
         join_extra_data = join_extra_data, extra_data = full_data_modified,
         filter_sources = filter_sources, excluded_geos = excluded_geos,
@@ -413,7 +413,7 @@ forecast_targets <- tar_map(
       ))
       run_forecaster(
         snapshot = full_data, forecaster = forecaster, aheads = aheads * ahead_multiplier,
-        params = params, param_names = param_names, id = id,
+        params = params, id = id,
         target_date_shift = target_date_shift,
         join_extra_data = join_extra_data, extra_data = nssp_exogenous_data,
         filter_sources = filter_sources, excluded_geos = excluded_geos,

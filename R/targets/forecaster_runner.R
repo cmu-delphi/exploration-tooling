@@ -34,7 +34,7 @@
 #   target_date_shift. forecast_date stays forecaster-native (the snapshot's
 #   as_of); each pipeline aligns it downstream as it needs.
 run_forecaster <- function(
-  snapshot, forecaster, aheads, params, param_names, id,
+  snapshot, forecaster, aheads, params, id,
   target_date_shift = 0L,
   join_extra_data = FALSE, extra_data = NULL,
   filter_sources = NULL, excluded_geos = NULL,
@@ -47,13 +47,12 @@ run_forecaster <- function(
   # Inject primary_source only for forecasters that accept it; others route it
   # through ... into default_args_list(), which errors on unknown args.
   if (!is.null(primary_source) && "primary_source" %in% names(formals(forecaster))) {
-    params <- c(params, list(primary_source))
-    param_names <- c(param_names, "primary_source")
+    params <- c(params, list(primary_source = primary_source))
   }
   if (join_extra_data) {
     snapshot <- snapshot %>% left_join(extra_data, by = join_by(geo_value, time_value))
   }
-  forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
+  forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params)
   out <- forecaster_fn(snapshot)
   if (join_extra_data && "source" %in% colnames(out)) {
     out <- out %>% select(-source)

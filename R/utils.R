@@ -136,16 +136,14 @@ make_forecaster_grid <- function(tib, family) {
       family = family,
       id = tib$id,
       forecaster = rlang::syms(tib$forecaster),
-      params = list(list()),
-      param_names = list(list())
+      params = list(list())
     )
   } else {
     out <- tibble(
       family = family,
       id = tib$id,
       forecaster = rlang::syms(tib$forecaster),
-      params = params_list,
-      param_names = map(params_list, names)
+      params = params_list
     )
   }
 

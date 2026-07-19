@@ -318,3 +318,21 @@ declarations (all "per100k" for flu today), which is behavior-preserving and
 only removes the footgun for a future count-output flu forecaster (e.g. the
 E2 prod-component family). Deferred as low priority; CLAUDE.md roadmap wording
 corrected to match. Also dropped the now-done covid de-spoof roadmap bullet.
+
+## param_names grid column deletion (`qvqoylsp`)
+
+Roadmap "minor" item. Verified empirically first that `tar_map` substitutes
+list-column values as literals with names intact (tiny synthetic tar_map,
+deparsed frozen commands show `list(x = 1, ...)`), so `params` already carried
+its names and `set_names(params, param_names)` was pure duplication. Dropped
+the column from `make_forecaster_grid()`, the argument from `run_forecaster()`
+and `get_partially_applied_forecaster()` (now `!!!params`), and the 5 call
+sites; `primary_source` injection names its list element directly.
+
+Unlike E0/E1 this changes command text for every forecast target (the
+`param_names=` argument disappears), so no manifest-diff check — verification
+is the golden alone.
+
+- `make test`: 105 pass, 0 fail, 9 skips (unchanged).
+- Flu golden: capture `param-names` (ref 2026-01-07, EVALUATION_N_DATES=1) vs
+  `e3-weights` — ALL MATCH, max rel diff 0, all 13 frames.

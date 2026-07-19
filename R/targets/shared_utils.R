@@ -5,17 +5,15 @@
 
 #' Get partially applied forecaster function
 #'
-#' params and param_names are defined by the values of the
-#' tar_map. params is a list of lists, and param_names is the
-#' names of parameters in each list. These are separate because
-#' targets::tar_map strips the names from lists in a tibble.
+#' params is defined by the values of the tar_map: a named list of forecaster
+#' arguments (tar_map substitutes list-column values as literals, names intact).
 #' Defining this function inside the target causes scope issues.
 #'
 #' @param id Forecaster ID
 #' @return A partially applied forecaster function
 #' @export
-get_partially_applied_forecaster <- function(forecaster, ahead, params, param_names) {
-  function(epi_data, ...) rlang::inject(forecaster(epi_data, ..., ahead = ahead, !!!(set_names(params, param_names))))
+get_partially_applied_forecaster <- function(forecaster, ahead, params) {
+  function(epi_data, ...) rlang::inject(forecaster(epi_data, ..., ahead = ahead, !!!params))
 }
 
 
@@ -79,7 +77,6 @@ create_forecast_targets <- function() {
             forecaster = forecaster,
             aheads = aheads * ahead_multiplier,
             params = params,
-            param_names = param_names,
             id = id,
             sort_quantiles = sort_quantiles
           )

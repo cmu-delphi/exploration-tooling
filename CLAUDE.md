@@ -117,8 +117,6 @@ Roadmap:
 - Prod parallelism: suspected BLAS oversubscription (crew workers × BLAS
   threads) — pin BLAS to one thread per worker and measure before
   restructuring.
-- Minor: the `param_names` grid column is deletable (`tar_map` does not strip
-  names from list-columns).
 
 Refactoring practice: a behavior-preserving step succeeds when its golden diff
 is empty — replay with `make eval-flu` (separate `flu_hosp_evaluation` store,
