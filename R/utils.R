@@ -166,29 +166,6 @@ make_forecaster_grid <- function(tib, family) {
   return(out)
 }
 
-#' Make an ensemble grid.
-#'
-#' Same as `make_forecaster_grid`, but for ensembles.
-#'
-#' @param tib the tibble of parameters.
-#'
-#' @export
-make_ensemble_grid <- function(tib) {
-  sym_subset <- function(param_list) {
-    imap(param_list, \(x, y) if (y %in% list("average_type")) rlang::sym(x) else x)
-  }
-
-  tibble(
-    id = tib$id,
-    children_ids = tib$children_ids %>%
-      map(function(x) paste0("forecast_", x)) %>%
-      map(rlang::syms),
-    ensemble = rlang::syms(tib$ensemble),
-    ensemble_args = map(tib$ensemble_args, sym_subset),
-    ensemble_args_names = map(tib$ensemble_args, ~ names(.x))
-  )
-}
-
 #' Get exclusions from a JSON file for a given date
 #'
 #' @param date A date
