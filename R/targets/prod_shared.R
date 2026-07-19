@@ -74,6 +74,288 @@ build_external_forecast_targets <- function() {
   )
 }
 
+# Returns the per-date ensemble/submission/report tar_map shared by the flu and
+# covid prod pipelines. The per-disease asymmetries are named arguments here
+# rather than inline literals buried in two hand-copied tar_maps, so drift
+# between the pipelines is visible at the call sites. Everything else in the
+# commands is shared verbatim. Depends on targets and g_* globals defined in
+# the calling script: aheads, forecast_nhsn_full / forecast_nssp_full,
+# g_forecaster_params_grid, g_submission_directory, g_evaluation_mode,
+# g_forecast_dates, g_truth_data_date, g_insufficient_data_geos,
+# nhsn_archive_data, nhsn_latest_data, nssp_latest_data, forecast_report_rmd,
+# and the geo-exclusion file targets named by *_geo_exclusions_file.
+#
+# Arguments (all per-disease config; substituted into the commands as literals
+# via tar_map values, so no run-time global carries them):
+# - geo_exclusions_file / nssp_geo_exclusions_file: bare target names (strings)
+#   of the hand-edited weights csv file targets.
+# - clim_lin_max_weights_nhsn / _nssp: c(ahead, quantile) caps on the climate
+#   weight in ensemble_climate_linear. Flu nhsn historically passed no caps,
+#   i.e. the function defaults c(0.9, 1).
+# - ar_drop_negative_aheads: signals ("nhsn"/"nssp") whose AR components drop
+#   negative aheads before entering ensemble_mixture.
+# - climate_submission_excluded_geos: geos dropped from the standalone
+#   CMU-climate_baseline submission (flu only; historically g_excluded_geos).
+build_prod_ensemble_targets <- function(
+  forecast_schedule,
+  disease,
+  geo_exclusions_file,
+  nssp_geo_exclusions_file,
+  clim_lin_max_weights_nhsn,
+  clim_lin_max_weights_nssp,
+  ar_drop_negative_aheads,
+  climate_submission_excluded_geos = character(0)
+) {
+  values <- forecast_schedule %>%
+    mutate(
+      disease = .env$disease,
+      geo_exclusions_file = rlang::syms(.env$geo_exclusions_file),
+      nssp_geo_exclusions_file = rlang::syms(.env$nssp_geo_exclusions_file),
+      clim_max_ahead_nhsn = .env$clim_lin_max_weights_nhsn[[1]],
+      clim_max_quantile_nhsn = .env$clim_lin_max_weights_nhsn[[2]],
+      clim_max_ahead_nssp = .env$clim_lin_max_weights_nssp[[1]],
+      clim_max_quantile_nssp = .env$clim_lin_max_weights_nssp[[2]],
+      ar_drop_neg_nhsn = "nhsn" %in% .env$ar_drop_negative_aheads,
+      ar_drop_neg_nssp = "nssp" %in% .env$ar_drop_negative_aheads,
+      climate_excluded_geos = list(.env$climate_submission_excluded_geos)
+    )
+  tar_map(
+    values = values,
+    names = "forecast_date_chr",
+    tar_target(
+      name = forecast_filtered,
+      command = list(
+        nhsn = forecast_nhsn_full %>%
+          filter(forecast_date == as.Date(forecast_date_int)) %>%
+          filter(forecaster %nin% c("linear_no_population_scale")),
+        nssp = forecast_nssp_full %>%
+          filter(forecast_date == as.Date(forecast_date_int)) %>%
+          filter(forecaster %nin% c("linear"))
+      )
+    ),
+    tar_target(
+      name = geo_weights,
+      command = {
+        make_weights <- function(excl_file) {
+          w <- parse_prod_weights(excl_file, forecast_date_int, g_forecaster_params_grid$id)
+          if (nrow(w %>% filter(forecast_date == as.Date(forecast_date_int))) == 0) {
+            cli_abort("there are no weights for the forecast date {forecast_date}")
+          }
+          w
+        }
+        list(
+          nhsn = make_weights(geo_exclusions_file),
+          nssp = make_weights(nssp_geo_exclusions_file)
+        )
+      }
+    ),
+    # Derived from the nhsn weights file but applied to both signals' ensembles
+    # (pre-existing behavior in both pipelines, possibly a copy-paste artifact;
+    # kept verbatim -- adjudicate when the ensemble layer gets its spec).
+    tar_target(
+      name = geo_exclusions,
+      command = exclude_geos(geo_weights$nhsn)
+    ),
+    tar_target(
+      name = ensemble_clim_lin,
+      command = {
+        make_clim_lin <- function(forecasts, weights, max_ahead_weight, max_quantile_weight) {
+          forecasts %>%
+            ensemble_climate_linear(
+              aheads,
+              other_weights = weights,
+              max_climate_ahead_weight = max_ahead_weight,
+              max_climate_quantile_weight = max_quantile_weight
+            ) %>%
+            filter(geo_value %nin% geo_exclusions) %>%
+            ungroup() %>%
+            sort_by_quantile() %>%
+            mutate(forecaster = "climate_linear")
+        }
+        list(
+          nhsn = make_clim_lin(forecast_filtered$nhsn, geo_weights$nhsn, clim_max_ahead_nhsn, clim_max_quantile_nhsn),
+          nssp = make_clim_lin(forecast_filtered$nssp, geo_weights$nssp, clim_max_ahead_nssp, clim_max_quantile_nssp)
+        )
+      }
+    ),
+    tar_target(
+      name = ens_ar_only,
+      command = {
+        forecast_filtered$nhsn %>%
+          filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources")) %>%
+          group_by(geo_value, forecast_date, target_end_date, quantile) %>%
+          summarize(value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+          sort_by_quantile() %>%
+          mutate(forecaster = "ens_ar_only")
+      }
+    ),
+    tar_target(
+      name = ensemble_mixture,
+      command = {
+        make_ar <- function(forecasts, drop_negative_aheads) {
+          ar <- forecasts %>%
+            filter(forecaster %in% c("windowed_seasonal", "windowed_seasonal_extra_sources"))
+          if (drop_negative_aheads) {
+            ar <- ar %>% filter(forecast_date < target_end_date)
+          }
+          ar
+        }
+        list(
+          nhsn = ensemble_clim_lin$nhsn %>%
+            bind_rows(make_ar(forecast_filtered$nhsn, ar_drop_neg_nhsn)) %>%
+            ensemble_weighted(geo_weights$nhsn) %>%
+            mutate(forecaster = "ensemble_mix"),
+          nssp = ensemble_clim_lin$nssp %>%
+            bind_rows(make_ar(forecast_filtered$nssp, ar_drop_neg_nssp)) %>%
+            ensemble_weighted(geo_weights$nssp) %>%
+            mutate(forecaster = "ensemble_mix")
+        )
+      }
+    ),
+    tar_target(
+      name = forecasts_and_ensembles,
+      command = list(
+        nhsn = bind_rows(forecast_filtered$nhsn, ensemble_clim_lin$nhsn, ensemble_mixture$nhsn, ens_ar_only),
+        nssp = bind_rows(forecast_filtered$nssp, ensemble_clim_lin$nssp, ensemble_mixture$nssp)
+      )
+    ),
+    tar_target(
+      name = make_submission_csv,
+      command = {
+        if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+          forecast_reference_date <- get_forecast_reference_date(forecast_date_int)
+          nhsn_submission <- ensemble_mixture$nhsn %>%
+            format_flusight(disease = disease)
+          nssp_submission <- ensemble_mixture$nssp %>%
+            format_flusight(disease = disease) %>%
+            mutate(
+              target = paste0("wk inc ", disease, " prop ed visits"),
+              value = value / 100
+            )
+          bind_rows(nhsn_submission, nssp_submission) %>%
+            write_submission_file(
+              forecast_reference_date,
+              file.path(g_submission_directory, "model-output/CMU-TimeSeries")
+            )
+        } else {
+          cli_alert_info("Not making submission csv because we're in backtest mode or submission directory is cache")
+        }
+      },
+      cue = tar_cue("always")
+    ),
+    tar_target(
+      name = make_climate_submission_csv,
+      command = {
+        if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+          forecast_filtered$nhsn %>%
+            filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
+            group_by(geo_value, target_end_date, quantile) %>%
+            summarize(forecast_date = as.Date(forecast_date_int), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+            ungroup() %>%
+            filter(!(geo_value %in% climate_excluded_geos)) %>%
+            format_flusight(disease = disease) %>%
+            filter(location %nin% c("60", "66", "78")) %>%
+            write_submission_file(
+              get_forecast_reference_date(forecast_date_int),
+              file.path(g_submission_directory, "model-output/CMU-climate_baseline"),
+              file_name = "CMU-climate_baseline"
+            )
+        } else {
+          cli_alert_info(
+            "Not making climate submission csv because we're in backtest mode or submission directory is cache"
+          )
+        }
+      },
+      cue = tar_cue("always")
+    ),
+    tar_target(
+      name = validate_result,
+      command = {
+        make_submission_csv
+        if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+          validate_submission(
+            g_submission_directory,
+            file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(forecast_date_int))
+          )
+        } else {
+          "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
+        }
+      }
+    ),
+    tar_target(
+      name = validate_climate_result,
+      command = {
+        make_climate_submission_csv
+        if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+          validate_submission(
+            g_submission_directory,
+            file_path = sprintf(
+              "CMU-climate_baseline/%s-CMU-climate_baseline.csv",
+              get_forecast_reference_date(forecast_date_int)
+            )
+          )
+        } else {
+          "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
+        }
+      }
+    ),
+    tar_target(
+      name = truth_data,
+      command = {
+        nhsn_raw <- nhsn_archive_data %>%
+          epix_as_of(min(as.Date(forecast_generation_date_int), nhsn_archive_data$versions_end)) %>%
+          mutate(source = "nhsn as_of forecast") %>%
+          bind_rows(nhsn_latest_data %>% mutate(source = "nhsn")) %>%
+          select(geo_value, target_end_date = time_value, value, source) %>%
+          filter(target_end_date > g_truth_data_date, geo_value %nin% g_insufficient_data_geos)
+        nssp_raw <- nssp_latest_data %>%
+          select(geo_value, target_end_date = time_value, value = nssp) %>%
+          filter(target_end_date > g_truth_data_date, geo_value %nin% g_insufficient_data_geos) %>%
+          mutate(target_end_date = target_end_date + 3, source = "nssp")
+        normalize_to_primary <- function(primary, secondary) {
+          rel_max <- secondary %>%
+            rename(sec = value) %>%
+            full_join(primary %>% select(geo_value, target_end_date, value), by = join_by(geo_value, target_end_date)) %>%
+            group_by(geo_value) %>%
+            summarise(scale = max(value, na.rm = TRUE) / max(sec, na.rm = TRUE))
+          secondary %>%
+            left_join(rel_max, by = join_by(geo_value)) %>%
+            mutate(value = value * scale) %>%
+            select(-scale) %>%
+            bind_rows(primary, .)
+        }
+        list(
+          nhsn = normalize_to_primary(nhsn_raw, nssp_raw),
+          nssp = normalize_to_primary(nssp_raw, nhsn_raw)
+        )
+      }
+    ),
+    tar_target(
+      notebook,
+      command = {
+        if (!g_evaluation_mode) {
+          if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
+          rmarkdown::render(
+            forecast_report_rmd,
+            output_file = here::here(
+              "reports",
+              sprintf("%s_%s_prod_on_%s.html", as.Date(forecast_date_int), disease, as.Date(Sys.Date()))
+            ),
+            params = list(
+              disease = disease,
+              forecast_nhsn = forecasts_and_ensembles$nhsn %>% ungroup() %>% filter(forecaster %in% c("cdc_baseline", "climate_linear", "ensemble_mix", "windowed_seasonal", "windowed_seasonal_extra_sources")),
+              forecast_nssp = forecasts_and_ensembles$nssp %>% ungroup() %>% filter(forecaster %in% c("cdc_baseline", "climate_linear", "ensemble_mix", "windowed_seasonal", "windowed_seasonal_extra_sources")),
+              forecast_date = as.Date(forecast_date_int),
+              truth_data_nhsn = truth_data$nhsn,
+              truth_data_nssp = truth_data$nssp
+            )
+          )
+        }
+      }
+    )
+  )
+}
+
 # Combines per-forecaster forecast_nhsn and forecast_nssp tar_map outputs into
 # single forecast_nhsn_full / forecast_nssp_full targets.
 build_combined_forecast_targets <- function(forecast_targets) {
