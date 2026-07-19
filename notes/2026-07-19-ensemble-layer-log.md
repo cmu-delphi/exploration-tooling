@@ -136,3 +136,78 @@ Verification:
   vs `e0-ensemble` -- ALL MATCH, max rel diff 0. No `validate_forecast_output`
   failures observed on either replay (in particular `ensemble_mixture`, which
   runs unsorted, produced no quantile-crossing errors on these dates).
+
+## E3 — schema validation for the hand-edited prod weights csvs (`kqouxowm`)
+
+`parse_prod_weights()` (`R/utils.R`) previously trusted the four hand-edited
+`scripts/*_geo_exclusions.csv` files completely -- a typo'd forecaster id or
+geo code just produced a weights row that silently never joined to anything
+downstream. Added two validation helpers, called from inside
+`parse_prod_weights()`:
+
+- `validate_prod_weights_columns(raw, filename)` -- runs on the whole raw
+  file (not just the requested date's rows): required columns present
+  (`forecast_date`, `forecaster`, `geo_value`, `weight`); `forecast_date`
+  parseable (readr guesses the whole column as character if any single entry
+  doesn't match a date format, and `as.Date()` throws rather than returning
+  `NA` on a totally unrecognized string, so this parses element-wise and
+  reports the offending value(s)).
+- `validate_prod_weights_values(weights, filename, forecaster_fn_names,
+  all_geos)` -- runs only on `useful_prod_weights`, the post-date-filter
+  subset that actually drives this call (only one date block is ever
+  consumed per call; other historical blocks are inert and deliberately not
+  checked, see finding below): `weight` numeric and finite; `weight >= 0`
+  (the only well-defined range -- `ensemble_weighted()` and
+  `ensemble_climate_linear()` renormalize weights as relative mass within a
+  group, so there's no natural upper bound and negative weights would corrupt
+  that renormalization; `exclude_geos()` also relies on `weight` bottoming
+  out at exactly 0 for its exclusion test); `forecaster` in
+  `forecaster_fn_names` (the grid's `g_forecaster_params_grid$id`, the actual
+  argument already threaded through) plus the sentinel `"all"`; `geo_value`
+  in the same state list `parse_prod_weights()` already builds, plus `"all"`.
+
+**Finding -- the weights csvs reference forecaster ids that don't exist in
+the current grid, by design.** `ensemble_climate_linear()` doesn't join
+`other_weights` against a registered forecaster list; it matches by
+`grepl("climate|linear", forecaster)` against whatever ids are actually
+present in the forecast frame it's given. So all four csvs carry
+`"linearlog"` and `"climate_quantile_extrapolated"` (retired forecasters,
+kept at weight 0 as inert documentation across essentially every date block)
+and `"climate_linear"` (predates the `climate_linear` ensemble target of the
+same name -- never a base forecaster id, appears at a small nonzero weight
+like 0.001 in several blocks, always inert). A strict
+"forecaster must be in `g_forecaster_params_grid$id`" rule would reject all
+four current files. Per the task's guidance, loosened rather than edited the
+csvs: added `LEGACY_PROD_WEIGHT_FORECASTER_IDS <- c("linearlog",
+"climate_quantile_extrapolated", "climate_linear")` (in `R/utils.R`,
+documented inline) and whitelisted it alongside the active ids and `"all"`.
+
+**Finding -- one real, pre-existing typo, currently harmless.**
+`scripts/flu_nssp_geo_exclusions.csv`'s 2025-12-17 block has
+`linear_no_population-scale` (hyphen) instead of the real id
+`linear_no_population_scale` (underscore), at weight 2 (nonzero, i.e. not a
+deliberately-zeroed placeholder). It's inert today only because that date
+block is stale (superseded by later blocks for any current forecast date);
+it would be caught loudly by this validation if `2025-12-17` were ever
+re-requested (e.g. a historical replay). Left as-is per the task's
+instructions (validation scope is intentionally the post-date-filter subset,
+not the full historical file, precisely so a stale mistake like this doesn't
+block current runs) -- worth a manual fix in the csv separately since it's a
+one-off, not a documented convention like the legacy ids above.
+
+Verification:
+
+- `make test`: 105 pass, 0 fail, 9 skips (was 93/0/9; added 12 tests in
+  `tests/testthat/test-prod-weights.R` covering both helpers directly --
+  offline, no network dependency -- plus one end-to-end
+  `parse_prod_weights()` pass/fail-free check per csv against the current
+  disease's forecaster id list).
+- All four current csvs parse cleanly via `parse_prod_weights()` with a
+  plausible date (2026-01-07) and each disease's real
+  `g_forecaster_params_grid$id` list.
+- Flu golden: capture `e3-weights` (ref 2026-01-07, EVALUATION_N_DATES=1) vs
+  `e1-ensemble` -- ALL MATCH, max rel diff 0. Only `geo_weights` (and its
+  downstream ensemble targets) recomputed, as expected for a
+  `parse_prod_weights()` function-body change; every other target
+  byte-identical. Covid golden skipped (low-risk, slow 9-date replay per task
+  scoping).
