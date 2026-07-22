@@ -107,32 +107,11 @@ recipes, the `_targets.yaml` entry, `RSV_SUBMISSION_DIRECTORY`) points at a
 not-yet-written `scripts/rsv_hosp_prod.R` and will fail if run; write it
 directly on the shared stack whenever it is picked up.
 
-History lives in `notes/`: dated work logs with per-step verification details
-and design scouts. CLAUDE.md describes only the current state and open threads.
-
-## Open threads
-
-- **E2 — sweep the shipped prod ensembles in explore**: exploration never
-  evaluates the `run_ensemble()` path prod actually submits. Full design
-  (atomic component family, sweep grid, uniform-vs-prod-csv weights question,
-  correctness landmines) in `notes/2026-07-19-e2-explore-ensemble-design.md`.
-  Deferred; the highest-value open item.
-- **Snapshot input validator**: replace trust-based metadata handling at the
-  `make_forecast_snapshot()` boundary with an explicit
-  `validate_forecast_snapshot()`. Design (and confirmation that epipredict
-  reads `metadata$as_of` at training time via `step_adjust_latency`, so the
-  as-of override is load-bearing policy) in
-  `notes/2026-07-19-validate-snapshot-design.md`.
-- **Per-forecaster `output_scale`**: per-disease today and NOT a live scoring
-  bug (verified by magnitude 2026-07-19; see the ensemble-layer log). If ever
-  done, must be explicit per-family declarations — deriving it from
-  `pop_scaling` would corrupt flu scores by ~pop/1e5. Low priority.
-- **Per-source version policies** for explore-style multi-source snapshots.
-- **Prod parallelism / BLAS**: measured 2026-07-19
-  (`notes/2026-07-19-blas-timing.md`): pinning BLAS to 1 thread saves ~7%
-  CPU-seconds consistently but wall time is unchanged at evaluation scale
-  (16 targets / 12 workers). Not the clear win hypothesized; re-measure at
-  prod scale before restructuring anything.
+History lives in `notes/`: the annotated commit log
+(`notes/2026-07-22-ds-refactor2-annotated-commit-log.md`) is the source of
+truth for what was done and how it was verified; `notes/refactor-ideas.md`
+holds all open threads and future refactor designs; the remaining dated
+files are experiment records. CLAUDE.md describes only the current state.
 
 ## Refactoring practice
 
