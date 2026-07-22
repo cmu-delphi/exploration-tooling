@@ -263,9 +263,6 @@ check-socrata-updates:
 	echo "NSSP Update:"
 	@curl -s https://data.cdc.gov/api/views/rdmq-nq56 | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['rowsUpdatedAt'])" | xargs -I {} date -d "@{}"
 
-check-nssp-socrata-github-diff:
-	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); check_nssp_socrata_github_diff()"
-
 update-only-nssp-submission:
 	@if [ -z "$$date" ]; then \
 		echo "Usage: make update-only-nssp-submission date=2025-09-13"; \

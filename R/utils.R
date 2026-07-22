@@ -164,31 +164,6 @@ make_forecaster_grid <- function(tib, family) {
   return(out)
 }
 
-#' Get exclusions from a JSON file for a given date
-#'
-#' @param date A date
-#' @param exclusions_json A JSON file with exclusions in the format:
-#' @param forecaster the forecaster whose exclusions to look up; global means to be excluded from the submitted forecast, and otherwise corresponds to the name of the forecaster in forecaster_fns
-#'
-#'    {"exclusions": {"2024-03-24": "ak,hi"}}
-#'
-#' @export
-get_exclusions <- function(
-  date,
-  forecaster,
-  exclusions_json = here::here("scripts", "geo_exclusions.json")
-) {
-  if (!file.exists(exclusions_json)) {
-    return("")
-  }
-
-  res <- jsonlite::read_json(exclusions_json)$exclusions[[as.character(date)]]
-  if (!is.null(res[[forecaster]])) {
-    return(strsplit(res[[forecaster]], ",")[[1]])
-  }
-  return("")
-}
-
 data_substitutions <- function(dataset, substitutions_path, forecast_generation_date) {
   # Get the substitutions from the table, matched by forecast generation date
   substitutions <- readr::read_csv(
@@ -556,76 +531,6 @@ update_site <- function() {
   )
 }
 
-#' Delete unused reports from the S3 bucket.
-#'
-#' @param dry_run List files that would be deleted if `dry_run` is `FALSE`.
-delete_extra_s3_files <- function(dry_run = TRUE) {
-  local_path <- "reports"
-  bucket <- "forecasting-team-data"
-  prefix <- "reports-2024/"
-  # Get list of local files (relative paths)
-  local_files <- list.files(local_path, recursive = TRUE)
-
-  # Get list of S3 files
-  s3_objects <- aws.s3::get_bucket(bucket, prefix = prefix)
-  s3_files <- sapply(s3_objects, function(x) x$Key)
-
-  # Find files that exist in S3 but not locally
-  # Remove prefix from s3_files for comparison
-  s3_files_clean <- gsub(prefix, "", s3_files)
-  files_to_delete <- s3_files[!(s3_files_clean %in% local_files)]
-
-  if (dry_run) {
-    message("Would delete ", length(files_to_delete), " files from S3")
-    message("Files: ", paste(files_to_delete, collapse = ", "))
-    return(invisible(files_to_delete))
-  }
-
-  # Delete each extra file
-  if (length(files_to_delete) > 0) {
-    message("Deleting ", length(files_to_delete), " files from S3")
-    for (file in files_to_delete) {
-      message("Deleting: ", file)
-      aws.s3::delete_object(file, bucket)
-    }
-  } else {
-    message("No files to delete")
-  }
-}
-
-#' Find unused report files in index.html.
-find_unused_score_files <- function() {
-  library(rvest)
-  library(fs)
-  library(stringr)
-
-  # Read all files in reports directory
-  all_files <- dir_ls("reports", recurse = TRUE) %>%
-    path_file() # just get filenames, not full paths
-
-  # Read index.html and extract all href links
-  index_html <- read_html("reports/index.html")
-  used_files <- index_html %>%
-    html_elements("a") %>%
-    html_attr("href") %>%
-    # Add known required files like CSS
-    c("style.css", "template.md", "report.md", "index.html", .) %>%
-    # Remove links like "https://" from the list
-    keep(~ !grepl("^https?://", .))
-
-  # Find files that exist but aren't referenced
-  unused_files <- setdiff(all_files, used_files)
-
-  if (length(unused_files) > 0) {
-    cat("The following files in 'reports' are not referenced in index.html:\n")
-    cat(paste("-", unused_files), sep = "\n")
-  } else {
-    cat("All files in 'reports' are referenced in index.html\n")
-  }
-
-  return(invisible(unused_files))
-}
-
 #' Ensure that forecast values are monotically increasing
 #' in quantile order.
 sort_by_quantile <- function(forecasts) {
@@ -723,88 +628,7 @@ validate_epi_data <- function(epi_data) {
   return(epi_data)
 }
 
-#' Convenience wrapper for working with Delphi S3 bucket.
-get_bucket_df_delphi <- function(prefix = "", bucket = "forecasting-team-data", ...) {
-  aws.s3::get_bucket_df(prefix = prefix, bucket = bucket, ...) %>% tibble()
-}
-
-#' Remove duplicate files from S3
-#'
-#' Removes duplicate files from S3 by keeping only the earliest LastModified
-#' file for each ETag. You can modify the logic of keep_df, if this doesn't suit
-#' your needs.
-#'
-#' @param bucket The name of the S3 bucket.
-#' @param prefix The prefix of the files to remove duplicates from.
-#' @param dry_run Whether to actually delete the files.
-#' @param .progress Whether to show a progress bar.
-delete_duplicates_from_s3_by_etag <- function(bucket, prefix, dry_run = TRUE, .progress = TRUE) {
-  # Get a list of all new dataset snapshots from S3
-  files_df <- aws.s3::get_bucket_df(bucket = bucket, prefix = prefix) %>% as_tibble()
-
-  # Create a list of all the files to keep by keeping the earliest timestamp file for each ETag
-  keep_df <- files_df %>%
-    group_by(ETag) %>%
-    slice_min(LastModified) %>%
-    ungroup()
-
-  # Create a list of all the files to delete by taking the complement of keep_df
-  delete_df <- files_df %>%
-    anti_join(keep_df, by = "Key")
-
-  if (nrow(delete_df) == 0) {
-    return(invisible(delete_df))
-  }
-
-  if (dry_run) {
-    cli::cli_alert_info("Would delete {nrow(delete_df)} files from {bucket} with prefix {prefix}")
-    print(delete_df)
-    return(invisible(delete_df))
-  }
-
-  # Delete
-  delete_files_from_s3(bucket = bucket, keys = delete_df$Key, .progress = .progress)
-
-  return(invisible(delete_df))
-}
-
-#' Delete files from S3
-#'
-#' Faster than aws.s3::delete_object, when there are many files to delete (thousands).
-#'
-#' @param bucket The name of the S3 bucket.
-#' @param keys The keys of the files to delete, as a character vector.
-#' @param batch_size The number of files to delete in each batch.
-#' @param .progress Whether to show a progress bar.
-delete_files_from_s3 <- function(keys, bucket, batch_size = 500, .progress = TRUE) {
-  split(keys, ceiling(seq_along(keys) / batch_size)) %>%
-    purrr::walk(~ aws.s3::delete_object(bucket = bucket, object = .x), .progress = .progress)
-}
-
-
 MIN_TIMESTAMP <- as.POSIXct("2000-01-01 00:00:00S", tz = "UTC")
-
-#' Get the last time a covidcast signal was updated.
-#'
-#' @param source The source of the signal.
-#' @param signal The signal of the signal.
-#' @param geo_type The geo type of the signal.
-#' @param missing_value The value to return if the signal is not found.
-#'
-#' @return The last time the signal was updated in POSIXct format.
-get_covidcast_signal_last_update <- function(source, signal, geo_type, missing_value = lubridate::now(tz = "UTC")) {
-  tryCatch(
-    {
-      pub_covidcast_meta() %>%
-        filter(source == !!source, signal == !!signal, geo_type == !!geo_type) %>%
-        pull(last_update) %>%
-        as.POSIXct()
-    },
-    error = function(cond) {
-      return(missing_value)
-    }
-  )
-}
 
 get_local_file_last_modified <- function(file_path, missing_value = MIN_TIMESTAMP) {
   if (!file.exists(file_path)) {
@@ -856,26 +680,6 @@ get_socrata_updated_at <- function(dataset_url, missing_value) {
       return(missing_value)
     }
   )
-}
-
-get_cast_api_updated_at <- function(source, signal = NULL) {
-  req <- httr2::request(EPIDATA_V5_URL) %>%
-    httr2::req_url_path_append("metadata/latest_update/") %>%
-    httr2::req_url_query(
-      source = source,
-      signal = signal,
-      .multi = "explode"
-    )
-  proxy_port <- Sys.getenv("CAST_API_PROXY_PORT", "")
-  if (proxy_port != "") {
-    # if you need to use a proxy, ssh -D localhost:proxy_port mentat will open the SOCKS5 proxy
-    req <- req %>% httr2::req_proxy(url = "socks5h://localhost", port = as.integer(proxy_port))
-  }
-  # actually make the request
-  httr2::req_perform(req) %>%
-    httr2::resp_body_json() %>%
-    `$`("latest_update") %>%
-    as_datetime()
 }
 
 #' create a list of valid locations x forecast_dates shared among forecasters
@@ -983,88 +787,6 @@ get_file_hash <- function(file, algorithm = "md5") {
     digest::digest(algo = algorithm, serialize = FALSE)
 }
 
-#' Calculate MD5 hash of a tibble as Parquet data
-#'
-#' This function takes a tibble, writes it to a Parquet file in memory,
-#' and calculates an MD5 hash of the resulting binary data. This is useful
-#' for creating content-based hashes of data that can be used for caching
-#' or detecting changes in data.
-#'
-#' @param df A tibble or data frame to hash
-#' @param algorithm The hash algorithm to use. Defaults to "md5".
-#'   Other options include "sha1", "sha256", "crc32", etc.
-#'
-#' @return A character string containing the MD5 hash
-#'
-#' @examples
-#' \dontrun{
-#' library(dplyr)
-#' data <- tibble(x = 1:5, y = letters[1:5])
-#' hash <- get_parquet_hash(data)
-#' print(hash)
-#' }
-#'
-#' @export
-get_tibble_hash <- function(df, algorithm = "md5") {
-  temp_file <- tempfile(fileext = ".parquet")
-  on.exit(unlink(temp_file), add = TRUE)
-  nanoparquet::write_parquet(df, temp_file)
-  get_file_hash(temp_file, algorithm = algorithm)
-}
-
-#' Compare an S3 ETag with local hashes
-#'
-#' This function downloads a file from S3, calculates various hashes of the
-#' binary data, and compares them to the ETag of the S3 object. A test to verify
-#' that I understand how S3 ETags are computed.
-#'
-#' @param bucket The name of the S3 bucket.
-#' @param key The key of the S3 object.
-compare_s3_etag <- function(bucket, key, region = "us-east-1") {
-  # Download file to temp location
-  temp_file <- tempfile()
-  on.exit(unlink(temp_file), add = TRUE)
-
-  # Download from S3
-  aws.s3::save_object(object = key, bucket = bucket, file = temp_file, region = region)
-
-  # Get S3 metadata to extract ETag
-  s3_meta <- aws.s3::head_object(object = key, bucket = bucket, region = region)
-
-  # Extract ETag (remove quotes if present)
-  s3_etag <- gsub('"', "", attr(s3_meta, "etag"))
-
-  # Calculate various hashes of the local file
-  raw_data <- readBin(temp_file, "raw", file.info(temp_file)$size)
-
-  hashes <- list(
-    md5 = digest::digest(raw_data, algo = "md5", serialize = FALSE),
-    sha1 = digest::digest(raw_data, algo = "sha1", serialize = FALSE),
-    sha256 = digest::digest(raw_data, algo = "sha256", serialize = FALSE),
-    crc32 = digest::digest(raw_data, algo = "crc32", serialize = FALSE)
-  )
-
-  # Compare results
-  cat("S3 ETag:", s3_etag, "\n")
-  cat("Local hashes:\n")
-  for (name in names(hashes)) {
-    match_indicator <- if (hashes[[name]] == s3_etag) " ✓ MATCH" else ""
-    cat(sprintf("  %s: %s%s\n", name, hashes[[name]], match_indicator))
-  }
-
-  # Check if it's a multipart upload (contains hyphen)
-  if (grepl("-", s3_etag)) {
-    cat("\nNote: ETag contains hyphen - this was likely a multipart upload\n")
-    cat("Multipart ETags are MD5 of concatenated part MD5s, plus part count\n")
-  }
-
-  invisible(list(
-    s3_etag = s3_etag,
-    local_hashes = hashes,
-    file_size = file.info(temp_file)$size
-  ))
-}
-
 build_cast_api_query <- function(
   source = c("nssp", "nhsn"),
   signal = NULL,
@@ -1113,16 +835,6 @@ get_cast_api_data <- function(...) {
   req %>% httr2::req_perform(path = filename)
   readr::read_csv(filename, show_col_types = FALSE) %>%
     dplyr::rename(any_of(c(time_value = "reference_time", version = "report_time")))
-}
-
-get_cast_api_latest_update_date <- function(source = c("nssp", "nhsn")) {
-  source <- rlang::arg_match(source)
-  httr2::request(EPIDATA_V5_URL) %>%
-    httr2::req_url_path_append("metadata/") %>%
-    httr2::req_url_query(source = source) %>%
-    httr2::req_perform() %>%
-    httr2::resp_body_json() %>%
-    purrr::pluck(source, "version_range", "latest")
 }
 
 #' Check whether NHSN and NSSP source data is fresh enough to forecast on

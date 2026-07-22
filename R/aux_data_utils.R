@@ -710,18 +710,6 @@ get_nhsn_data_archive <- function(disease = c("covid", "flu", "rsv")) {
 }
 
 
-get_old_nhsn_data_archive <- function(disease_name) {
-  aws.s3::s3read_using(
-    nanoparquet::read_parquet,
-    object = "nhsn_data_archive.parquet",
-    bucket = "forecasting-team-data"
-  ) %>%
-    filter(disease == disease_name) %>%
-    filter(!grepl("region.*", geo_value)) %>%
-    select(-version_timestamp, -disease) %>%
-    as_epi_archive(compactify = TRUE)
-}
-
 up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv")) {
   disease <- arg_match(disease)
   nssp_national <- get_cast_api_data(
@@ -765,34 +753,3 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv
     as_epi_archive(compactify = TRUE)
 }
 
-get_nssp_upstream <- function(disease = c("covid", "influenza"), source = c("github", "socrata")) {
-  source <- arg_match(source)
-  disease <- arg_match(disease)
-  if (source == "github") {
-    filename <- tempfile(fileext = ".parquet")
-    url <- "https://raw.githubusercontent.com/CDCgov/covid19-forecast-hub/refs/heads/main/auxiliary-data/nssp-raw-data/latest.parquet"
-    httr2::request(url) %>%
-      httr2::req_perform(path = filename)
-    raw_file <- nanoparquet::read_parquet(filename)
-  } else if (source == "socrata") {
-    url <- glue::glue(
-      "https://data.cdc.gov/resource/rdmq-nq56.csv?$limit=1000000&$select=geography,week_end,county,percent_visits_{disease}"
-    )
-    raw_file <- read_csv(url, show_col_types = FALSE)
-  }
-  state_map <- get_population_data() %>% filter(state_id != "usa")
-  processed_nssp <- raw_file %>%
-    filter(county == "All") %>%
-    left_join(state_map, by = join_by(geography == state_name)) %>%
-    select(geo_value = state_id, time_value = week_end, value = starts_with(glue::glue("percent_visits_{disease}"))) %>%
-    mutate(time_value = as.Date(floor_date(time_value, "week", week_start = 7) + 3)) %>%
-    mutate(version = as.Date(floor_date(Sys.Date(), "week", week_start = 7) + 3))
-  processed_nssp %>% arrange(desc(time_value))
-}
-
-check_nssp_socrata_github_diff <- function() {
-  df1 <- get_nssp_upstream("github")
-  df2 <- get_nssp_upstream("socrata")
-  out <- full_join(df1, df2, by = c("geo_value", "time_value", "version"))
-  out %>% filter(abs(value.x - value.y) > 1e-6)
-}
