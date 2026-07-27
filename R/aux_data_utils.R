@@ -509,6 +509,15 @@ generate_flusurv_adjusted <- function(day_of_week = 1) {
     as_tibble() %>%
     mutate(start_year = as.numeric(substr(season, 1, 4)))
   adj_factor <- calculate_burden_adjustment(flusurv_all_latest)
+  # This drop_na() is the *effective* time bound on flusurv, not the live
+  # pub_flusurv() fetch above: adj_factor only exists for the seasons covered by
+  # the static aux_data/flusion_data/flu_burden.csv + us_pop.csv (2011-2020), so
+  # every flusurv row outside those seasons is dropped here (max time_value ends
+  # up ~2020-04-22). Downstream (nhsn_prod_archive in flu_hosp_prod.R) folds these
+  # rows into the training archive as faux-versioned history and asserts they
+  # predate the forecast window. That assertion is really guarding against
+  # someone extending flu_burden.csv past 2020 -- new flusurv issues alone can't
+  # push data into the window while this cap holds.
   flusurv_lat <- flusurv_all$DT %>%
     left_join(adj_factor, by = "season") %>%
     drop_na() %>%
@@ -701,18 +710,6 @@ get_nhsn_data_archive <- function(disease = c("covid", "flu", "rsv")) {
 }
 
 
-get_old_nhsn_data_archive <- function(disease_name) {
-  aws.s3::s3read_using(
-    nanoparquet::read_parquet,
-    object = "nhsn_data_archive.parquet",
-    bucket = "forecasting-team-data"
-  ) %>%
-    filter(disease == disease_name) %>%
-    filter(!grepl("region.*", geo_value)) %>%
-    select(-version_timestamp, -disease) %>%
-    as_epi_archive(compactify = TRUE)
-}
-
 up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv")) {
   disease <- arg_match(disease)
   nssp_national <- get_cast_api_data(
@@ -738,7 +735,16 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv
     ) %>%
     # Ensure uniqueness and convert to epi_archive
     arrange(geo_value, time_value, version) %>%
-    distinct(geo_value, time_value, version, .keep_all = TRUE)
+    distinct(geo_value, time_value, version, .keep_all = TRUE) %>%
+    # NSSP publishes explicit NA values for non-reporting geos (wy through
+    # version 2026-01-07, backfilled with real values on 2026-01-14). An NA
+    # observation is not an observation: keeping the rows makes historical
+    # as-of slices serve NAs that crash NA-intolerant forecasters
+    # (cdc_baseline via propagate_samples) on replay, while dropping them makes
+    # the geo absent for that period -- matching the pre-2026-06-24 behavior of
+    # excluding wy outright. Current-date slices are unaffected (later real
+    # versions supersede).
+    filter(!is.na(nssp))
 
   # Complete the rest of the conversion.
   nssp_data %>%
@@ -747,34 +753,3 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv
     as_epi_archive(compactify = TRUE)
 }
 
-get_nssp_upstream <- function(disease = c("covid", "influenza"), source = c("github", "socrata")) {
-  source <- arg_match(source)
-  disease <- arg_match(disease)
-  if (source == "github") {
-    filename <- tempfile(fileext = ".parquet")
-    url <- "https://raw.githubusercontent.com/CDCgov/covid19-forecast-hub/refs/heads/main/auxiliary-data/nssp-raw-data/latest.parquet"
-    httr2::request(url) %>%
-      httr2::req_perform(path = filename)
-    raw_file <- nanoparquet::read_parquet(filename)
-  } else if (source == "socrata") {
-    url <- glue::glue(
-      "https://data.cdc.gov/resource/rdmq-nq56.csv?$limit=1000000&$select=geography,week_end,county,percent_visits_{disease}"
-    )
-    raw_file <- read_csv(url, show_col_types = FALSE)
-  }
-  state_map <- get_population_data() %>% filter(state_id != "usa")
-  processed_nssp <- raw_file %>%
-    filter(county == "All") %>%
-    left_join(state_map, by = join_by(geography == state_name)) %>%
-    select(geo_value = state_id, time_value = week_end, value = starts_with(glue::glue("percent_visits_{disease}"))) %>%
-    mutate(time_value = as.Date(floor_date(time_value, "week", week_start = 7) + 3)) %>%
-    mutate(version = as.Date(floor_date(Sys.Date(), "week", week_start = 7) + 3))
-  processed_nssp %>% arrange(desc(time_value))
-}
-
-check_nssp_socrata_github_diff <- function() {
-  df1 <- get_nssp_upstream("github")
-  df2 <- get_nssp_upstream("socrata")
-  out <- full_join(df1, df2, by = c("geo_value", "time_value", "version"))
-  out %>% filter(abs(value.x - value.y) > 1e-6)
-}

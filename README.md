@@ -1,8 +1,15 @@
 # Exploration Tooling
 
-This repo is for exploring forecasting methods and tools for both COVID and Flu.
-The repo is structured as a [targets](https://docs.ropensci.org/targets/) project, which means that it is easy to run things in parallel and to cache results.
-The repo is also structured as an R package, which means that it is easy to share code between different targets.
+This repo produces Delphi's COVID, flu, and RSV hospitalization forecasts
+(submitted to the CDC forecast hubs as "CMU-TimeSeries") and hosts the
+exploration sweeps used to develop them. It is organized as several
+[targets](https://docs.ropensci.org/targets/) pipeline projects sharing one R
+codebase, which makes it easy to run things in parallel and cache results.
+
+This README is the human-facing guide: setup, weekly production operation,
+exploration runs, and how to add a forecaster. `CLAUDE.md` holds the terse
+working reference (command cheatsheet, REPL debugging, architecture map, and
+the refactor roadmap); `notes/` holds dated work logs.
 
 
 ## Production Usage 2024-2025
@@ -20,8 +27,6 @@ EPIDATR_USE_CACHE=true
 EPIDATR_CACHE_MAX_AGE_DAYS=42
 # Controls whether all forecasters are replaced with a dummy. This is useful for testing a new pipeline.
 DUMMY_MODE=false
-# Set to the project you want targets to use by default. The options can be found in `_targets.yaml`.
-TAR_PROJECT=covid_hosp_explore
 # If you're on a production machine, set these to the path of the directory where you want to save the submission.
 FLU_SUBMISSION_DIRECTORY=cache
 COVID_SUBMISSION_DIRECTORY=cache
@@ -30,6 +35,13 @@ AWS_S3_PREFIX=exploration
 # Set to the path of the directory where you want to save the auxiliary data.
 AUX_DATA_PATH=aux_data
 ```
+
+Do NOT set `TAR_PROJECT` in `.Renviron`: R re-loads `.Renviron` on every
+`Rscript` start (including the callr subprocess `tar_make` spawns), and its
+values override the shell environment — a default here silently redirects any
+invocation that selects a project via `export TAR_PROJECT=...`. Make recipes
+select projects via `TAR_RUN_PROJECT` (see `scripts/run.R`); in a REPL, start
+with `Sys.setenv(TAR_PROJECT = "<project>")` (options in `_targets.yaml`).
 
 Run the pipeline using:
 
@@ -49,14 +61,17 @@ make pull
 # Make forecasts
 make prod-flu
 make prod-covid
+# (make prod-rsv is a stub: scripts/rsv_hosp_prod.R is not written yet)
 
-# If there are errors, you can view the top n with the following command (replace with appropriate project)
-source("scripts/targets-common.R");
-get_targets_errors("covid_hosp_prod", top_n = 10)
+# If there are errors, view the top n with (in an R session; replace with appropriate project):
+#   suppressPackageStartupMessages(source("R/load_all.R"))
+#   get_targets_errors("covid_hosp_prod", top_n = 10)
+# or use the make shortcut, e.g.
+make get-flu-prod-errors
 
 # Automatically append the new reports to the site index and host the site on netlify
 # (this requires the netlify CLI to be installed and configured, talk to Dmitry about this)
-make update_site && make netlify
+make update-site && make netlify
 
 # Update weights until satisfied using *_geo_exclusions.csv, rerun the make command above
 # Submit (makes a commit, pushes to our fork, and makes a PR; this requires a GitHub token
@@ -90,29 +105,27 @@ nohup make explore-covid &
 
 ## Development Overview
 
-This repo is organized as a monorepo with multiple `targets` projects.
-The four targets projects are:
+This repo is organized as a monorepo with multiple `targets` projects,
+declared in `_targets.yaml`. Each project maps a pipeline script in `scripts/`
+to a store directory (targets cache) of the same name:
 
-- `covid_hosp_explore`: for exploring covid hospitalization forecasters
-- `flu_hosp_explore`: for exploring flu hospitalization forecasters
-- `covid_hosp_prod`: for predicting covid hospitalizations
-- `flu_hosp_prod`: for predicting flu hospitalizations
-
-Each of these projects has its own script file that defines the pipeline.
-These are in the `scripts/` directory.
+- `covid_hosp_explore`, `flu_hosp_explore`: exploration sweeps over many
+  forecaster/parameter combinations
+- `covid_hosp_prod`, `flu_hosp_prod`: weekly production forecasts and reports
+- `rsv_hosp_prod`: a stub — its Makefile recipes and `_targets.yaml` entry
+  point at a not-yet-written `scripts/rsv_hosp_prod.R` (not a priority)
+- `flu_hosp_evaluation`: historical replay + scoring; same script as flu prod
+  but a separate store, so replays don't invalidate the production cache
 
 ### Directory Layout
 
-- `run.R` and `Makefile`: the main entrypoint for all pipelines
+- `scripts/run.R` and `Makefile`: the main entrypoints for all pipelines
 - `R/`: reusable R code for forecasters, targets, and data processing functions
-- `scripts/`: entry-points for target pipelines, one-off data processing
-  scripts, and report generation scripts
+- `scripts/`: pipeline definitions (one per project), archive-building and
+  data-processing scripts, and report generation scripts
 - `tests/`: package tests
-- `covid_hosp_explore/` and `scripts/covid_hosp_explore.R`: a `targets` project for exploring covid hospitalization forecasters
-- `flu_hosp_explore/` and `scripts/flu_hosp_explore.R`: a `targets` project for exploring flu hospitalization forecasters
-- `covid_hosp_prod/` and `scripts/covid_hosp_prod.R`: a `targets` project for predicting covid hospitalizations
-- `flu_hosp_prod/` and `scripts/flu_hosp_prod.R`: a `targets` project for predicting flu hospitalizations
-- `forecaster_testing/` and `scripts/forecaster_testing.R`: a `targets` project for testing forecasters
+- `notes/`: dated work logs
+- `deploy/`: systemd units for the archive pollers and scheduled prod runs
 
 ### Pipeline Structure
 
@@ -149,27 +162,9 @@ Some general tips:
 
 ### Running and debugging pipelines
 
-You can run these pipelines as described above, but you can also run them in the R REPL.
-
-```r
-suppressPackageStartupMessages(source("R/load_all.R"))
-
-# Make sure to set the project to the one you want to run
-Sys.setenv(TAR_PROJECT = "covid_hosp_explore")
-
-# Run the pipeline
-tar_make()
-```
-
-Frequently, you will want to run and debug a single target. First place a
-`browser()` statement in the target function. Then run the following command:
-
-```r
-tar_make(target_name, callr_function = NULL, use_crew = FALSE)
-```
-
-This will run the pipeline up to and including the target you specified and drop
-you into the R debugger.
+Pipelines can also be run and debugged interactively from the R REPL
+(single-target debugging with `browser()`, error inspection, forecaster
+lookup): see "REPL workflow" in `CLAUDE.md`.
 
 ### Adding a new forecaster
 
@@ -217,6 +212,27 @@ faster. Run the pipeline until your forecaster produces sensible results. If you
 add your forecaster under a new heading in
 `g_forecaster_parameter_combinations`, it will get a new report notebook in
 `reports/` (such as `reports/flu-notebook-new_forecaster.html`).
+
+Exploration and production share one runner. A forecaster is a bare function
+`fn(epi_data, outcome, ahead, ...)`; everything that is a cross-cutting
+convention rather than a modeling parameter is declared as a *spec column* on
+its grid row and applied uniformly by `run_forecaster()` (in `map()` over dates
+for explore, once per `(forecaster, date)` target for prod). The spec columns
+and their defaults live in `FORECASTER_SPEC_DEFAULTS` (`R/utils.R`):
+`as_of_policy` (`"asof"` real-time vs `"cheating"` finalized-with-cutoff),
+`ahead_multiplier` (1 for day-native, 7 for week-native forecasters),
+`target_date_shift`, `join_extra_data`, `filter_sources`, `excluded_geos`,
+`sort_quantiles` (the flu quantile-whitening workaround), and `output_scale`
+(`"count"` vs `"per100k"`, controlling whether scoring rescales to counts).
+`make_forecaster_grid()` splits these off from the params list-column and fills
+defaults, so a grid row omits whatever it doesn't need; explore rides the
+defaults while prod forecasters declare their overrides inline in
+`g_forecaster_params_grid` (see `scripts/flu_hosp_prod.R`). Because both
+pipelines consume the same grid and runner, a forecaster that works in an
+exploration sweep runs verbatim in backtesting and prod — there is no separate
+per-disease prod closure to keep in sync. (Covid and RSV prod are still on the
+older per-disease wiring pending their own migration; see "Shared forecaster
+architecture" in `CLAUDE.md` for status and roadmap.)
 
 ### Some handy utilities
 

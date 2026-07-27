@@ -310,6 +310,12 @@ get_flu_forecaster_params <- function() {
       x <- add_id(x)
       # Add the outcome to each forecaster.
       x$outcome <- "hhs"
+      # Spec-column overrides read by run_forecaster()/scoring (make_forecaster_grid
+      # supplies defaults for the rest). Set after add_id so they stay out of the
+      # id hash. Flu forecasts are per-100k (rescaled to counts at scoring) and get
+      # the quantile-whitening workaround.
+      x$sort_quantiles <- TRUE
+      x$output_scale <- "per100k"
       x
     })
 

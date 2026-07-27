@@ -5,17 +5,15 @@
 
 #' Get partially applied forecaster function
 #'
-#' params and param_names are defined by the values of the
-#' tar_map. params is a list of lists, and param_names is the
-#' names of parameters in each list. These are separate because
-#' targets::tar_map strips the names from lists in a tibble.
+#' params is defined by the values of the tar_map: a named list of forecaster
+#' arguments (tar_map substitutes list-column values as literals, names intact).
 #' Defining this function inside the target causes scope issues.
 #'
 #' @param id Forecaster ID
 #' @return A partially applied forecaster function
 #' @export
-get_partially_applied_forecaster <- function(forecaster, ahead, params, param_names) {
-  function(epi_data, ...) rlang::inject(forecaster(epi_data, ..., ahead = ahead, !!!(set_names(params, param_names))))
+get_partially_applied_forecaster <- function(forecaster, ahead, params) {
+  function(epi_data, ...) rlang::inject(forecaster(epi_data, ..., ahead = ahead, !!!params))
 }
 
 
@@ -40,12 +38,13 @@ create_parameter_targets <- function() {
 #'
 #' Variables with 'g_' prefix are globals defined in the calling script.
 #' implicit global dependencies:
-#' - g_forecaster_params_grid
+#' - g_forecaster_params_grid (needs `sort_quantiles` and `output_scale` columns)
 #' - g_time_value_adjust
 #' implicit target dependencies:
 #' - joined_archive_data
 #' - hhs_evaluation_data
 #' - aheads
+#' - forecast_dates
 #' - state_geo_values
 #' @return A list of targets for forecasts and scores
 #' @export
@@ -57,40 +56,50 @@ create_forecast_targets <- function() {
     tar_target(
       name = forecast,
       command = {
-        out <- epix_slide_simple(
-          joined_archive_data,
-          get_partially_applied_forecaster(forecaster, aheads, params, param_names),
-          forecast_dates,
-          cache_key = "joined_archive_data"
-        )
-        if (g_disease == "flu") {
-          # TODO: Hack fix because whitening has edge cases. Remove when fixed.
-          out %<>% sort_by_quantile()
-        }
-        out %<>%
-          rename(prediction = value) %>%
-          mutate(ahead = as.numeric(target_end_date - forecast_date)) %>%
-          mutate(id = id)
-        out
+        # Same runner as prod: snapshot the archive as-of each forecast date and
+        # forecast. Explore is the degenerate case of run_forecaster's wrapping
+        # (asof policy, no source filter/extra join/geo exclusion). Explore's
+        # aheads are already in days and its forecasters are day-native, so
+        # ahead_multiplier is 1 (the make_forecaster_grid default). `sort_quantiles`
+        # is a spec column (was a `g_disease == "flu"` grep). target_end_date stays
+        # Wednesday here; the Wednesday->Saturday shift is applied downstream
+        # (score/combine).
+        archive_hash <- rlang::hash(joined_archive_data)
+        map(forecast_dates, function(fdate) {
+          run_forecaster(
+            snapshot = make_forecast_snapshot(
+              joined_archive_data,
+              forecast_date = fdate,
+              generation_date = fdate,
+              cache_key = "joined_archive_data",
+              archive_hash = archive_hash
+            ),
+            forecaster = forecaster,
+            aheads = aheads * ahead_multiplier,
+            params = params,
+            id = id,
+            sort_quantiles = sort_quantiles
+          )
+        }) %>%
+          bind_rows() %>%
+          mutate(ahead = as.numeric(target_end_date - forecast_date))
       },
       pattern = map(aheads)
     ),
     tar_target(
       name = score,
       command = {
-        # If the data has already been scaled, hhs needs to include the
-        # population and undo scaling.
-        if ("population" %in% colnames(hhs_evaluation_data)) {
-          actual_eval_data <- hhs_evaluation_data %>% select(-population)
-          forecast_scaled <- forecast %>%
+        # `output_scale` (spec column) replaces sniffing hhs_evaluation_data for a
+        # `population` column: "per100k" forecasts are rescaled to counts to match
+        # the truth data; "count" forecasts are compared as-is.
+        forecast_scaled <- forecast
+        if (output_scale == "per100k") {
+          forecast_scaled <- forecast_scaled %>%
             left_join(
               hhs_evaluation_data %>% distinct(geo_value, population),
               by = "geo_value"
             ) %>%
-            mutate(prediction = prediction * population / 10L**5)
-        } else {
-          forecast_scaled <- forecast
-          actual_eval_data <- hhs_evaluation_data
+            mutate(value = value * population / 10L**5)
         }
         forecast_scaled <- forecast_scaled %>%
           # Push the Wednesday markers to Saturday, to match targets with truth data.
@@ -98,9 +107,9 @@ create_forecast_targets <- function() {
             forecast_date = forecast_date + g_time_value_adjust,
             target_end_date = target_end_date + g_time_value_adjust
           ) %>%
-          rename("model" = "id")
+          rename(model = forecaster, prediction = value)
         evaluate_predictions(forecasts = forecast_scaled, truth_data = hhs_evaluation_data) %>%
-          rename("id" = "model")
+          rename(forecaster = model)
       }
     )
   )
@@ -112,7 +121,7 @@ create_forecast_targets <- function() {
       forecasts_and_scores[["forecast"]],
       command = {
         dplyr::bind_rows(!!!.x) %>%
-          rename(forecaster = id) %>%
+          rename(prediction = value) %>%
           filter(geo_value %in% state_geo_values) %>%
           # Push the Wednesday markers to Saturday, to match targets with truth data.
           mutate(
@@ -126,7 +135,6 @@ create_forecast_targets <- function() {
       forecasts_and_scores[["score"]],
       command = {
         dplyr::bind_rows(!!!.x) %>%
-          rename(forecaster = id) %>%
           filter(geo_value %in% state_geo_values)
       }
     )

@@ -63,20 +63,3 @@ evaluate_predictions <- function(forecasts, truth_data) {
     ) %>%
     mutate(ahead = as.numeric(target_end_date - forecast_date))
 }
-
-
-#' import prediction cards generated elsewhere
-#' @description
-#' load an externally generated RDS to be evaluated
-#' @param predictions_filename the filename to be read as an RDS
-#' @param forecaster_name the name to assign the forecaster
-#' @export
-read_external_predictions_data <- function(predictions_filename, forecaster_name = NULL) {
-  prediction_cards <- readRDS(predictions_filename)
-  if (is.null(forecaster_name)) {
-    return(prediction_cards)
-  }
-  prediction_cards %>%
-    filter(forecast_date >= "2023-06-01") %>%
-    filter(forecaster == forecaster_name)
-}

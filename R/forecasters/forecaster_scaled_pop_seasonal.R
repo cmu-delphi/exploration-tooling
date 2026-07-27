@@ -39,6 +39,7 @@ scaled_pop_seasonal <- function(
   epi_data,
   outcome,
   extra_sources = character(),
+  primary_source = "nhsn",
   ahead = 1,
   pop_scaling = TRUE,
   drop_non_seasons = FALSE,
@@ -87,11 +88,12 @@ scaled_pop_seasonal <- function(
     )
     return(null_result)
   }
-  # this is to deal with grouping by source in tests that don't include it
+  # this is to deal with grouping by source in tests that don't include it;
+  # stamp primary_source so the source filters below still match
   adding_source <- FALSE
   if (!("source" %in% names(epi_data))) {
     adding_source <- TRUE
-    epi_data$source <- c("nhsn")
+    epi_data$source <- primary_source
     attributes(epi_data)$metadata$other_keys <- "source"
   }
   args_input[["ahead"]] <- ahead
@@ -169,14 +171,14 @@ scaled_pop_seasonal <- function(
   # that we use the right data when forecasting and selecting the training
   # window. We do this by removing any extra source data that could be older.
   max_time_nhsn <- epi_data %>%
-    filter(source == "nhsn") %>%
+    filter(source == primary_source) %>%
     group_by(geo_value) %>%
     summarize(max_time_nhsn = max(time_value))
   epi_data %<>%
-    filter(source == "nhsn") %>%
+    filter(source == primary_source) %>%
     bind_rows(
       epi_data %>%
-        filter(source != "nhsn") %>%
+        filter(source != primary_source) %>%
         left_join(max_time_nhsn, by = "geo_value") %>%
         filter(time_value <= max_time_nhsn)
     )
@@ -232,7 +234,7 @@ scaled_pop_seasonal <- function(
       )
   }
   # with all the setup done, we execute and format
-  pred <- run_workflow_and_format(preproc, postproc, trainer, season_data, epi_data)
+  pred <- run_workflow_and_format(preproc, postproc, trainer, season_data, epi_data, source_value = primary_source)
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration
