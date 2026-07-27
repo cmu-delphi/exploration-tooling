@@ -820,6 +820,8 @@ build_cast_api_query <- function(
       fill_method = fill_method,
       geo_value = geo_value,
       reference_time = time_value,
+      format = "csv",
+      header = "true",
       .multi = "explode"
     ) %>%
     {
