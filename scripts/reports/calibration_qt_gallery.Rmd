@@ -1,0 +1,255 @@
+---
+title: MultiQT calibration gallery — per-forecast panels at the chosen operating point
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  burn_in_seasons: "2023-2024"
+  season_policy: "carry"
+  lr_window: 20
+  lr_mult: 0.03
+  n_panels: 150
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+# cache = TRUE chunks are keyed on chunk code + cache.extra, NOT on functions
+# in R/ -- after changing calibration code, clear cache/calibration/knitr_cache_gallery/.
+knitr::opts_chunk$set(
+  fig.align = "center", fig.width = 10, fig.height = 6,
+  message = FALSE, warning = FALSE, cache = FALSE,
+  cache.path = here::here("cache/calibration/knitr_cache_gallery/")
+)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{r load, cache=TRUE, cache.extra=list(params)}
+suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+
+forecasts <- hub_read_forecasts()
+truth <- hub_read_truth()
+rounds <- hub_label_seasons(unique(forecasts$reference_date))
+
+burn_in <- if (nzchar(params$burn_in_seasons)) {
+  strsplit(params$burn_in_seasons, ",")[[1]]
+} else {
+  character(0)
+}
+
+cal <- calibrate_hub_forecasts(
+  forecasts, truth,
+  burn_in_seasons = burn_in,
+  season_policy = params$season_policy,
+  lr_window = params$lr_window,
+  lr_args = list(mult = params$lr_mult),
+  progress = FALSE
+)
+```
+
+Companion to `calibration_qt.Rmd` (the parameter-sweep record; see
+`notes/CALIBRATION.md` for the project state). Parameters are fixed at the
+operating point the sweep selected — `lr_mult = `r params$lr_mult``,
+`lr_window = `r params$lr_window``, `season_policy = "`r params$season_policy`"`
+— and the rest of the document is a ranked gallery of individual forecasts,
+one panel per (location, round), for the two live seasons.
+
+# Headline at the fixed operating point
+
+Calibration error is the mean over the 23 quantile levels of
+`|geo-pooled empirical coverage at a - a|`; WIS uses the standard
+factor-of-two convention. The burn-in season is excluded.
+
+```{r headline}
+bind_rows(
+  left_join(
+    hub_coverage_summary(cal),
+    select(hub_quantile_loss(cal), horizon, loss_base, loss_cal, loss_pct = pct_improvement),
+    by = "horizon"
+  ) %>% mutate(season = "all"),
+  left_join(
+    hub_coverage_summary(cal, by = "season"),
+    select(hub_quantile_loss(cal, by = "season"),
+      season, horizon, loss_base, loss_cal, loss_pct = pct_improvement
+    ),
+    by = c("season", "horizon")
+  )
+) %>%
+  transmute(
+    season, horizon,
+    `cal err (base)` = round(cal_error_base, 4),
+    `cal err (calibrated)` = round(cal_error_cal, 4),
+    `cal err improvement %` = round(pct_improvement, 1),
+    `WIS (base)` = round(2 * loss_base, 1),
+    `WIS (calibrated)` = round(2 * loss_cal, 1),
+    `WIS improvement %` = round(loss_pct, 1)
+  ) %>%
+  arrange(season, horizon)
+```
+
+# Data vintages for the panels
+
+Each panel shows the NHSN data **as of the Wednesday before the reference
+date** (`reference_date - 3`, roughly what the forecaster saw at submission
+time) alongside the finalized truth. Vintages come from a frozen copy of the
+NHSN archive (`cache/calibration/nhsn_archive_flu.parquet`; provenance in
+`notes/CALIBRATION.md`). No vintages exist before 2024-11-19, which still
+covers every live-season round.
+
+```{r snapshots, cache=TRUE, dependson="load"}
+archive <- nanoparquet::read_parquet(
+  here::here("cache/calibration/nhsn_archive_flu.parquet")
+) %>%
+  as_epi_archive(compactify = TRUE)
+
+geo_map <- get_population_data() %>%
+  distinct(state_id, .keep_all = TRUE) %>%
+  transmute(state_id, abbrev = toupper(state_id), location = state_code)
+
+live_rounds <- rounds %>% filter(!season %in% burn_in)
+min_version <- min(archive$DT$version)
+
+snapshots <- purrr::map(live_rounds$round_date, function(rd) {
+  as_of <- rd - 3L
+  if (as_of < min_version) {
+    return(NULL)
+  }
+  epix_as_of(archive, as_of) %>%
+    as_tibble() %>%
+    inner_join(geo_map, by = c("geo_value" = "state_id")) %>%
+    transmute(reference_date = rd, location, time_value, value)
+}) %>% bind_rows()
+```
+
+# Ranking
+
+Panels are ordered by the size of the correction: the mean absolute
+displacement between calibrated and base quantiles (over the 5 horizons x 23
+levels of a round), divided by the round's mean base median so small states
+rank on relative shift rather than raw admissions. The denominator is floored
+at 20 admissions — without the floor the entire top of the list is
+end-of-season rounds where the base median is ~1 and any leftover offset is a
+huge ratio. Even with the floor, season edges (May, October) dominate the top:
+the tracker carries offsets sized for mid-season signal into weeks with almost
+none. That is the first gallery finding, not an artifact of the metric.
+Captions carry the raw numbers: MAD, the WIS change of that single forecast
+(positive = calibration improved it), and whether the finalized truth escaped
+the base 90% interval at any horizon.
+
+```{r ranking}
+pinball <- function(truth, value, level) {
+  ifelse(truth >= value, level * (truth - value), (1 - level) * (value - truth))
+}
+
+live <- cal$forecasts %>%
+  filter(!is_burn_in, !is.na(value_base), !is.na(value_cal))
+
+escapes <- live %>%
+  filter(level %in% c(0.05, 0.95), !is.na(truth)) %>%
+  select(location, reference_date, horizon, level, value_base, truth) %>%
+  tidyr::pivot_wider(names_from = level, values_from = value_base, names_prefix = "q") %>%
+  group_by(location, reference_date) %>%
+  summarize(escape90 = any(truth < q0.05 | truth > q0.95), .groups = "drop")
+
+panel_stats <- live %>%
+  group_by(season, location, reference_date) %>%
+  summarize(
+    mad = mean(abs(value_cal - value_base)),
+    base_med = mean(value_base[level == 0.5]),
+    wis_base = 2 * mean(pinball(truth, value_base, level)[!is.na(truth)]),
+    wis_cal = 2 * mean(pinball(truth, value_cal, level)[!is.na(truth)]),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    mad_rel = mad / pmax(base_med, 20),
+    wis_pct = if_else(wis_base > 0, 100 * (1 - wis_cal / wis_base), NA_real_)
+  ) %>%
+  left_join(escapes, by = c("location", "reference_date")) %>%
+  left_join(select(geo_map, location, abbrev), by = "location") %>%
+  arrange(desc(mad_rel))
+
+panel_stats %>%
+  transmute(
+    season, abbrev, reference_date,
+    mad = round(mad, 1), mad_rel = round(mad_rel, 3),
+    wis_pct = round(wis_pct, 1), escape90
+  )
+```
+
+# Gallery: top `r params$n_panels` panels
+
+How to read a panel: black is the NHSN data as of the forecast Wednesday
+(dashed vertical line); gray is the finalized series. Blue is the submitted
+(base) forecast, orange the calibrated one; ribbons are the 50% and 90%
+central intervals, the line is the median, across horizons -1 to 3.
+
+```{r panel-fn}
+fan_cols <- c(base = "#0072B2", calibrated = "#D55E00")
+ribbon_levels <- c(
+  "0.05" = "lo90", "0.25" = "lo50", "0.5" = "med",
+  "0.75" = "hi50", "0.95" = "hi90"
+)
+
+panel_plot <- function(loc, ref_date, caption) {
+  win_start <- ref_date - 84L
+  win_end <- ref_date + 28L
+  fin <- truth %>%
+    filter(location == loc, target_end_date >= win_start, target_end_date <= win_end)
+  snap <- snapshots %>%
+    filter(reference_date == ref_date, location == loc, time_value >= win_start)
+  fan <- cal$forecasts %>%
+    filter(
+      location == loc, reference_date == ref_date,
+      level %in% c(0.05, 0.25, 0.5, 0.75, 0.95)
+    ) %>%
+    mutate(
+      target_end_date = reference_date + 7L * horizon,
+      level = ribbon_levels[as.character(level)]
+    ) %>%
+    select(target_end_date, level, base = value_base, calibrated = value_cal) %>%
+    tidyr::pivot_longer(c(base, calibrated), names_to = "which") %>%
+    tidyr::pivot_wider(names_from = level, values_from = value)
+
+  ggplot() +
+    geom_line(data = fin, aes(target_end_date, truth), colour = "grey65") +
+    geom_point(data = fin, aes(target_end_date, truth), colour = "grey65", size = 0.7) +
+    geom_ribbon(
+      data = fan, aes(target_end_date, ymin = lo90, ymax = hi90, fill = which),
+      alpha = 0.16
+    ) +
+    geom_ribbon(
+      data = fan, aes(target_end_date, ymin = lo50, ymax = hi50, fill = which),
+      alpha = 0.3
+    ) +
+    geom_line(data = fan, aes(target_end_date, med, colour = which)) +
+    geom_line(data = snap, aes(time_value, value), colour = "black") +
+    geom_point(data = snap, aes(time_value, value), colour = "black", size = 0.7) +
+    geom_vline(xintercept = ref_date - 3L, linetype = "dashed", colour = "grey40") +
+    scale_fill_manual(values = fan_cols, aesthetics = c("fill", "colour")) +
+    labs(x = NULL, y = "admissions", colour = NULL, fill = NULL, subtitle = caption)
+}
+```
+
+```{r gallery, results='asis', fig.width=9, fig.height=4}
+top <- head(panel_stats, params$n_panels)
+for (i in seq_len(nrow(top))) {
+  p <- top[i, ]
+  cat(sprintf(
+    "\n\n### %d. %s — %s (%s)\n\n",
+    i, p$abbrev, format(p$reference_date), p$season
+  ))
+  caption <- sprintf(
+    "MAD %.1f admissions (base median %.1f) | WIS %s | truth escaped base 90%%: %s",
+    p$mad, p$base_med,
+    if (is.na(p$wis_pct)) "n/a" else sprintf("%+.1f%%", p$wis_pct),
+    if (isTRUE(p$escape90)) "yes" else "no"
+  )
+  print(panel_plot(p$location, p$reference_date, caption))
+}
+```
