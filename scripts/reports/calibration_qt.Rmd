@@ -1,0 +1,582 @@
+---
+title: Online quantile calibration (MultiQT) on submitted FluSight forecasts
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    toc: true
+    toc_float: true
+params:
+  burn_in_seasons: "2023-2024"
+  season_policy: "carry"
+  lr_window: 50
+  lr_mult: 0.1
+  roll_window: 20
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+# cache = TRUE chunks are keyed on chunk code + cache.extra, NOT on functions
+# in R/ -- after changing calibration code, clear cache/calibration/knitr_cache/.
+knitr::opts_chunk$set(
+  fig.align = "center", fig.width = 10, fig.height = 6,
+  message = FALSE, warning = FALSE, cache = FALSE,
+  cache.path = here::here("cache/calibration/knitr_cache/")
+)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{r load, cache=TRUE, cache.extra=list(params)}
+suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+
+forecasts <- hub_read_forecasts()
+truth <- hub_read_truth()
+rounds <- hub_label_seasons(unique(forecasts$reference_date))
+
+burn_in <- if (nzchar(params$burn_in_seasons)) {
+  strsplit(params$burn_in_seasons, ",")[[1]]
+} else {
+  character(0)
+}
+
+cal <- calibrate_hub_forecasts(
+  forecasts, truth,
+  burn_in_seasons = burn_in,
+  season_policy = params$season_policy,
+  lr_window = params$lr_window,
+  lr_args = list(mult = params$lr_mult),
+  progress = FALSE
+)
+```
+
+We calibrate the forecasts CMU-TimeSeries submitted to FluSight. https://github.com/cdcepi/FluSight-forecast-hub The hub
+ships one consistent truth series (`target-data/target-hospital-admissions.csv`)
+covering every season. The method is MultiQT (Ding, Gibbs & Tibshirani 2025); our
+port is `R/calibration/qt.R`, verified against the authors' Python in
+`tests/testthat/test-qt.R` (same input, same output).
+
+Data facts:
+
+```{r data-shape}
+forecasts %>%
+  left_join(select(rounds, reference_date = round_date, season), by = "reference_date") %>%
+  group_by(season) %>%
+  summarize(
+    rounds = n_distinct(reference_date),
+    locations = n_distinct(location),
+    horizons = paste(sort(unique(horizon)), collapse = ","),
+    cell_completeness = sprintf(
+      "%.0f%%", 100 * (n() / 23) / (n_distinct(reference_date) * 265)
+    ),
+    .groups = "drop"
+  )
+```
+
+Notes:
+
+1. Waiting for revisions costs us `horizon + 2` rounds. `reference_date` and
+   `target_end_date` are both Saturdays with
+   `target_end_date = reference_date + 7 * horizon`, so waiting 14 days for NHSN
+   to settle puts the delay at exactly `h + 2` rounds. The offset applied at
+   horizon 3 is therefore always 5 rounds stale.
+2. 2023-24 is incomplete: horizon -1 exists in only 5 of 28 rounds and
+   locations drop in and out, so it is used as a burn-in season. Its residuals
+   warm up the learning rate, but no gradient step is taken and the offsets
+   stay at zero.
+3. Per-series coverage cannot be measured at the extreme levels: ~27 rounds
+   per season minus delay means the 1% and 99% levels see ~0.3 expected
+   exceedances per series. Every coverage number below is pooled over the 53
+   locations.
+
+# Score results
+
+Coverage improves at some cost in sharpness. Below we show that the sharpness
+cost can be reduced by changing the learning rate.
+
+```{r headline}
+headline <- left_join(
+  hub_coverage_summary(cal),
+  select(hub_quantile_loss(cal), horizon, loss_base, loss_cal, loss_pct = pct_improvement),
+  by = "horizon"
+)
+headline %>%
+  transmute(
+    horizon,
+    n_obs,
+    `cal err (base)` = round(cal_error_base, 4),
+    `cal err (calibrated)` = round(cal_error_cal, 4),
+    `cal err improvement %` = round(pct_improvement, 1),
+    `WIS (base)` = round(2 * loss_base, 1),
+    `WIS (calibrated)` = round(2 * loss_cal, 1),
+    `WIS improvement %` = round(loss_pct, 1)
+  )
+```
+
+Calibration error here is the mean over the 23 quantile levels of
+`|geo-pooled empirical coverage at a - a|`. WIS is reported with the standard
+factor-of-two convention (2 x the level-averaged pinball loss on this level
+set), so it is directly comparable to hub scores; improvement percentages are
+identical either way. The two metrics move in opposite directions, and the WIS
+cost grows with the horizon. This is consistent with the `h + 2` staleness: a
+stale additive offset in count space does the most damage where the seasonal
+ramp is steep relative to the offset.
+
+## By season
+
+```{r headline-by-season}
+left_join(
+  hub_coverage_summary(cal, by = "season"),
+  select(hub_quantile_loss(cal, by = "season"),
+    season, horizon, loss_base, loss_cal, loss_pct = pct_improvement
+  ),
+  by = c("season", "horizon")
+) %>%
+  transmute(
+    season, horizon,
+    `cal err (base)` = round(cal_error_base, 4),
+    `cal err (calibrated)` = round(cal_error_cal, 4),
+    `cal err improvement %` = round(pct_improvement, 1),
+    `WIS (base)` = round(2 * loss_base, 1),
+    `WIS (calibrated)` = round(2 * loss_cal, 1),
+    `WIS improvement %` = round(loss_pct, 1)
+  ) %>%
+  arrange(season, horizon)
+```
+
+The burn-in season (2023-24) is excluded throughout. In the per-season view,
+season 2 is the tracker's first live season; season 3 shows the effect of a
+second season of accumulated state (under `carry` across the off-season gap).
+
+# 1. What feeds the learning rate
+
+`eta_t = max(floor, mult * quantile_0.9(|Y - Yhat|))` over a window of recent
+observed rounds, pooled across all 23 quantile levels -- one step size per
+(series, round). The residual distribution below therefore determines the
+learning rate, up to the multiplier.
+
+```{r resid-series, fig.height=7}
+resid <- cal$forecasts %>%
+  filter(!is.na(truth), !is.na(value_base)) %>%
+  mutate(abs_resid = abs(truth - value_base)) %>%
+  group_by(location, horizon, reference_date, season, is_burn_in) %>%
+  summarize(q90 = quantile(abs_resid, 0.9), .groups = "drop")
+
+show_geos <- c("06", "36", "48", "50", "US")
+resid %>%
+  filter(location %in% show_geos) %>%
+  mutate(location = recode(location,
+    "06" = "CA", "36" = "NY", "48" = "TX", "50" = "VT", "US" = "US"
+  )) %>%
+  ggplot(aes(reference_date, q90, colour = factor(horizon))) +
+  geom_line() +
+  facet_wrap(~location, scales = "free_y", ncol = 1) +
+  scale_y_log10() +
+  labs(
+    title = "90th percentile of |truth - base forecast|, per round",
+    subtitle = "The quantity the adaptive learning rate is a fraction of. Log scale.",
+    x = NULL, y = "q90 |residual| (log)", colour = "horizon"
+  )
+```
+
+The residual scale swings by 1-2 orders of magnitude within a season, so an
+additive offset learned near the peak is badly sized for the trough, and vice
+versa.
+
+## Does the window length matter?
+
+`lr_window` sets how many of the most recent observed rounds feed the adaptive
+learning rate; `Inf` is an expanding window over the full history.
+
+```{r lr-window, cache=TRUE, dependson="load"}
+lr_by_window <- purrr::map(c(8, 20, 50, Inf), function(w) {
+  purrr::map(show_geos, function(loc) {
+    series <- forecasts %>% filter(location == loc, horizon == 2)
+    if (nrow(series) == 0) {
+      return(NULL)
+    }
+    Yhat <- hub_series_matrix(series, rounds$round_date, 23)
+    ted <- rounds$round_date + 14L
+    Y <- truth$truth[match(paste(loc, ted), paste(truth$location, truth$target_end_date))]
+    learnable <- !is.na(Y) & !apply(is.na(Yhat), 2, any)
+    delay <- qt_delay_from_dates(rounds$round_date, ted, 14L)
+    delay <- lapply(delay, function(i) i[learnable[i]])
+    res <- qt_track(Y, Yhat, HUB_QUANTILE_LEVELS,
+      delay = delay, lr_window = w, nonneg = TRUE
+    )
+    tibble(
+      location = loc, round_date = rounds$round_date,
+      lr = res$lr, window = as.character(w)
+    )
+  }) %>% bind_rows()
+}) %>% bind_rows()
+
+lr_by_window %>%
+  filter(lr > 0) %>%
+  mutate(
+    location = recode(location,
+      "06" = "CA", "36" = "NY", "48" = "TX", "50" = "VT", "US" = "US"
+    ),
+    window = factor(window, levels = c("8", "20", "50", "Inf"))
+  ) %>%
+  ggplot(aes(round_date, lr, colour = window)) +
+  geom_line() +
+  facet_wrap(~location, scales = "free_y", ncol = 1) +
+  scale_y_log10() +
+  labs(
+    title = "Learning-rate trajectory by window length (horizon 2)",
+    subtitle = "A short window tracks the season; an expanding one (Inf) ratchets up and stays.",
+    x = NULL, y = "eta (log)", colour = "lr_window"
+  )
+```
+
+The expanding window is monotone by construction: once a peak-season residual
+enters the pool it never leaves, so `eta` rises to peak scale and stays there
+through the following low season. A short window decays back. On 83 rounds the
+difference in outcome is small (below), but it would likely grow over more
+seasons.
+
+# 2. Actual vs nominal coverage, per location
+
+```{r coverage-plot, fig.height=6}
+cov_by_geo <- hub_coverage(cal, by = "location")
+
+cov_long <- cov_by_geo %>%
+  select(location, horizon, level, coverage_base, coverage_cal) %>%
+  tidyr::pivot_longer(
+    c(coverage_base, coverage_cal),
+    names_to = "which", values_to = "coverage"
+  ) %>%
+  mutate(which = factor(
+    if_else(which == "coverage_base", "pre-calibration", "post-calibration"),
+    levels = c("pre-calibration", "post-calibration")
+  ))
+
+cov_long %>%
+  filter(horizon %in% c(0, 2)) %>%
+  ggplot(aes(level, coverage, group = location)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey30") +
+  geom_line(alpha = 0.28, colour = "steelblue4") +
+  facet_grid(horizon ~ which, labeller = label_both) +
+  coord_equal(xlim = c(0, 1), ylim = c(0, 1)) +
+  labs(
+    title = "Empirical vs nominal coverage, one line per location",
+    subtitle = "Dashed line is perfect calibration. Each line is one of 53 locations, over all non-burn-in rounds.",
+    x = "nominal level", y = "empirical coverage"
+  )
+```
+
+```{r coverage-pooled}
+hub_coverage(cal) %>%
+  select(horizon, level, coverage_base, coverage_cal) %>%
+  tidyr::pivot_longer(c(coverage_base, coverage_cal),
+    names_to = "which", values_to = "coverage"
+  ) %>%
+  mutate(which = if_else(which == "coverage_base", "pre", "post")) %>%
+  ggplot(aes(level, coverage, colour = which)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey30") +
+  geom_line() +
+  geom_point(size = 1) +
+  facet_wrap(~horizon, labeller = label_both, nrow = 1) +
+  coord_equal() +
+  labs(
+    title = "Geo-pooled coverage, pre and post calibration",
+    x = "nominal level", y = "empirical coverage", colour = NULL
+  )
+```
+
+The per-location spread is not visible in the pooled number: it shows whether
+the pooled improvement is a per-series effect or an averaging artefact, and it
+bears on whether the offsets themselves should be pooled across geos.
+
+# 3. Calibration error against quantile loss
+
+Both axes are rolling averages over the last `r params$roll_window` rounds, pooled
+over locations. Moving down is better calibrated; moving left is sharper. A
+trajectory that goes down and to the right means calibration is being bought
+with sharpness.
+
+```{r tradeoff, fig.height=6}
+tradeoff <- hub_rolling_tradeoff(cal, window = params$roll_window)
+
+tradeoff %>%
+  select(horizon, reference_date, cal_error_base, cal_error_cal, qloss_base, qloss_cal) %>%
+  tidyr::pivot_longer(
+    -c(horizon, reference_date),
+    names_to = c(".value", "which"), names_pattern = "(.*)_(base|cal)$"
+  ) %>%
+  mutate(which = if_else(which == "base", "pre-calibration", "post-calibration")) %>%
+  ggplot(aes(qloss, cal_error, colour = which)) +
+  geom_path(alpha = 0.7) +
+  geom_point(aes(size = as.numeric(reference_date)), alpha = 0.5, show.legend = FALSE) +
+  scale_size_continuous(range = c(0.4, 2.2)) +
+  facet_wrap(~horizon, scales = "free_x", labeller = label_both) +
+  labs(
+    title = "Rolling calibration error vs rolling quantile loss",
+    subtitle = "Point size increases with time. Down = better calibrated, left = sharper.",
+    x = "rolling mean pinball loss (proportional to WIS)", y = "rolling calibration error", colour = NULL
+  )
+```
+
+```{r tradeoff-time, fig.height=5}
+tradeoff %>%
+  select(horizon, reference_date, cal_error_base, cal_error_cal) %>%
+  tidyr::pivot_longer(-c(horizon, reference_date),
+    names_to = "which", values_to = "cal_error"
+  ) %>%
+  mutate(which = if_else(which == "cal_error_base", "pre", "post")) %>%
+  ggplot(aes(reference_date, cal_error, colour = which)) +
+  geom_line() +
+  facet_wrap(~horizon, labeller = label_both, nrow = 1) +
+  labs(
+    title = "Rolling calibration error over time",
+    subtitle = "How fast the tracker converges after the burn-in season, and what the off-season gap does to it.",
+    x = NULL, y = "rolling calibration error", colour = NULL
+  )
+```
+
+# 4. Interval widths
+
+The WIS cost has to show up somewhere in the quantiles; central interval widths
+are the direct measure. For three central intervals -- 20% (0.4 to 0.6), 60%
+(0.2 to 0.8), 80% (0.1 to 0.9) -- we compare the calibrated width to the base
+width, per (round, location, horizon). Widths are geo-pooled by mean, matching
+the implicit weighting of the WIS aggregate (large-count series dominate both).
+
+```{r interval-widths}
+interval_defs <- tibble::tribble(
+  ~interval, ~lo, ~hi,
+  "20% (0.4-0.6)", 0.4, 0.6,
+  "60% (0.2-0.8)", 0.2, 0.8,
+  "80% (0.1-0.9)", 0.1, 0.9
+)
+
+width_rows <- cal$forecasts %>%
+  filter(!is_burn_in, !is.na(value_base), !is.na(value_cal)) %>%
+  select(reference_date, season, location, horizon, level, value_base, value_cal)
+
+widths <- purrr::pmap(interval_defs, function(interval, lo, hi) {
+  inner_join(
+    width_rows %>% filter(level == lo) %>%
+      select(-level) %>% rename(base_lo = value_base, cal_lo = value_cal),
+    width_rows %>% filter(level == hi) %>%
+      select(-level) %>% rename(base_hi = value_base, cal_hi = value_cal),
+    by = c("reference_date", "season", "location", "horizon")
+  ) %>%
+    transmute(
+      reference_date, season, location, horizon,
+      interval,
+      width_base = base_hi - base_lo,
+      width_cal = cal_hi - cal_lo
+    )
+}) %>%
+  bind_rows() %>%
+  mutate(interval = factor(interval, levels = interval_defs$interval))
+```
+
+```{r width-time, fig.height=6}
+widths %>%
+  group_by(interval, horizon, reference_date) %>%
+  summarize(
+    base = mean(width_base), calibrated = mean(width_cal),
+    .groups = "drop"
+  ) %>%
+  tidyr::pivot_longer(c(base, calibrated), names_to = "which", values_to = "width") %>%
+  ggplot(aes(reference_date, width, colour = which)) +
+  geom_line() +
+  facet_grid(interval ~ horizon, scales = "free_y", labeller = label_both) +
+  labs(
+    title = "Geo-pooled mean central interval width, base vs calibrated",
+    subtitle = "Mean over the 53 locations, per round. The gap between the lines is the sharpness cost.",
+    x = NULL, y = "mean interval width (admissions)", colour = NULL
+  )
+```
+
+```{r width-change, fig.height=4}
+widths %>%
+  group_by(interval, horizon) %>%
+  summarize(
+    pct_change = 100 * (mean(width_cal) / mean(width_base) - 1),
+    .groups = "drop"
+  ) %>%
+  ggplot(aes(horizon, pct_change, colour = interval)) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+  geom_line() +
+  geom_point(size = 2) +
+  labs(
+    title = "Change in mean interval width from calibration",
+    subtitle = "Positive means the calibrated intervals are wider than the base intervals.",
+    x = "horizon", y = "width change (%)", colour = "central interval"
+  )
+```
+
+Wider intervals where the base under-covers are the intended correction; the
+question is whether the widening is concentrated in the intervals and horizons
+where the coverage plots (section 2) show a deficit, or spread indiscriminately.
+
+# 5. Sensitivity: window or multiplier?
+
+The learning rate has two knobs: how far back the residual pool reaches
+(`lr_window`) and what fraction of its 90th percentile becomes the step size
+(`lr_mult`). The factorial sweep below shows which one matters: if the lines
+for different windows sit on top of each other while the multiplier moves
+everything, the multiplier is the tuning parameter and the window is a detail
+(and vice versa).
+
+```{r sweep, cache=TRUE, dependson="load"}
+sweep_grid <- tidyr::expand_grid(
+  season_policy = c("carry", "reset"),
+  lr_window = c(8, 20, 50, Inf),
+  lr_mult = c(0.3, 0.1, 0.03, 0.01)
+)
+sweep <- purrr::pmap(sweep_grid, function(season_policy, lr_window, lr_mult) {
+  s <- calibrate_hub_forecasts(forecasts, truth,
+    burn_in_seasons = burn_in, season_policy = season_policy,
+    lr_window = lr_window, lr_args = list(mult = lr_mult), progress = FALSE
+  )
+  overall <- left_join(
+    hub_coverage_summary(s),
+    select(hub_quantile_loss(s), horizon, loss_pct = pct_improvement),
+    by = "horizon"
+  ) %>%
+    mutate(season = "all")
+  by_season <- left_join(
+    hub_coverage_summary(s, by = "season"),
+    select(hub_quantile_loss(s, by = "season"),
+      season, horizon,
+      loss_pct = pct_improvement
+    ),
+    by = c("season", "horizon")
+  )
+  bind_rows(overall, by_season) %>%
+    mutate(season_policy = season_policy, lr_window = lr_window, lr_mult = lr_mult)
+}) %>% bind_rows()
+
+# Keep the sweep around for analysis outside the notebook.
+dir.create(here::here("cache/calibration"), showWarnings = FALSE, recursive = TRUE)
+saveRDS(sweep, here::here("cache/calibration/sweep.rds"))
+```
+
+```{r sweep-cal-error, fig.height=5}
+sweep %>%
+  filter(season == "all") %>%
+  ggplot(aes(lr_mult, cal_error_cal, colour = factor(lr_window))) +
+  geom_line() +
+  geom_point(size = 1.6) +
+  scale_x_log10() +
+  facet_grid(season_policy ~ horizon, labeller = label_both) +
+  labs(
+    title = "Calibration error by multiplier, one line per window",
+    subtitle = "Separated lines would indicate a window effect; sloped lines indicate a multiplier effect.",
+    x = "lr mult (log)", y = "calibration error (calibrated)",
+    colour = "lr_window"
+  )
+```
+
+```{r sweep-wis, fig.height=5}
+sweep %>%
+  filter(season == "all") %>%
+  ggplot(aes(lr_mult, loss_pct, colour = factor(lr_window))) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+  geom_line() +
+  geom_point(size = 1.6) +
+  scale_x_log10() +
+  facet_grid(season_policy ~ horizon, labeller = label_both) +
+  labs(
+    title = "WIS improvement by multiplier, one line per window",
+    subtitle = "Dashed line is WIS parity with the raw submission; above it calibration has no WIS cost.",
+    x = "lr mult (log)", y = "WIS improvement (%)",
+    colour = "lr_window"
+  )
+```
+
+The target region is the combination of low calibration error and WIS at or
+above parity.
+
+```{r sweep-corner, fig.height=5}
+sweep %>%
+  filter(season == "all", season_policy == "carry") %>%
+  ggplot(aes(cal_error_cal, loss_pct,
+    colour = factor(lr_mult), shape = factor(lr_window)
+  )) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+  geom_point(size = 3, alpha = 0.85) +
+  facet_wrap(~horizon, scales = "free_x", labeller = label_both, nrow = 1) +
+  labs(
+    title = "Calibration error vs WIS change (season_policy = carry)",
+    subtitle = "Upper-left is the target region: well calibrated and no worse on WIS.",
+    x = "calibration error (calibrated)", y = "WIS change (%)",
+    colour = "lr mult", shape = "lr_window"
+  )
+```
+
+If the expanding window's monotone behavior matters, its effect should grow
+with history: season 2 starts with at most one season in the pool, season 3
+with two. The per-season view checks that.
+
+```{r sweep-by-season, fig.height=5}
+sweep %>%
+  filter(season != "all", season_policy == "carry", horizon == 2) %>%
+  ggplot(aes(lr_mult, cal_error_cal, colour = factor(lr_window))) +
+  geom_line() +
+  geom_point(size = 1.6) +
+  scale_x_log10() +
+  facet_wrap(~season, labeller = label_both) +
+  labs(
+    title = "Calibration error by season (horizon 2, season_policy = carry)",
+    subtitle = "Does the window matter more once multiple seasons of residuals are available?",
+    x = "lr mult (log)", y = "calibration error (calibrated)",
+    colour = "lr_window"
+  )
+```
+
+```{r sweep-table}
+sweep %>%
+  filter(season == "all") %>%
+  transmute(
+    season_policy, lr_window, lr_mult, horizon,
+    cal_error_cal = round(cal_error_cal, 4),
+    wis_pct = round(loss_pct, 1)
+  ) %>%
+  arrange(horizon, season_policy, lr_window, lr_mult)
+```
+
+# 6. Offset trajectories
+
+```{r offsets, fig.height=6}
+cal$forecasts %>%
+  filter(location %in% show_geos, horizon == 2, level %in% c(0.025, 0.5, 0.975)) %>%
+  mutate(location = recode(location,
+    "06" = "CA", "36" = "NY", "48" = "TX", "50" = "VT", "US" = "US"
+  )) %>%
+  ggplot(aes(reference_date, offset, colour = factor(level))) +
+  geom_hline(yintercept = 0, colour = "grey50") +
+  geom_line() +
+  facet_wrap(~location, scales = "free_y", ncol = 1) +
+  labs(
+    title = "Realised offset (played - base), horizon 2",
+    subtitle = "Zero through the burn-in season by construction. With season_policy='carry' the offset is held across the off-season gap.",
+    x = NULL, y = "offset (admissions)", colour = "level"
+  )
+```
+
+```{r offset-scale}
+cal$forecasts %>%
+  filter(!is_burn_in, !is.na(value_base), value_base > 0) %>%
+  group_by(horizon, level) %>%
+  summarize(
+    median_abs_offset = median(abs(offset)),
+    median_rel = median(abs(offset) / pmax(value_base, 1)),
+    .groups = "drop"
+  ) %>%
+  ggplot(aes(level, median_rel, colour = factor(horizon))) +
+  geom_line() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "Median |offset| as a fraction of the base forecast",
+    subtitle = "How large a correction the tracker is applying, and how that scales with horizon.",
+    x = "quantile level", y = "median |offset| / base", colour = "horizon"
+  )
+```
