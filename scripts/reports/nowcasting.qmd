@@ -1,0 +1,335 @@
+---
+title: "Integrating Nowcasts into Epipredict Forecasters: Strategy Survey"
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+format:
+  html:
+    code-fold: true
+    toc: true
+    embed-resources: true
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup}
+#| message: false
+#| warning: false
+knitr::opts_chunk$set(fig.align = "center", warning = FALSE, message = FALSE, cache = TRUE)
+ggplot2::theme_set(ggplot2::theme_bw())
+
+library(baselinenowcast)
+library(furrr)
+source(here::here("R/load_all.R"))
+```
+
+The question here is: given that nowcast, how do we feed nowcast quantiles into a forecaster?
+
+# Data
+
+This is just to have something concrete to work on. 
+Load and prepare the NHSN flu archive.
+We use the same Wednesday-alignment from `baseline_nowcast_flu_nhsn.qmd`.
+
+```{r load-data}
+nhsn_archive <- get_nhsn_data_archive("flu")
+
+align_version_to_wednesday <- function(dt) {
+  dt |>
+    as_tibble() |>
+    mutate(
+      version_wed = lubridate::floor_date(version, "week", week_start = 3L),
+      is_wednesday = lubridate::wday(version, week_start = 1L) == 3L
+    ) |>
+    group_by(geo_value, time_value, version_wed) |>
+    arrange(desc(is_wednesday)) |>
+    slice(1) |>
+    ungroup() |>
+    mutate(version = version_wed) |>
+    select(-version_wed, -is_wednesday)
+}
+
+nhsn_archive <- nhsn_archive$DT |>
+  align_version_to_wednesday() |>
+  mutate(time_value = lubridate::floor_date(time_value, "week", week_start = 3L)) |>
+  distinct(geo_value, time_value, version, .keep_all = TRUE) |>
+  as_epi_archive(compactify = TRUE)
+```
+
+# Strategy overview
+
+All strategies below use the NHSN archive as their data source and `baselinenowcast`-style nowcasts as the external input.
+For concreteness, "nowcast" means `nowcast_median`: the median predicted final value for a given (geo, reference_week) at a given forecast date. Several of these will have natural extensions that incorporate other quantiles, while others won't.
+
+A fundamental problem with integrating nowcasts into a forecast is the lags in the training dataset *vary depending on how far away from the `forecast_date` the datapoint is*. This means the necessity of nowcasting varies greatly across the dataset.
+For each datapoint we have 3 potential values, each of which can be assigned to either the values selected by the **predictor** (x) role or assigned to the **outcome** (y) role:
+
+| Predictor                                       | Outcome                                  | Description                                                   | Used in              |
+|-------------------------------------------------+------------------------------------------+---------------------------------------------------------------+----------------------|
+| `as_of(forecast_date)`                          | `as_of(forecast_date)`                   | Standard pipeline: train and predict on the current snapshot. | Current production   |
+| `as_of(forecast_date)` + `nowcast` column       | `as_of(forecast_date)`                   | Add nowcast as an additional feature                          | Strategy 1           |
+| `as_of(forecast_date)`, recent values `nowcast` | `as_of(forecast_date)`                   | Minimal replacement                                           | Strategy 2           |
+| `as_of(forecast_date)`, n recent rows `nowcast` | `as_of(forecast_date)`                   | Patch training boundary too (latest nowcast only)             | Strategy 2b          |
+| `nowcast`                                       | `nowcast`                                | Potentially compounds error                                   | Strategy 3           |
+| `retro_nowcast lags`                            | `as_of(forecast_date)`                                  | Train matrix from retro nowcast diagonal                      | Strategy 4           |
+| `as_of(time_value)`                             | `as_of(forecast_date)`                   | Revision-aware forecast                                       | Strategy 5           |
+| `as_of(time_value)`                             | `final`                                  | Revision-aware, oracle y                                      | Strategy 5c          |
+| `final`                                         | `final`                                  | Cheating mode                                                 | requires omniscience |
+
+A separate axis is what we do at test time; the typical case is to use `as_of(forecast_date)`; we could instead substitute (some fraction) of values with the nowcast (strategy 2), or go further and build the entire training matrix from retro nowcasts (strategy 4).
+
+A more gnarly kind of variation is how to deal with lags. The most straightforward thing we can do is grab the nowcasts and associate them directly with a `time_value` in the data matrix. 
+Effectively this makes each row the value(s) seen `as_of` the `time_value`.
+However, if you lag this to get new columns, it results in data for one row coming from the `as_of` at a previous one. 
+What we actually need is each row pulling lags from their respective archives.
+This more or less precludes using the lag features built into epipredict unfortunately.
+
+# Strategy 1: Nowcast as standard exogenous variable
+
+**Idea**: run the forecaster as-is but add `nowcast_median` as an `extra_sources` column alongside the NHSN target.
+
+**Implementation sketch**:
+
+```r
+# Build a wide epi_df where `value` is the usual as-of NHSN column
+# and `nowcast_median` is the baselinenowcast estimate for each (geo, time_value)
+epi_data_with_nowcast <- current_snapshot |>
+  left_join(nowcasts_at_forecast_date, by = c("geo_value", "time_value"))
+
+scaled_pop(
+  epi_data = epi_data_with_nowcast,
+  outcome = "value",
+  extra_sources = "nowcast_median",
+  ahead = 1
+)
+```
+
+**Why this probably underperforms**: most training rows are effectively from a finalized archive, so `value` for all but the recent historical lags is already close to its finalized value.
+The model sees `nowcast_median` as a worse prediction for `value` for every row than `value` itself. This will lead to it being ignored.
+
+---
+
+# Strategy 2: Boundary replacement — test time only
+
+**Idea**: replace the most recent `value` observations in the current snapshot with `nowcast_median` before prediction.
+No retraining required; uses only the nowcast available at `forecast_date`.
+
+```r
+# forecast_date: single Date; ahead: single integer
+current_snapshot <- epix_as_of(nhsn_archive, forecast_date)
+
+# 1. Fit on unmodified snapshot
+fitted_model <- fit(forecaster_workflow, current_snapshot)
+
+# 2. Substitute nowcast into the test point only
+latest_nowcast <- retro_nowcasts |>
+  filter(nowcast_date == forecast_date) |>
+  select(geo_value, time_value = reference_date, nowcast_median = median)
+
+corrected_test <- current_snapshot |>
+  left_join(latest_nowcast, by = c("geo_value", "time_value")) |>
+  mutate(value = coalesce(nowcast_median, value)) |>
+  select(-nowcast_median)
+
+# 3. Predict from corrected test point
+predict(fitted_model, new_data = corrected_test)
+```
+
+Train/test mismatch at exactly the boundary rows: the model was trained on final values but predicts from nowcast-substituted values.
+In the case that the nowcasts are perfect this is fine; insofar as they're wrong it introduces error.
+For example, if the as_of values and nowcasts are both systematically low, the model coefficients (trained on finalized data) will be larger than needed for the inputs it receives.
+
+---
+
+# Strategy 2b: Boundary replacement — train and test time (latest nowcast only)
+
+**Idea**: same as strategy 2, but patch the n most recent training rows as well, using the same `forecast_date` nowcast.
+Reduces train/test mismatch relative to strategy 2 since the model sees nowcast-substituted values at the boundary during training too.
+Does not require retro nowcasts — only the current nowcast at `forecast_date`.
+
+```r
+# forecast_date: single Date; ahead: single integer; n_boundary_lags: integer
+current_snapshot <- epix_as_of(nhsn_archive, forecast_date)
+
+latest_nowcast <- retro_nowcasts |>
+  filter(nowcast_date == forecast_date) |>
+  select(geo_value, time_value = reference_date, nowcast_median = median)
+
+boundary_cutoff <- forecast_date - weeks(n_boundary_lags)
+
+patched_snapshot <- current_snapshot |>
+  left_join(latest_nowcast, by = c("geo_value", "time_value")) |>
+  mutate(value = if_else(time_value >= boundary_cutoff, coalesce(nowcast_median, value), value)) |>
+  select(-nowcast_median)
+
+scaled_pop(
+  epi_data = patched_snapshot,
+  outcome = "value",
+  ahead = ahead
+)
+```
+
+The training rows near the boundary now see nowcast-substituted values, matching what the model sees at test time.
+The nowcast used for training rows is the one from `forecast_date`, not the one that would have been available when that row was "live" — this is an approximation that avoids requiring retro nowcasts.
+For rows far from the boundary, `nowcast_median` is `NA` and `value` is unchanged.
+
+---
+
+# Strategy 3: Nowcast as both x and y — ignore underlying signal
+
+**Idea**: replace `value` with `nowcast_median` everywhere.
+Train a forecaster where both the lagged inputs and the forecast target are nowcast values.
+
+**Implementation sketch**:
+
+```r
+# forecast_date: single Date; ahead: single integer
+nowcast_series <- retro_nowcasts |>
+  group_by(geo_value, reference_date) |>
+  filter(nowcast_date == max(nowcast_date)) |>
+  ungroup() |>
+  select(geo_value, time_value = reference_date, value = median) |>
+  as_epi_df(as_of = forecast_date)
+
+scaled_pop(
+  epi_data = nowcast_series,
+  outcome = "value",
+  extra_sources = character(),
+  ahead = ahead
+)
+```
+
+Assuming the nowcast is accurate into the past and goes indefinitely far back, this is similar to 2b. If there's systematic error in the longer run, or if the nowcaster doesn't cover every `time_value` with a horizon, this is not a good idea.
+
+---
+
+# Strategy 4: Historical Boundary replacement — train and test time
+
+**Idea**: Extend 2b to all historical data.
+For each historical training row, replace the n most recent lag values with the nowcast that would have been available at that time.
+Unlike 3, this requires the full diagonal of `retro_nowcasts` (one nowcast per `nowcast_date`), not just the latest snapshot.
+
+```r
+# forecast_date: single Date; ahead: single integer
+n_boundary_lags <- 2L
+lag_offsets <- seq(0, n_boundary_lags * 7, by = 7)  # 0, 7, 14 days
+
+# Pivot retro_nowcasts wide: one row per (geo, nowcast_date), columns = lag_0, lag_7, ...
+# retro_nowcasts has columns: geo_value, nowcast_date, reference_date, median
+# lag_days = nowcast_date - reference_date: lag_0 is the nowcast for the current week,
+# lag_7 for the week before, etc.
+nowcast_lags <- retro_nowcasts |>
+  mutate(lag_days = as.integer(difftime(nowcast_date, reference_date, units = "days"))) |>
+  filter(lag_days %in% lag_offsets) |>
+  pivot_wider(
+    id_cols = c(geo_value, nowcast_date),
+    names_from = lag_days,
+    names_prefix = "lag_",
+    values_from = median
+  ) |>
+  rename(time_value = nowcast_date)
+
+# y: finalized value at time_value + ahead weeks
+y_values <- nhsn_archive |>
+  epix_as_of_current() |>
+  select(geo_value, time_value, y = value)
+
+training_matrix <- nowcast_lags |>
+  left_join(
+    y_values |> mutate(time_value = time_value - weeks(ahead)),
+    by = c("geo_value", "time_value")
+  )
+# training_matrix: one row per (geo, time_value) with lag_0/lag_7/lag_14 and y
+
+# At test time, take the single row for forecast_date from nowcast_lags:
+test_row <- nowcast_lags |>
+  filter(time_value == forecast_date)
+```
+
+The outcome `y` is the finalized value, so the model learns the mapping from (retro nowcast lags) → (final value at +ahead).
+At test time the inputs are nowcasts at `forecast_date`, which matches the training distribution.
+The most recent rows in the training matrix may have less reliable `y` if the finalized archive isn't yet settled.
+A major downside of this is we can't use the lag/lead features of epipredict, as it effectively needs to sample from archives instead of simply sliding columns around.
+
+There's a variant that uses `as_of(time_value)` from the archive instead of `epix_as_of_current()` for `y`.
+Given that most training rows are fully settled this is ~unnecessary complication.
+
+---
+
+# Strategy 5: Revision-aware x (reconstructed as-of predictors)
+
+**Idea**: use the historical as-of values as the predictors, while keeping some version of the target as the outcome.
+All of these require reworking the lag system of epipredict from scratch, as they need to query from the archive at particular lags.
+
+**Implementation sketch**:
+
+```r
+# forecast_date: single Date; ahead: single integer
+lag_offsets <- seq(0, n_lags * 7, by = 7)  # 0, 7, 14, ... days
+
+# For each training date d, pull what the archive looked like as-of d at each lag offset
+
+as_of_lags <- nhsn_archive |>
+  mutate(lag_days = as.integer(difftime(nowcast_date, reference_date, units = "days"))) |>
+  # need a new function to guarantee that these rows are actually present
+  archive_fill_lags(lag_days) |>
+  pivot_wider(
+    id_cols = c(geo_value, nowcast_date),
+    names_from = lag_days,
+    names_prefix = "lag_",
+    values_from = median
+  ) |>
+  rename(time_value = nowcast_date)
+
+# y: outcome is one of the variants below
+y_values <- nhsn_archive |>
+  epix_as_of(forecast_date) |>
+  select(geo_value, time_value, y = value)
+
+training_matrix <- as_of_lags |>
+  left_join(
+    y_values |> mutate(time_value = time_value - weeks(ahead)),
+    by = c("geo_value", "time_value")
+  )# training_matrix: one row per (geo, training_date) with lag_0/lag_7/... and y
+```
+
+**Outcome sub-variants**:
+
+- **Base (as_of outcome)**: use `as_of(forecast_date)` as the outcome.
+For old rows this is effectively the final value; for the 1–2 most recent rows it is still understated.
+Basically bakes nowcasting into the forecaster itself
+
+- **5c. Oracle y (final value)**: use the fully finalized value as outcome.
+Upper bound — the model sees revision-faithful x values and clean y targets.
+Requires a join against the finalized archive for labels.
+
+---
+
+# Oracle ceiling (reference baseline)
+
+**Idea**: train and predict with fully-finalized data everywhere — the `cheating` as-of mode already present in the pipeline via `EVALUATION_N_DATES` + `make_forecast_snapshot(as_of_policy = "cheating")`.
+This already exists; no new implementation needed.
+
+Any strategy that underperforms the oracle ceiling by a large margin indicates either:
+(a) nowcast quality is the bottleneck, or
+(b) the train/test mismatch in that strategy is hurting more than the revision correction helps.
+
+---
+
+# Correspondence to Logan's writeup
+
+Using the notation:
+
+- **v**: forecast date/version
+- **Y**: target signal archive (NHSN); **Y(v)** = `epix_as_of(nhsn_archive, v)`
+- **X**: nowcast signal archive; **`X[4](v)`** = lag-4-days nowcast time series as-of v (nowcasting revisions to the most recent expected observation in Y(v))
+- **`Y[k](v)`**: `epix_as_of(nhsn_archive, v - k days)` — what the archive looked like k days before v
+
+| Idea | Predictors | Target | Corresponds to |
+|------|------------|--------|----------------|
+| 1 | `Y(v)` lags (0,7,14,21); `X[4](v)` lags (0,7,14,21) | `Y(v)` | Strategy 1 |
+| 2 | `Y(v)` lags (7,14,21); `X[4](v)` lag 0 | `Y(v)` | Strategy 2 / 2b |
+| 3 | `Y[4](v)`…`Y[25](v)` lag 0; `X[4](v)` lag 0 | `Y(v)` | Strategy 5 + exogenous nowcast |
+
+Idea 3 is the revision-aware predictor construction from Strategy 5 but built as a manual ARX rather than via `epix_as_of` per training date.
+`Y[4](v)` lag 0 through `Y[25](v)` lag 0 are equivalent to the `lag_0` through `lag_21` columns in `as_of_lags`; `X[4](v)` lag 0 is the nowcast added as an extra input.
+
+---

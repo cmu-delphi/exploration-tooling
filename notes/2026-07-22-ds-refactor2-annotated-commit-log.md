@@ -108,8 +108,8 @@ per-commit.
   *Golden: per-commit store comparison — runner reproduces cached
   `forecast_nhsn_*` exactly for deterministic forecasters (stochastic match
   under same seed).*
-- `d11eec6` refactor: route explore forecast/score through run_forecaster
-  with sort_quantiles/output_scale specs — Explore calls the same runner;
+- `d11eec6` refactor: route explore forecast/score through `run_forecaster`
+  with `sort_quantiles`/`output_scale` specs — Explore calls the same runner;
   the `g_disease == "flu"` sort hack and the score-time population-column
   sniff become spec columns. This is the drift-killer: prod can no longer
   silently diverge from what exploration evaluated.
@@ -157,7 +157,7 @@ attributed to the marked intentional changes.
   *Golden: partial by design — self-check that the 5 deterministic
   forecasters stay bit-zero; stochastic ones move intentionally. Confirmed
   in the 07-18 batch golden.*
-- `cbaa19e` refactor: parameterize primary source in scaled_pop_seasonal —
+- `cbaa19e` refactor: parameterize primary source in `scaled_pop_seasonal` —
   `primary_source` arg (default `"nhsn"`) replaces hardcoded
   `source == "nhsn"` filters. Behavior-preserving; enables the honest nssp
   de-spoof below.
@@ -182,10 +182,10 @@ attributed to the marked intentional changes.
   `g_forecast_schedule` pairing nominal forecast dates with actual
   generation dates, replacing parallel vectors that could skew.
   *Golden: batch (07-18 `head` vs `yopxxtmx`).*
-- `5cb08e2` refactor: tighten make_forecast_snapshot API — Small
+- `5cb08e2` refactor: tighten `make_forecast_snapshot` API — Small
   signature/internals cleanup of the shared snapshot function.
   *Golden: batch.*
-- `6e1a255` refactor: standardize run_forecaster geo_value on character —
+- `6e1a255` refactor: standardize `run_forecaster` `geo_value` on character —
   Drops a factor stamp; parquet-invisible, removes a gratuitous explore/prod
   difference.
   *Golden: batch.*
@@ -234,11 +234,11 @@ Each verified by eval replay + capture diff `head-nxpuszrv` vs
 - `ba87cfb` feat: assert version faithfulness at the snapshot boundary —
   `make_forecast_snapshot()`'s asof branch aborts if any assembled row has
   `time_value > generation_date`, and rejects `forecast_date >
-  generation_date`. Catches faux-versioned rows that epix_as_of's version
+  generation_date`. Catches faux-versioned rows that `epix_as_of`'s version
   bound lets through.
   *Golden: per-commit (head vs contracts capture pair) + unit tests.*
 - `66b50a9` fix: name the quantile column consistently in
-  g_baseline_forecaster early return — **[behavior change]** The `ahead < 3`
+  `g_baseline_forecaster` early return — **[behavior change]** The `ahead < 3`
   early return said `quantile_value`, injecting a spurious all-NA column
   into every `forecast_*_full` via bind_rows. Found by the output contract;
   schema-only fix.
@@ -267,7 +267,7 @@ One golden capture per step in `cache/oracle/covid_hosp_evaluation/`
 (`multibase`/`multihead`) and, after the NA fix, a 9-date winter-window
 replay (`multibase9`/`multihead9`).
 
-- `bfcd4a4` refactor: pin covid prod on FORECAST_REFERENCE_DATE and unify
+- `bfcd4a4` refactor: pin covid prod on `FORECAST_REFERENCE_DATE` and unify
   its forecast schedule — Covid's `6d6c568` + `771dc44`.
   *Golden: none of its own (behavior-identical by construction when the env
   var is unset); covered by the `multibase`→`multihead` old-vs-new replays.*
@@ -386,7 +386,7 @@ golden captures (flu ref 2026-01-07 n=1; covid ref 2026-02-18 n=9).
 - `451465a` docs: slim CLAUDE.md to current state and open threads.
 - `7447d8e` ci: fix R version — Pin the tests workflow to the R version the
   repo actually uses. *Golden: n/a (CI config).*
-- `ace2dad` clean: remove dead g_rsv_* prod-closure forecasters — Closures
+- `ace2dad` clean: remove dead `g_rsv_*` prod-closure forecasters — Closures
   orphaned by the never-written rsv prod script.
   *Golden: none of its own — dead-code removal verified by rg per the
   scout; covered by the tip-of-branch prod golden below.*

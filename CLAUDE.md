@@ -16,7 +16,7 @@ make prod-covid           # covid production pipeline
 make prod-rsv             # STUB: scripts/rsv_hosp_prod.R does not exist yet; recipe fails if run
 make explore-flu          # flu exploration sweep (~3h)
 make explore-covid        # covid exploration sweep (~3h)
-make eval-flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n dates. Also: eval-covid. BACKTEST_MODE survives only for the rsv stub (prod-rsv-backtest)
+make eval-flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n forecast dates. Also: eval-covid. BACKTEST_MODE survives only for the rsv stub (prod-rsv-backtest)
 make pull / make push     # sync aux_data, targets stores, and forecasts with S3 (forecasting-team-data bucket)
 make update-site && make netlify   # rebuild report index and deploy
 make submit-flu           # commit forecast to ../FluSight-forecast-hub and open PR (also: submit-covid, submit-rsv, *-dry)
