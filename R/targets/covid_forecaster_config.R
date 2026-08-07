@@ -122,6 +122,26 @@ get_covid_forecaster_params <- function() {
         list2("climatological", "window")
       )
     ),
+    # Revision-aware analog of the `window` seasonal method: trains on past
+    # vintages (needs_archive hands it the truncated archive). The covid archive
+    # has a single (unversioned-key) source, so there is no include/exclude-faux
+    # `train_sources` knob as there is for flu -- just the whitening contrast
+    # (`quart_root` vs `none`, whose ^4 coloring can blow up the upper tail).
+    # sort_quantiles is set here since the covid config map (unlike flu's) does
+    # not add it, and quantile_reg output can cross.
+    revision_aware = tidyr::expand_grid(
+      forecaster = "scaled_pop_seasonal_revision",
+      trainer = "quantreg",
+      lags = list2(c(0, 7)),
+      pop_scaling = FALSE,
+      scale_method = "quantile",
+      center_method = "median",
+      nonlin_method = c("quart_root", "none"),
+      seasonal_backward_window = 5 * 7,
+      seasonal_forward_window = 3 * 7,
+      needs_archive = TRUE,
+      sort_quantiles = TRUE
+    ),
     climate_linear = bind_rows(
       expand_grid(
         forecaster = "climate_linear_ensembled",

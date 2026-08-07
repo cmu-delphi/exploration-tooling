@@ -405,6 +405,11 @@ create_flu_data_targets <- function() {
           epix_merge(nssp_archive, sync = "locf") %>%
           epix_merge(veteran_state_archive, sync = "locf") %>%
           extract2("DT") %>%
+          # `signal` is leftover epidatr metadata from the nssp/veteran merges, not
+          # a key. It is a reserved epiprocess name, so leaving it in makes
+          # epix_as_of treat the archive as long-format and pivot every wide column
+          # (hhs, nssp, ...) into junk -- breaking every snapshot forecaster.
+          select(-any_of("signal")) %>%
           drop_na("hhs") %>%
           filter(geo_value %nin% g_insufficient_data_geos) %>%
           as_epi_archive(other_keys = "source", compactify = TRUE)

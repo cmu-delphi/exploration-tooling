@@ -66,14 +66,21 @@ create_forecast_targets <- function() {
         # (score/combine).
         archive_hash <- rlang::hash(joined_archive_data)
         map(forecast_dates, function(fdate) {
-          run_forecaster(
-            snapshot = make_forecast_snapshot(
+          # Revision-aware forecasters (needs_archive) train on past vintages, so
+          # they get the truncated archive; everyone else gets the as-of snapshot.
+          input <- if (needs_archive) {
+            make_forecast_archive_snapshot(joined_archive_data, forecast_date = fdate, generation_date = fdate)
+          } else {
+            make_forecast_snapshot(
               joined_archive_data,
               forecast_date = fdate,
               generation_date = fdate,
               cache_key = "joined_archive_data",
               archive_hash = archive_hash
-            ),
+            )
+          }
+          run_forecaster(
+            snapshot = input,
             forecaster = forecaster,
             aheads = aheads * ahead_multiplier,
             params = params,

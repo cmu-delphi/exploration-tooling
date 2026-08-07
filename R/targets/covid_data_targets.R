@@ -332,6 +332,11 @@ create_covid_data_targets <- function() {
         joined_archive_data %<>% epix_merge(veteran_state_archive, sync = "locf")
         joined_archive_data <- joined_archive_data$DT %>%
           filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% g_insufficient_data_geos)) %>%
+          # `signal` is leftover epidatr metadata from the nssp/veteran merges, not
+          # a key. It is a reserved epiprocess name, so leaving it in makes
+          # epix_as_of treat the archive as long-format and pivot every wide column
+          # into junk -- breaking every snapshot forecaster.
+          select(-any_of("signal")) %>%
           # Always convert to data.frame after dplyr operations on data.table
           # https://github.com/cmu-delphi/epiprocess/issues/618
           as.data.frame() %>%

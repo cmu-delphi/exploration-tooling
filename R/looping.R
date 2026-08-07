@@ -196,6 +196,35 @@ make_forecast_snapshot <- function(
 }
 
 
+#' Truncate an archive to what a forecast date could have seen.
+#'
+#' The archive analog of [make_forecast_snapshot]: rather than collapsing the
+#' archive to a single as-of `epi_df`, this hands a revision-aware forecaster the
+#' whole archive (main and auxiliary columns alike) with every version after the
+#' generation date removed, so it can reconstruct any past vintage up to the
+#' forecast date itself. Truncation bounds versions, which is exactly the version
+#' faithfulness [make_forecast_snapshot] has to assert after the fact.
+#'
+#' @param archive         an `epi_archive`.
+#' @param forecast_date   nominal (Wednesday) forecast date. Kept for a symmetric
+#'   signature with [make_forecast_snapshot]; must not be after `generation_date`.
+#' @param generation_date date the forecast is actually generated; the latest
+#'   version retained.
+#' @return an `epi_archive` with `versions_end <= generation_date`.
+#'
+#' @importFrom epiprocess epix_truncate_versions_after
+make_forecast_archive_snapshot <- function(archive, forecast_date, generation_date) {
+  forecast_date <- as.Date(forecast_date)
+  generation_date <- as.Date(generation_date)
+  if (forecast_date > generation_date) {
+    cli::cli_abort(
+      "make_forecast_archive_snapshot(): forecast_date ({forecast_date}) is after generation_date ({generation_date})."
+    )
+  }
+  epix_truncate_versions_after(archive, min(generation_date, archive$versions_end))
+}
+
+
 epix_slide_simple <- function(epi_archive, forecaster, ref_time_values, before = Inf, cache_key = NULL) {
   # hash once here rather than per ref_time_value inside make_forecast_snapshot
   archive_hash <- if (!is.null(cache_key)) rlang::hash(epi_archive)

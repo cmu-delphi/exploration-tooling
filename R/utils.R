@@ -88,6 +88,9 @@ get_single_id <- function(param_list) {
 #   min_train_date    if non-NULL (declare as list(as.Date(...))), drop training
 #                     rows before this absolute date at the snapshot boundary
 #                     (covid cdc_baseline uses it to bound quantile spread).
+#   needs_archive     TRUE hands the forecaster the truncated epi_archive instead
+#                     of an as-of epi_df snapshot, for revision-aware forecasters
+#                     (see make_forecast_archive_snapshot / run_forecaster).
 FORECASTER_SPEC_DEFAULTS <- list(
   as_of_policy = "asof",
   ahead_multiplier = 1L,
@@ -97,7 +100,8 @@ FORECASTER_SPEC_DEFAULTS <- list(
   excluded_geos = NULL,
   sort_quantiles = FALSE,
   output_scale = "count",
-  min_train_date = NULL
+  min_train_date = NULL,
+  needs_archive = FALSE
 )
 
 #' Make a forecaster grid.

@@ -41,7 +41,12 @@ run_forecaster <- function(
   primary_source = NULL,
   sort_quantiles = FALSE
 ) {
-  if (!is.null(filter_sources) && "source" %in% colnames(snapshot)) {
+  # Revision-aware forecasters are handed the (truncated) archive itself instead
+  # of an as-of epi_df; the epi_df-only input munging below (source filter, extra
+  # join) doesn't apply -- the forecaster reads sources/aux columns straight from
+  # the archive. Output-side wrapping still runs identically on the forecast.
+  is_archive <- inherits(snapshot, "epi_archive")
+  if (!is_archive && !is.null(filter_sources) && "source" %in% colnames(snapshot)) {
     snapshot <- snapshot %>% filter(source %in% filter_sources)
   }
   # Inject primary_source only for forecasters that accept it; others route it
@@ -49,7 +54,7 @@ run_forecaster <- function(
   if (!is.null(primary_source) && "primary_source" %in% names(formals(forecaster))) {
     params <- c(params, list(primary_source = primary_source))
   }
-  if (join_extra_data) {
+  if (!is_archive && join_extra_data) {
     snapshot <- snapshot %>% left_join(extra_data, by = join_by(geo_value, time_value))
   }
   forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params)
