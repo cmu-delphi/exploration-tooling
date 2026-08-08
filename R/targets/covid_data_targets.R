@@ -10,48 +10,43 @@
 #' @export
 create_covid_data_targets <- function() {
   rlang::list2(
-    tar_target(
-      name = hhs_archive_data_asof,
+    tar_change(
+      name = nhsn_archive,
+      change = get_s3_object_last_modified("nhsn_data_archive.parquet", "forecasting-team-data"),
       command = {
-        get_health_data(as.Date(forecast_dates), disease = "covid") %>%
-          mutate(version = as.Date(forecast_dates)) %>%
-          relocate(geo_value, time_value, version, hhs)
-      },
-      pattern = map(forecast_dates)
-    ),
-    tar_target(
-      name = hhs_archive,
-      command = {
-        hhs_archive <- hhs_archive_data_asof %>%
-          rename(value = hhs) %>%
-          as_epi_archive(compactify = TRUE) %>%
-          daily_to_weekly_archive(agg_columns = "value")
-        hhs_archive$geo_type <- "state"
-        hhs_archive
+        # NHSN hospitalization counts, the same source covid prod uses, replacing
+        # the discontinued healthdata.gov g62h-syeh pull (get_health_data), which
+        # froze in 2024 and no longer covers the forecast season. This carries
+        # NHSN's real revision history rather than a synthetic version-per-date.
+        # NHSN weeks end Saturday; shift to the Wednesday label the rest of this
+        # pipeline uses internally (g_time_value_adjust pushes back to Saturday at
+        # scoring/output).
+        nhsn_archive <- get_nhsn_data_archive("covid")$DT %>%
+          as.data.frame() %>%
+          mutate(time_value = time_value - 3L) %>%
+          as_epi_archive(compactify = TRUE)
+        nhsn_archive$geo_type <- "state"
+        nhsn_archive
       }
     ),
     tar_target(
       name = hhs_evaluation_data,
       command = {
-        retry_fn(
-          max_attempts = 10,
-          wait_seconds = 1,
-          fn = pub_covidcast,
-          source = "hhs",
-          signals = g_hhs_signal,
-          geo_type = "state",
-          time_type = "day",
-          geo_values = "*",
-          time_values = "*",
-          fetch_args = g_fetch_args
-        ) %>%
-          select(signal, geo_value, time_value, value) %>%
-          # This aggregates the data to the week and labels each Sunday - Saturday
-          # summation with the Wednesday of that week.
-          daily_to_weekly(keys = c("geo_value", "signal")) %>%
-          select(signal, geo_value, target_end_date = time_value, true_value = value) %>%
-          # Correction for timing offsets
-          mutate(target_end_date = target_end_date + g_time_value_adjust)
+        # Oracle = the finalized NHSN hospitalizations (counts) straight from the
+        # joined archive, matching what the forecasters target. The old HHS
+        # covidcast signal (confirmed_admissions_covid_1d) was discontinued when
+        # the reporting mandate lapsed (~2024-04-27), so it no longer covers the
+        # forecast season; flu already sources its truth from NHSN the same way.
+        joined_archive_data %>%
+          epix_as_of(joined_archive_data$versions_end) %>%
+          transmute(
+            signal = "nhsn",
+            geo_value,
+            # Push the Wednesday week label to Saturday, as the old truth did.
+            target_end_date = time_value + g_time_value_adjust,
+            true_value = hhs
+          ) %>%
+          drop_na(true_value)
       }
     ),
     tar_target(
@@ -312,8 +307,8 @@ create_covid_data_targets <- function() {
     tar_target(
       name = joined_archive_data,
       command = {
-        # reformt hhs_archive, remove data spotty locations
-        joined_archive_data <- hhs_archive$DT %>%
+        # reformat the nhsn archive, remove data spotty locations
+        joined_archive_data <- nhsn_archive$DT %>%
           select(geo_value, time_value, value, version) %>%
           rename("hhs" := value) %>%
           add_hhs_region_sum(hhs_region) %>%

@@ -32,11 +32,17 @@ get_covid_forecaster_params <- function() {
       forecaster = "flatline_fc",
     ),
     # using exogenous variables
+    # NOTE: nwss / nwss_region / va_covid_per_100k are temporarily removed as
+    # exogenous sources -- their upstream feeds are retired and will be
+    # reintroduced through new endpoints that aren't wired up yet. Only the live
+    # sources (nssp, google_symptoms) remain; restore the combinations below when
+    # the new endpoints land.
     scaled_pop_exogenous = bind_rows(
+      # a single exogenous source
       expand_grid(
         forecaster = "scaled_pop",
         trainer = "quantreg",
-        extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region", "va_covid_per_100k"),
+        extra_sources = list2("nssp", "google_symptoms"),
         lags = list2(
           list2(
             c(0, 7, 14, 21), # hhs
@@ -51,53 +57,21 @@ get_covid_forecaster_params <- function() {
         scale_method = "quantile",
         n_training = Inf
       ),
+      # both live exogenous sources together
       expand_grid(
         forecaster = "scaled_pop",
         trainer = "quantreg",
-        extra_sources = list2(
-          c("nssp", "google_symptoms"),
-          c("nssp", "nwss"),
-          c("nssp", "nwss_region"),
-          c("nssp", "va_covid_per_100k"),
-          c("google_symptoms", "nwss"),
-          c("google_symptoms", "nwss_region"),
-          c("google_symptoms", "va_covid_per_100k"),
-          c("nwss", "nwss_region"),
-          c("nwss", "va_covid_per_100k"),
-        ),
-        lags = list2(
-          list2(
-            c(0, 7, 14, 21), # hhs
-            c(0, 7), # first feature
-            c(0, 7) # second feature
-          )
-        ),
-        pop_scaling = FALSE,
-        scale_method = "quantile",
-        n_training = Inf
-      ),
-      expand_grid(
-        forecaster = "scaled_pop",
-        trainer = "quantreg",
-        extra_sources = list2(
-          c("nssp", "google_symptoms", "nwss", "nwss_region", "va_covid_per_100k"),
-        ),
+        extra_sources = list2(c("nssp", "google_symptoms")),
         lags = list2(
           list2(
             c(0, 7, 14, 21), # hhs
             c(0, 7), # nssp
-            c(0, 7), # google symptoms
-            c(0, 7), # nwss
-            c(0, 7), # nwss_region
-            c(0, 7), # va_covid_per_100k
+            c(0, 7) # google_symptoms
           ),
           list2(
             c(0, 7, 14, 21), # hhs
             c(0, 7), # nssp
-            c(0, 7, 14), # google symptoms
-            c(0, 7, 14), # nwss
-            c(0, 7, 14), # nwss_region
-            c(0, 7, 14), # va_covid_per_100k
+            c(0, 7, 14) # google_symptoms
           )
         ),
         pop_scaling = FALSE,
@@ -190,11 +164,13 @@ get_covid_forecaster_params <- function() {
       x <- add_id(x)
       # Add the outcome to each forecaster.
       x$outcome <- "hhs"
-      # Whitening in the scaled_pop_seasonal family produces occasional tiny
-      # quantile crossings; opt those forecasters into monotonicity enforcement
-      # (flu does this for every family via its own config map). Set after add_id
-      # so the spec column stays out of the id hash and existing ids/caches hold.
-      x$sort_quantiles <- x$forecaster %in% c("scaled_pop_seasonal", "scaled_pop_seasonal_revision")
+      # Whitening in the scaled_pop family (scale_method != "none") produces
+      # occasional tiny quantile crossings; opt those forecasters into
+      # monotonicity enforcement (flu does this for every family via its own
+      # config map). Monotone-by-construction families (climate, flatline) stay
+      # strict so a real crossing still surfaces as an error. Set after add_id so
+      # the spec column stays out of the id hash and existing ids/caches hold.
+      x$sort_quantiles <- x$forecaster %in% c("scaled_pop", "scaled_pop_seasonal", "scaled_pop_seasonal_revision")
       x
     })
 

@@ -43,7 +43,7 @@ g_forecaster_params_grid <- g_forecaster_parameter_combinations %>%
 # - forecaster_params_grid
 parameter_targets <- create_parameter_targets()
 # data_targets creates "internal" targets:
-# - hhs_archive
+# - nhsn_archive
 # - nssp_archive
 # - google_symptoms_archive
 # - nwss_coarse
