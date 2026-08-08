@@ -190,6 +190,11 @@ get_covid_forecaster_params <- function() {
       x <- add_id(x)
       # Add the outcome to each forecaster.
       x$outcome <- "hhs"
+      # Whitening in the scaled_pop_seasonal family produces occasional tiny
+      # quantile crossings; opt those forecasters into monotonicity enforcement
+      # (flu does this for every family via its own config map). Set after add_id
+      # so the spec column stays out of the id hash and existing ids/caches hold.
+      x$sort_quantiles <- x$forecaster %in% c("scaled_pop_seasonal", "scaled_pop_seasonal_revision")
       x
     })
 
