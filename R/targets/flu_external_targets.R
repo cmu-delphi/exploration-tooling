@@ -9,29 +9,35 @@ create_flu_external_targets <- function() {
       command = c("FluSight-baseline", "FluSight-ensemble", "UMass-flusion")
     ),
     tar_target(
-      external_forecasts_file,
-      command = {
-        s3load("flusight_forecasts_2023.rds", bucket = "forecasting-team-data")
-        flusight_forecasts_2023
-      }
-    ),
-    tar_target(
       external_forecasts,
       command = {
-        external_forecasts_file %>%
-          filter(forecaster %in% outside_forecaster_subset)
+        # Reuse the prod hub-download path: get_external_forecasts() reads the
+        # per-date hub submissions the get_forecast_data.R cron uploads to S3, so
+        # explore compares against the same season it is sweeping rather than the
+        # frozen 2023 snapshot. A missing date (404) resolves to empty rows.
+        purrr::map(
+          as.character(forecast_dates + g_time_value_adjust),
+          \(d) get_external_forecasts(glue::glue("exploration/{d}/flu_forecasts.parquet"))
+        ) %>%
+          bind_rows() %>%
+          filter(target == "wk inc flu hosp", forecaster %in% outside_forecaster_subset) %>%
+          select(geo_value, forecaster, forecast_date, target_end_date, quantile, prediction = value)
       }
     ),
     tar_target(
       external_scores,
       command = {
-        evaluate_predictions(
-          forecasts = external_forecasts %>%
-            filter(forecast_date %in% (forecast_dates + g_time_value_adjust)) %>%
-            rename(model = forecaster),
-          truth_data = hhs_evaluation_data %>% select(-population)
-        ) %>%
-          rename(forecaster = model)
+        # No matching external forecasts (e.g. the hub has not posted this season
+        # yet) -> empty, so downstream bind_rows just yields the Delphi scores.
+        if (nrow(external_forecasts) == 0) {
+          tibble::tibble()
+        } else {
+          evaluate_predictions(
+            forecasts = external_forecasts %>% rename(model = forecaster),
+            truth_data = hhs_evaluation_data %>% select(-population)
+          ) %>%
+            rename(forecaster = model)
+        }
       }
     )
   )

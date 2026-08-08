@@ -62,7 +62,6 @@ data_targets <- create_covid_data_targets()
 forecast_targets <- create_forecast_targets()
 # external_targets creates:
 # - outside_forecaster_subset
-# - external_forecasts_file
 # - external_forecasts
 # And the one used externally:
 # - external_scores

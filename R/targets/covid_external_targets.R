@@ -10,41 +10,38 @@ create_covid_external_targets <- function() {
   rlang::list2(
     tar_target(
       outside_forecaster_subset,
-      command = c("COVIDhub-baseline", "COVIDhub-trained_ensemble", "COVIDhub_CDC-ensemble")
-    ),
-    tar_target(
-      external_forecasts_file,
-      command = s3read_using(
-        nanoparquet::read_parquet,
-        # TODO: How was this generated? Was there any date shifting there?
-        object = "covid19_forecast_hub_2023_full_summed.parquet",
-        bucket = "forecasting-team-data"
-      )
+      command = c("CovidHub-baseline", "CovidHub-ensemble")
     ),
     tar_target(
       external_forecasts,
       command = {
-        external_forecasts_file %>%
-          filter(geo_value %in% state_geo_values, forecaster %in% outside_forecaster_subset) %>%
-          rename(ahead = week_ahead, prediction = value) %>%
-          # Push the label to Saturday from Monday.
-          mutate(forecast_date = forecast_date + 5) %>%
-          # Filter to only forecasts we care about.
-          filter(forecast_date %in% (forecast_dates + g_time_value_adjust)) %>%
-          mutate(target_end_date = as.Date(forecast_date) + 7 * as.numeric(ahead)) %>%
-          # TODO: A very rough adjustment to get daily counts on the same scale
-          # as weekly counts.
-          mutate(prediction = prediction * 7)
+        # Reuse the prod hub-download path: get_external_forecasts() reads the
+        # per-date hub submissions the get_forecast_data.R cron uploads to S3, so
+        # explore compares against the same season it is sweeping rather than the
+        # frozen 2023 snapshot. A missing date (404) resolves to empty rows.
+        purrr::map(
+          as.character(forecast_dates + g_time_value_adjust),
+          \(d) get_external_forecasts(glue::glue("exploration/{d}/covid_forecasts.parquet"))
+        ) %>%
+          bind_rows() %>%
+          filter(target == "wk inc covid hosp", forecaster %in% outside_forecaster_subset) %>%
+          select(geo_value, forecaster, forecast_date, target_end_date, quantile, prediction = value)
       }
     ),
     tar_target(
       external_scores,
       command = {
-        evaluate_predictions(
-          forecasts = external_forecasts %>% rename(model = forecaster),
-          truth_data = hhs_evaluation_data
-        ) %>%
-          rename(forecaster = model)
+        # No matching external forecasts (e.g. the hub has not posted this season
+        # yet) -> empty, so downstream bind_rows just yields the Delphi scores.
+        if (nrow(external_forecasts) == 0) {
+          tibble::tibble()
+        } else {
+          evaluate_predictions(
+            forecasts = external_forecasts %>% rename(model = forecaster),
+            truth_data = hhs_evaluation_data
+          ) %>%
+            rename(forecaster = model)
+        }
       }
     )
   )
