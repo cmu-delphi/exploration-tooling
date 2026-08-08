@@ -114,7 +114,15 @@ create_forecast_targets <- function() {
             forecast_date = forecast_date + g_time_value_adjust,
             target_end_date = target_end_date + g_time_value_adjust
           ) %>%
-          rename(model = forecaster, prediction = value)
+          # `model` is the forecaster id. It cannot be written as
+          # `rename(model = forecaster)`: `forecaster` is a tar_map grid column,
+          # so tar_map substitutes the bare symbol with the forecaster *function*
+          # name, renaming a column that doesn't exist. `id` is the same grid's id
+          # literal (== the stamped `forecaster` column), and `any_of("forecaster")`
+          # is a string tar_map won't touch.
+          rename(prediction = value) %>%
+          mutate(model = id) %>%
+          select(-any_of("forecaster"))
         evaluate_predictions(forecasts = forecast_scaled, truth_data = hhs_evaluation_data) %>%
           rename(forecaster = model)
       }
