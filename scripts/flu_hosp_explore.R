@@ -62,7 +62,7 @@ custom_targets <- list2(
 # - forecaster_params_grid
 parameter_targets <- create_parameter_targets()
 # data_targets creates "internal" targets:
-# - hhs_archive
+# - nhsn_archive
 # - flusurv
 # - ili_plus
 # - flusion_data_archive

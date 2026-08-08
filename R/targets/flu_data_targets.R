@@ -11,29 +11,31 @@
 create_flu_data_targets <- function() {
   # TODO: Share code with covid?
   rlang::list2(
-    tar_target(
-      name = hhs_archive_data_asof,
+    # NHSN flu hospitalizations, the same source flu prod uses
+    # (get_nhsn_data_archive("flu")), replacing the discontinued healthdata.gov
+    # g62h-syeh pull (get_health_data). That source froze in 2024 and was stamped
+    # with a synthetic version = forecast_date, so every forecast date saw the
+    # same frozen snapshot and collapsed to one forecast (duplicate rows at
+    # scoring). NHSN carries a real, advancing revision history through the
+    # forecast window. NHSN is already weekly (no daily_to_weekly) and its weeks
+    # end Saturday; shift to the Wednesday label the rest of the pipeline uses
+    # (flusurv/ILI+/nssp all land on Wednesday), matching flu prod's -3 shift.
+    tar_change(
+      name = nhsn_archive,
+      change = get_s3_object_last_modified("nhsn_data_archive.parquet", "forecasting-team-data"),
       command = {
-        get_health_data(as.Date(forecast_dates), disease = "flu") %>%
-          mutate(version = as.Date(forecast_dates)) %>%
-          relocate(geo_value, time_value, version, hhs)
-      },
-      pattern = map(forecast_dates)
-    ),
-    # TODO: Share code with covid?
-    tar_target(
-      name = hhs_archive,
-      command = {
-        hhs_archive <- hhs_archive_data_asof %>%
-          as_epi_archive(compactify = TRUE) %>%
-          daily_to_weekly_archive(agg_columns = "hhs")
-        hhs_archive$DT %>%
+        get_nhsn_data_archive("flu")$DT %>%
+          as.data.frame() %>%
+          mutate(
+            geo_value = ifelse(geo_value == "usa", "us", geo_value),
+            time_value = time_value - 3L
+          ) %>%
           add_season_info() %>%
           mutate(
             agg_level = ifelse(grepl("[0-9]{2}", geo_value), "hhs_region", ifelse("us" == geo_value, "nation", "state"))
           ) %>%
           add_pop_and_density() %>%
-          mutate(hhs = hhs / population * 10L^5) %>%
+          mutate(hhs = value / population * 10L^5) %>%
           mutate(source = "nhsn") %>%
           as_epi_archive(other_keys = "source", compactify = TRUE) %>%
           extract2("DT") %>%
@@ -80,7 +82,7 @@ create_flu_data_targets <- function() {
     tar_target(
       name = flusion_data_archive,
       command = {
-        flusion_data_archive <- bind_rows(ili_plus, flusurv, hhs_archive) %>%
+        flusion_data_archive <- bind_rows(ili_plus, flusurv, nhsn_archive) %>%
           add_pop_and_density() %>%
           as_epi_archive(compactify = TRUE, other_keys = "source")
         flusion_data_archive <- flusion_data_archive$DT %>%

@@ -50,8 +50,8 @@ if (params$disease == "flu") {
   base_forecaster_name <- "FluSight-baseline"
   ensemble_forecaster_name <- "FluSight-ensemble"
 } else {
-  base_forecaster_name <- "COVIDhub-baseline"
-  ensemble_forecaster_name <- "COVIDhub_CDC-ensemble"
+  base_forecaster_name <- "CovidHub-baseline"
+  ensemble_forecaster_name <- "CovidHub-ensemble"
 }
 
 # Load scores and filter them, get global variables
