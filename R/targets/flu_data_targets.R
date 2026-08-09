@@ -134,7 +134,11 @@ create_flu_data_targets <- function() {
         nssp <- nssp_state %>%
           select(geo_value, time_value, issue, nssp = value) %>%
           append_us_aggregate("nssp", group_keys = c("time_value", "issue")) %>%
-          bind_rows(nssp_hhs) %>%
+          # nssp_hhs must get the same select: left raw it keeps pub_covidcast's
+          # `signal` column, which makes as_epi_archive() treat the frame as long
+          # format and pivot every column into junk (pct_ed_visits_influenza / NA),
+          # dropping `nssp` entirely.
+          bind_rows(nssp_hhs %>% select(geo_value, time_value, issue, nssp = value)) %>%
           as_epi_archive(compactify = TRUE) %>%
           extract2("DT") %>%
           # weekly data is indexed from the start of the week

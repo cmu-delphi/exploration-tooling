@@ -50,12 +50,18 @@ get_flu_forecaster_params <- function() {
       filter_agg_level = "state"
     ),
     # using exogenous variables
+    # NOTE: nwss / nwss_region / va_flu_per_100k are temporarily removed as
+    # exogenous sources -- their upstream feeds are retired (nwss is a frozen
+    # 2024-10 static file) and will return through new endpoints not wired up
+    # yet, so a current-season forecast row has no value for them. Only the live
+    # sources (nssp, google_symptoms) remain; restore the combinations when the
+    # new endpoints land. (Same change as covid_forecaster_config.)
     scaled_pop_exogenous = bind_rows(
       expand_grid(
         forecaster = "scaled_pop",
         trainer = "quantreg",
         # since it's a list, this gets expanded out to a single one in each row
-        extra_sources = list2("nssp", "google_symptoms", "nwss", "nwss_region", "va_flu_per_100k"),
+        extra_sources = list2("nssp", "google_symptoms"),
         lags = list2(
           list2(
             c(0, 7), # hhs
@@ -75,48 +81,16 @@ get_flu_forecaster_params <- function() {
       expand_grid(
         forecaster = "scaled_pop",
         trainer = "quantreg",
+        # only both live exogenous sources together (the all-5 block collapsed to
+        # this same pair once the dead sources were removed, so it is dropped)
         extra_sources = list2(
           c("nssp", "google_symptoms"),
-          c("nssp", "nwss"),
-          c("nssp", "nwss_region"),
-          c("nssp", "va_flu_per_100k"),
-          c("google_symptoms", "nwss"),
-          c("google_symptoms", "nwss_region"),
-          c("google_symptoms", "va_flu_per_100k"),
-          c("nwss", "nwss_region"),
-          c("nwss", "va_flu_per_100k"),
         ),
         lags = list2(
           list2(
             c(0, 7), # hhs
             c(0, 7), # first feature
             c(0, 7) # second feature
-          )
-        ),
-        pop_scaling = FALSE,
-        scale_method = "quantile",
-        center_method = "median",
-        nonlin_method = "quart_root",
-        filter_source = "nhsn",
-        filter_agg_level = "state",
-        n_training = Inf,
-        drop_non_seasons = TRUE,
-        keys_to_ignore = g_very_latent_locations,
-      ),
-      expand_grid(
-        forecaster = "scaled_pop",
-        trainer = "quantreg",
-        extra_sources = list2(
-          c("nssp", "google_symptoms", "nwss", "nwss_region", "va_flu_per_100k"),
-        ),
-        lags = list2(
-          list2(
-            c(0, 7), # hhs
-            c(0, 7), # nssp
-            c(0, 7), # google symptoms
-            c(0, 7), # nwss
-            c(0, 7), # nwss_region
-            c(0, 7), # va_flu_per_100k
           )
         ),
         pop_scaling = FALSE,
@@ -227,8 +201,11 @@ get_flu_forecaster_params <- function() {
       expand_grid(
         forecaster = "scaled_pop_seasonal",
         trainer = "quantreg",
-        # since it's a list, this gets expanded out to a single one in each row
-        extra_sources = list2("nssp", "nwss", "nwss_region", "va_flu_per_100k"), # removing google_symptoms for lack of data for now
+        # since it's a list, this gets expanded out to a single one in each row.
+        # nwss / nwss_region / va_flu_per_100k are temporarily removed (retired
+        # feeds, see the scaled_pop_exogenous note); only the live nssp remains.
+        # (google_symptoms was already dropped here for lack of data.)
+        extra_sources = list2("nssp"),
         lags = list2(
           list2(
             c(0, 7), # hhs
