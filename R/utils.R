@@ -560,6 +560,41 @@ update_site <- function() {
     }
   }
 
+  # Handle season-stamped explore notebooks ({disease}-[overall-]notebook-{YYYY-YYYY}.html)
+  explore_overall_files <- dir_ls(reports_dir, regexp = ".*-overall-notebook-\\d{4}-\\d{4}\\.html")
+  explore_family_files <- dir_ls(reports_dir, regexp = ".*-notebook-[^0-9].*-\\d{4}-\\d{4}\\.html")
+  explore_files <- c(explore_overall_files, explore_family_files)
+  if (length(explore_files) > 0) {
+    explore_table <- tibble(filename = explore_files) %>%
+      mutate(
+        file_name = path_file(filename),
+        disease = str_extract(file_name, "^(flu|covid)"),
+        season = str_extract(file_name, "\\d{4}-\\d{4}"),
+        is_overall = grepl("overall", file_name),
+        family = if_else(
+          is_overall, "Overall",
+          str_remove(str_remove(file_name, glue("^{disease}-notebook-")), "-\\d{{4}}-\\d{{4}}\\.html$")
+        )
+      ) %>%
+      arrange(disease, season, desc(is_overall), family)
+
+    for (season_name in unique(explore_table$season)) {
+      section_header <- glue("## {season_name} Season Backtesting")
+      season_rows <- explore_table %>% filter(season == season_name)
+      for (ii in seq_len(nrow(season_rows))) {
+        row <- season_rows[ii, ]
+        report_link <- sprintf(
+          "- [%s %s](%s)",
+          str_to_title(row$disease),
+          row$family,
+          row$file_name
+        )
+        insert_index <- which(grepl(section_header, report_md_content, fixed = TRUE)) + 1
+        report_md_content <- append(report_md_content, report_link, after = insert_index)
+      }
+    }
+  }
+
   # Write the updated content to report.md
   report_md_path <- path(reports_dir, "report.md")
   writeLines(report_md_content, report_md_path)

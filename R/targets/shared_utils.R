@@ -200,7 +200,7 @@ create_joined_targets <- function() {
               truth_data = hhs_evaluation_data,
               disease = g_disease
             ),
-            output_file = here::here(g_reports_dir, paste0(g_disease, "-notebook-", forecaster_family, ".html"))
+            output_file = here::here(g_reports_dir, paste0(g_disease, "-notebook-", forecaster_family, "-", g_season, ".html"))
           )
         }
       )
@@ -217,7 +217,7 @@ create_joined_targets <- function() {
             truth_data = hhs_evaluation_data,
             disease = g_disease
           ),
-          output_file = here::here(g_reports_dir, paste0(g_disease, "-overall-notebook.html"))
+          output_file = here::here(g_reports_dir, paste0(g_disease, "-overall-notebook-", g_season, ".html"))
         )
       }
     ),

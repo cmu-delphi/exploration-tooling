@@ -25,6 +25,7 @@ g_forecast_dates <- seq.Date(as.Date("2025-11-19"), as.Date("2026-04-29"), by = 
 g_time_value_adjust <- 3
 # Directory for reports.
 g_reports_dir <- "reports"
+g_season <- paste0(format(min(g_forecast_dates), "%Y"), "-", format(max(g_forecast_dates), "%Y"))
 # Fetch arguments for epidatr.
 g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
 # Geos with insufficient data for forecasting.
