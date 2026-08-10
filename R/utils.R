@@ -573,7 +573,7 @@ update_site <- function() {
         is_overall = grepl("overall", file_name),
         family = if_else(
           is_overall, "Overall",
-          str_remove(str_remove(file_name, glue("^{disease}-notebook-")), "-\\d{{4}}-\\d{{4}}\\.html$")
+          str_remove(str_remove(file_name, glue("^{disease}-notebook-")), "-\\d{4}-\\d{4}\\.html$")
         )
       ) %>%
       arrange(disease, season, desc(is_overall), family)
