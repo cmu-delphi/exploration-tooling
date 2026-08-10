@@ -113,6 +113,9 @@ score_forecasts <- function(latest_data, forecasts, target) {
 }
 
 render_score_plot <- function(score_report_rmd, scores, forecast_dates, disease, target) {
+  season_start <- format(min(forecast_dates), "%Y")
+  season_end <- format(max(forecast_dates), "%Y")
+  season <- glue::glue("{season_start}_{season_end}")
   rmarkdown::render(
     score_report_rmd,
     params = list(
@@ -123,7 +126,7 @@ render_score_plot <- function(score_report_rmd, scores, forecast_dates, disease,
     ),
     output_file = here::here(
       "reports",
-      glue::glue("{disease}_{target}_backtesting_2024_2025_on_{as.Date(Sys.Date())}")
+      glue::glue("{disease}_{target}_backtesting_{season}_on_{as.Date(Sys.Date())}")
     )
   )
 }
