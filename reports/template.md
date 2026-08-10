@@ -34,6 +34,12 @@
 - [An Analysis of Decreasing Behavior in Forecasters](decreasing_forecasters.html)
 - [NHSN 2024-2025 Data Analysis](new_data.html)
 
+## 2025-2026 Season Backtesting
+
+
+## 2024-2025 Season Backtesting
+
+
 ## 2023-2024 Season Backtesting
 
 - [Forecaster Exploration Summary](#exploration-summary-2024-2025)

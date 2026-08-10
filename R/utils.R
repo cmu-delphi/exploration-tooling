@@ -525,6 +525,41 @@ update_site <- function() {
     }
   }
 
+  # Handle backtesting reports
+  backtest_season_names <- c("2024-2025", "2025-2026")
+  for (season_name in backtest_season_names) {
+    season_pattern <- str_replace_all(season_name, "-", "_")
+    backtest_files <- dir_ls(reports_dir, regexp = glue(".*_backtesting_{season_pattern}_on_.*\\.html"))
+    if (length(backtest_files) == 0) next
+
+    backtest_table <- tibble(filename = backtest_files) %>%
+      mutate(
+        file_name = path_file(filename),
+        generation_date = ymd(str_extract(file_name, "\\d{4}-\\d{2}-\\d{2}(?=\\.html)")),
+        disease = str_extract(file_name, "^(flu|covid)"),
+        target = str_match(file_name, glue("^(?:flu|covid)_(nhsn|nssp)_backtesting_{season_pattern}"))[, 2]
+      ) %>%
+      group_by(disease, target) %>%
+      slice_max(generation_date) %>%
+      ungroup() %>%
+      arrange(disease, target)
+
+    section_header <- glue("## {season_name} Season Backtesting")
+    for (ii in seq_len(nrow(backtest_table))) {
+      row <- backtest_table[ii, ]
+      target_str <- if (!is.na(row$target)) toupper(row$target) else "All"
+      report_link <- sprintf(
+        "- [%s %s Backtesting (rendered %s)](%s)",
+        str_to_title(row$disease),
+        target_str,
+        row$generation_date,
+        row$file_name
+      )
+      insert_index <- which(grepl(section_header, report_md_content, fixed = TRUE)) + 1
+      report_md_content <- append(report_md_content, report_link, after = insert_index)
+    }
+  }
+
   # Write the updated content to report.md
   report_md_path <- path(reports_dir, "report.md")
   writeLines(report_md_content, report_md_path)
