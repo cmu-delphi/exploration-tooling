@@ -25,7 +25,7 @@ g_forecast_dates <- seq.Date(as.Date("2025-11-19"), as.Date("2026-04-29"), by = 
 g_time_value_adjust <- 3
 # Directory for reports.
 g_reports_dir <- "reports"
-g_season <- paste0(format(min(g_forecast_dates), "%Y"), "-", format(max(g_forecast_dates), "%Y"))
+g_season <- paste0(format(min(g_forecast_dates), "%Y"), "_", format(max(g_forecast_dates), "%Y"))
 # Fetch arguments for epidatr.
 g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
 # Geos with insufficient data for forecasting.
@@ -67,11 +67,11 @@ forecast_targets <- create_forecast_targets()
 # And the one used externally:
 # - external_scores
 external_targets <- create_covid_external_targets()
-# joined_targets creates:
-# - joined_forecasts
-# - joined_scores
-# - notebook_{g_forecaster_params_grid$family}
-# - overall_notebook
+# joined_targets creates (all stamped with g_season):
+# - joined_forecasts_{g_season}
+# - joined_scores_{g_season}
+# - notebook_{g_forecaster_params_grid$family}_{g_season}
+# - overall_notebook_{g_season}
 joined_targets <- create_joined_targets()
 
 # Combine all targets

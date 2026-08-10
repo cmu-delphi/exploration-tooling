@@ -236,26 +236,57 @@ get_flu_forecaster_params <- function() {
       seasonal_forward_window = c(7, 3 * 7, 5 * 7),
       keys_to_ignore = g_very_latent_locations
     ),
-    # Revision-aware analog of the `window` seasonal method: trains on past
-    # vintages (needs_archive hands it the truncated archive). `train_sources` is
-    # the include/exclude-faux-revisions knob -- nhsn alone is genuinely
-    # version-aware but short; adding ILI+/flusurv buys decades of history whose
-    # version == time_value (not truly revision-aware). `quart_root` vs `none`
-    # contrasts the whitening whose ^4 coloring can blow up the upper tail.
+    # Revision-aware analog of the `window` seasonal method
     revision_aware = tidyr::expand_grid(
       forecaster = "scaled_pop_seasonal_revision",
       trainer = "quantreg",
-      lags = list2(c(0, 7)),
+      lags = list2(c(0, 7), c(0, 7, 14, 21)),
       pop_scaling = FALSE,
+      filter_agg_level = "state",
       scale_method = "quantile",
       center_method = "median",
-      nonlin_method = c("quart_root", "none"),
+      nonlin_method = "quart_root",
       seasonal_backward_window = 5 * 7,
       seasonal_forward_window = 3 * 7,
       train_sources = list2(
-        c("nhsn"),
         c("nhsn", "ILI+", "flusurv")
       ),
+      needs_archive = TRUE
+    ),
+    # Revision-aware analog of the `window` seasonal method
+    revision_aware = tidyr::expand_grid(
+      forecaster = "scaled_pop_seasonal_revision",
+      trainer = "quantreg",
+      lags = list2(c(0, 7), c(0, 7, 14, 21)),
+      pop_scaling = FALSE,
+      filter_agg_level = "state",
+      scale_method = "none",
+      center_method = "none",
+      nonlin_method = "none",
+      seasonal_backward_window = 5 * 7,
+      seasonal_forward_window = 3 * 7,
+      train_sources = list2(
+        c("nhsn")
+      ),
+      needs_archive = TRUE
+    ),
+    # Same as revision_aware but with nssp as an exogenous predictor. Restricts
+    # to nhsn-only training (genuinely revision-aware rows) since nssp's
+    # version == time_value means faux-revision rows can't provide real-time nssp
+    # lags anyway.
+    revision_aware_nssp = tidyr::expand_grid(
+      forecaster = "scaled_pop_seasonal_revision",
+      trainer = "quantreg",
+      lags = list2(c(0, 7), c(0, 7, 14, 21)),
+      extra_sources = list("nssp"),
+      pop_scaling = FALSE,
+      filter_agg_level = "none",
+      scale_method = "none",
+      center_method = "none",
+      nonlin_method = "none",
+      seasonal_backward_window = 5 * 7,
+      seasonal_forward_window = 3 * 7,
+      train_sources = list2(c("nhsn")),
       needs_archive = TRUE
     ),
     climate_linear = bind_rows(

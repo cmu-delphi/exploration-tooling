@@ -43,28 +43,6 @@
 ## 2023-2024 Season Backtesting
 
 - [Forecaster Exploration Summary](#exploration-summary-2024-2025)
-- Flu
-  - [Flu Overall](flu-overall-notebook.html)
-  - [Flu AR](flu-notebook-scaled_pop_main.html)
-  - [Flu AR with augmented data](flu-notebook-scaled_pop_data_augmented.html)
-  - [Flu AR with exogenous features](flu-notebook-scaled_pop_exogenous.html)
-  - [Flu AR with different seasonal schemes](flu-notebook-scaled_pop_season.html)
-  - [Flu AR with augmented data and with different seasonal window sizes](flu-notebook-season_window_sizes.html)
-  - [Flu AR with augmented data, exogenous features, and seasonal windowing](flu-notebook-scaled_pop_season_exogenous.html)
-  - Simplistic/low data methods:
-    - [Flu no recent](flu-notebook-no_recent_quant.html)
-    - [Flu flatline](flu-notebook-flatline.html)
-    - [Flu climate and linear](flu-notebook-climate_linear.html)
-- Covid
-  - [Covid Overall](covid-overall-notebook.html)
-  - [Covid AR](covid-notebook-scaled_pop_main.html)
-  - [Covid AR with seasonal features](covid-notebook-scaled_pop_season.html)
-  - [Covid AR with exogenous features](covid-notebook-scaled_pop_exogenous.html)
-  - [Covid Flatline](covid-notebook-flatline_forecaster.html)
-  - Simplistic/low data methods:
-    - [Covid no recent](covid-notebook-no_recent_quant.html)
-    - [Covid flatline](covid-notebook-flatline.html)
-    - [Covid climate and linear](covid-notebook-climate_linear.html)
 
 ## Description of Forecaster Families
 

@@ -560,27 +560,28 @@ update_site <- function() {
     }
   }
 
-  # Handle season-stamped explore notebooks ({disease}-[overall-]notebook-{YYYY-YYYY}.html)
-  explore_overall_files <- dir_ls(reports_dir, regexp = ".*-overall-notebook-\\d{4}-\\d{4}\\.html")
-  explore_family_files <- dir_ls(reports_dir, regexp = ".*-notebook-[^0-9].*-\\d{4}-\\d{4}\\.html")
+  # Handle season-stamped explore notebooks ({disease}-[overall-]notebook-{YYYY_YYYY}.html)
+  explore_overall_files <- dir_ls(reports_dir, regexp = ".*-overall-notebook-\\d{4}_\\d{4}\\.html")
+  explore_family_files <- dir_ls(reports_dir, regexp = ".*-notebook-[^0-9].*-\\d{4}_\\d{4}\\.html")
   explore_files <- c(explore_overall_files, explore_family_files)
   if (length(explore_files) > 0) {
     explore_table <- tibble(filename = explore_files) %>%
       mutate(
         file_name = path_file(filename),
         disease = str_extract(file_name, "^(flu|covid)"),
-        season = str_extract(file_name, "\\d{4}-\\d{4}"),
+        season_slug = str_extract(file_name, "\\d{4}_\\d{4}"),
+        season_name = str_replace(season_slug, "_", "-"),
         is_overall = grepl("overall", file_name),
         family = if_else(
           is_overall, "Overall",
-          str_remove(str_remove(file_name, glue("^{disease}-notebook-")), "-\\d{4}-\\d{4}\\.html$")
+          str_remove(str_remove(file_name, glue("^{disease}-notebook-")), "-\\d{4}_\\d{4}\\.html$")
         )
       ) %>%
-      arrange(disease, season, desc(is_overall), family)
+      arrange(disease, season_name, desc(is_overall), family)
 
-    for (season_name in unique(explore_table$season)) {
+    for (season_name in unique(explore_table$season_name)) {
       section_header <- glue("## {season_name} Season Backtesting")
-      season_rows <- explore_table %>% filter(season == season_name)
+      season_rows <- explore_table %>% filter(season_name == season_name)
       for (ii in seq_len(nrow(season_rows))) {
         row <- season_rows[ii, ]
         report_link <- sprintf(

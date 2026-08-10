@@ -170,7 +170,8 @@ create_forecast_targets <- function() {
 #' @return A list of targets for joined forecasts and scores
 #' @export
 create_joined_targets <- function() {
-  rlang::list2(
+  tar_map(
+    values = list(season = g_season),
     tar_target(joined_forecasts, command = {
       if (g_disease == "flu") {
         rescaled_delphi_forecasts %>% bind_rows(external_forecasts)
@@ -220,7 +221,7 @@ create_joined_targets <- function() {
           output_file = here::here(g_reports_dir, paste0(g_disease, "-overall-notebook-", g_season, ".html"))
         )
       }
-    ),
+    )
     # TODO: Fix notebook, it's missing process_nhsn_data() function.
     # tar_target(
     #   new_data_notebook,
