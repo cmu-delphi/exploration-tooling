@@ -21,6 +21,15 @@ ensemble_climate_linear <- function(
     max_climate_ahead_weight = 0.90,
     min_climate_quantile_weight = 0.1,
     max_climate_quantile_weight = 1) {
+  if (nrow(forecasts) == 0) {
+    return(tibble(
+      geo_value = character(),
+      forecast_date = as.Date(character()),
+      target_end_date = as.Date(character()),
+      quantile = numeric(),
+      value = numeric()
+    ))
+  }
   last_data <- min(forecasts$target_end_date)
   forecast_date <- min(forecasts$forecast_date)
   latency <- ceiling(as.integer(forecast_date - last_data) / 7)
