@@ -365,8 +365,8 @@ scaled_pop_seasonal_revision <- function(
     tibble(
       geo_value = forecast_rows$geo_value[[ii]],
       source = forecast_rows$source[[ii]],
-      # the anchor week is this forecast's reference date, ahead is measured from it
-      forecast_date = forecast_rows$time_value[[ii]],
+      forecast_date = epi_data$versions_end,
+      target_end_date = forecast_rows$time_value[[ii]] + ahead,
       quantile = levels_out,
       value = quantile_mat[ii, ]
     )
@@ -390,8 +390,6 @@ scaled_pop_seasonal_revision <- function(
     ) %>%
     rename(value = {{ outcome }})
 
-  out <- out %>%
-    mutate(target_end_date = forecast_date + ahead)
   if (clip_lower) {
     out <- out %>% mutate(value = pmax(0, value))
   }
