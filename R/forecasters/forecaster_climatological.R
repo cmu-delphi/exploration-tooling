@@ -142,6 +142,15 @@ climate_linear_ensembled <- function(
       return(null_result)
     }
   }
+  if (nrow(pred) == 0) {
+    return(tibble(
+      geo_value = character(),
+      forecast_date = as.Date(character()),
+      target_end_date = as.Date(character()),
+      quantile = numeric(),
+      value = numeric()
+    ))
+  }
   # undo whitening
   if (adding_source) {
     pred %<>%

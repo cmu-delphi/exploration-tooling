@@ -41,6 +41,15 @@ climatological_model <- function(
         (abs(forecast_week + ahead - epiweek) <= window_size)
       )
   }
+  if (nrow(filtered) == 0) {
+    return(tibble(
+      geo_value = character(),
+      forecast_date = as.Date(character()),
+      target_end_date = as.Date(character()),
+      quantile = numeric(),
+      value = numeric()
+    ))
+  }
   # filtered %>% ggplot(aes(x = epiweek, y = value, color = source)) + geom_point() + facet_wrap(~geo_value); epi_data %>% autoplot(value, .facet_by = "geo_value", color = "source")
   if (geo_agg && pop_scale) {
     filtered %<>%
