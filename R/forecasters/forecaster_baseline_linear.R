@@ -46,6 +46,16 @@ forecaster_baseline_linear <- function(
     mutate(weeks_back = as.integer(time_value - max(df_processed$time_value)) / 7)
   latency <- as.integer(ceiling((epi_as_of(df_processed) - max(df_processed$time_value)) / 7))
 
+  if (nrow(train_data) == 0) {
+    return(tibble(
+      geo_value = character(),
+      forecast_date = as.Date(character()),
+      target_end_date = as.Date(character()),
+      quantile = numeric(),
+      value = numeric()
+    ))
+  }
+
   if (no_intercept) {
     # set the intercept column to be the last value for that geo
     intercept_values <-
