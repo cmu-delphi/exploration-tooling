@@ -612,6 +612,7 @@ sort_by_quantile <- function(forecasts) {
   forecasts %>%
     arrange(geo_value, target_end_date, forecast_date, quantile) %>%
     group_by(geo_value, forecast_date, target_end_date) %>%
+    filter(!anyNA(value)) %>%
     mutate(value = sort(value)) %>%
     ungroup()
 }
