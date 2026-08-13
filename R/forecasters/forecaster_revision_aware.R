@@ -352,6 +352,13 @@ scaled_pop_seasonal_revision <- function(
     filter(time_value %in% window_dates) %>%
     drop_na(all_of(c(lag_cols, target_name)))
 
+  null_result <- tibble(
+    geo_value = character(),
+    forecast_date = as.Date(character()),
+    target_end_date = as.Date(character()),
+    quantile = numeric(),
+    value = numeric()
+  )
   if (nrow(train) < length(lag_cols) + 1 || nrow(forecast_rows) == 0) {
     return(null_result)
   }
