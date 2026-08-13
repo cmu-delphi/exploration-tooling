@@ -77,6 +77,17 @@ revision_predictor_design <- function(
   # first_v (a backfill block first-reports many weeks at one version) to their
   # running-max keeps the roll join from picking an arbitrary member of the block.
   reported <- archive_dt[!is.na(get(target_col)), c(grp_keys, "time_value", "version"), with = FALSE]
+
+  null_result <- tibble(
+    geo_value = character(),
+    forecast_date = as.Date(character()),
+    target_end_date = as.Date(character()),
+    quantile = numeric(),
+    value = numeric()
+  )
+  if (nrow(reported) == 0) {
+    return(null_result)
+  }
   first_rep <- reported[, .(first_v = min(version)), by = c(grp_keys, "time_value")]
   data.table::setorderv(first_rep, c(grp_keys, "first_v"))
   first_rep[, anchor := as.Date(cummax(as.integer(time_value))), by = grp_keys]
@@ -251,13 +262,6 @@ scaled_pop_seasonal_revision <- function(
   base_cols <- c(outcome, extra_sources)
   train_sources <- union(primary_source, unlist(train_sources) %||% primary_source)
 
-  null_result <- tibble(
-    geo_value = character(),
-    forecast_date = as.Date(character()),
-    target_end_date = as.Date(character()),
-    quantile = numeric(),
-    value = numeric()
-  )
 
   # Revision-aware design: as-of lags for every base column plus the finalized
   # outcome target, then restrict to the genuinely-revised primary source.
