@@ -105,7 +105,7 @@ get_covid_forecaster_params <- function() {
     # not add it, and quantile_reg output can cross.
     revision_aware = tidyr::expand_grid(
       forecaster = "scaled_pop_seasonal_revision",
-      trainer = "quantreg",
+      trainer = "quantreg_fn",
       lags = list2(c(0, 7)),
       pop_scaling = FALSE,
       scale_method = "quantile",

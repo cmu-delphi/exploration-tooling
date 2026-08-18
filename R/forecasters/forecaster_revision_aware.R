@@ -244,7 +244,7 @@ scaled_pop_seasonal_revision <- function(
   nonlin_method = c("quart_root", "none"),
   seasonal_backward_window = 5 * 7,
   seasonal_forward_window = 3 * 7,
-  trainer = epipredict::quantile_reg(),
+  trainer = epipredict::quantile_reg(method = "fn"),
   quantile_levels = covidhub_probs(),
   clip_lower = TRUE,
   ...
