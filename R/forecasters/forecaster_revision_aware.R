@@ -366,7 +366,8 @@ scaled_pop_seasonal_revision <- function(
     filter(time_value %in% window_dates) %>%
     drop_na(all_of(c(lag_cols, target_name)))
 
-  if (nrow(train) < max(length(lag_cols) + 1, 20L) || nrow(forecast_rows) == 0) {
+  n_geos <- n_distinct(train$geo_value)
+  if (nrow(train) < max(n_geos * 3L, 20L, length(lag_cols) + 1L) || nrow(forecast_rows) == 0) {
     return(null_result)
   }
 
