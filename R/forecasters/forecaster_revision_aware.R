@@ -69,6 +69,7 @@ revision_predictor_design <- function(
   if (is.null(versions)) {
     versions <- sort(unique(archive_dt$version))
   }
+  message("revision_predictor_design: nrow(archive_dt)=", nrow(archive_dt), " n_versions=", length(versions))
 
   # Anchor per (keys, version): the latest week whose target was first reported
   # by that version. `first_v` = each week's first-reporting version; a running
@@ -267,6 +268,7 @@ scaled_pop_seasonal_revision <- function(
   # outcome target, then restrict to the genuinely-revised primary source.
   # cache the (ahead-independent) predictor design so a date's aheads, run in
   # separate workers, share one slide via the on-disk cache.
+  message(format(epi_data$versions_end), " ahead=", ahead, " building design")
   design <- archive_to_revision_predictors(
     epi_data,
     lags = lags,
@@ -275,6 +277,7 @@ scaled_pop_seasonal_revision <- function(
     target_col = outcome,
     cache_key = "revision_design"
   )
+  message(format(epi_data$versions_end), " ahead=", ahead, " design nrow=", nrow(design))
   # Archives without a source key (e.g. the clean nhsn prod archive) are stamped
   # so the source-keyed whitening/coloring below still matches.
   if (!("source" %in% names(design))) {
@@ -367,11 +370,13 @@ scaled_pop_seasonal_revision <- function(
     return(null_result)
   }
 
+  message(format(epi_data$versions_end), " ahead=", ahead, " fitting nrow(train)=", nrow(train), " nrow(forecast_rows)=", nrow(forecast_rows))
   # One pooled quantile regression across geos (pop scaling makes them
   # comparable); predict the forecast row per geo.
   form <- reformulate(lag_cols, response = target_name)
   model <- quantile_reg(quantile_levels = quantile_levels)
   fitted <- fit(model, form, data = train)
+  message(format(epi_data$versions_end), " ahead=", ahead, " fit done")
   preds <- predict(fitted, forecast_rows)$.pred
   quantile_mat <- as.matrix(preds)
   levels_out <- hardhat::extract_quantile_levels(preds)
