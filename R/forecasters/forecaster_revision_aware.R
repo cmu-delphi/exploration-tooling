@@ -78,15 +78,15 @@ revision_predictor_design <- function(
   # running-max keeps the roll join from picking an arbitrary member of the block.
   reported <- archive_dt[!is.na(get(target_col)), c(grp_keys, "time_value", "version"), with = FALSE]
 
-  null_result <- tibble(
-    geo_value = character(),
-    forecast_date = as.Date(character()),
-    target_end_date = as.Date(character()),
-    quantile = numeric(),
-    value = numeric()
-  )
   if (nrow(reported) == 0) {
-    return(null_result)
+    null_design <- tibble(
+      !!!setNames(lapply(grp_keys, \(k) character()), grp_keys),
+      version = as.Date(character()),
+      time_value = as.Date(character()),
+      !!!setNames(lapply(lag_spec$name, \(n) numeric()), lag_spec$name)
+    )
+    if (!is.null(cache_path)) qs::qsave(null_design, cache_path)
+    return(null_design)
   }
   first_rep <- reported[, .(first_v = min(version)), by = c(grp_keys, "time_value")]
   data.table::setorderv(first_rep, c(grp_keys, "first_v"))
@@ -163,7 +163,7 @@ archive_to_revision_predictors <- function(
 ) {
   grp_keys <- setdiff(key_colnames(archive), c("time_value", "version"))
   design <- revision_predictor_design(archive, lags, cols, target_col, versions, cache_key, archive_hash)
-  if (is.null(ahead)) {
+  if (is.null(ahead) || nrow(design) == 0) {
     return(design)
   }
 
@@ -284,6 +284,17 @@ scaled_pop_seasonal_revision <- function(
   target_name <- paste0(outcome, "_target")
   lag_cols <- grep("_lag_", names(design), value = TRUE)
 
+  null_result <- tibble(
+    geo_value = character(),
+    forecast_date = as.Date(character()),
+    target_end_date = as.Date(character()),
+    quantile = numeric(),
+    value = numeric()
+  )
+  if (nrow(design) == 0 || !(target_name %in% names(design))) {
+    return(null_result)
+  }
+
   # Whitening, learned per base column: the outcome from its finalized target,
   # exogenous columns from their contemporaneous (lag 0) observation. The same
   # per-(source, geo) params are then applied to every lag of that column (they
@@ -352,13 +363,6 @@ scaled_pop_seasonal_revision <- function(
     filter(time_value %in% window_dates) %>%
     drop_na(all_of(c(lag_cols, target_name)))
 
-  null_result <- tibble(
-    geo_value = character(),
-    forecast_date = as.Date(character()),
-    target_end_date = as.Date(character()),
-    quantile = numeric(),
-    value = numeric()
-  )
   if (nrow(train) < length(lag_cols) + 1 || nrow(forecast_rows) == 0) {
     return(null_result)
   }
