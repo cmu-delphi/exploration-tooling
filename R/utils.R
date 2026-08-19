@@ -413,6 +413,11 @@ get_forecast_reference_date <- function(date) {
 update_site <- function() {
   library(fs)
   library(stringr)
+  insert_after_section <- function(content, header, link) {
+    idx <- which(grepl(header, content, fixed = TRUE))
+    if (length(idx) == 0) stop(glue("Template is missing section '{header}' — add it to reports/template.md"))
+    append(content, link, after = idx[[1]] + 1L)
+  }
   # Define the directories
   reports_dir <- "reports"
   template_path <- "reports/template.md"
@@ -477,13 +482,9 @@ update_site <- function() {
         file_name
       )
 
-      # Insert into Production Reports section, skipping a line
-      prod_reports_index <- which(grepl(glue("## Weekly Fanplots {season_name} Season"), report_md_content)) + 1
-      report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
-      # insert into This week if it's actually from within the past week
+      report_md_content <- insert_after_section(report_md_content, glue("## Weekly Fanplots {season_name} Season"), report_link)
       if (as.Date(generation_date) > Sys.Date() - 7) {
-        prod_reports_index <- which(grepl(glue("## Most recent week"), report_md_content)) + 1
-        report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
+        report_md_content <- insert_after_section(report_md_content, "## Most recent week", report_link)
       }
     }
   }
@@ -515,13 +516,9 @@ update_site <- function() {
       file_path
     )
 
-    # Insert into Production Reports section, skipping a line
-    prod_reports_index <- which(grepl("## Score notebooks", report_md_content)) + 1
-    report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
-    # insert into This week if it's actually from within the past week
+    report_md_content <- insert_after_section(report_md_content, "## Score notebooks", report_link)
     if (as.Date(generation_date) > Sys.Date() - 7) {
-      prod_reports_index <- which(grepl(glue("## Most recent week"), report_md_content)) + 1
-      report_md_content <- append(report_md_content, report_link, after = prod_reports_index)
+      report_md_content <- insert_after_section(report_md_content, "## Most recent week", report_link)
     }
   }
 
@@ -555,8 +552,7 @@ update_site <- function() {
         row$generation_date,
         row$file_name
       )
-      insert_index <- which(grepl(section_header, report_md_content, fixed = TRUE)) + 1
-      report_md_content <- append(report_md_content, report_link, after = insert_index)
+      report_md_content <- insert_after_section(report_md_content, section_header, report_link)
     }
   }
 
@@ -579,9 +575,9 @@ update_site <- function() {
       ) %>%
       arrange(disease, season_name, desc(is_overall), family)
 
+    section_header <- "## Explore Notebooks"
     for (season_name in unique(explore_table$season_name)) {
-      section_header <- glue("## {season_name} Season Backtesting")
-      season_rows <- explore_table %>% filter(season_name == season_name)
+      season_rows <- explore_table %>% filter(season_name == .env$season_name)
       for (ii in seq_len(nrow(season_rows))) {
         row <- season_rows[ii, ]
         report_link <- sprintf(
@@ -590,8 +586,7 @@ update_site <- function() {
           row$family,
           row$file_name
         )
-        insert_index <- which(grepl(section_header, report_md_content, fixed = TRUE)) + 1
-        report_md_content <- append(report_md_content, report_link, after = insert_index)
+        report_md_content <- insert_after_section(report_md_content, section_header, report_link)
       }
     }
   }
