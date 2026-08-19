@@ -61,7 +61,10 @@ revision_predictor_design <- function(
     dir.create("cache/revision_cache", showWarnings = FALSE, recursive = TRUE)
     cache_path <- glue::glue("cache/revision_cache/{cache_key}_{hash}_{spec_hash}.qs")
     if (file.exists(cache_path)) {
-      return(qs::qread(cache_path))
+      tryCatch(
+        return(qs::qread(cache_path)),
+        error = function(e) message("revision_cache: corrupt cache at ", cache_path, ", recomputing")
+      )
     }
   }
 
@@ -86,7 +89,11 @@ revision_predictor_design <- function(
       time_value = as.Date(character()),
       !!!setNames(lapply(lag_spec$name, \(n) numeric()), lag_spec$name)
     )
-    if (!is.null(cache_path)) qs::qsave(null_design, cache_path)
+    if (!is.null(cache_path)) {
+      tmp <- paste0(cache_path, ".tmp.", Sys.getpid())
+      qs::qsave(null_design, tmp)
+      file.rename(tmp, cache_path)
+    }
     return(null_design)
   }
   first_rep <- reported[, .(first_v = min(version)), by = c(grp_keys, "time_value")]
@@ -110,7 +117,9 @@ revision_predictor_design <- function(
     relocate(all_of(c(grp_keys, "version", "time_value")))
 
   if (!is.null(cache_path)) {
-    qs::qsave(design, cache_path)
+    tmp <- paste0(cache_path, ".tmp.", Sys.getpid())
+    qs::qsave(design, tmp)
+    file.rename(tmp, cache_path)
   }
   design
 }
