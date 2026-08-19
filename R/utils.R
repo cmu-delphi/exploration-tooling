@@ -454,6 +454,7 @@ update_site <- function() {
     slice_max(generation_date) %>%
     ungroup() %>%
     arrange(forecast_date)
+  max_prod_gen_date <- max(used_reports$generation_date, na.rm = TRUE)
   seasons <- tibble(
     season_name = c("2024-2025", "2025-2026"),
     season_start = as.Date(c("2024-11-20", "2025-06-04")),
@@ -483,7 +484,7 @@ update_site <- function() {
       )
 
       report_md_content <- insert_after_section(report_md_content, glue("## Weekly Fanplots {season_name} Season"), report_link)
-      if (as.Date(generation_date) > Sys.Date() - 7) {
+      if (as.Date(generation_date) == max_prod_gen_date) {
         report_md_content <- insert_after_section(report_md_content, "## Most recent week", report_link)
       }
     }
@@ -502,6 +503,7 @@ update_site <- function() {
       disease = str_match(filename, "flu|covid")[1]
     ) %>%
     arrange(generation_date)
+  max_score_gen_date <- max(score_table$generation_date, na.rm = TRUE)
   for (score_file in score_table$filename) {
     file_name <- path_file(score_file)
     file_parts <- str_match(file_name, "(\\d{4}-\\d{2}-\\d{2})_(.*)\\.html")
@@ -517,7 +519,7 @@ update_site <- function() {
     )
 
     report_md_content <- insert_after_section(report_md_content, "## Score notebooks", report_link)
-    if (as.Date(generation_date) > Sys.Date() - 7) {
+    if (as.Date(generation_date) == max_score_gen_date) {
       report_md_content <- insert_after_section(report_md_content, "## Most recent week", report_link)
     }
   }
