@@ -116,6 +116,22 @@ get_covid_forecaster_params <- function() {
       needs_archive = TRUE,
       sort_quantiles = TRUE
     ),
+    # Revision-aware with nssp as an exogenous predictor. No train_sources knob
+    # since the covid explore archive has no source key (single-source nhsn).
+    revision_aware_nssp = tidyr::expand_grid(
+      forecaster = "scaled_pop_seasonal_revision",
+      trainer = "quantreg_fn",
+      lags = list2(c(0, 7)),
+      extra_sources = list("nssp"),
+      pop_scaling = FALSE,
+      scale_method = "none",
+      center_method = "none",
+      nonlin_method = "none",
+      seasonal_backward_window = 5 * 7,
+      seasonal_forward_window = 3 * 7,
+      needs_archive = TRUE,
+      sort_quantiles = TRUE
+    ),
     climate_linear = bind_rows(
       expand_grid(
         forecaster = "climate_linear_ensembled",

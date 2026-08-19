@@ -11,6 +11,7 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, climate_base, all, 2
 2024-10-01, climate_geo_agged, all, 0
 2024-10-01, climate_quantile_extrapolated, all, 0
+2024-10-01, revision_aware_nssp, all, 0
 ##################
 # Jan 7
 ##################
@@ -23,6 +24,7 @@ forecast_date,forecaster,geo_value,weight
 2026-01-07, climate_base, all, 2
 2026-01-07, climate_geo_agged, all, 0
 2026-01-07, climate_quantile_extrapolated, all, 0
+2026-01-07, revision_aware_nssp, all, 0
 ##################
 # Dec 31
 ##################
