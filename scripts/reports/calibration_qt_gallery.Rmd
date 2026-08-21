@@ -53,18 +53,19 @@ cal <- calibrate_hub_forecasts(
 )
 ```
 
-Companion to `calibration_qt.Rmd` (the parameter-sweep record; see
-`notes/CALIBRATION.md` for the project state). Parameters are fixed at the
-operating point the sweep selected — `lr_mult = `r params$lr_mult``,
-`lr_window = `r params$lr_window``, `season_policy = "`r params$season_policy`"`
-— and the rest of the document is a ranked gallery of individual forecasts,
-one panel per (location, round), for the two live seasons.
+This document contains a gallery of forecasts that were adjusted the most (in mean absolute deviation, see below) (`calibration_qt.Rmd` has the parameter-sweeps, this notebook gets more granular about forecast adjustments; see
+`notes/CALIBRATION.md` for the project state).
 
-# Headline at the fixed operating point
+The parameters for the calibration method are fixed:
+- `lr_mult = `r params$lr_mult`` (the learning rate multiplier, which was found to be too slow at 0.01 and too fast at 0.1),
+- `lr_window = `r params$lr_window`` (a window of 8 weeks paid the cost across aheads, while 20, 50, and Inf were essentially indistinguishable and had consistent calibration improvements across aheads)
+- `season_policy = "`r params$season_policy`"` (this parameter was either "carry" for carrying the learning rate over from the previous season or "reset" to reset it; we found that this did not influence things very much)
 
-Calibration error is the mean over the 23 quantile levels of
+# Summary scores at the parameter sweep peak settings
+
+Calibration error  is the mean over the 23 quantile levels of
 `|geo-pooled empirical coverage at a - a|`; WIS uses the standard
-factor-of-two convention. The burn-in season is excluded.
+factor-of-two convention. The burn-in season (2023-24) is excluded, so testing is across (2024-25 and 2025-26).
 
 ```{r headline}
 bind_rows(
@@ -95,12 +96,9 @@ bind_rows(
 
 # Data vintages for the panels
 
-Each panel shows the NHSN data **as of the Wednesday before the reference
-date** (`reference_date - 3`, roughly what the forecaster saw at submission
-time) alongside the finalized truth. Vintages come from a frozen copy of the
-NHSN archive (`cache/calibration/nhsn_archive_flu.parquet`; provenance in
-`notes/CALIBRATION.md`). No vintages exist before 2024-11-19, which still
-covers every live-season round.
+Each panel shows the NHSN data as of the Wednesday before the reference
+date (`reference_date - 3`, which should be what the forecaster saw at submission
+time, unless there were delays) alongside the finalized truth.
 
 ```{r snapshots, cache=TRUE, dependson="load"}
 archive <- nanoparquet::read_parquet(
@@ -131,16 +129,11 @@ snapshots <- purrr::map(live_rounds$round_date, function(rd) {
 
 Panels are ordered by the size of the correction: the mean absolute
 displacement between calibrated and base quantiles (over the 5 horizons x 23
-levels of a round), divided by the round's mean base median so small states
-rank on relative shift rather than raw admissions. The denominator is floored
-at 20 admissions — without the floor the entire top of the list is
-end-of-season rounds where the base median is ~1 and any leftover offset is a
-huge ratio. Even with the floor, season edges (May, October) dominate the top:
-the tracker carries offsets sized for mid-season signal into weeks with almost
-none. That is the first gallery finding, not an artifact of the metric.
-Captions carry the raw numbers: MAD, the WIS change of that single forecast
-(positive = calibration improved it), and whether the finalized truth escaped
-the base 90% interval at any horizon.
+levels of a round), divided by the round's mean base median (this way we rank small states
+on relative shift). We floored the denominator at 20 admissions (with out this the entire top of the list is
+end-of-season rounds where the base median is ~1).
+
+Even with that correction, season edges (May, October) dominate: the mid-season offsets are carried into the very low signal values at the end.
 
 ```{r ranking}
 pinball <- function(truth, value, level) {
@@ -184,8 +177,8 @@ panel_stats %>%
 
 # Gallery: top `r params$n_panels` panels
 
-How to read a panel: black is the NHSN data as of the forecast Wednesday
-(dashed vertical line); gray is the finalized series. Blue is the submitted
+In the plots below, black is the NHSN data as of the forecast Wednesday
+(dashed vertical line), while gray is the finalized series. Blue is the submitted
 (base) forecast, orange the calibrated one; ribbons are the 50% and 90%
 central intervals, the line is the median, across horizons -1 to 3.
 
