@@ -10,6 +10,7 @@ set_targets_config()
 # These are trainer model objects needed by the targets pipeline.
 linreg <- parsnip::linear_reg()
 quantreg <- epipredict::quantile_reg()
+quantreg_fn <- epipredict::quantile_reg(method = "fn")
 randforest_grf <- rand_forest(engine = "grf_quantiles", mode = "regression")
 # Dummy mode will replace all forecaster functions with a fast dummy forecaster. Helps
 # with prototyping the pipeline.

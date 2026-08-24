@@ -239,7 +239,7 @@ get_flu_forecaster_params <- function() {
     # Revision-aware analog of the `window` seasonal method
     revision_aware = tidyr::expand_grid(
       forecaster = "scaled_pop_seasonal_revision",
-      trainer = "quantreg",
+      trainer = "quantreg_fn",
       lags = list2(c(0, 7), c(0, 7, 14, 21)),
       pop_scaling = FALSE,
       filter_agg_level = "state",
@@ -256,7 +256,7 @@ get_flu_forecaster_params <- function() {
     # Revision-aware analog of the `window` seasonal method
     revision_aware = tidyr::expand_grid(
       forecaster = "scaled_pop_seasonal_revision",
-      trainer = "quantreg",
+      trainer = "quantreg_fn",
       lags = list2(c(0, 7), c(0, 7, 14, 21)),
       pop_scaling = FALSE,
       filter_agg_level = "state",
@@ -276,7 +276,7 @@ get_flu_forecaster_params <- function() {
     # lags anyway.
     revision_aware_nssp = tidyr::expand_grid(
       forecaster = "scaled_pop_seasonal_revision",
-      trainer = "quantreg",
+      trainer = "quantreg_fn",
       lags = list2(c(0, 7), c(0, 7, 14, 21)),
       extra_sources = list("nssp"),
       pop_scaling = FALSE,

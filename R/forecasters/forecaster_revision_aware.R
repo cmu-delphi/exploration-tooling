@@ -384,8 +384,8 @@ scaled_pop_seasonal_revision <- function(
   # One pooled quantile regression across geos (pop scaling makes them
   # comparable); predict the forecast row per geo.
   form <- reformulate(lag_cols, response = target_name)
-  model <- quantile_reg(quantile_levels = quantile_levels)
-  fitted <- fit(model, form, data = train)
+  trainer$args$quantile_levels <- rlang::enquo(quantile_levels)
+  fitted <- fit(trainer, form, data = train)
   message(format(epi_data$versions_end), " ahead=", ahead, " fit done")
   preds <- predict(fitted, forecast_rows)$.pred
   quantile_mat <- as.matrix(preds)
