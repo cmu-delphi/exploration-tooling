@@ -3,6 +3,17 @@
 #' This file contains utility functions that can be used by both COVID and flu
 #' forecasting pipelines.
 
+#' Map a date to a season slug (e.g. "2024_2025").
+#'
+#' Seasons run from July 15 of year Y to July 14 of year Y+1.
+#' @keywords internal
+season_of_date <- function(date, cutoff_month = 7L, cutoff_day = 15L) {
+  year <- as.integer(format(date, "%Y"))
+  cutoff <- as.Date(paste0(year, "-", sprintf("%02d-%02d", cutoff_month, cutoff_day)))
+  start_year <- ifelse(date < cutoff, year - 1L, year)
+  paste0(start_year, "_", start_year + 1L)
+}
+
 #' Get partially applied forecaster function
 #'
 #' params is defined by the values of the tar_map: a named list of forecaster
@@ -186,40 +197,48 @@ create_joined_targets <- function() {
         name = notebook,
         command = {
           params_subset <- g_forecaster_parameter_combinations[[forecaster_family]]
-          filtered_forecasts <- joined_forecasts %>%
-            filter(forecaster %in% c(params_subset$id, outside_forecaster_subset))
-          filtered_scores <- joined_scores %>%
-            filter(forecaster %in% c(params_subset$id, outside_forecaster_subset))
-
-          rmarkdown::render(
-            "scripts/reports/comparison-notebook.Rmd",
-            params = list(
-              forecaster_parameters = params_subset,
-              forecaster_family = forecaster_family,
-              forecasts = filtered_forecasts,
-              scores = filtered_scores,
-              truth_data = hhs_evaluation_data,
-              disease = g_disease
-            ),
-            output_file = here::here(g_reports_dir, paste0(g_disease, "-notebook-", forecaster_family, "-", g_season, ".html"))
-          )
+          forecaster_ids <- c(params_subset$id, outside_forecaster_subset)
+          family_forecasts <- joined_forecasts %>%
+            filter(forecaster %in% forecaster_ids) %>%
+            mutate(season_slug = season_of_date(forecast_date))
+          family_scores <- joined_scores %>%
+            filter(forecaster %in% forecaster_ids) %>%
+            mutate(season_slug = season_of_date(forecast_date))
+          for (slug in sort(unique(family_forecasts$season_slug))) {
+            rmarkdown::render(
+              "scripts/reports/comparison-notebook.Rmd",
+              params = list(
+                forecaster_parameters = params_subset,
+                forecaster_family = forecaster_family,
+                forecasts = family_forecasts %>% filter(season_slug == slug) %>% select(-season_slug),
+                scores = family_scores %>% filter(season_slug == slug) %>% select(-season_slug),
+                truth_data = hhs_evaluation_data,
+                disease = g_disease
+              ),
+              output_file = here::here(g_reports_dir, paste0(g_disease, "-notebook-", forecaster_family, "-", slug, ".html"))
+            )
+          }
         }
       )
     ),
     tar_target(
       overall_notebook,
       command = {
-        rmarkdown::render(
-          "scripts/reports/overall-comparison-notebook.Rmd",
-          params = list(
-            forecaster_parameters = g_forecaster_parameter_combinations,
-            forecasts = joined_forecasts,
-            scores = joined_scores,
-            truth_data = hhs_evaluation_data,
-            disease = g_disease
-          ),
-          output_file = here::here(g_reports_dir, paste0(g_disease, "-overall-notebook-", g_season, ".html"))
-        )
+        all_forecasts <- joined_forecasts %>% mutate(season_slug = season_of_date(forecast_date))
+        all_scores <- joined_scores %>% mutate(season_slug = season_of_date(forecast_date))
+        for (slug in sort(unique(all_forecasts$season_slug))) {
+          rmarkdown::render(
+            "scripts/reports/overall-comparison-notebook.Rmd",
+            params = list(
+              forecaster_parameters = g_forecaster_parameter_combinations,
+              forecasts = all_forecasts %>% filter(season_slug == slug) %>% select(-season_slug),
+              scores = all_scores %>% filter(season_slug == slug) %>% select(-season_slug),
+              truth_data = hhs_evaluation_data,
+              disease = g_disease
+            ),
+            output_file = here::here(g_reports_dir, paste0(g_disease, "-overall-notebook-", slug, ".html"))
+          )
+        }
       }
     )
     # TODO: Fix notebook, it's missing process_nhsn_data() function.
