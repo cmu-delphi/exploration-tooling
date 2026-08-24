@@ -578,18 +578,22 @@ update_site <- function() {
       arrange(disease, season_name, desc(is_overall), family)
 
     section_header <- "## Explore Notebooks"
-    for (season_name in unique(explore_table$season_name)) {
-      season_rows <- explore_table %>% filter(season_name == .env$season_name)
+    all_explore_lines <- character(0)
+    for (season_name in sort(unique(explore_table$season_name), decreasing = TRUE)) {
+      season_rows <- explore_table %>%
+        filter(season_name == .env$season_name) %>%
+        arrange(disease, desc(is_overall), family)
+      all_explore_lines <- c(all_explore_lines, "", glue("### {season_name}"), "")
       for (ii in seq_len(nrow(season_rows))) {
         row <- season_rows[ii, ]
-        report_link <- sprintf(
-          "- [%s %s](%s)",
-          str_to_title(row$disease),
-          row$family,
-          row$file_name
+        all_explore_lines <- c(
+          all_explore_lines,
+          sprintf("- [%s %s](%s)", str_to_title(row$disease), row$family, row$file_name)
         )
-        report_md_content <- insert_after_section(report_md_content, section_header, report_link)
       }
+    }
+    if (length(all_explore_lines) > 0) {
+      report_md_content <- insert_after_section(report_md_content, section_header, all_explore_lines)
     }
   }
 
