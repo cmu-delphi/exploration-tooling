@@ -189,6 +189,52 @@ archive_to_revision_predictors <- function(
 }
 
 
+#' Flag (geo_value, version) pairs with anomalous late revisions.
+#'
+#' A `(geo_value, version)` is flagged if there are at least `min_obs` archive
+#' rows with `lag_weeks > n_weeks` for that pair, AND at least one of those rows
+#' has a deviation from the finalized value exceeding `threshold` for a
+#' `time_value` whose finalized count is at least `min_value` (low-count
+#' periods are excluded because `threshold`% of a tiny count is just noise).
+#'
+#' @param archive_dt data.table of the archive's DT slot.
+#' @param outcome name of the outcome column.
+#' @param n_weeks revisions after this many weeks are considered "late".
+#' @param threshold fractional deviation from finalized that counts as anomalous.
+#' @param min_value absolute finalized value below which the threshold check is
+#'   skipped.
+#' @param min_obs minimum number of late-window rows required before a pair can
+#'   be flagged (guards against sparse early snapshots).
+#' @return a data.table with columns `geo_value` and `version`.
+#' @keywords internal
+flag_revision_outlier_versions <- function(
+  archive_dt,
+  outcome,
+  n_weeks,
+  threshold = 0.10,
+  min_value = 30,
+  min_obs = 5L
+) {
+  col_dt <- archive_dt[!is.na(get(outcome)),
+    .(geo_value, time_value, version, val = get(outcome))]
+  final_dt <- col_dt[, .(value_final = val[which.max(version)]),
+    by = .(geo_value, time_value)]
+  col_dt <- final_dt[col_dt, on = .(geo_value, time_value)]
+  col_dt[, lag_weeks := as.numeric(version - time_value) / 7]
+  summary_dt <- col_dt[
+    lag_weeks > n_weeks,
+    .(
+      is_outlier = any(
+        abs(val - value_final) / (abs(value_final) + 1e-6) > threshold &
+          abs(value_final) >= min_value
+      ),
+      n_late_obs = .N
+    ),
+    by = .(geo_value, version)
+  ]
+  summary_dt[is_outlier == TRUE & n_late_obs >= min_obs, .(geo_value, version)]
+}
+
 #' Scaled pop seasonal, revision-aware
 #'
 #' A variant of [scaled_pop_seasonal] that is aware of data revisions. Instead of
@@ -257,6 +303,10 @@ scaled_pop_seasonal_revision <- function(
   trainer = epipredict::quantile_reg(method = "fn"),
   quantile_levels = covidhub_probs(),
   clip_lower = TRUE,
+  outlier_n_weeks = NULL,
+  outlier_threshold = 0.10,
+  outlier_min_value = 30,
+  outlier_min_obs = 5L,
   ...
 ) {
   scale_method <- arg_match(scale_method)
@@ -374,6 +424,18 @@ scaled_pop_seasonal_revision <- function(
   train <- design %>%
     filter(time_value %in% window_dates) %>%
     drop_na(all_of(c(lag_cols, target_name)))
+
+  if (!is.null(outlier_n_weeks)) {
+    flagged_versions <- flag_revision_outlier_versions(
+      data.table::as.data.table(epi_data$DT),
+      outcome,
+      n_weeks    = outlier_n_weeks,
+      threshold  = outlier_threshold,
+      min_value  = outlier_min_value,
+      min_obs    = outlier_min_obs
+    )
+    train <- anti_join(train, as_tibble(flagged_versions), by = c("geo_value", "version"))
+  }
 
   n_geos <- n_distinct(train$geo_value)
   if (nrow(train) < max(n_geos * 3L, 20L, length(lag_cols) + 1L) || nrow(forecast_rows) == 0) {

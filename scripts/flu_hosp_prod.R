@@ -209,6 +209,26 @@ g_forecaster_params_grid <- list(
     target_date_shift = 3L,
     sort_quantiles = TRUE,
     needs_archive = TRUE
+  ),
+  revision_aware_nssp_filtered = tibble(
+    id = "revision_aware_nssp_filtered",
+    forecaster = "scaled_pop_seasonal_revision",
+    outcome = "value",
+    extra_sources = "nssp",
+    trainer = "g_quantreg",
+    lags = list(c(0, 7, 14)),
+    pop_scaling = FALSE,
+    scale_method = "none",
+    center_method = "none",
+    nonlin_method = "none",
+    seasonal_backward_window = 5 * 7,
+    seasonal_forward_window = 3 * 7,
+    train_sources = list(c("nhsn")),
+    ahead_multiplier = 7L,
+    target_date_shift = 3L,
+    sort_quantiles = TRUE,
+    needs_archive = TRUE,
+    outlier_n_weeks = 4L
   )
 ) %>%
   imap(\(tib, family) make_forecaster_grid(tib, family)) %>%
