@@ -425,7 +425,7 @@ scaled_pop_seasonal_revision <- function(
     filter(time_value %in% window_dates) %>%
     drop_na(all_of(c(lag_cols, target_name)))
 
-  if (!is.null(outlier_n_weeks)) {
+  if (!is.null(outlier_n_weeks) && !is.na(outlier_n_weeks)) {
     flagged_versions <- flag_revision_outlier_versions(
       data.table::as.data.table(epi_data$DT),
       outcome,

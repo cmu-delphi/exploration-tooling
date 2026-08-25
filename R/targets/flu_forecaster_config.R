@@ -288,7 +288,7 @@ get_flu_forecaster_params <- function() {
       seasonal_forward_window = 3 * 7,
       train_sources = list2(c("nhsn")),
       needs_archive = TRUE,
-      outlier_n_weeks = list(NULL, 4L)
+      outlier_n_weeks = c(NA_integer_, 4L)
     ),
     climate_linear = bind_rows(
       expand_grid(

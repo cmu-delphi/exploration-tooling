@@ -131,7 +131,7 @@ get_covid_forecaster_params <- function() {
       seasonal_forward_window = 3 * 7,
       needs_archive = TRUE,
       sort_quantiles = TRUE,
-      outlier_n_weeks = list(NULL, 4L)
+      outlier_n_weeks = c(NA_integer_, 4L)
     ),
     climate_linear = bind_rows(
       expand_grid(
