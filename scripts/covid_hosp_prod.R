@@ -189,25 +189,6 @@ g_forecaster_params_grid <- list(
     join_extra_data = TRUE,
     excluded_geos = list(c("mo", "wy")),
     sort_quantiles = TRUE
-  ),
-  revision_aware_nssp = tibble(
-    id = "revision_aware_nssp",
-    forecaster = "scaled_pop_seasonal_revision",
-    outcome = "value",
-    extra_sources = "nssp",
-    trainer = "g_quantreg",
-    lags = list(c(0, 7, 14)),
-    pop_scaling = FALSE,
-    scale_method = "none",
-    center_method = "none",
-    nonlin_method = "none",
-    seasonal_backward_window = 5 * 7,
-    seasonal_forward_window = 3 * 7,
-    train_sources = list(c("nhsn")),
-    ahead_multiplier = 7L,
-    target_date_shift = 3L,
-    sort_quantiles = TRUE,
-    needs_archive = TRUE
   )
 ) %>%
   imap(\(tib, family) make_forecaster_grid(tib, family)) %>%
@@ -323,21 +304,6 @@ parameters_and_date_targets <- rlang::list2(
         epix_as_of(min(g_reference_date, nssp_archive_data$versions_end))
     }
   ),
-  # nhsn_prod_archive with the nssp column merged in (stamped source = "nhsn"
-  # so epix_merge joins onto nhsn rows). Handed to revision_aware_nssp via the
-  # needs_archive branch in forecast_nhsn. nssp_archive_data is already
-  # Wednesday-aligned by up_to_date_nssp_state_archive.
-  tar_target(
-    name = nhsn_nssp_prod_archive,
-    command = {
-      nssp_for_merge <- nssp_archive_data$DT %>%
-        mutate(source = "nhsn") %>%
-        as.data.frame() %>%
-        as_epi_archive(other_keys = "source", compactify = TRUE)
-      nhsn_prod_archive %>%
-        epix_merge(nssp_for_merge, sync = "locf")
-    }
-  )
 )
 
 
@@ -397,18 +363,8 @@ forecast_targets <- tar_map(
       set.seed(targets::tar_seed_create(
         paste(id, "nhsn", forecast_date_chr, aheads, sep = "/")
       ))
-      # Revision-aware forecasters (needs_archive = TRUE) receive the truncated
-      # archive directly; everyone else receives the as-of epi_df snapshot.
-      snapshot <- if (needs_archive) {
-        make_forecast_archive_snapshot(
-          nhsn_nssp_prod_archive,
-          forecast_date_int,
-          forecast_generation_date_int
-        )
-      } else {
-        full_data
-      }
-      if (!needs_archive && !is.null(min_train_date)) {
+      snapshot <- full_data
+      if (!is.null(min_train_date)) {
         snapshot <- snapshot %>% filter(time_value >= min_train_date)
       }
       run_forecaster(
@@ -487,7 +443,7 @@ g_ensemble_specs <- list(
     id = "ensemble_mix",
     method = "weighted",
     components = list(
-      nhsn = c("windowed_seasonal", "windowed_seasonal_extra_sources", "revision_aware_nssp"),
+      nhsn = c("windowed_seasonal", "windowed_seasonal_extra_sources"),
       nssp = c("windowed_seasonal", "windowed_seasonal_extra_sources")
     ),
     drop_negative_aheads = list(nhsn = TRUE, nssp = FALSE),

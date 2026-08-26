@@ -215,24 +215,33 @@ flag_revision_outlier_versions <- function(
   min_value = 30,
   min_obs = 5L
 ) {
-  col_dt <- archive_dt[!is.na(get(outcome)),
-    .(geo_value, time_value, version, val = get(outcome))]
-  final_dt <- col_dt[, .(value_final = val[which.max(version)]),
-    by = .(geo_value, time_value)]
-  col_dt <- final_dt[col_dt, on = .(geo_value, time_value)]
-  col_dt[, lag_weeks := as.numeric(version - time_value) / 7]
-  summary_dt <- col_dt[
-    lag_weeks > n_weeks,
-    .(
+  # All non-NA (geo, time_value, version) triples for the outcome column.
+  vintage_obs <- as_tibble(archive_dt) %>%
+    filter(!is.na(.data[[outcome]])) %>%
+    select(geo_value, time_value, version, val = all_of(outcome))
+
+  # Most-recent-version value per (geo, time_value)
+  recent_values <- vintage_obs %>%
+    group_by(geo_value, time_value) %>%
+    slice_max(version, n = 1) %>%
+    ungroup() %>%
+    select(geo_value, time_value, value_latest = val)
+
+  vintage_obs %>%
+    left_join(recent_values, by = c("geo_value", "time_value")) %>%
+    mutate(lag_weeks = as.numeric(version - time_value) / 7) %>%
+    filter(lag_weeks > n_weeks) %>%
+    group_by(geo_value, version) %>%
+    summarise(
       is_outlier = any(
-        abs(val - value_final) / (abs(value_final) + 1e-6) > threshold &
-          abs(value_final) >= min_value
+        abs(val - value_latest) / (abs(value_latest) + 1e-6) > threshold &
+          abs(value_latest) >= min_value
       ),
-      n_late_obs = .N
-    ),
-    by = .(geo_value, version)
-  ]
-  summary_dt[is_outlier == TRUE & n_late_obs >= min_obs, .(geo_value, version)]
+      n_late_obs = n(),
+      .groups = "drop"
+    ) %>%
+    filter(is_outlier, n_late_obs >= min_obs) %>%
+    select(geo_value, version)
 }
 
 #' Scaled pop seasonal, revision-aware
@@ -434,7 +443,7 @@ scaled_pop_seasonal_revision <- function(
       min_value  = outlier_min_value,
       min_obs    = outlier_min_obs
     )
-    train <- anti_join(train, as_tibble(flagged_versions), by = c("geo_value", "version"))
+    train <- anti_join(train, flagged_versions, by = c("geo_value", "version"))
   }
 
   n_geos <- n_distinct(train$geo_value)
