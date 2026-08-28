@@ -1,0 +1,310 @@
+---
+title: MultiQT calibration — whole-season views of five states, across method variants
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  burn_in_seasons: "2023-2024"
+  season_policy: "carry"
+  lr_window: 20
+  lr_mult: 0.03
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+# cache = TRUE chunks are keyed on chunk code + cache.extra, NOT on functions
+# in R/ -- after changing calibration code, clear cache/calibration/knitr_cache_seasons/.
+knitr::opts_chunk$set(
+  fig.align = "center", fig.width = 10, fig.height = 6,
+  message = FALSE, warning = FALSE, cache = FALSE,
+  cache.path = here::here("cache/calibration/knitr_cache_seasons/")
+)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+This notebook takes the operating point chosen in `notes/CALIBRATION.md`
+(`lr_mult = 0.03`, `lr_window = 20`, carry, burn-in 2023-24) and looks at five
+states across whole seasons rather than one panel at a time
+(`calibration_qt_gallery.Rmd` has the per-forecast gallery view). Five method
+variants are compared: the baseline, turning calibration off after April 1,
+per-level eta, geo-pooled eta, and a seasonal eta window.
+
+```{r load, cache=TRUE}
+suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+
+forecasts <- hub_read_forecasts()
+truth <- hub_read_truth()
+rounds <- hub_label_seasons(unique(forecasts$reference_date))
+burn_in <- strsplit(params$burn_in_seasons, ",")[[1]]
+
+geo_map <- get_population_data() %>%
+  distinct(state_id, .keep_all = TRUE) %>%
+  transmute(state_id, abbrev = toupper(state_id), location = state_code)
+pop <- get_population_data() %>%
+  distinct(state_code, .keep_all = TRUE) %>%
+  transmute(location = state_code, population)
+
+archive <- nanoparquet::read_parquet(
+  here::here("cache/calibration/nhsn_archive_flu.parquet")
+) %>%
+  as_epi_archive(compactify = TRUE)
+
+live_rounds <- rounds %>% filter(!season %in% burn_in)
+min_version <- min(archive$DT$version)
+snapshots <- purrr::map(live_rounds$round_date, function(rd) {
+  as_of <- rd - 3L
+  if (as_of < min_version) {
+    return(NULL)
+  }
+  epix_as_of(archive, as_of) %>%
+    as_tibble() %>%
+    inner_join(geo_map, by = c("geo_value" = "state_id")) %>%
+    transmute(reference_date = rd, location, time_value, value)
+}) %>% bind_rows()
+
+states <- tibble(
+  location = c("06", "48", "39", "50", "56"),
+  abbrev = c("CA", "TX", "OH", "VT", "WY")
+)
+seasons <- c("2024-2025", "2025-2026")
+```
+
+```{r variants, cache=TRUE, dependson="load"}
+base_args <- list(
+  burn_in_seasons = burn_in, season_policy = params$season_policy,
+  lr_window = params$lr_window, lr_args = list(mult = params$lr_mult),
+  progress = FALSE
+)
+variant_args <- list(
+  baseline = list(),
+  off_after = list(off_after = "04-01"),
+  per_level = list(lr_args = list(mult = params$lr_mult, per_level = TRUE)),
+  geo_pooled = list(lr_geo_pool = pop),
+  seasonal = list(lr_window = 10, lr_seasonal = list(half_width_weeks = 5), season_policy = "reset")
+)
+variant_titles <- c(
+  baseline = "Baseline",
+  off_after = "Calibration off after April 1",
+  per_level = "Per-level eta",
+  geo_pooled = "Geo-pooled eta",
+  seasonal = "Seasonal eta window + reset"
+)
+
+cals <- purrr::map(variant_args, function(v) {
+  do.call(calibrate_hub_forecasts, c(list(forecasts, truth), modifyList(base_args, v)))
+})
+```
+
+# Summary across variants
+
+WIS % improvement over the base forecast (all seasons, burn-in excluded), per
+horizon.
+
+```{r variant-summary}
+purrr::imap(cals, function(cal, nm) {
+  hub_quantile_loss(cal) %>% transmute(variant = variant_titles[[nm]], horizon, pct = round(pct_improvement, 1))
+}) %>%
+  bind_rows() %>%
+  tidyr::pivot_wider(names_from = horizon, values_from = pct, names_prefix = "h")
+```
+
+```{r helpers}
+headline_table <- function(cal) {
+  bind_rows(
+    left_join(
+      hub_coverage_summary(cal),
+      select(hub_quantile_loss(cal), horizon, loss_base, loss_cal, loss_pct = pct_improvement),
+      by = "horizon"
+    ) %>% mutate(season = "all"),
+    left_join(
+      hub_coverage_summary(cal, by = "season"),
+      select(hub_quantile_loss(cal, by = "season"),
+        season, horizon, loss_base, loss_cal, loss_pct = pct_improvement
+      ),
+      by = c("season", "horizon")
+    )
+  ) %>%
+    transmute(
+      season, horizon,
+      `cal err (base)` = round(cal_error_base, 4),
+      `cal err (calibrated)` = round(cal_error_cal, 4),
+      `cal err improvement %` = round(pct_improvement, 1),
+      `WIS (base)` = round(2 * loss_base, 1),
+      `WIS (calibrated)` = round(2 * loss_cal, 1),
+      `WIS improvement %` = round(loss_pct, 1)
+    ) %>%
+    arrange(season, horizon)
+}
+
+fan_cols <- c(base = "#0072B2", calibrated = "#D55E00")
+
+# One plot per (state, season): whole-season fan (odd season_rounds only, h 0..3;
+# h -1 dropped -- with h -1 in, 5 horizons x ~13 rounds x 2 fans was unreadable)
+# plus vintage patchwork strips underneath, plus an eta strip.
+season_plot <- function(cal, loc, season) {
+  rr <- cal$rounds %>% filter(season == !!season, season_round %% 2 == 1)
+  ref_dates <- sort(rr$round_date)
+
+  fin <- truth %>%
+    filter(location == loc, target_end_date >= min(ref_dates) - 21L, target_end_date <= max(ref_dates) + 28L)
+
+  fan <- cal$forecasts %>%
+    filter(location == loc, reference_date %in% ref_dates, horizon %in% 0:3, level %in% c(0.05, 0.5, 0.95)) %>%
+    mutate(
+      target_end_date = reference_date + 7L * horizon,
+      lvl = c(`0.05` = "lo", `0.5` = "med", `0.95` = "hi")[as.character(level)]
+    ) %>%
+    select(reference_date, target_end_date, lvl, base = value_base, calibrated = value_cal) %>%
+    tidyr::pivot_longer(c(base, calibrated), names_to = "which") %>%
+    tidyr::pivot_wider(names_from = lvl, values_from = value)
+
+  # Vintage patchwork: each plotted round's as-of snapshot paints only the
+  # fortnight since the previous plotted round (like backtesting.Rmd's vignette).
+  vint_windows <- tibble(ref = ref_dates) %>%
+    mutate(
+      win_start = dplyr::lag(ref, default = ref[1] - 14L) - 3L,
+      win_end = ref - 3L
+    )
+  vint <- purrr::pmap(vint_windows, function(ref, win_start, win_end) {
+    snapshots %>%
+      filter(reference_date == ref, location == loc, time_value >= win_start, time_value <= win_end)
+  }) %>% bind_rows()
+
+  main <- ggplot() +
+    geom_line(data = fin, aes(target_end_date, truth), colour = "grey65") +
+    geom_point(data = fin, aes(target_end_date, truth), colour = "grey65", size = 0.7) +
+    geom_ribbon(
+      data = filter(fan, which == "base"),
+      aes(target_end_date, ymin = lo, ymax = hi, fill = which, group = reference_date),
+      alpha = 0.2
+    ) +
+    geom_line(
+      data = filter(fan, which == "calibrated"),
+      aes(target_end_date, lo, colour = which, group = reference_date), linewidth = 0.3
+    ) +
+    geom_line(
+      data = filter(fan, which == "calibrated"),
+      aes(target_end_date, hi, colour = which, group = reference_date), linewidth = 0.3
+    ) +
+    geom_line(data = fan, aes(target_end_date, med, colour = which, group = reference_date)) +
+    geom_line(data = vint, aes(time_value, value), colour = "black") +
+    geom_point(data = vint, aes(time_value, value), colour = "black", size = 0.6) +
+    geom_vline(xintercept = ref_dates - 3L, linetype = "dashed", colour = "grey40", linewidth = 0.3) +
+    scale_fill_manual(values = fan_cols, aesthetics = c("fill", "colour")) +
+    labs(x = NULL, y = "admissions", colour = NULL, fill = NULL) +
+    theme(legend.position = "top")
+
+  eta <- cal$series %>%
+    filter(location == loc, season == !!season, horizon %in% 0:3) %>%
+    # lr is 0 at rounds with no reveal (gaps); blank those rather than plot dips.
+    mutate(lr = if_else(lr > 0, lr, NA_real_)) %>%
+    ggplot(aes(round_date, lr, colour = factor(horizon))) +
+    geom_line(na.rm = TRUE) +
+    geom_point(size = 0.6, na.rm = TRUE) +
+    labs(x = NULL, y = "eta", colour = "horizon") +
+    theme(legend.position = "top")
+
+  title <- paste0(geo_map$abbrev[match(loc, geo_map$location)], " — ", season)
+  cowplot::plot_grid(
+    cowplot::ggdraw() + cowplot::draw_label(title, fontface = "bold"),
+    cowplot::plot_grid(main, eta, ncol = 1, rel_heights = c(3, 1), align = "v", axis = "lr"),
+    ncol = 1, rel_heights = c(0.08, 1)
+  )
+}
+
+# oh_table.R's internals table, generalized to any location/horizon/season.
+oh_table <- function(cal, loc, h, season) {
+  cal$forecasts %>%
+    filter(location == loc, horizon == h, season == !!season, level %in% c(0.05, 0.25, 0.5, 0.75, 0.95)) %>%
+    mutate(level = paste0("q", level)) %>%
+    select(reference_date, level, lr_level, truth, hidden, offset, value_base, value_cal) %>%
+    tidyr::pivot_wider(
+      names_from = level,
+      values_from = c(hidden, offset, value_base, value_cal, lr_level),
+      names_glue = "{level}_{.value}"
+    ) %>%
+    mutate(
+      eta = round(q0.5_lr_level, 3),
+      across(c(truth, matches("hidden|offset|value_base|value_cal")), ~ round(.x))
+    ) %>%
+    select(
+      reference_date, eta, truth,
+      matches("^q.*_hidden$"), matches("^q.*_offset$"),
+      matches("^q.*_value_base$"), matches("^q.*_value_cal$")
+    ) %>%
+    arrange(reference_date)
+}
+
+internals_block <- function(cal, season) {
+  for (i in seq_len(nrow(states))) {
+    loc <- states$location[i]
+    abbrev <- states$abbrev[i]
+    cat(sprintf("\n\n<details><summary>%s internals (h=2)</summary>\n\n", abbrev))
+    print(knitr::kable(oh_table(cal, loc, 2L, season)))
+    cat("\n\n</details>\n\n")
+  }
+}
+```
+
+The whole-season fans plot horizons 0–3 only (dropping −1) and only every
+other round. Blue ribbon and line: base 90% band and median; orange lines:
+calibrated 5%, 50%, 95% quantiles. Black: the NHSN vintage each forecast saw,
+painted over the fortnight before its reference date (dashed); grey: finalized
+truth. The strip below is eta per horizon (blank where a round revealed no
+outcome). Read it as "where do the medians diverge, and does the orange band
+contain the grey truth better than the blue", not round-by-round.
+
+```{r sections, results='asis'}
+for (nm in names(cals)) {
+  cal <- cals[[nm]]
+  cat(sprintf("\n\n# %s\n\n", variant_titles[[nm]]))
+
+  desc <- switch(nm,
+    baseline = "The chosen operating point: lr_mult = 0.03, lr_window = 20, carry, isotonic
+      projection. Offsets update every round including the spring tail and carry
+      across the off-season gap.",
+    off_after = "Rounds from April 1 through June play the base forecast unchanged and take
+      no gradient step; the offset learned through the peak is frozen and carried
+      into the next season rather than decaying toward zero on low-signal spring data.",
+    per_level = "Each of the 23 quantile levels gets its own eta from its own residual
+      history, instead of one eta shared (via the level mean) across all levels.
+      Expect the tails to adapt at a different rate than the median.",
+    geo_pooled = "Eta is computed once per (horizon, round) from per-capita residuals
+      pooled across all 53 locations, then rescaled by each location's population and
+      floored at 0.1 in count space. Eta is not pooled across horizons in any variant --
+      each (location, horizon) series keeps its own. Expect low-count states (VT, WY) to
+      benefit most, since their own residual history is too sparse to size eta well.",
+    seasonal = "lr_window drops to 10 rounds but is padded with a +/-5 week window around
+      the same season-week in earlier seasons, so eta at the start of a ramp is sized by
+      last year's ramp rather than last year's trough. Offsets are reset to zero at the
+      season boundary (with carry, the small early-season eta left last spring's offsets
+      in place for longer)."
+  )
+  cat(desc, "\n\n")
+
+  cat("## Headline\n\n")
+  print(knitr::kable(headline_table(cal)))
+
+  for (season in seasons) {
+    cat(sprintf("\n\n## %s\n\n", season))
+    for (i in seq_len(nrow(states))) {
+      loc <- states$location[i]
+      cat(sprintf("\n\n### %s — %s\n\n", states$abbrev[i], season))
+      print(season_plot(cal, loc, season))
+    }
+  }
+
+  cat("\n\n## Internals\n\n")
+  for (season in seasons) {
+    cat(sprintf("\n\n### %s\n\n", season))
+    internals_block(cal, season)
+  }
+}
+```

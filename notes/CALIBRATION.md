@@ -79,6 +79,13 @@ the central integration design issue.
 
 - `scripts/reports/calibration_qt.Rmd` — the parameter-sweep EDA. Frozen as
   the sweep record; rendered HTML alongside.
+- `scripts/reports/calibration_qt_seasons.Rmd` — whole-season views for five
+  states (CA, TX, OH, VT, WY) × two live seasons, one panel per (state,
+  season): every-other-round fans for h 0–3, the NHSN vintage each round saw
+  painted over its fortnight, finalized truth, and an eta strip; plus
+  collapsible internals tables at h2 (eta, pre-PAVA hidden offset, post-PAVA
+  offset, base, calibrated at 5 levels). Repeated for five method variants
+  (below) with a headline WIS/calibration-error comparison at the top.
 - `scripts/reports/calibration_qt_gallery.Rmd` — fixed operating point. Slim
   headline table (WIS + calibration error per horizon per season), then a
   ranked per-forecast gallery: top-N (location, round) panels ordered by mean
@@ -88,6 +95,36 @@ the central integration design issue.
   delta, and whether truth escaped the base 90% band. Seasons 2024-25 and
   2025-26 only, flu only. A dynamic/paginated app version was considered and
   rejected for now in favor of static top-N HTML.
+
+## Method variants (`calibrate_hub_forecasts()` options; 2026-08-27)
+
+All at the operating point above; WIS change vs base, both live seasons, by
+horizon −1/0/1/2/3:
+
+| variant | option | h−1 | h0 | h1 | h2 | h3 |
+|---|---|---|---|---|---|---|
+| baseline | — | +4.3 | +1.8 | −1.9 | −5.3 | −6.7 |
+| off after April 1 | `off_after = "04-01"` | +4.9 | +1.4 | −1.3 | −2.8 | −3.9 |
+| per-level eta | `lr_args$per_level = TRUE` | +4.2 | +1.8 | −1.3 | −3.4 | −5.4 |
+| geo-pooled eta | `lr_geo_pool = <pop>` | +4.4 | +2.0 | −2.2 | −5.5 | −7.7 |
+| seasonal eta window (carry) | `lr_window = 10, lr_seasonal = list(half_width_weeks = 5)` | +2.9 | +0.1 | −3.0 | −5.5 | −7.5 |
+| seasonal eta window (reset) | same + `season_policy = "reset"` | +3.2 | +1.1 | −2.1 | −4.7 | −7.0 |
+
+- Eta was never pooled across horizons: each (location, horizon) series has its
+  own tracker and its own eta (pooled over the 23 levels and the window).
+- **Switching off after April 1** (play base, no updates, offsets carry to next
+  season) roughly halves the WIS cost at h2/h3 — the spring tail, where
+  peak-tuned additive offsets are out of regime, is where most of the damage
+  was.
+- **Per-level eta** is a modest gain at h ≥ 1: the pooled 0.9 quantile of
+  |residual| is dominated by the outer levels and over-steps the median.
+- **Geo-pooled eta** gives visibly smoother eta trajectories but no WIS gain.
+- **Seasonal window** is worse everywhere on the headline. In the panels its
+  eta at season start is *smaller* than baseline's (last year's same weeks were
+  a slow ramp), so the carried-over spring offsets take longer to unwind.
+  Reset instead of carry recovers some of that (h2 −4.7) but still trails
+  baseline; 2024-25 is fine (+5.7/+2.8/+0.1 at h−1/0/1), 2025-26 is uniformly
+  worse. The notebook's seasonal section now runs the reset variant.
 
 # Roadmap
 

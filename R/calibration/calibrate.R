@@ -65,7 +65,24 @@ hub_series_matrix <- function(series, round_date, n_levels) {
 #'   `"carry"` keeps them, `"reset"` zeroes them, `"shrink"` multiplies by
 #'   `shrink_factor`. Not a free choice: the base forecaster changed between
 #'   seasons, so carrying is a bet that the miscalibration outlived the model.
-#' @param lr,lr_window,projection,nonneg passed to [qt_track()].
+#' @param lr,lr_window,lr_args,projection,nonneg passed to [qt_track()].
+#'   `lr_args = list(per_level = TRUE)` gives each quantile level its own eta.
+#' @param off_after `NULL`, or a `"MM-DD"` string. Rounds whose reference date
+#'   falls on or after this day of the year (and before July) play the base
+#'   forecast and take no gradient steps; the hidden offsets carry unchanged
+#'   into the next season. `"04-01"` switches calibration off for the spring
+#'   tail, where the peak-tuned offsets are out of regime.
+#' @param lr_seasonal `NULL`, or `list(half_width_weeks = 5)`. Pools into the
+#'   eta residual window the rounds of every earlier season that fall within
+#'   `half_width_weeks` of the same point in the season (same calendar date
+#'   shifted by whole 52-week years), so eta at the start of a ramp is sized by
+#'   last year's ramp rather than last year's trough. Typically paired with a
+#'   short `lr_window` (e.g. 10).
+#' @param lr_geo_pool `NULL`, or a tibble of `location`, `population`. Eta is
+#'   then computed once per (horizon, round) from the per-capita residuals of
+#'   all locations over the `lr_window` tail (and `lr_seasonal` extras), and
+#'   handed to each series scaled back to its own counts. The 0.1 floor is
+#'   applied in count space, so small geos are not floored to nothing.
 #' @param progress show a progress bar.
 #' @return list with
 #'   `forecasts` long tibble, one row per (round, horizon, location, level), with
@@ -86,6 +103,9 @@ calibrate_hub_forecasts <- function(
   lr_args = list(),
   projection = c("isotonic", "sort", "none"),
   nonneg = TRUE,
+  off_after = NULL,
+  lr_seasonal = NULL,
+  lr_geo_pool = NULL,
   progress = TRUE
 ) {
   season_policy <- rlang::arg_match(season_policy)
@@ -107,6 +127,18 @@ calibrate_hub_forecasts <- function(
     reset = 0,
     shrink = shrink_factor
   )
+
+  apply <- rep(TRUE, n)
+  if (!is.null(off_after)) {
+    mmdd <- format(round_date, "%m-%d")
+    off <- mmdd >= off_after & mmdd < "07-01"
+    apply[off] <- FALSE
+    update_from[off] <- FALSE
+  }
+
+  lr_extra <- if (!is.null(lr_seasonal)) {
+    hub_seasonal_lr_extra(round_date, lr_seasonal$half_width_weeks %||% 5)
+  }
 
   if (all(!update_from)) {
     cli::cli_abort(
@@ -134,6 +166,20 @@ calibrate_hub_forecasts <- function(
   keys <- keys[ord, ]
   chunks <- chunks[ord]
 
+  # Geo-pooled eta: one per-capita schedule per horizon, computed on the same
+  # observed-window rule qt_track() uses, from the calendar delay alone.
+  pooled_eta <- NULL
+  if (!is.null(lr_geo_pool)) {
+    pop <- stats::setNames(lr_geo_pool$population, lr_geo_pool$location)
+    if (!all(keys$location %in% names(pop))) {
+      cli::cli_abort("{.arg lr_geo_pool} lacks population for some locations.")
+    }
+    pooled_eta <- hub_pooled_eta(
+      chunks, keys, round_date, m, truth_lookup, pop, settle_days,
+      lr_window, lr_extra, lr_args
+    )
+  }
+
   if (progress) cli::cli_progress_bar("tracking", total = nrow(keys))
   per_series <- vector("list", nrow(keys))
   diagnostics <- vector("list", nrow(keys))
@@ -154,11 +200,15 @@ calibrate_hub_forecasts <- function(
     delay <- qt_delay_from_dates(round_date, target_end_date, settle_days)
     delay <- lapply(delay, function(idx) idx[learnable[idx]])
 
+    lr_schedule <- if (!is.null(pooled_eta)) {
+      pmax(0.1, pooled_eta[[as.character(h)]] * pop[[loc]])
+    }
     res <- qt_track(
       Y = Y, Yhat = Yhat, levels = levels, delay = delay,
       lr = lr, lr_window = lr_window, lr_args = lr_args, projection = projection,
       nonneg = nonneg,
-      update_from = update_from, hidden_scale = hidden_scale
+      update_from = update_from, hidden_scale = hidden_scale,
+      apply = apply, lr_extra = lr_extra, lr_schedule = lr_schedule
     )
 
     per_series[[i]] <- tibble(
@@ -170,6 +220,8 @@ calibrate_hub_forecasts <- function(
       value_base = as.vector(Yhat),
       value_cal = as.vector(res$played),
       offset = as.vector(res$offset),
+      hidden = as.vector(res$hidden),
+      lr_level = as.vector(res$lr_levels),
       truth = rep(Y, each = m)
     )
     diagnostics[[i]] <- tibble(
@@ -197,7 +249,8 @@ calibrate_hub_forecasts <- function(
     select(
       "location", "horizon", "reference_date", "target_end_date", "season",
       "season_round", "round_index", "level_index", "level",
-      "value_base", "value_cal", "offset", "truth", "is_burn_in"
+      "value_base", "value_cal", "offset", "hidden", "lr_level", "truth",
+      "is_burn_in"
     )
 
   list(
@@ -205,7 +258,8 @@ calibrate_hub_forecasts <- function(
     rounds = rounds %>% mutate(
       is_burn_in = .data$season %in% burn_in_seasons,
       hidden_scale = hidden_scale,
-      updates = update_from
+      updates = update_from,
+      applies = apply
     ),
     series = bind_rows(diagnostics) %>% left_join(round_meta, by = "round_index")
   )
@@ -342,4 +396,71 @@ hub_rolling_tradeoff <- function(cal, window = 20L, by = character(0), drop_burn
       qloss_cal = mean(.data$roll_loss_cal),
       .groups = "drop"
     )
+}
+
+
+#' Rounds of earlier seasons near the same point in the season, per round.
+#'
+#' Seasons are aligned by shifting the round date back whole 52-week years
+#' (364 days keeps the weekday), so "same point" is the same epi week. Only
+#' earlier seasons are pooled; later ones would be lookahead.
+#' @keywords internal
+hub_seasonal_lr_extra <- function(round_date, half_width_weeks = 5) {
+  n <- length(round_date)
+  hw <- 7L * half_width_weeks
+  lapply(seq_len(n), function(t) {
+    d <- round_date[t]
+    idx <- integer(0)
+    for (k in 1:3) {
+      anchor <- d - 364L * k
+      idx <- c(idx, which(abs(as.numeric(round_date - anchor)) <= hw))
+    }
+    sort(unique(idx[idx < t]))
+  })
+}
+
+
+#' Geo-pooled per-capita eta, one schedule per horizon.
+#'
+#' Reproduces qt_track()'s window rule -- the tail of the revealed rounds, in
+#' reveal order, plus `lr_extra` -- but over the per-capita residuals of every
+#' location at once. Returns eta per 1 capita, unfloored; the caller multiplies
+#' by population and applies the floor in count space.
+#' @keywords internal
+hub_pooled_eta <- function(
+  chunks, keys, round_date, m, truth_lookup, pop, settle_days,
+  lr_window, lr_extra, lr_args
+) {
+  n <- length(round_date)
+  mult <- lr_args$mult %||% 0.1
+  prob <- lr_args$prob %||% 0.9
+  out <- list()
+  for (h in sort(unique(keys$horizon))) {
+    idx <- which(keys$horizon == h)
+    target_end_date <- round_date + 7L * h
+    # m x n x L array of per-capita |residuals|; NA where unlearnable.
+    resid <- array(NA_real_, dim = c(m, n, length(idx)))
+    for (j in seq_along(idx)) {
+      loc <- keys$location[idx[j]]
+      Yhat <- hub_series_matrix(chunks[[idx[j]]], round_date, m)
+      Y <- unname(truth_lookup[paste(loc, target_end_date)])
+      resid[, , j] <- abs(matrix(Y, m, n, byrow = TRUE) - Yhat) / pop[[loc]]
+    }
+    delay <- qt_delay_from_dates(round_date, target_end_date, settle_days)
+    eta <- numeric(n)
+    observed <- integer(0)
+    for (t in seq_len(n)) {
+      observed <- c(observed, delay[[t]])
+      if (length(observed) == 0L) next
+      window <- if (is.finite(lr_window)) utils::tail(observed, lr_window) else observed
+      if (!is.null(lr_extra)) window <- union(window, intersect(lr_extra[[t]], observed))
+      r <- resid[, window, , drop = FALSE]
+      r <- r[!is.na(r)]
+      if (length(r) > 0L) {
+        eta[t] <- mult * stats::quantile(r, prob, names = FALSE, type = 7L)
+      }
+    }
+    out[[as.character(h)]] <- eta
+  }
+  out
 }

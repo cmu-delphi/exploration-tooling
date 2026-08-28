@@ -37,7 +37,9 @@
 #' @param floor,mult,prob heuristic constants. The reference hardcodes
 #'   `0.1, 0.1, 0.9`.
 #' @keywords internal
-qt_learning_rate <- function(lr, residuals, floor = 0.1, mult = 0.1, prob = 0.9) {
+qt_learning_rate <- function(
+  lr, residuals, floor = 0.1, mult = 0.1, prob = 0.9, per_level = FALSE
+) {
   if (is.numeric(lr)) {
     if (length(lr) != 1L || !is.finite(lr) || lr <= 0) {
       cli::cli_abort("A numeric {.arg lr} must be a single positive finite value.")
@@ -46,6 +48,12 @@ qt_learning_rate <- function(lr, residuals, floor = 0.1, mult = 0.1, prob = 0.9)
   }
   if (!identical(lr, "adaptive+")) {
     cli::cli_abort("{.arg lr} must be a positive scalar or {.val adaptive+}.")
+  }
+  if (per_level) {
+    # One eta per quantile level: each level is its own quantile tracker, so
+    # the outer levels' large residuals no longer size the median's step.
+    q <- apply(abs(residuals), 1L, stats::quantile, probs = prob, names = FALSE, type = 7L)
+    return(pmax(floor, mult * q))
   }
   # Pooled across levels and across the time window, matching the reference:
   # one eta per (series, round), not one per quantile level.
@@ -210,12 +218,28 @@ qt_validate_delay <- function(delay, n) {
 #'   Carrying is the aggressive choice -- across FluSight's 20-29 week off-season
 #'   the base forecaster itself changed, so a carried offset is a correction for
 #'   a model that no longer exists.
+#' @param apply logical of length T. `FALSE` at round `t` plays the projected
+#'   base forecast instead of `base + hidden`; the hidden state is untouched and
+#'   keeps carrying. The gradient is still evaluated at what was played, so a
+#'   later step on this round's outcome is descent on the base forecast's
+#'   coverage. Pair with `update_from = FALSE` to switch calibration off
+#'   entirely for a stretch (e.g. a season tail) and resume later.
+#' @param lr_extra `NULL`, or list of length T. `lr_extra[[t]]` are round
+#'   indices whose residuals join the learning-rate pool at round `t` on top of
+#'   the `lr_window` tail, provided they have been revealed by `t`. This is how a
+#'   caller pools the same calendar stretch of earlier seasons into eta.
+#' @param lr_schedule `NULL`, or a positive numeric of length T giving the step
+#'   size to use at each round, overriding `lr`. Lets a caller pool eta across
+#'   series (e.g. per-capita across locations) and hand each series its slice.
 #'
 #' @return list with
 #'   `played` (m x T, the calibrated forecasts),
 #'   `hidden` (m x T, the un-projected offsets),
 #'   `offset` (m x T, `played - Yhat`, the realised total correction),
-#'   `lr` (length T, the step size used at each round; 0 where no update ran),
+#'   `lr` (length T, the step size used at each round; 0 where no update ran;
+#'   the level-mean when `lr_args$per_level = TRUE`),
+#'   `lr_levels` (m x T, the per-level step size; rows identical unless
+#'   `per_level`),
 #'   `gradient` (m x T),
 #'   `n_observed` (length T, how many outcomes had been revealed by each round),
 #'   `delay` (the resolved delay).
@@ -235,7 +259,10 @@ qt_track <- function(
   nonneg = FALSE,
   update_from = NULL,
   hidden_scale = NULL,
-  lr_args = list()
+  lr_args = list(),
+  apply = NULL,
+  lr_extra = NULL,
+  lr_schedule = NULL
 ) {
   projection <- rlang::arg_match(projection)
   eval_grad_at <- rlang::arg_match(eval_grad_at)
@@ -292,6 +319,24 @@ qt_track <- function(
   if (length(hidden_scale) != n || !all(is.finite(hidden_scale))) {
     cli::cli_abort("{.arg hidden_scale} must be a finite numeric of length {n}.")
   }
+  apply <- apply %||% rep(TRUE, n)
+  if (length(apply) != n || !is.logical(apply) || anyNA(apply)) {
+    cli::cli_abort("{.arg apply} must be a non-missing logical of length {n}.")
+  }
+  if (!is.null(lr_extra)) {
+    if (!is.list(lr_extra) || length(lr_extra) != n) {
+      cli::cli_abort("{.arg lr_extra} must be a list of length {n}.")
+    }
+    flat <- unlist(lr_extra, use.names = FALSE)
+    if (length(flat) > 0L && !all(flat %in% seq_len(n))) {
+      cli::cli_abort("{.arg lr_extra} contains indices outside {.code 1:{n}}.")
+    }
+  }
+  if (!is.null(lr_schedule)) {
+    if (length(lr_schedule) != n || !all(is.finite(lr_schedule)) || any(lr_schedule <= 0)) {
+      cli::cli_abort("{.arg lr_schedule} must be a positive finite numeric of length {n}.")
+    }
+  }
 
   delay <- delay %||% lapply(seq_len(n), function(t) t)
   qt_validate_delay(delay, n)
@@ -323,14 +368,19 @@ qt_track <- function(
   played <- matrix(0, nrow = m, ncol = n)
   gradient <- matrix(0, nrow = m, ncol = n)
   lr_used <- numeric(n)
+  lr_levels <- matrix(0, nrow = m, ncol = n)
   n_observed <- integer(n)
 
-  hidden[, 1L] <- init_hidden * hidden_scale[1L]
-  played[, 1L] <- if (!active[1L]) {
-    NA_real_
-  } else {
-    qt_project(hidden[, 1L] + Yhat[, 1L], projection)
+  play <- function(t) {
+    if (!active[t]) {
+      return(NA_real_)
+    }
+    off <- if (apply[t]) hidden[, t] else 0
+    qt_project(off + Yhat[, t], projection)
   }
+
+  hidden[, 1L] <- init_hidden * hidden_scale[1L]
+  played[, 1L] <- play(1L)
 
   # Observed rounds in reveal order; the learning-rate window is the tail of
   # this, so it is "the last k outcomes we saw", not "the last k calendar weeks".
@@ -357,13 +407,21 @@ qt_track <- function(
       } else {
         observed
       }
-      eta <- do.call(
-        qt_learning_rate,
-        c(list(lr, residual[, window, drop = FALSE]), lr_args)
-      )
+      if (!is.null(lr_extra)) {
+        window <- union(window, intersect(lr_extra[[t]], observed))
+      }
+      eta <- if (!is.null(lr_schedule)) {
+        lr_schedule[t]
+      } else {
+        do.call(
+          qt_learning_rate,
+          c(list(lr, residual[, window, drop = FALSE]), lr_args)
+        )
+      }
       # Recorded even during burn-in: watching eta warm up is the point of
       # having a burn-in season at all.
-      lr_used[t] <- eta
+      lr_used[t] <- mean(eta)
+      lr_levels[, t] <- eta
       if (update_from[t]) {
         for (s in delay[[t]]) {
           hidden[, t + 1L] <- hidden[, t + 1L] + eta * gradient[, s]
@@ -371,11 +429,7 @@ qt_track <- function(
       }
     }
     hidden[, t + 1L] <- hidden[, t + 1L] * hidden_scale[t + 1L]
-    played[, t + 1L] <- if (active[t + 1L]) {
-      qt_project(hidden[, t + 1L] + Yhat[, t + 1L], projection)
-    } else {
-      NA_real_
-    }
+    played[, t + 1L] <- play(t + 1L)
   }
   n_observed[n] <- length(c(observed, delay[[n]]))
 
@@ -393,6 +447,7 @@ qt_track <- function(
     hidden = hidden,
     offset = played - Yhat,
     lr = lr_used,
+    lr_levels = lr_levels,
     gradient = gradient,
     n_observed = n_observed,
     delay = delay

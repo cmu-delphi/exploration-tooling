@@ -329,3 +329,61 @@ test_that("offset and played are consistent, and nonneg clamps after projection"
   expect_equal(clamped$hidden, res$hidden)
   expect_equal(clamped$lr, res$lr)
 })
+
+test_that("apply = FALSE plays the base forecast but keeps the hidden state", {
+  fx <- qt_read_fixture("hub_delay2")
+  n <- length(fx$Y)
+  apply <- rep(TRUE, n)
+  apply[30:40] <- FALSE
+  full <- qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay)
+  off <- qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay, apply = apply)
+  expect_equal(off$played[, 30:40], apply(fx$Yhat[, 30:40], 2, qt_project))
+  expect_equal(off$played[, 1:29], full$played[, 1:29])
+  # Hidden keeps evolving through the off stretch: it is not zeroed.
+  expect_false(all(off$hidden[, 40] == 0))
+  expect_error(qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay, apply = apply[-1]), "length")
+})
+
+test_that("lr_extra pools extra revealed rounds into the learning rate", {
+  fx <- qt_read_fixture("small_nodelay")
+  n <- length(fx$Y)
+  m <- length(fx$levels)
+  resid <- abs(matrix(fx$Y, nrow = m, ncol = n, byrow = TRUE) - fx$Yhat)
+  extra <- rep(list(integer(0)), n)
+  extra[[30L]] <- c(1L, 2L, 3L, 100L + n) # the last one is never revealed
+  extra[[31L]] <- 200L + n
+  expect_error(qt_track(fx$Y, fx$Yhat, fx$levels, lr_window = 8, lr_extra = extra), "outside")
+  extra[[30L]] <- c(1L, 2L, 3L)
+  extra[[31L]] <- integer(0)
+  res <- qt_track(fx$Y, fx$Yhat, fx$levels, lr_window = 8, lr_extra = extra)
+  plain <- qt_track(fx$Y, fx$Yhat, fx$levels, lr_window = 8)
+  t <- 30L
+  expect_equal(res$lr[t], max(0.1, 0.1 * stats::quantile(
+    resid[, c((t - 7L):t, 1:3)], 0.9, names = FALSE, type = 7L
+  )))
+  expect_equal(res$lr[t - 1L], plain$lr[t - 1L])
+})
+
+test_that("per-level eta gives each level its own step size", {
+  fx <- qt_read_fixture("small_nodelay")
+  n <- length(fx$Y)
+  m <- length(fx$levels)
+  resid <- abs(matrix(fx$Y, nrow = m, ncol = n, byrow = TRUE) - fx$Yhat)
+  res <- qt_track(fx$Y, fx$Yhat, fx$levels, lr_window = Inf, lr_args = list(per_level = TRUE))
+  t <- 20L
+  expected <- pmax(0.1, 0.1 * apply(resid[, 1:t], 1, stats::quantile, probs = 0.9, names = FALSE, type = 7L))
+  expect_equal(res$lr_levels[, t], expected)
+  expect_equal(res$lr[t], mean(expected))
+  pooled <- qt_track(fx$Y, fx$Yhat, fx$levels, lr_window = Inf)
+  expect_true(all(pooled$lr_levels[, t] == pooled$lr[t]))
+})
+
+test_that("lr_schedule overrides the adaptive learning rate", {
+  fx <- qt_read_fixture("hub_delay2")
+  n <- length(fx$Y)
+  sched <- seq(1, 2, length.out = n)
+  res <- qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay, lr_schedule = sched)
+  used <- res$lr > 0
+  expect_equal(res$lr[used], sched[used])
+  expect_error(qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay, lr_schedule = -sched), "positive")
+})
