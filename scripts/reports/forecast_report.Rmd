@@ -47,28 +47,7 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 # Forecaster Predictions for `r params$disease`:  {.tabset}
 
-## Main quantile
-
-Fan displays 20-80 quantiles for coverage.
-
-
-```{r, fig.height = 60, fig.width = 12, echo=FALSE}
-plot_forecasts(
-  params$forecast_nhsn,
-  params$forecast_date,
-  params$truth_data_nhsn,
-  quantiles = c(0.8),
-  alphas = c(0.7)
-) %>%
-  apply_view_defaults(params$forecast_nhsn, params$truth_data_nhsn, params$forecast_date) %>%
-  suppressMessages() %>%
-  suppressWarnings() %>%
-  ggplotly(tooltip = "text", height = 9000, width = 2000) %>%
-  layout(hoverlabel = list(bgcolor = "white"))
-```
-
-
-## Extreme quantiles
+## NHSN
 
 Fan displays 20-80, 5-95, and 1-99 quantiles.
 
@@ -88,25 +67,7 @@ plot_forecasts(
   layout(hoverlabel = list(bgcolor = "white"))
 ```
 
-## Main quantile NSSP
-Fan displays 20-80 quantiles for coverage.
-
-```{r, fig.height = 60, fig.width = 12, echo=FALSE}
-plot_forecasts(
-  params$forecast_nssp,
-  params$forecast_date,
-  params$truth_data_nssp,
-  quantiles = c(0.8),
-  alphas = c(0.7)
-) %>%
-  apply_view_defaults(params$forecast_nssp, params$truth_data_nssp, params$forecast_date) %>%
-  suppressMessages() %>%
-  suppressWarnings() %>%
-  ggplotly(tooltip = "text", height = 9000, width = 2000) %>%
-  layout(hoverlabel = list(bgcolor = "white"))
-```
-
-## Extreme quantiles NSSP
+## NSSP
 
 Fan displays 20-80, 5-95, and 1-99 quantiles.
 

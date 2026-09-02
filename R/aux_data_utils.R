@@ -710,6 +710,55 @@ get_nhsn_data_archive <- function(disease = c("covid", "flu", "rsv")) {
 }
 
 
+#' Fetch NHSN inpatient bed count and occupancy archives.
+#'
+#' Returns an `epi_archive` with two columns: `inpatient_beds_ew` (total
+#' inpatient beds, count) and `inpatient_beds_occupied_pct_ew` (occupied
+#' inpatient beds, count — misnamed in NHSN; not a percentage), keyed on
+#' `geo_value`, `time_value`, and `version`. Rows where occupied exceeds total
+#' are set to NA as physically impossible data errors.
+#' @export
+get_nhsn_beds_archive <- function() {
+  fetch_nhsn_signal <- function(signal, geo_type) {
+    get_cast_api_data(
+      source = "nhsn",
+      signal = signal,
+      geo_type = geo_type,
+      columns = c("geo_value", "time_value", "value", "version"),
+      report_time_query = glue::glue("<={Sys.Date()}")
+    ) %>%
+      select(geo_value, time_value, version, value) %>%
+      mutate(geo_value = tolower(geo_value), version = as.Date(version)) %>%
+      arrange(geo_value, time_value, version) %>%
+      distinct(geo_value, time_value, version, .keep_all = TRUE)
+  }
+
+  beds <- bind_rows(
+    fetch_nhsn_signal("inpatient_beds_ew", "state"),
+    fetch_nhsn_signal("inpatient_beds_ew", "nation")
+  ) %>%
+    rename(inpatient_beds_ew = value)
+
+  beds_pct <- bind_rows(
+    fetch_nhsn_signal("inpatient_beds_occupied_pct_ew", "state"),
+    fetch_nhsn_signal("inpatient_beds_occupied_pct_ew", "nation")
+  ) %>%
+    rename(inpatient_beds_occupied_pct_ew = value)
+
+  beds %>%
+    full_join(beds_pct, by = c("geo_value", "time_value", "version")) %>%
+    mutate(
+      inpatient_beds_occupied_pct_ew = ifelse(
+        inpatient_beds_occupied_pct_ew > inpatient_beds_ew,
+        NA_real_,
+        inpatient_beds_occupied_pct_ew
+      )
+    ) %>%
+    arrange(geo_value, time_value, version) %>%
+    as_epi_archive(compactify = TRUE)
+}
+
+
 up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv")) {
   disease <- arg_match(disease)
   nssp_national <- get_cast_api_data(

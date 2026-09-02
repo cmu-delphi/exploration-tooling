@@ -394,6 +394,24 @@ create_flu_data_targets <- function() {
         varch
       }
     ),
+    tar_change(
+      name = beds_archive,
+      change = get_s3_object_last_modified("nhsn_data_archive.parquet", "forecasting-team-data"),
+      command = {
+        result <- get_nhsn_beds_archive()$DT %>%
+          as.data.frame() %>%
+          mutate(
+            geo_value = ifelse(geo_value == "usa", "us", geo_value),
+            time_value = time_value - 3L
+          ) %>%
+          mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
+          unnest(cols = "source") %>%
+          as.data.frame() %>%
+          as_epi_archive(other_keys = "source", compactify = TRUE)
+        result$geo_type <- "custom"
+        result
+      }
+    ),
     tar_target(
       name = state_geo_values,
       command = {
@@ -410,6 +428,7 @@ create_flu_data_targets <- function() {
           epix_merge(nwss_coarse, sync = "locf") %>%
           epix_merge(nssp_archive, sync = "locf") %>%
           epix_merge(veteran_state_archive, sync = "locf") %>%
+          epix_merge(beds_archive, sync = "locf") %>%
           extract2("DT") %>%
           # `signal` is leftover epidatr metadata from the nssp/veteran merges, not
           # a key. It is a reserved epiprocess name, so leaving it in makes

@@ -307,6 +307,7 @@ scaled_pop_seasonal_revision <- function(
   scale_method = c("quantile", "std", "none"),
   center_method = c("median", "mean", "none"),
   nonlin_method = c("quart_root", "none"),
+  use_seasonal_window = TRUE,
   seasonal_backward_window = 5 * 7,
   seasonal_forward_window = 3 * 7,
   trainer = epipredict::quantile_reg(method = "fn"),
@@ -332,16 +333,37 @@ scaled_pop_seasonal_revision <- function(
   train_sources <- union(primary_source, unlist(train_sources) %||% primary_source)
 
 
+  # For negative aheads, the most recent anchor week is still being actively
+  # revised. Drop it so the model anchors on the previous (more finalized) week,
+  # effectively adding one week of latency per negative-ahead step.
+  # For negative aheads, the most recent anchor week is still being actively
+  # revised and its lag-0 value directly covers the target week. Drop one week
+  # per negative-ahead step so the model predicts from genuinely prior data.
+  archive_for_design <- epi_data
+  if (ahead < 0L) {
+    n_drop <- as.integer(-ahead / 7L)
+    all_tv <- sort(unique(epi_data$DT$time_value), decreasing = TRUE)
+    drop_tv <- all_tv[seq_len(min(n_drop, length(all_tv)))]
+    archive_for_design$DT <- epi_data$DT[!(time_value %in% drop_tv)]
+  }
+  # epipredict-based forecasters implicitly predict one period beyond the last
+  # observed row. The revision design anchors at max(time_value) directly, so
+  # offset ahead by the gap between versions_end and the last observed
+  # time_value (computed after any row-dropping above) to align target_end_date
+  # with the epipredict convention regardless of data latency.
+  max_tv <- max(archive_for_design$DT$time_value, na.rm = TRUE)
+  ahead_for_design <- ahead + as.integer(epi_data$versions_end - max_tv)
+
   # Revision-aware design: as-of lags for every base column plus the finalized
   # outcome target, then restrict to the genuinely-revised primary source.
   # cache the (ahead-independent) predictor design so a date's aheads, run in
   # separate workers, share one slide via the on-disk cache.
   message(format(epi_data$versions_end), " ahead=", ahead, " building design")
   design <- archive_to_revision_predictors(
-    epi_data,
+    archive_for_design,
     lags = lags,
     cols = base_cols,
-    ahead = ahead,
+    ahead = ahead_for_design,
     target_col = outcome,
     cache_key = "revision_design"
   )
@@ -413,26 +435,30 @@ scaled_pop_seasonal_revision <- function(
     filter(source == primary_source, version == latest_primary_version) %>%
     drop_na(all_of(lag_cols))
 
-  # Seasonal training window: keep training rows whose time_value sits within the
-  # backward/forward window of any year's copy of the forecast anchor's season
-  # week. Centering on the anchor (the last week actually observed), not the
-  # calendar as-of, mirrors bake.step_epi_training_window()'s "last_data_season_week"
-  # and guarantees the window has data even when the outcome lags the as-of date.
-  forecast_season_week <- forecast_rows %>%
-    filter(time_value == max(time_value)) %>%
-    pull(season_week) %>%
-    max()
-  window_dates <- design %>%
-    filter(season_week == forecast_season_week) %>%
-    pull(time_value) %>%
-    unique() %>%
-    map(~ c(.x - seq_len(seasonal_backward_window), .x + 0:(seasonal_forward_window + ahead))) %>%
-    unlist() %>%
-    as.Date() %>%
-    unique()
-  train <- design %>%
-    filter(time_value %in% window_dates) %>%
-    drop_na(all_of(c(lag_cols, target_name)))
+  if (use_seasonal_window) {
+    # Seasonal training window: keep training rows whose time_value sits within the
+    # backward/forward window of any year's copy of the forecast anchor's season
+    # week. Centering on the anchor (the last week actually observed), not the
+    # calendar as-of, mirrors bake.step_epi_training_window()'s "last_data_season_week"
+    # and guarantees the window has data even when the outcome lags the as-of date.
+    forecast_season_week <- forecast_rows %>%
+      filter(time_value == max(time_value)) %>%
+      pull(season_week) %>%
+      max()
+    window_dates <- design %>%
+      filter(season_week == forecast_season_week) %>%
+      pull(time_value) %>%
+      unique() %>%
+      map(~ c(.x - seq_len(seasonal_backward_window), .x + 0:(seasonal_forward_window + ahead))) %>%
+      unlist() %>%
+      as.Date() %>%
+      unique()
+    train <- design %>%
+      filter(time_value %in% window_dates) %>%
+      drop_na(all_of(c(lag_cols, target_name)))
+  } else {
+    train <- design %>% drop_na(all_of(c(lag_cols, target_name)))
+  }
 
   if (!is.null(outlier_n_weeks) && !is.na(outlier_n_weeks)) {
     flagged_versions <- flag_revision_outlier_versions(
@@ -467,7 +493,7 @@ scaled_pop_seasonal_revision <- function(
       geo_value = forecast_rows$geo_value[[ii]],
       source = forecast_rows$source[[ii]],
       forecast_date = epi_data$versions_end,
-      target_end_date = forecast_rows$time_value[[ii]] + ahead,
+      target_end_date = forecast_rows$time_value[[ii]] + ahead_for_design,
       quantile = levels_out,
       value = quantile_mat[ii, ]
     )

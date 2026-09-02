@@ -290,6 +290,43 @@ get_flu_forecaster_params <- function() {
       needs_archive = TRUE,
       outlier_n_weeks = c(NA_integer_, 4L)
     ),
+    # Non-seasonal baseline: same as revision_aware but no season-week window,
+    # training on all historical rows. Gives a clean comparison for the beds variant.
+    revision_aware_no_season = tidyr::expand_grid(
+      forecaster = "scaled_pop_seasonal_revision",
+      trainer = "quantreg_fn",
+      lags = list2(c(0, 7), c(0, 7, 14, 21)),
+      pop_scaling = FALSE,
+      filter_agg_level = "none",
+      scale_method = "none",
+      center_method = "none",
+      nonlin_method = "none",
+      use_seasonal_window = FALSE,
+      train_sources = list2(c("nhsn")),
+      needs_archive = TRUE,
+      outlier_n_weeks = c(NA_integer_, 4L)
+    ),
+    # Beds as revision proxy: only version history from Dec 2024+, so training
+    # rows before that drop out (NA beds lags). Non-seasonal window keeps
+    # everything the beds data does cover in play.
+    revision_aware_beds_no_season = tidyr::expand_grid(
+      forecaster = "scaled_pop_seasonal_revision",
+      trainer = "quantreg_fn",
+      lags = list2(c(0, 7), c(0, 7, 14, 21)),
+      extra_sources = list(
+        "inpatient_beds_ew",
+        c("inpatient_beds_ew", "inpatient_beds_occupied_pct_ew")
+      ),
+      pop_scaling = FALSE,
+      filter_agg_level = "none",
+      scale_method = "none",
+      center_method = "none",
+      nonlin_method = "none",
+      use_seasonal_window = FALSE,
+      train_sources = list2(c("nhsn")),
+      needs_archive = TRUE,
+      outlier_n_weeks = c(NA_integer_, 4L)
+    ),
     climate_linear = bind_rows(
       expand_grid(
         forecaster = "climate_linear_ensembled",

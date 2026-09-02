@@ -172,6 +172,23 @@ g_forecaster_params_grid <- list(
     geo_agg = TRUE,
     filter_sources = list(c("nhsn", "nssp"))
   ),
+  revision_aware = tibble(
+    id = "revision_aware",
+    forecaster = "scaled_pop_seasonal_revision",
+    outcome = "value",
+    trainer = "g_quantreg",
+    lags = list(c(0, 7)),
+    pop_scaling = FALSE,
+    sort_quantiles = TRUE,
+    scale_method = "none",
+    center_method = "none",
+    nonlin_method = "none",
+    seasonal_backward_window = 35L,
+    seasonal_forward_window = 21L,
+    needs_archive = TRUE,
+    ahead_multiplier = 7L,
+    target_date_shift = 3L
+  ),
   # Cheats by always using the latest available data revision (as a limit test).
   seasonal_nssp_cheating = tibble(
     id = "seasonal_nssp_cheating",
@@ -376,8 +393,19 @@ forecast_targets <- tar_map(
         rename(nssp = value) %>%
         filter(source == "nhsn") %>%
         select(-c(source, epiweek, epiyear, season, season_week))
+      # Revision-aware forecasters need the archive; non-revision ones use the
+      # pre-sliced nssp_forecast_data epi_df.
+      nssp_input <- if (needs_archive) {
+        make_forecast_archive_snapshot(
+          nssp_target_archive,
+          forecast_date = forecast_date_int,
+          generation_date = forecast_generation_date_int
+        )
+      } else {
+        nssp_forecast_data
+      }
       run_forecaster(
-        snapshot = nssp_forecast_data, forecaster = forecaster, aheads = aheads * ahead_multiplier,
+        snapshot = nssp_input, forecaster = forecaster, aheads = aheads * ahead_multiplier,
         params = params, id = id,
         target_date_shift = target_date_shift,
         join_extra_data = join_extra_data, extra_data = full_data_modified,
@@ -411,7 +439,15 @@ forecast_targets <- tar_map(
       set.seed(targets::tar_seed_create(
         paste(id, "nhsn", forecast_date_chr, aheads, sep = "/")
       ))
-      snapshot <- full_data
+      snapshot <- if (needs_archive) {
+        make_forecast_archive_snapshot(
+          nhsn_prod_archive,
+          forecast_date = forecast_date_int,
+          generation_date = forecast_generation_date_int
+        )
+      } else {
+        full_data
+      }
       run_forecaster(
         snapshot = snapshot, forecaster = forecaster, aheads = aheads * ahead_multiplier,
         params = params, id = id,

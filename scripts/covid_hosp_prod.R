@@ -159,6 +159,24 @@ g_forecaster_params_grid <- list(
     forecaster = "climatological_model",
     geo_agg = TRUE
   ),
+  revision_aware = tibble(
+    id = "revision_aware",
+    forecaster = "scaled_pop_seasonal_revision",
+    outcome = "value",
+    trainer = "g_quantreg",
+    lags = list(list(c(0, 7, 14, 21), c(0, 7))),
+    extra_sources = "nssp",
+    pop_scaling = FALSE,
+    sort_quantiles = TRUE,
+    scale_method = "none",
+    center_method = "none",
+    nonlin_method = "none",
+    seasonal_backward_window = 35L,
+    seasonal_forward_window = 21L,
+    needs_archive = TRUE,
+    ahead_multiplier = 7L,
+    target_date_shift = 3L
+  ),
   windowed_seasonal_latest = tibble(
     id = "windowed_seasonal_latest",
     forecaster = "scaled_pop_seasonal",
@@ -304,6 +322,19 @@ parameters_and_date_targets <- rlang::list2(
         epix_as_of(min(g_reference_date, nssp_archive_data$versions_end))
     }
   ),
+  # Merged nhsn+nssp archive for the revision-aware forecaster. Strips source
+  # (nhsn_prod_archive has source as an other_key; nssp_archive_data does not),
+  # then merges to add the versioned nssp column as an exogenous predictor.
+  tar_target(
+    name = nhsn_nssp_revision_archive,
+    command = {
+      nhsn_only <- nhsn_prod_archive$DT %>%
+        filter(source == "nhsn") %>%
+        select(-source) %>%
+        as_epi_archive(compactify = TRUE)
+      epix_merge(nhsn_only, nssp_archive_data, sync = "locf")
+    }
+  ),
 )
 
 
@@ -363,8 +394,16 @@ forecast_targets <- tar_map(
       set.seed(targets::tar_seed_create(
         paste(id, "nhsn", forecast_date_chr, aheads, sep = "/")
       ))
-      snapshot <- full_data
-      if (!is.null(min_train_date)) {
+      snapshot <- if (needs_archive) {
+        make_forecast_archive_snapshot(
+          nhsn_nssp_revision_archive,
+          forecast_date = forecast_date_int,
+          generation_date = forecast_generation_date_int
+        )
+      } else {
+        full_data
+      }
+      if (!is.null(min_train_date) && !inherits(snapshot, "epi_archive")) {
         snapshot <- snapshot %>% filter(time_value >= min_train_date)
       }
       run_forecaster(
@@ -392,13 +431,31 @@ forecast_targets <- tar_map(
       full_data_modified <- full_data %>%
         rename(nssp = value) %>%
         select(geo_value, time_value, nssp)
-      snapshot <- nssp_forecast_data
-      if (!is.null(min_train_date)) {
+      # For revision-aware forecasters on the nssp path: nssp_target_archive has
+      # no nssp predictor column (nssp was renamed to value). Strip extra_sources
+      # from params so the forecaster only uses the value column.
+      params_effective <- if (needs_archive) {
+        p <- params[setdiff(names(params), "extra_sources")]
+        if (is.list(p$lags)) p$lags <- p$lags[[1L]]
+        p
+      } else {
+        params
+      }
+      snapshot <- if (needs_archive) {
+        make_forecast_archive_snapshot(
+          nssp_target_archive,
+          forecast_date = forecast_date_int,
+          generation_date = forecast_generation_date_int
+        )
+      } else {
+        nssp_forecast_data
+      }
+      if (!is.null(min_train_date) && !inherits(snapshot, "epi_archive")) {
         snapshot <- snapshot %>% filter(time_value >= min_train_date)
       }
       run_forecaster(
         snapshot = snapshot, forecaster = forecaster, aheads = aheads * ahead_multiplier,
-        params = params, id = id,
+        params = params_effective, id = id,
         target_date_shift = target_date_shift,
         join_extra_data = join_extra_data, extra_data = full_data_modified,
         filter_sources = filter_sources, excluded_geos = excluded_geos,
