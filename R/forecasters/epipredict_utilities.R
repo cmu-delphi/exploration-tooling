@@ -130,6 +130,15 @@ run_workflow_and_format <- function(
     preproc,
     source_value = source_value
   )
+  if (nrow(test_data) == 0L) {
+    return(tibble(
+      geo_value = character(),
+      forecast_date = lubridate::Date(),
+      target_end_date = lubridate::Date(),
+      quantile = numeric(),
+      value = numeric()
+    ))
+  }
   # predict, and filter out those forecasts for less recent days (predict
   # predicts for every day that has enough data)
   pred <- predict(workflow, test_data)

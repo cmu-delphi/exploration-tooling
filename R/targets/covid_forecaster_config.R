@@ -34,50 +34,25 @@ get_covid_forecaster_params <- function() {
     # using exogenous variables
     # NOTE: nwss / nwss_region / va_covid_per_100k are temporarily removed as
     # exogenous sources -- their upstream feeds are retired and will be
-    # reintroduced through new endpoints that aren't wired up yet. Only the live
-    # sources (nssp, google_symptoms) remain; restore the combinations below when
-    # the new endpoints land.
-    scaled_pop_exogenous = bind_rows(
-      # a single exogenous source
-      expand_grid(
-        forecaster = "scaled_pop",
-        trainer = "quantreg",
-        extra_sources = list2("nssp", "google_symptoms"),
-        lags = list2(
-          list2(
-            c(0, 7, 14, 21), # hhs
-            c(0, 7) # exogenous feature
-          ),
-          list2(
-            c(0, 7, 14, 21), # hhs
-            c(0, 7, 14) # exogenous feature
-          )
+    # reintroduced through new endpoints that aren't wired up yet. google_symptoms
+    # is also retired (dataset discontinued). Only nssp remains.
+    scaled_pop_exogenous = expand_grid(
+      forecaster = "scaled_pop",
+      trainer = "quantreg",
+      extra_sources = list2("nssp"),
+      lags = list2(
+        list2(
+          c(0, 7, 14, 21), # hhs
+          c(0, 7) # exogenous feature
         ),
-        pop_scaling = FALSE,
-        scale_method = "quantile",
-        n_training = Inf
+        list2(
+          c(0, 7, 14, 21), # hhs
+          c(0, 7, 14) # exogenous feature
+        )
       ),
-      # both live exogenous sources together
-      expand_grid(
-        forecaster = "scaled_pop",
-        trainer = "quantreg",
-        extra_sources = list2(c("nssp", "google_symptoms")),
-        lags = list2(
-          list2(
-            c(0, 7, 14, 21), # hhs
-            c(0, 7), # nssp
-            c(0, 7) # google_symptoms
-          ),
-          list2(
-            c(0, 7, 14, 21), # hhs
-            c(0, 7), # nssp
-            c(0, 7, 14) # google_symptoms
-          )
-        ),
-        pop_scaling = FALSE,
-        scale_method = "quantile",
-        n_training = Inf
-      )
+      pop_scaling = FALSE,
+      scale_method = "quantile",
+      n_training = Inf
     ),
     scaled_pop_season = tidyr::expand_grid(
       forecaster = "scaled_pop_seasonal",
