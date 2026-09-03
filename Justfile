@@ -225,3 +225,21 @@ calibration-experiments *notebooks:
 [group('exploration')]
 sleepcycle-eda:
     TAR_PROJECT=sleepcycle_eda Rscript -e 'targets::tar_make()'
+
+# ---- TimesFM ----
+
+# See scripts/tsfm/README.md. If R lives in a container, run just inside it (e.g. `distrobox enter rocker -- just tsfm-dump`).
+# Dump the flu prod store's data pool to cache/tsfm for the TimesFM backtest.
+[group('exploration')]
+tsfm-dump:
+    Rscript scripts/tsfm/dump_data_pool.R flu_hosp_prod cache/tsfm
+
+# Run the TimesFM forecaster over the data pool, e.g. `just tsfm-forecast --mode geo_multivariate`.
+[group('exploration')]
+tsfm-forecast *args:
+    uv run scripts/tsfm/timesfm_forecast.py {{args}}
+
+# Render the TimesFM vs R forecasters comparison for a target (default nhsn) into reports/.
+[group('exploration')]
+tsfm-report target="nhsn":
+    Rscript -e "rmarkdown::render('scripts/reports/timesfm_comparison.Rmd', output_file = here::here('reports', 'timesfm_comparison_{{target}}.html'), params = list(target = '{{target}}'))"
