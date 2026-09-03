@@ -134,3 +134,6 @@ load-bearing.
 - Testing focuses on utility functions; forecaster quality is assessed by inspecting results/reports, not unit tests.
 - Formatting via `air` (`air.toml`); lint config in `.lintr`.
 - `_local/` is user-level git-ignored scratch (rg skips it by default).
+
+## Run conventions
+Most runs of explore targets happen on a remote machine, and not locally

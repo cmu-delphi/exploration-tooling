@@ -152,7 +152,7 @@ get_oversized_test_data <- function(full_data, test_data_interval, preproc, sour
     filter(role == "pre-predictor") %>%
     pull(variable)
   max_time_value <- full_data %>%
-    na.omit(non_na_indicators) %>%
+    filter(if_all(all_of(non_na_indicators), Negate(is.na))) %>%
     pull(time_value) %>%
     max()
   if ("source" %in% names(full_data)) {
