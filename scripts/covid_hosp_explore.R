@@ -48,7 +48,6 @@ parameter_targets <- create_parameter_targets()
 # data_targets creates "internal" targets:
 # - nhsn_archive
 # - nssp_archive
-# - google_symptoms_archive
 # - nwss_coarse
 # - hhs_region
 # - validate_joined_archive_data

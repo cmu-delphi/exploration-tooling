@@ -156,77 +156,7 @@ create_flu_data_targets <- function() {
       }
     ),
     # TODO: Share code with covid?
-    tar_target(
-      name = google_symptoms_archive,
-      command = {
-        used_searches <- c(1, 3, 4)
-        # not using actual versions here because the only revision behavior is the
-        # source going down completely, which means we're actually just comparing
-        # with the version without this source
-        all_of_them <- lapply(used_searches, \(search_name) {
-          google_symptoms_state_archive <- retry_fn(
-            max_attempts = 10,
-            wait_seconds = 1,
-            fn = pub_covidcast,
-            source = "google-symptoms",
-            signals = glue::glue("s0{search_name}_smoothed_search"),
-            time_type = "day",
-            geo_type = "state",
-            geo_values = "*",
-            fetch_args = g_fetch_args
-          )
-          google_symptoms_hhs_archive <- retry_fn(
-            max_attempts = 10,
-            wait_seconds = 1,
-            fn = pub_covidcast,
-            source = "google-symptoms",
-            signals = glue::glue("s0{search_name}_smoothed_search"),
-            time_type = "day",
-            geo_type = "hhs",
-            geo_values = "*",
-            fetch_args = g_fetch_args
-          )
-          google_symptoms_archive_min <- google_symptoms_state_archive %>%
-            append_us_aggregate("value") %>%
-            bind_rows(google_symptoms_hhs_archive) %>%
-            select(geo_value, time_value, value) %>%
-            daily_to_weekly() %>%
-            mutate(version = time_value) %>%
-            mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
-            unnest(cols = "source") %>%
-            filter(!is.na(value)) %>%
-            relocate(source, geo_value, time_value, version, value) %>%
-            # Always convert to data.frame after dplyr operations on data.table.
-            # https://github.com/cmu-delphi/epiprocess/issues/618
-            as.data.frame() %>%
-            as_epi_archive(other_keys = "source", compactify = TRUE)
-        })
-        all_of_them[[1]]$DT %<>% rename(google_symptoms_1_cough = value)
-        all_of_them[[2]]$DT %<>% rename(google_symptoms_3_fever = value)
-        all_of_them[[3]]$DT %<>% rename(google_symptoms_4_bronchitis = value)
-        google_symptoms_archive <- epix_merge(all_of_them[[1]], all_of_them[[2]]) %>% epix_merge(all_of_them[[3]])
-        pre_pipeline <- google_symptoms_archive %>% epix_as_of(as.Date("2023-10-04"))
-        colnames <- c("google_symptoms_1_cough", "google_symptoms_3_fever", "google_symptoms_4_bronchitis")
-        for (colname in colnames) {
-          learned_params <- calculate_whitening_params(pre_pipeline, colname = colname)
-          google_symptoms_archive$DT %<>%
-            data_whitening(colname = colname, learned_params, join_cols = c("geo_value", "source"))
-        }
-        google_symptoms_archive <- google_symptoms_archive$DT %>%
-          mutate(
-            google_symptoms = ifelse(is.na(google_symptoms_1_cough), 0, google_symptoms_1_cough) +
-              ifelse(is.na(google_symptoms_3_fever), 0, google_symptoms_3_fever) +
-              ifelse(is.na(google_symptoms_4_bronchitis), 0, google_symptoms_4_bronchitis)
-          ) %>%
-          # Always convert to data.frame after dplyr operations on data.table
-          # https://github.com/cmu-delphi/epiprocess/issues/618
-          as.data.frame() %>%
-          as_epi_archive(other_keys = "source", compactify = TRUE)
-        google_symptoms_archive$geo_type <- "custom"
-        google_symptoms_archive
-      }
-    ),
-    # TODO: Share code with covid?
+    # see git history for google symptoms
     # TODO: Geo code share?
     tar_target(
       name = nwss_coarse,
@@ -424,7 +354,7 @@ create_flu_data_targets <- function() {
       name = joined_archive_data,
       command = {
         joined_archive_data <- flusion_data_archive %>%
-          epix_merge(google_symptoms_archive, sync = "locf") %>%
+          # see git history for google symptoms
           epix_merge(nwss_coarse, sync = "locf") %>%
           epix_merge(nssp_archive, sync = "locf") %>%
           epix_merge(veteran_state_archive, sync = "locf") %>%

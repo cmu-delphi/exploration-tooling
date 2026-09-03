@@ -97,84 +97,7 @@ create_covid_data_targets <- function() {
           as_epi_archive(compactify = TRUE)
       }
     ),
-    tar_target(
-      name = google_symptoms_archive,
-      command = {
-        used_searches <- c(4, 5)
-        # not using actual versions here because the only revision behavior is the
-        # source going down completely, which means we're actually just comparing
-        # with the version without this source
-        all_of_them <- lapply(used_searches, \(search_name) {
-          google_symptoms_state_archive <- retry_fn(
-            max_attempts = 10,
-            wait_seconds = 1,
-            fn = pub_covidcast,
-            source = "google-symptoms",
-            signals = glue::glue("s0{search_name}_smoothed_search"),
-            time_type = "day",
-            geo_type = "state",
-            geo_values = "*",
-            fetch_args = g_fetch_args
-          )
-          google_symptoms_hhs_archive <- retry_fn(
-            max_attempts = 10,
-            wait_seconds = 1,
-            fn = pub_covidcast,
-            source = "google-symptoms",
-            signals = glue::glue("s0{search_name}_smoothed_search"),
-            time_type = "day",
-            geo_type = "hhs",
-            geo_values = "*",
-            fetch_args = g_fetch_args
-          )
-          google_symptoms_archive_min <- google_symptoms_state_archive %>%
-            bind_rows(google_symptoms_hhs_archive) %>%
-            select(geo_value, time_value, value) %>%
-            daily_to_weekly() %>%
-            mutate(version = time_value) %>%
-            filter(!is.na(value)) %>%
-            relocate(geo_value, time_value, version, value) %>%
-            # Always convert to data.frame after dplyr operations on data.table.
-            # https://github.com/cmu-delphi/epiprocess/issues/618
-            as.data.frame() %>%
-            as_epi_archive(compactify = TRUE)
-        })
-        all_of_them[[1]] <- all_of_them[[1]]$DT %>%
-          rename(google_symptoms_4_bronchitis = value) %>%
-          # Always convert to data.frame after dplyr operations on data.table.
-          # https://github.com/cmu-delphi/epiprocess/issues/618
-          as.data.frame() %>%
-          as_epi_archive(compactify = TRUE)
-        all_of_them[[2]] <- all_of_them[[2]]$DT %>%
-          rename(google_symptoms_5_ageusia = value) %>%
-          # Always convert to data.frame after dplyr operations on data.table.
-          # https://github.com/cmu-delphi/epiprocess/issues/618
-          as.data.frame() %>%
-          as_epi_archive(compactify = TRUE)
-        google_symptoms_archive <- epix_merge(all_of_them[[1]], all_of_them[[2]])
-        pre_pipeline <- google_symptoms_archive %>%
-          epix_as_of(as.Date("2023-10-04")) %>%
-          mutate(source = "none")
-        # Google Symptoms has two signals that have different and unknown scales,
-        # so we need to whiten them.
-        colnames <- c("google_symptoms_4_bronchitis", "google_symptoms_5_ageusia")
-        for (colname in colnames) {
-          learned_params <- calculate_whitening_params(pre_pipeline, colname = colname)
-          google_symptoms_archive$DT %<>% data_whitening(colname = colname, learned_params, join_cols = "geo_value")
-        }
-        # Sum the two signals.
-        google_symptoms_archive$DT %>%
-          mutate(
-            google_symptoms = ifelse(is.na(google_symptoms_4_bronchitis), 0, google_symptoms_4_bronchitis) +
-              ifelse(is.na(google_symptoms_5_ageusia), 0, google_symptoms_5_ageusia)
-          ) %>%
-          select(-starts_with("source")) %>%
-          # Always convert to data.frame after dplyr operations on data.table
-          # https://github.com/cmu-delphi/epiprocess/issues/618
-          as.data.frame() %>%
-          as_epi_archive(compactify = TRUE)
-      }
-    ),
+    # see git history for the google symptoms target
     tar_target(
       name = nwss_coarse,
       command = {
@@ -322,8 +245,7 @@ create_covid_data_targets <- function() {
         joined_archive_data$geo_type <- "custom"
         joined_archive_data %<>% epix_merge(nssp_archive, sync = "locf")
         joined_archive_data$geo_type <- "custom"
-        joined_archive_data %<>% epix_merge(google_symptoms_archive, sync = "locf")
-        joined_archive_data$geo_type <- "custom"
+        # see git history for google_symptoms
         joined_archive_data %<>% epix_merge(veteran_state_archive, sync = "locf")
         joined_archive_data <- joined_archive_data$DT %>%
           filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% g_insufficient_data_geos)) %>%
