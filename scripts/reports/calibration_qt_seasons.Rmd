@@ -1,5 +1,5 @@
 ---
-title: MultiQT calibration — whole-season views of five states, across method variants
+title: MultiQT calibration — whole-season views of CA, across method variants
 date: "`r format(Sys.time(), '%d %B %Y')`"
 output:
   html_document:
@@ -30,11 +30,12 @@ ggplot2::theme_set(ggplot2::theme_bw())
 ```
 
 This notebook takes the operating point chosen in `notes/CALIBRATION.md`
-(`lr_mult = 0.03`, `lr_window = 20`, carry, burn-in 2023-24) and looks at five
-states across whole seasons rather than one panel at a time
-(`calibration_qt_gallery.Rmd` has the per-forecast gallery view). Five method
-variants are compared: the baseline, turning calibration off after April 1,
-per-level eta, geo-pooled eta, and a seasonal eta window.
+(`lr_mult = 0.03`, `lr_window = 20`, carry, burn-in 2023-24) and looks at one
+state (CA) across whole seasons rather than one panel at a time
+(`calibration_qt_gallery.Rmd` has the per-forecast gallery view), to understand
+the method's behavior in depth before widening again. Method variants compared:
+the baseline, turning calibration off after April 1 or March 1, per-level eta,
+geo-pooled eta, and a seasonal eta window.
 
 ```{r load, cache=TRUE}
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))
@@ -69,10 +70,7 @@ snapshots <- purrr::map(live_rounds$round_date, function(rd) {
     transmute(reference_date = rd, location, time_value, value)
 }) %>% bind_rows()
 
-states <- tibble(
-  location = c("06", "48", "39", "50", "56"),
-  abbrev = c("CA", "TX", "OH", "VT", "WY")
-)
+states <- tibble(location = "06", abbrev = "CA")
 seasons <- c("2024-2025", "2025-2026")
 ```
 
@@ -85,6 +83,7 @@ base_args <- list(
 variant_args <- list(
   baseline = list(),
   off_after = list(off_after = "04-01"),
+  off_march = list(off_after = "03-01"),
   per_level = list(lr_args = list(mult = params$lr_mult, per_level = TRUE)),
   geo_pooled = list(lr_geo_pool = pop),
   seasonal = list(lr_window = 10, lr_seasonal = list(half_width_weeks = 5), season_policy = "reset")
@@ -92,6 +91,7 @@ variant_args <- list(
 variant_titles <- c(
   baseline = "Baseline",
   off_after = "Calibration off after April 1",
+  off_march = "Calibration off after March 1",
   per_level = "Per-level eta",
   geo_pooled = "Geo-pooled eta",
   seasonal = "Seasonal eta window + reset"
@@ -156,10 +156,10 @@ season_plot <- function(cal, loc, season) {
     filter(location == loc, target_end_date >= min(ref_dates) - 21L, target_end_date <= max(ref_dates) + 28L)
 
   fan <- cal$forecasts %>%
-    filter(location == loc, reference_date %in% ref_dates, horizon %in% 0:3, level %in% c(0.05, 0.5, 0.95)) %>%
+    filter(location == loc, reference_date %in% ref_dates, horizon %in% 0:3, level %in% c(0.1, 0.5, 0.9)) %>%
     mutate(
       target_end_date = reference_date + 7L * horizon,
-      lvl = c(`0.05` = "lo", `0.5` = "med", `0.95` = "hi")[as.character(level)]
+      lvl = c(`0.1` = "lo", `0.5` = "med", `0.9` = "hi")[as.character(level)]
     ) %>%
     select(reference_date, target_end_date, lvl, base = value_base, calibrated = value_cal) %>%
     tidyr::pivot_longer(c(base, calibrated), names_to = "which") %>%
@@ -193,7 +193,10 @@ season_plot <- function(cal, loc, season) {
       data = filter(fan, which == "calibrated"),
       aes(target_end_date, hi, colour = which, group = reference_date), linewidth = 0.3
     ) +
-    geom_line(data = fan, aes(target_end_date, med, colour = which, group = reference_date)) +
+    geom_line(
+      data = fan,
+      aes(target_end_date, med, colour = which, group = interaction(reference_date, which))
+    ) +
     geom_line(data = vint, aes(time_value, value), colour = "black") +
     geom_point(data = vint, aes(time_value, value), colour = "black", size = 0.6) +
     geom_vline(xintercept = ref_dates - 3L, linetype = "dashed", colour = "grey40", linewidth = 0.3) +
@@ -254,8 +257,8 @@ internals_block <- function(cal, season) {
 ```
 
 The whole-season fans plot horizons 0–3 only (dropping −1) and only every
-other round. Blue ribbon and line: base 90% band and median; orange lines:
-calibrated 5%, 50%, 95% quantiles. Black: the NHSN vintage each forecast saw,
+other round. Blue ribbon and line: base 80% band and median; orange lines:
+calibrated 10%, 50%, 90% quantiles. Black: the NHSN vintage each forecast saw,
 painted over the fortnight before its reference date (dashed); grey: finalized
 truth. The strip below is eta per horizon (blank where a round revealed no
 outcome). Read it as "where do the medians diverge, and does the orange band
@@ -273,6 +276,8 @@ for (nm in names(cals)) {
     off_after = "Rounds from April 1 through June play the base forecast unchanged and take
       no gradient step; the offset learned through the peak is frozen and carried
       into the next season rather than decaying toward zero on low-signal spring data.",
+    off_march = "Same switch-off as above but from March 1: CA was still being punished in
+      April under the April-1 rule, so test whether the out-of-regime tail starts earlier.",
     per_level = "Each of the 23 quantile levels gets its own eta from its own residual
       history, instead of one eta shared (via the level mean) across all levels.
       Expect the tails to adapt at a different rate than the median.",

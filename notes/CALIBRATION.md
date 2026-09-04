@@ -79,13 +79,14 @@ the central integration design issue.
 
 - `scripts/reports/calibration_qt.Rmd` — the parameter-sweep EDA. Frozen as
   the sweep record; rendered HTML alongside.
-- `scripts/reports/calibration_qt_seasons.Rmd` — whole-season views for five
-  states (CA, TX, OH, VT, WY) × two live seasons, one panel per (state,
-  season): every-other-round fans for h 0–3, the NHSN vintage each round saw
-  painted over its fortnight, finalized truth, and an eta strip; plus
-  collapsible internals tables at h2 (eta, pre-PAVA hidden offset, post-PAVA
-  offset, base, calibrated at 5 levels). Repeated for five method variants
-  (below) with a headline WIS/calibration-error comparison at the top.
+- `scripts/reports/calibration_qt_seasons.Rmd` — whole-season views, condensed
+  to CA only (was five states) to understand one series in depth × two live
+  seasons, one panel per season: every-other-round fans (80% band) for h 0–3,
+  the NHSN vintage each round saw painted over its fortnight, finalized truth,
+  and an eta strip; plus collapsible internals tables at h2 (eta, pre-PAVA
+  hidden offset, post-PAVA offset, base, calibrated at 5 levels). Repeated for
+  six method variants (the five below plus off-after-March-1) with a headline
+  WIS/calibration-error comparison at the top.
 - `scripts/reports/calibration_qt_gallery.Rmd` — fixed operating point. Slim
   headline table (WIS + calibration error per horizon per season), then a
   ranked per-forecast gallery: top-N (location, round) panels ordered by mean
@@ -105,6 +106,7 @@ horizon −1/0/1/2/3:
 |---|---|---|---|---|---|---|
 | baseline | — | +4.3 | +1.8 | −1.9 | −5.3 | −6.7 |
 | off after April 1 | `off_after = "04-01"` | +4.9 | +1.4 | −1.3 | −2.8 | −3.9 |
+| off after March 1 | `off_after = "03-01"` | +4.5 | +2.0 | +0.4 | 0.0 | +0.2 |
 | per-level eta | `lr_args$per_level = TRUE` | +4.2 | +1.8 | −1.3 | −3.4 | −5.4 |
 | geo-pooled eta | `lr_geo_pool = <pop>` | +4.4 | +2.0 | −2.2 | −5.5 | −7.7 |
 | seasonal eta window (carry) | `lr_window = 10, lr_seasonal = list(half_width_weeks = 5)` | +2.9 | +0.1 | −3.0 | −5.5 | −7.5 |
@@ -116,6 +118,10 @@ horizon −1/0/1/2/3:
   season) roughly halves the WIS cost at h2/h3 — the spring tail, where
   peak-tuned additive offsets are out of regime, is where most of the damage
   was.
+- **Switching off after March 1 removes the WIS cost entirely** (h1–h3 within
+  ±0.4 of base, h−1/h0 still positive) — the out-of-regime tail starts around
+  March, not April. First variant that is WIS-neutral-or-better at every
+  horizon.
 - **Per-level eta** is a modest gain at h ≥ 1: the pooled 0.9 quantile of
   |residual| is dominated by the outer levels and over-steps the median.
 - **Geo-pooled eta** gives visibly smoother eta trajectories but no WIS gain.
