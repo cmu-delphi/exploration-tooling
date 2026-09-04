@@ -34,8 +34,8 @@ This notebook takes the operating point chosen in `notes/CALIBRATION.md`
 state (CA) across whole seasons rather than one panel at a time
 (`calibration_qt_gallery.Rmd` has the per-forecast gallery view), to understand
 the method's behavior in depth before widening again. Method variants compared:
-the baseline, turning calibration off after April 1 or March 1, per-level eta,
-geo-pooled eta, and a seasonal eta window.
+the baseline, turning calibration off after March 1 or February 15, per-level
+eta, geo-pooled eta, and a seasonal eta window.
 
 ```{r load, cache=TRUE}
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))
@@ -82,16 +82,16 @@ base_args <- list(
 )
 variant_args <- list(
   baseline = list(),
-  off_after = list(off_after = "04-01"),
   off_march = list(off_after = "03-01"),
+  off_feb = list(off_after = "02-15"),
   per_level = list(lr_args = list(mult = params$lr_mult, per_level = TRUE)),
   geo_pooled = list(lr_geo_pool = pop),
   seasonal = list(lr_window = 10, lr_seasonal = list(half_width_weeks = 5), season_policy = "reset")
 )
 variant_titles <- c(
   baseline = "Baseline",
-  off_after = "Calibration off after April 1",
   off_march = "Calibration off after March 1",
+  off_feb = "Calibration off after February 15",
   per_level = "Per-level eta",
   geo_pooled = "Geo-pooled eta",
   seasonal = "Seasonal eta window + reset"
@@ -273,11 +273,12 @@ for (nm in names(cals)) {
     baseline = "The chosen operating point: lr_mult = 0.03, lr_window = 20, carry, isotonic
       projection. Offsets update every round including the spring tail and carry
       across the off-season gap.",
-    off_after = "Rounds from April 1 through June play the base forecast unchanged and take
-      no gradient step; the offset learned through the peak is frozen and carried
-      into the next season rather than decaying toward zero on low-signal spring data.",
-    off_march = "Same switch-off as above but from March 1: CA was still being punished in
-      April under the April-1 rule, so test whether the out-of-regime tail starts earlier.",
+    off_march = "Rounds from March 1 through June play the base forecast unchanged and take
+      no gradient step; the offset learned through the peak is frozen and carried into the
+      next season rather than decaying toward zero on low-signal spring data. First variant
+      that was WIS-neutral-or-better at every horizon (April 1 still paid at h1-h3).",
+    off_feb = "Same switch-off from February 15: does cutting even earlier start costing
+      calibration error at the peak, or is the post-peak descent already out of regime?",
     per_level = "Each of the 23 quantile levels gets its own eta from its own residual
       history, instead of one eta shared (via the level mean) across all levels.
       Expect the tails to adapt at a different rate than the median.",
