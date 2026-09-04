@@ -85,8 +85,9 @@ the central integration design issue.
   the NHSN vintage each round saw painted over its fortnight, finalized truth,
   and an eta strip; plus collapsible internals tables at h2 (eta, pre-PAVA
   hidden offset, post-PAVA offset, base, calibrated at 5 levels). Repeated for
-  six method variants (the five below plus off-after-March-1) with a headline
-  WIS/calibration-error comparison at the top.
+  six method variants (baseline, off after March 1 / February 15, per-level
+  eta, geo-pooled eta, seasonal window) with a headline WIS/calibration-error
+  comparison at the top.
 - `scripts/reports/calibration_qt_gallery.Rmd` — fixed operating point. Slim
   headline table (WIS + calibration error per horizon per season), then a
   ranked per-forecast gallery: top-N (location, round) panels ordered by mean
@@ -107,6 +108,7 @@ horizon −1/0/1/2/3:
 | baseline | — | +4.3 | +1.8 | −1.9 | −5.3 | −6.7 |
 | off after April 1 | `off_after = "04-01"` | +4.9 | +1.4 | −1.3 | −2.8 | −3.9 |
 | off after March 1 | `off_after = "03-01"` | +4.5 | +2.0 | +0.4 | 0.0 | +0.2 |
+| off after February 15 | `off_after = "02-15"` | +3.0 | +2.5 | +1.3 | +0.8 | +0.9 |
 | per-level eta | `lr_args$per_level = TRUE` | +4.2 | +1.8 | −1.3 | −3.4 | −5.4 |
 | geo-pooled eta | `lr_geo_pool = <pop>` | +4.4 | +2.0 | −2.2 | −5.5 | −7.7 |
 | seasonal eta window (carry) | `lr_window = 10, lr_seasonal = list(half_width_weeks = 5)` | +2.9 | +0.1 | −3.0 | −5.5 | −7.5 |
@@ -122,6 +124,10 @@ horizon −1/0/1/2/3:
   ±0.4 of base, h−1/h0 still positive) — the out-of-regime tail starts around
   March, not April. First variant that is WIS-neutral-or-better at every
   horizon.
+- **February 15 is better still at h0–h3** (+2.5/+1.3/+0.8/+0.9,
+  WIS-*positive* everywhere) at the cost of ~1.5 points at h−1 vs March 1 —
+  the post-peak descent is already out of regime, not just the spring tail.
+  The notebook now runs the March-1 and Feb-15 cutoffs (April 1 dropped).
 - **Per-level eta** is a modest gain at h ≥ 1: the pooled 0.9 quantile of
   |residual| is dominated by the outer levels and over-steps the median.
 - **Geo-pooled eta** gives visibly smoother eta trajectories but no WIS gain.
