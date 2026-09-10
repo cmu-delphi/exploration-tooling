@@ -164,7 +164,7 @@ g_forecaster_params_grid <- list(
     forecaster = "scaled_pop_seasonal_revision",
     outcome = "value",
     trainer = "g_quantreg",
-    lags = list(list(c(0, 7, 14, 21), c(0, 7))),
+    lags = list(list(c(0, 7, 14), c(0, 7))),
     extra_sources = "nssp",
     pop_scaling = FALSE,
     sort_quantiles = TRUE,
