@@ -166,7 +166,7 @@ g_forecaster_params_grid <- list(
     trainer = "g_quantreg",
     lags = list(list(c(0, 7, 14), c(0, 7))),
     extra_sources = "nssp",
-    pop_scaling = FALSE,
+    pop_scaling = TRUE,
     sort_quantiles = TRUE,
     scale_method = "none",
     center_method = "none",
@@ -500,10 +500,13 @@ g_ensemble_specs <- list(
     id = "ensemble_mix",
     method = "weighted",
     components = list(
-      nhsn = c("windowed_seasonal", "windowed_seasonal_extra_sources"),
+      nhsn = c("windowed_seasonal", "windowed_seasonal_extra_sources", "revision_aware"),
       nssp = c("windowed_seasonal", "windowed_seasonal_extra_sources")
     ),
     drop_negative_aheads = list(nhsn = TRUE, nssp = FALSE),
+    # Restrict revision_aware to aheads -1 (day offset -4) and 0 (day offset +3).
+    # drop_negative_aheads is not applied to components listed here.
+    component_ahead_days = list(nhsn = list(revision_aware = c(-4L, 3L))),
     apply_geo_exclusions = FALSE,
     sort_quantiles = FALSE
   )

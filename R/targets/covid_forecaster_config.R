@@ -98,7 +98,7 @@ get_covid_forecaster_params <- function() {
       trainer = "quantreg_fn",
       lags = list2(c(0, 7)),
       extra_sources = list("nssp"),
-      pop_scaling = FALSE,
+      pop_scaling = TRUE,
       scale_method = "none",
       center_method = "none",
       nonlin_method = "none",

@@ -178,7 +178,7 @@ g_forecaster_params_grid <- list(
     outcome = "value",
     trainer = "g_quantreg",
     lags = list(c(0, 7)),
-    pop_scaling = FALSE,
+    pop_scaling = TRUE,
     sort_quantiles = TRUE,
     scale_method = "none",
     center_method = "none",

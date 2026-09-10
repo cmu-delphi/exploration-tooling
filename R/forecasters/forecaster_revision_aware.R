@@ -244,6 +244,59 @@ flag_revision_outlier_versions <- function(
     select(geo_value, version)
 }
 
+#' Empirical finalization lag at a given coverage level.
+#'
+#' Returns the minimum lag (weeks, measured from time_value) such that at least
+#' `coverage` of (geo, time_value) pairs have their last >convergence_threshold
+#' revision within that lag. Used to drop under-finalized training targets from
+#' the revision-aware forecaster.
+#'
+#' Only time_values >= first release date are included so historical backfill
+#' rows (pre-NHSN) are excluded. The initial release version itself is excluded
+#' from the revision history.
+#'
+#' @param archive epi_archive used as-is (before any weekday or source filter).
+#' @param outcome name of the outcome column.
+#' @param convergence_threshold fractional deviation from final that counts as
+#'   not yet converged (default 0.05).
+#' @param coverage target coverage level (default 0.95).
+#' @param min_final_value pairs with |final_value| below this are excluded.
+#' @return a single numeric: the lag in weeks at the given coverage level.
+#' @keywords internal
+compute_finalization_lag_weeks <- function(
+  archive,
+  outcome,
+  convergence_threshold = 0.05,
+  coverage = 0.95,
+  min_final_value = 10L
+) {
+  arch_dt <- as_tibble(data.table::as.data.table(archive$DT)) %>%
+    filter(!is.na(.data[[outcome]]))
+  if (nrow(arch_dt) == 0L) {
+    return(0)
+  }
+  first_release <- min(arch_dt$version)
+  arch_dt %>%
+    filter(version > first_release, time_value >= first_release) %>%
+    group_by(geo_value, time_value) %>%
+    mutate(
+      final_value  = .data[[outcome]][which.max(version)],
+      lag_weeks    = as.numeric(version - time_value) / 7,
+      revision_pct = abs(.data[[outcome]] - final_value) / (abs(final_value) + 1e-6)
+    ) %>%
+    filter(abs(final_value) >= min_final_value) %>%
+    summarise(
+      convergence_wks = {
+        unsettled <- lag_weeks[revision_pct > convergence_threshold]
+        if (length(unsettled) == 0L) 0 else max(unsettled)
+      },
+      .groups = "drop"
+    ) %>%
+    pull(convergence_wks) %>%
+    quantile(probs = coverage, na.rm = TRUE) %>%
+    unname()
+}
+
 #' Scaled pop seasonal, revision-aware
 #'
 #' A variant of [scaled_pop_seasonal] that is aware of data revisions. Instead of
@@ -317,6 +370,7 @@ scaled_pop_seasonal_revision <- function(
   outlier_threshold = 0.10,
   outlier_min_value = 30,
   outlier_min_obs = 5L,
+  return_fit = FALSE,
   ...
 ) {
   scale_method <- arg_match(scale_method)
@@ -346,11 +400,22 @@ scaled_pop_seasonal_revision <- function(
     drop_tv <- all_tv[seq_len(min(n_drop, length(all_tv)))]
     archive_for_design$DT <- epi_data$DT[!(time_value %in% drop_tv)]
   }
-  # epipredict-based forecasters implicitly predict one period beyond the last
-  # observed row. The revision design anchors at max(time_value) directly, so
-  # offset ahead by the gap between versions_end and the last observed
-  # time_value (computed after any row-dropping above) to align target_end_date
-  # with the epipredict convention regardless of data latency.
+  # Restrict training versions to the same weekday as versions_end (Wednesday).
+  # NHSN releases on Fridays. Friday vintages have a completely
+  # different lag-0 distribution than the Wednesday vintages the forecaster
+  # actually predicts from, so mixing them into training degrades fit.
+  forecast_wday <- lubridate::wday(epi_data$versions_end)
+  archive_for_design$DT <- archive_for_design$DT[
+    lubridate::wday(version) == forecast_wday
+  ]
+  # `ahead_for_design`: the offset added to each training anchor to compute the
+  # output `target_end_date`. The revision design anchors at max(time_value)
+  # directly, so we add the gap between versions_end and max_tv so that
+  # `anchor + ahead_for_design = versions_end + ahead`, matching the epipredict
+  # "one period beyond the last observed row" convention for the hub submission.
+  # NOTE: this is NOT passed to archive_to_revision_predictors -- that lookup
+  # must use the plain `ahead` (always a multiple of 7) so the target query
+  # lands on a Saturday that actually exists in the NHSN archive.
   max_tv <- max(archive_for_design$DT$time_value, na.rm = TRUE)
   ahead_for_design <- ahead + as.integer(epi_data$versions_end - max_tv)
 
@@ -363,7 +428,7 @@ scaled_pop_seasonal_revision <- function(
     archive_for_design,
     lags = lags,
     cols = base_cols,
-    ahead = ahead_for_design,
+    ahead = ahead,
     target_col = outcome,
     cache_key = "revision_design"
   )
@@ -460,6 +525,22 @@ scaled_pop_seasonal_revision <- function(
     train <- design %>% drop_na(all_of(c(lag_cols, target_name)))
   }
 
+  # Drop training rows whose target hasn't had enough time to finalize.
+  # The 95th-percentile convergence lag (from the full pre-filter archive)
+  # gives a data-driven cutoff: targets this recent are often still actively
+  # revised. forecast_rows is built separately above and is not filtered here.
+  finalization_cutoff_days <- as.integer(
+    ceiling(compute_finalization_lag_weeks(epi_data, outcome) * 7)
+  )
+  message(
+    format(epi_data$versions_end), " ahead=", ahead,
+    " finalization_cutoff=", finalization_cutoff_days, "d"
+  )
+  train <- train %>%
+    filter(
+      as.integer(epi_data$versions_end - (time_value + ahead)) >= finalization_cutoff_days
+    )
+
   if (!is.null(outlier_n_weeks) && !is.na(outlier_n_weeks)) {
     flagged_versions <- flag_revision_outlier_versions(
       data.table::as.data.table(epi_data$DT),
@@ -484,6 +565,9 @@ scaled_pop_seasonal_revision <- function(
   trainer$args$quantile_levels <- rlang::enquo(quantile_levels)
   fitted <- fit(trainer, form, data = train)
   message(format(epi_data$versions_end), " ahead=", ahead, " fit done")
+  if (return_fit) {
+    return(fitted)
+  }
   preds <- predict(fitted, forecast_rows)$.pred
   quantile_mat <- as.matrix(preds)
   levels_out <- hardhat::extract_quantile_levels(preds)

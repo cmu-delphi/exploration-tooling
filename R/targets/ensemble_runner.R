@@ -55,6 +55,7 @@ run_ensemble <- function(
   method, id, forecasts, components,
   weights = NULL, aheads = NULL, climate_caps = NULL,
   geo_exclusions = NULL, drop_negative_aheads = FALSE,
+  component_ahead_days = NULL,
   extra_forecasts = NULL, sort_quantiles = FALSE
 ) {
   assert_components_present(forecasts, components, id)
@@ -78,8 +79,20 @@ run_ensemble <- function(
     },
     weighted = {
       ar <- forecasts %>% filter(forecaster %in% components)
+      # Apply explicit per-component ahead restrictions. Components listed in
+      # component_ahead_days are exempt from drop_negative_aheads so they can
+      # supply negative-ahead rows the global filter would otherwise remove.
+      if (!is.null(component_ahead_days)) {
+        restricted <- names(component_ahead_days)
+        ar_restricted <- purrr::imap_dfr(component_ahead_days, function(allowed_days, comp) {
+          ar %>%
+            filter(forecaster == comp, as.integer(target_end_date - forecast_date) %in% allowed_days)
+        })
+        ar <- bind_rows(ar %>% filter(forecaster %nin% restricted), ar_restricted)
+      }
       if (drop_negative_aheads) {
-        ar <- ar %>% filter(forecast_date < target_end_date)
+        exempt <- if (!is.null(component_ahead_days)) names(component_ahead_days) else character(0)
+        ar <- ar %>% filter(forecaster %in% exempt | forecast_date < target_end_date)
       }
       bind_rows(extra_forecasts, ar) %>%
         ensemble_weighted(weights)
