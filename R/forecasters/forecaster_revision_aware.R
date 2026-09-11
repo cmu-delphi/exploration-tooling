@@ -394,30 +394,13 @@ scaled_pop_seasonal_revision <- function(
   # revised and its lag-0 value directly covers the target week. Drop one week
   # per negative-ahead step so the model predicts from genuinely prior data.
   archive_for_design <- epi_data
-  if (ahead < 0L) {
-    n_drop <- as.integer(-ahead / 7L)
-    all_tv <- sort(unique(epi_data$DT$time_value), decreasing = TRUE)
-    drop_tv <- all_tv[seq_len(min(n_drop, length(all_tv)))]
-    archive_for_design$DT <- epi_data$DT[!(time_value %in% drop_tv)]
-  }
-  # Restrict training versions to the same weekday as versions_end (Wednesday).
-  # NHSN releases on Fridays. Friday vintages have a completely
-  # different lag-0 distribution than the Wednesday vintages the forecaster
-  # actually predicts from, so mixing them into training degrades fit.
-  forecast_wday <- lubridate::wday(epi_data$versions_end)
-  archive_for_design$DT <- archive_for_design$DT[
-    lubridate::wday(version) == forecast_wday
-  ]
-  # `ahead_for_design`: the offset added to each training anchor to compute the
-  # output `target_end_date`. The revision design anchors at max(time_value)
-  # directly, so we add the gap between versions_end and max_tv so that
-  # `anchor + ahead_for_design = versions_end + ahead`, matching the epipredict
-  # "one period beyond the last observed row" convention for the hub submission.
-  # NOTE: this is NOT passed to archive_to_revision_predictors -- that lookup
-  # must use the plain `ahead` (always a multiple of 7) so the target query
-  # lands on a Saturday that actually exists in the NHSN archive.
   max_tv <- max(archive_for_design$DT$time_value, na.rm = TRUE)
-  ahead_for_design <- ahead + as.integer(epi_data$versions_end - max_tv)
+  # Reporting latency: gap between forecast date and most recent data. Both
+  # max_tv and versions_end are Wednesdays (nhsn_prod_archive shifts time_values
+  # via floor_date + 3), so this is always a multiple of 7 in normal operation.
+  # Rounded up to the nearest week for robustness against off-schedule runs.
+  reporting_latency_days <- as.integer(epi_data$versions_end - max_tv)
+  design_ahead <- ahead + ceiling(reporting_latency_days / 7L) * 7L
 
   # Revision-aware design: as-of lags for every base column plus the finalized
   # outcome target, then restrict to the genuinely-revised primary source.
@@ -428,7 +411,7 @@ scaled_pop_seasonal_revision <- function(
     archive_for_design,
     lags = lags,
     cols = base_cols,
-    ahead = ahead,
+    ahead = design_ahead,
     target_col = outcome,
     cache_key = "revision_design"
   )
@@ -538,7 +521,7 @@ scaled_pop_seasonal_revision <- function(
   )
   train <- train %>%
     filter(
-      as.integer(epi_data$versions_end - (time_value + ahead)) >= finalization_cutoff_days
+      as.integer(epi_data$versions_end - (time_value + design_ahead)) >= finalization_cutoff_days
     )
 
   if (!is.null(outlier_n_weeks) && !is.na(outlier_n_weeks)) {
@@ -576,8 +559,8 @@ scaled_pop_seasonal_revision <- function(
     tibble(
       geo_value = forecast_rows$geo_value[[ii]],
       source = forecast_rows$source[[ii]],
-      forecast_date = epi_data$versions_end,
-      target_end_date = forecast_rows$time_value[[ii]] + ahead_for_design,
+      forecast_date = lubridate::floor_date(epi_data$versions_end, "week", week_start = 7L) + 3L,
+      target_end_date = epi_data$versions_end + ahead,
       quantile = levels_out,
       value = quantile_mat[ii, ]
     )
