@@ -1,5 +1,3 @@
-# Scoring and Evaluation Functions
-
 evaluate_predictions <- function(forecasts, truth_data) {
   # make sure the quantiles are in ascending order
   forecasts <- forecasts %>%
