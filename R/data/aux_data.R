@@ -52,6 +52,18 @@ get_cast_api_data <- function(...) {
     dplyr::rename(any_of(c(time_value = "reference_time", version = "report_time")))
 }
 
+# Fetch a signal for both state and nation geo_types, bind, and normalize:
+# lowercase geo_value, Date version, deduplicated on (geo_value, time_value, version).
+get_cast_api_all_geos <- function(source, signal, columns = c("geo_value", "time_value", "value", "version"), ...) {
+  bind_rows(
+    get_cast_api_data(source = source, signal = signal, geo_type = "state", columns = columns, ...),
+    get_cast_api_data(source = source, signal = signal, geo_type = "nation", columns = columns, ...)
+  ) %>%
+    mutate(geo_value = tolower(geo_value), version = as.Date(version)) %>%
+    arrange(geo_value, time_value, version) %>%
+    distinct(geo_value, time_value, version, .keep_all = TRUE)
+}
+
 get_nwss_coarse_data <- function(disease = c("covid", "flu")) {
   disease <- arg_match(disease)
   # TODO: Something is broken about get_bucket_df. There is only key, so just use that directly.
@@ -397,33 +409,13 @@ gen_ili_data <- function(default_day_of_week = 1) {
 #' @return An epi_archive of the NHSN data.
 get_nhsn_data_archive <- function(disease = c("covid", "flu", "rsv")) {
   disease <- arg_match(disease)
-  nhsn_state <- get_cast_api_data(
+  get_cast_api_all_geos(
     source = "nhsn",
     signal = glue::glue("confirmed_admissions_{disease}_ew"),
-    geo_type = "state",
-    columns = c("geo_value", "time_value", "value", "version"),
     report_time_query = glue::glue("<={Sys.Date()}")
-  )
-  nhsn_nation <- get_cast_api_data(
-    source = "nhsn",
-    signal = glue::glue("confirmed_admissions_{disease}_ew"),
-    geo_type = "nation",
-    columns = c("geo_value", "time_value", "value", "version"),
-    report_time_query = glue::glue("<={Sys.Date()}")
-  )
-  nhsn_data <- nhsn_state %>%
-    rbind(nhsn_nation) %>%
+  ) %>%
     select(geo_value, time_value, version, value) %>%
-    mutate(
-      geo_value = tolower(geo_value),
-      # Need to center the time_value on Wednesday of the week (rather than Saturday).
-      version = as.Date(version)
-    ) %>%
-    # Ensure uniqueness and convert to epi_archive
-    arrange(geo_value, time_value, version) %>%
-    distinct(geo_value, time_value, version, .keep_all = TRUE) %>%
     as_epi_archive(compactify = TRUE)
-  nhsn_data
 }
 
 
@@ -436,30 +428,19 @@ get_nhsn_data_archive <- function(disease = c("covid", "flu", "rsv")) {
 #' are set to NA as physically impossible data errors.
 #' @export
 get_nhsn_beds_archive <- function() {
-  fetch_nhsn_signal <- function(signal, geo_type) {
-    get_cast_api_data(
+  fetch_signal <- function(signal) {
+    get_cast_api_all_geos(
       source = "nhsn",
       signal = signal,
-      geo_type = geo_type,
-      columns = c("geo_value", "time_value", "value", "version"),
       report_time_query = glue::glue("<={Sys.Date()}")
     ) %>%
-      select(geo_value, time_value, version, value) %>%
-      mutate(geo_value = tolower(geo_value), version = as.Date(version)) %>%
-      arrange(geo_value, time_value, version) %>%
-      distinct(geo_value, time_value, version, .keep_all = TRUE)
+      select(geo_value, time_value, version, value)
   }
 
-  beds <- bind_rows(
-    fetch_nhsn_signal("inpatient_beds_ew", "state"),
-    fetch_nhsn_signal("inpatient_beds_ew", "nation")
-  ) %>%
+  beds <- fetch_signal("inpatient_beds_ew") %>%
     rename(inpatient_beds_ew = value)
 
-  beds_pct <- bind_rows(
-    fetch_nhsn_signal("inpatient_beds_occupied_pct_ew", "state"),
-    fetch_nhsn_signal("inpatient_beds_occupied_pct_ew", "nation")
-  ) %>%
+  beds_pct <- fetch_signal("inpatient_beds_occupied_pct_ew") %>%
     rename(inpatient_beds_occupied_pct_ew = value)
 
   beds %>%
@@ -478,30 +459,13 @@ get_nhsn_beds_archive <- function() {
 
 up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv")) {
   disease <- arg_match(disease)
-  nssp_national <- get_cast_api_data(
+  get_cast_api_all_geos(
     source = "nssp",
-    signal = glue::glue("pct_ed_visits_{disease}"),
-    geo_type = "nation",
-    columns = c("geo_value", "time_value", "value", "version"),
-  )
-  nssp_state <- get_cast_api_data(
-    source = "nssp",
-    signal = glue::glue("pct_ed_visits_{disease}"),
-    geo_type = "state",
-    columns = c("geo_value", "time_value", "value", "version"),
-  )
-  nssp_data <- nssp_state %>%
-    rbind(nssp_national) %>%
-    select(geo_value, time_value, nssp = value, version) %>%
-    mutate(
-      geo_value = tolower(geo_value),
-      # Need to center the time_value on Wednesday of the week (rather than Saturday).
-      time_value = time_value - 3,
-      version = as.Date(version)
-    ) %>%
-    # Ensure uniqueness and convert to epi_archive
-    arrange(geo_value, time_value, version) %>%
-    distinct(geo_value, time_value, version, .keep_all = TRUE) %>%
+    signal = glue::glue("pct_ed_visits_{disease}")
+  ) %>%
+    rename(nssp = value) %>%
+    # End-of-week Saturday → midweek Wednesday shift, then snap to Wednesday.
+    mutate(time_value = time_value - 3) %>%
     # NSSP publishes explicit NA values for non-reporting geos (wy through
     # version 2026-01-07, backfilled with real values on 2026-01-14). An NA
     # observation is not an observation: keeping the rows makes historical
@@ -510,11 +474,7 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv
     # the geo absent for that period -- matching the pre-2026-06-24 behavior of
     # excluding wy outright. Current-date slices are unaffected (later real
     # versions supersede).
-    filter(!is.na(nssp))
-
-  # Complete the rest of the conversion.
-  nssp_data %>%
-    # End of week to midweek correction.
+    filter(!is.na(nssp)) %>%
     mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
     as_epi_archive(compactify = TRUE)
 }
