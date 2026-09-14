@@ -227,6 +227,22 @@ create_covid_data_targets <- function() {
           mutate(hhs_region = as.character(hhs_region))
       }
     ),
+    tar_change(
+      name = beds_archive,
+      change = get_s3_object_last_modified("nhsn_data_archive.parquet", "forecasting-team-data"),
+      command = {
+        result <- get_nhsn_beds_archive()$DT %>%
+          as.data.frame() %>%
+          mutate(
+            geo_value = ifelse(geo_value == "usa", "us", geo_value),
+            time_value = time_value - 3L
+          ) %>%
+          as.data.frame() %>%
+          as_epi_archive(compactify = TRUE)
+        result$geo_type <- "custom"
+        result
+      }
+    ),
     tar_target(
       name = joined_archive_data,
       command = {
@@ -247,6 +263,8 @@ create_covid_data_targets <- function() {
         joined_archive_data$geo_type <- "custom"
         # see git history for google_symptoms
         joined_archive_data %<>% epix_merge(veteran_state_archive, sync = "locf")
+        joined_archive_data$geo_type <- "custom"
+        joined_archive_data %<>% epix_merge(beds_archive, sync = "locf")
         joined_archive_data <- joined_archive_data$DT %>%
           filter(grepl("[a-z]{2}", geo_value), !(geo_value %in% g_insufficient_data_geos)) %>%
           # `signal` is leftover epidatr metadata from the nssp/veteran merges, not

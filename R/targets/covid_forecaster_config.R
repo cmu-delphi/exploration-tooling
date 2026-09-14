@@ -108,6 +108,26 @@ get_covid_forecaster_params <- function() {
       sort_quantiles = TRUE,
       outlier_n_weeks = c(NA_integer_, 4L)
     ),
+    # Beds as revision proxy. Version history only exists from Dec 2024+, so
+    # training rows before that drop out (NA beds lags). Non-seasonal window
+    # keeps all dates the beds data covers in play.
+    revision_aware_beds_no_season = tidyr::expand_grid(
+      forecaster = "scaled_pop_seasonal_revision",
+      trainer = "quantreg_fn",
+      lags = list2(c(0, 7), c(0, 7, 14, 21)),
+      extra_sources = list(
+        "inpatient_beds_ew",
+        c("inpatient_beds_ew", "inpatient_beds_occupied_pct_ew")
+      ),
+      pop_scaling = TRUE,
+      scale_method = "none",
+      center_method = "none",
+      nonlin_method = "none",
+      use_seasonal_window = FALSE,
+      needs_archive = TRUE,
+      sort_quantiles = TRUE,
+      outlier_n_weeks = c(NA_integer_, 4L)
+    ),
     climate_linear = bind_rows(
       expand_grid(
         forecaster = "climate_linear_ensembled",
