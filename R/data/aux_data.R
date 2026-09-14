@@ -1,287 +1,55 @@
-convert_epiweek_to_season <- function(epiyear, epiweek) {
-  # Convert epiweek to season
-  update_inds <- epiweek <= 39
-  epiyear <- ifelse(update_inds, epiyear - 1, epiyear)
+EPIDATA_V5_URL <- "https://delphi.cmu.edu/epidata/v5"
 
-  season <- paste0(epiyear, "/", substr((epiyear + 1), 3, 4))
-  return(season)
-}
-
-epiweeks_in_year <- function(year) {
-  last_week_of_year <- seq.Date(as.Date(paste0(year, "-12-24")), as.Date(paste0(year, "-12-31")), by = 1)
-  return(max(as.numeric(MMWRweek::MMWRweek(last_week_of_year)$MMWRweek)))
-}
-
-convert_epiweek_to_season_week <- function(epiyear, epiweek, season_start = 39) {
-  season_week <- epiweek - 39
-  update_inds <- season_week <= 0
-  if (!any(update_inds)) {
-    # none need to be updated
-    return(season_week)
-  }
-  # last year's # of epiweeks determines which week in the season we're at at
-  # the beginning of the year
-  season_week[update_inds] <- season_week[update_inds] +
-    sapply(epiyear[update_inds] - 1, epiweeks_in_year)
-
-  return(season_week)
-}
-
-#' Adds epiweek, epiyear, season_week, season columns to the dataset.
-#'
-#' Assumes that the dataset has a time_value column that is a date. If
-#' season_week or season already exist, they will be dropped and replaced.
-add_season_info <- function(data) {
-  if (!("time_value" %in% names(data))) {
-    cli::cli_abort("'time_value' column not found in data", call = rlang::caller_fn())
-  }
-
-  data %>%
-    select(-any_of(c("season", "season_week", "epiweek", "epiyear"))) %>%
-    mutate(
-      epiweek = epiweek(time_value),
-      epiyear = epiyear(time_value)
-    ) %>%
-    left_join(
-      (.) %>%
-        distinct(epiweek, epiyear) %>%
-        mutate(
-          season = convert_epiweek_to_season(epiyear, epiweek),
-          season_week = convert_epiweek_to_season_week(epiyear, epiweek)
-        ),
-      by = c("epiweek", "epiyear")
-    )
-}
-
-#' add a sine and half sine component; it is zero after `season` (by default 35, which roughly corresponds to epiweek 23)
-step_season_week_sine <- function(preproc, season = 35) {
-  preproc %<>%
-    step_mutate(
-      season_half_sine = sinpi((pmin(season_week, !!season + 1) - 1) / !!season),
-      season_sine = sinpi(2 * (pmin(season_week, !!season + 1) - 1) / !!season),
-      role = "pre-predictor"
-    )
-}
-
-#' Append the state population and state population density, taken from the census and interpolated in the most straightforward way.
-#' apportionment data taken from here: https://www.census.gov/data/tables/time-series/dec/popchange-data-text.html
-#' there's probably a better way of doing this buried in
-#' https://www.census.gov/data/developers/data-sets/popest-popproj/popest.html,
-#' but for now it's not worth the time
-#' @param original_dataset tibble or epi_df, should have states as 2 letter lower case
-add_pop_and_density <-
-  function(
-    original_dataset,
-    apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
-    state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
-    hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")
-  ) {
-    pops_by_state_hhs <- gen_pop_and_density_data(apportion_filename, state_code_filename, hhs_code_filename)
-    # if the dataset uses "usa" instead of "us", substitute that
-    if ("usa" %in% unique(original_dataset)$geo_value) {
-      pops_by_state_hhs %<>%
-        mutate(
-          geo_value = ifelse(geo_value == "us", "usa", geo_value),
-          agg_level = ifelse(
-            grepl("[0-9]{2}", geo_value),
-            "hhs_region",
-            ifelse(("us" == geo_value) | ("usa" == geo_value), "nation", "state")
-          )
-        )
-    }
-    if (!("agg_level" %in% names(original_dataset))) {
-      original_dataset %<>% add_agg_level()
-    }
-    original_dataset %>%
-      mutate(year = year(time_value)) %>%
-      left_join(
-        pops_by_state_hhs,
-        by = join_by(year, geo_value, agg_level)
-      ) %>%
-      # virgin islands data too limited for now
-      filter(geo_value != "vi") %>%
-      arrange(geo_value, time_value) %>%
-      ungroup() %>%
-      fill(population, density)
-  }
-
-add_agg_level <- function(data) {
-  data %>%
-    mutate(
-      agg_level = case_when(
-        grepl("[0-9]{2}", geo_value) ~ "hhs_region",
-        geo_value %in% c("us", "usa") ~ "nation",
-        .default = "state"
-      )
-    )
-}
-
-gen_pop_and_density_data <-
-  function(
-    apportion_filename = here::here("aux_data", "flusion_data", "apportionment.csv"),
-    state_code_filename = here::here("aux_data", "flusion_data", "state_codes_table.csv"),
-    hhs_code_filename = here::here("aux_data", "flusion_data", "state_code_hhs_table.csv")
-  ) {
-    apportionment_data <- readr::read_csv(apportion_filename, show_col_types = FALSE) %>% as_tibble()
-    imputed_pop_data <- apportionment_data %>%
-      filter(`Geography Type` %in% c("State", "Nation")) %>%
-      select(Name, Year, `Resident Population`, `Resident Population Density`) %>%
-      group_by(Name) %>%
-      reframe(
-        population = spline(Year, `Resident Population`, n = 2020 - 1910 + 1)$y,
-        density = spline(Year, `Resident Population Density`, n = 2020 - 1910 + 1)$y,
-        Year = seq(1910, 2020, by = 1)
-      )
-    # converting names and adding to hhs_regions
-    state_codes <- readr::read_csv(state_code_filename, show_col_types = FALSE) %>%
-      mutate(state_code = as.character(as.integer(state_code)))
-
-    hhs_codes <- readr::read_csv(hhs_code_filename, show_col_types = FALSE) %>%
-      mutate(state_code = as.character(as.integer(state_code)))
-
-    # switching the names to codes, getting the hhs region sums
-    pops_by_state_hhs <-
-      state_codes %>%
-      left_join(hhs_codes, by = join_by(state_code)) %>%
-      mutate(hhs = as.character(hhs)) %>%
-      right_join(imputed_pop_data, by = join_by(state_name == Name)) %>%
-      select(-state_name, -state_code) %>%
-      rename(state = state_id, hhs_region = hhs, year = Year) %>%
-      pivot_longer(
-        cols = c(state, hhs_region),
-        values_to = "geo_value",
-        names_to = "agg_level"
-      )
-    # remove hhs_region na geo_values (this is national, and should only be
-    # present once)
-    pops_by_state_hhs %<>%
-      filter(!(is.na(geo_value) & (agg_level == "hhs_region"))) %>%
-      group_by(year, agg_level, geo_value) %>%
-      summarize(
-        area = sum(population / density),
-        population = sum(population),
-        density = population / area,
-        .groups = "drop"
-      ) %>%
-      select(-area)
-    # deal with us missing from the state_codes/ hhs_codes tables
-    pops_by_state_hhs %<>%
-      mutate(
-        geo_value = ifelse(is.na(geo_value), "us", geo_value)
-      )
-    # "project" populations forward into 2024 (should probably find the real data for this)
-    pops_by_state_hhs %<>%
-      bind_rows(
-        expand_grid(
-          year = c(2021, 2022, 2023, 2024),
-          pops_by_state_hhs %>%
-            select(agg_level, geo_value) %>%
-            distinct()
-        )
-      ) %>%
-      arrange(geo_value, year) %>%
-      fill(population, density)
-    # add us as both a nation and state
-    pops_by_state_hhs %>%
-      bind_rows(
-        (.) %>% filter(geo_value == "us") %>% mutate(agg_level = "nation")
-      )
-  }
-
-#' Aggregate a daily archive to a weekly archive.
-#'
-#' By default, aggregates from Sunday to Saturday and labels with the Wednesday
-#' of that week.
-#'
-#' @param epi_df the archive to aggregate.
-#' @param agg_method the method to use to aggregate the data, one of "sum" or "mean".
-#' @param keys the columns to group by.
-#' @param values the columns to aggregate.
-daily_to_weekly <- function(epi_df, agg_method = c("sum", "mean"), keys = "geo_value", values = c("value")) {
-  agg_method <- arg_match(agg_method)
-  epi_df %>%
-    arrange(across(all_of(c(keys, "time_value")))) %>%
-    mutate(epiweek = epiweek(time_value), year = epiyear(time_value)) %>%
-    group_by(across(any_of(c(keys, "epiweek", "year")))) %>%
-    summarize(
-      across(all_of(values), ~ sum(.x, na.rm = TRUE)),
-      time_value = floor_date(max(time_value), "weeks", week_start = 7) + 3,
-      .groups = "drop"
-    ) %>%
-    arrange(across(all_of(c(keys, "time_value")))) %>%
-    select(-epiweek, -year)
-}
-
-#' Aggregate a daily archive to a weekly archive.
-#'
-#' @param epi_arch the archive to aggregate.
-#' @param agg_columns the columns to aggregate.
-#' @param agg_method the method to use to aggregate the data, one of "sum" or "mean".
-#' @param week_reference the day of the week to use as the reference day (Wednesday is default).
-#'   Note that this is 1-indexed, so 1 = Sunday, 2 = Monday, ..., 7 = Saturday.
-#' @param week_start the day of the week to use as the start of the week (Sunday is default).
-#'   Note that this is 1-indexed, so 1 = Sunday, 2 = Monday, ..., 7 = Saturday.
-daily_to_weekly_archive <- function(
-  epi_arch,
-  agg_columns,
-  agg_method = c("sum", "mean"),
-  week_reference = 4L,
-  week_start = 7L
+build_cast_api_query <- function(
+  source = c("nssp", "nhsn"),
+  signal = NULL,
+  geo_type = c("state", "nation"),
+  columns = NULL,
+  fill_method = NULL,
+  limit = NULL,
+  offset = NULL,
+  report_time_query = NULL,
+  geo_value = NULL,
+  time_value = NULL
 ) {
-  # How to aggregate the windowed data.
-  agg_method <- arg_match(agg_method)
-  # The columns we will later group by when aggregating.
-  keys <- key_colnames(epi_arch, exclude = c("time_value", "version"))
-  # The versions we will slide over.
-  ref_time_values <- epi_arch$DT$version %>%
-    unique() %>%
-    sort()
-  # Choose a fast function to use to slide and aggregate.
-  if (agg_method == "sum") {
-    # If the week is complete, this is equivalent to the sum. If the week is not
-    # complete, this is equivalent to 7/(number of days in the week) * the sum,
-    # which should be a decent approximation.
-    agg_fun <- \(x) 7 * mean(x, na.rm = TRUE)
-  } else if (agg_method == "mean") {
-    agg_fun <- \(x) mean(x, na.rm = TRUE)
-  }
-  # Slide over the versions and aggregate.
-  epix_slide(
-    epi_arch,
-    .versions = ref_time_values,
-    function(x, group_keys, ref_time) {
-      # Slide over the days and aggregate.
-      x %>%
-        mutate(week_start = ceiling_date(time_value, "week", week_start = week_start) - 1) %>%
-        summarize(across(all_of(agg_columns), agg_fun), .by = all_of(c(keys, "week_start"))) %>%
-        mutate(time_value = round_date(week_start, "week", week_reference - 1)) %>%
-        select(-week_start) %>%
-        as_tibble()
+  source <- rlang::arg_match(source)
+  if (!is.null(fill_method)) fill_method <- rlang::arg_match(fill_method, c("source", "fill_ave", "fill_zero"))
+  geo_type <- rlang::arg_match(geo_type)
+  columns <- columns %||% c("geo_value", "time_value", "value", "version")
+  columns <- gsub("\\btime_value\\b", "reference_time", columns)
+  columns <- gsub("\\bversion\\b", "report_time", columns)
+  columns <- paste(columns, collapse = ",")
+
+  httr2::request(EPIDATA_V5_URL) %>%
+    httr2::req_url_path_append("archive/") %>%
+    httr2::req_url_query(
+      source = source,
+      signal = signal,
+      geo_type = geo_type,
+      report_time_query = report_time_query,
+      columns = columns,
+      limit = limit,
+      offset = offset,
+      fill_method = fill_method,
+      geo_value = geo_value,
+      reference_time = time_value,
+      format = "csv",
+      header = "true",
+      .multi = "explode"
+    ) %>%
+    {
+      key <- Sys.getenv("DELPHI_EPIDATA_KEY")
+      if (nchar(key) > 0) httr2::req_headers_redacted(., token = key) else .
     }
-  ) %>%
-    # Always convert to data.frame after dplyr operations on data.table.
-    # https://github.com/cmu-delphi/epiprocess/issues/618
-    as.data.frame() %>%
-    as_epi_archive(compactify = TRUE)
 }
 
-
-#' for training, we don't want off-season times or anomalous seasons, but for
-#' prediction we do
-drop_non_seasons <- function(epi_data, min_window = 12) {
-  forecast_date <- attributes(epi_data)$metadata$as_of %||% max(epi_data$time_value)
-  if ("season_week" %nin% names(epi_data)) {
-    epi_data %<>% add_season_info()
-  }
-  epi_data %>%
-    filter(
-      (season_week < 35) |
-        (forecast_date - time_value < as.difftime(min_window, units = "weeks")),
-      season != "2020/21",
-      # season != "2021/22", # keeping this because whitening otherwise gets really bad with the single season of data
-      (season != "2019/20"),
-      season != "2008/09"
-    )
+get_cast_api_data <- function(...) {
+  req <- build_cast_api_query(...)
+  if (Sys.getenv("DEBUG_MODE") == "true") print(req)
+  filename <- tempfile(fileext = ".csv")
+  req %>% httr2::req_perform(path = filename)
+  readr::read_csv(filename, show_col_types = FALSE) %>%
+    dplyr::rename(any_of(c(time_value = "reference_time", version = "report_time")))
 }
 
 get_nwss_coarse_data <- function(disease = c("covid", "flu")) {
@@ -298,32 +66,6 @@ get_nwss_coarse_data <- function(disease = c("covid", "flu")) {
     bucket = "forecasting-team-data",
     show_col_types = FALSE
   )
-}
-
-#' add a column summing the values in the hhs region
-#' @param hhs_region_table the region table
-add_hhs_region_sum <- function(archive_data_raw, hhs_region_table) {
-  need_agg_level <- !("agg_level" %in% names(archive_data_raw))
-  if (need_agg_level) {
-    archive_data_raw %<>% mutate(agg_level = "state")
-  }
-  hhs_region_agg_state <-
-    archive_data_raw %>%
-    left_join(hhs_region_table, by = "geo_value") %>%
-    filter(agg_level == "state") %>%
-    as_tibble() %>%
-    group_by(across(c(setdiff(data.table::key(archive_data_raw), "geo_value"), "hhs_region"))) %>%
-    reframe(hhs_region = sum(hhs, na.rm = TRUE), across(everything(), ~.x)) %>%
-    relocate(version, time_value, geo_value)
-
-  archive_data_raw %<>%
-    filter(agg_level != "state") %>%
-    mutate(hhs_region = hhs) %>%
-    bind_rows(hhs_region_agg_state)
-  if (need_agg_level) {
-    archive_data_raw %<>% select(-agg_level)
-  }
-  archive_data_raw
 }
 
 #' Get versioned NHSN data from healthdata.gov because covidcast API has
@@ -388,31 +130,6 @@ get_health_data <- function(as_of, disease = c("covid", "flu")) {
     # na.omit = TRUE. As otherwise we have some NAs from probably territories
     # propagated to US level.
     append_us_aggregate("hhs")
-}
-
-#' Append a national aggregate to a dataframe
-#'
-#' Computes national values by summing all the values per group_keys.
-#' Removes pre-existing national values.
-#'
-#' @param df A dataframe with a `geo_value` column.
-#' @param cols A character vector of column names to aggregate.
-#' @param group_keys A character vector of column names to group by.
-#' @return A dataframe with a `geo_value` column.
-append_us_aggregate <- function(df, cols = NULL, group_keys = c("time_value")) {
-  if (!(is.data.frame(df))) {
-    cli::cli_abort("df must be a data.frame", call = rlang::caller_env())
-  }
-  national_col_names <- c("us", "usa", "national", "nation", "US", "USA")
-  df1 <- df %>% filter(geo_value %nin% national_col_names)
-  if (is.null(cols)) {
-    df2 <- df1 %>%
-      summarize(geo_value = "us", across(where(is.numeric), ~ sum(.x, na.rm = TRUE)), .by = all_of(group_keys))
-  } else {
-    df2 <- df1 %>%
-      summarize(geo_value = "us", across(all_of(cols), ~ sum(.x, na.rm = TRUE)), .by = all_of(group_keys))
-  }
-  bind_rows(df1, df2)
 }
 
 calculate_burden_adjustment <- function(flusurv_latest) {
@@ -801,4 +518,3 @@ up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv
     mutate(time_value = floor_date(time_value, "week", week_start = 7) + 3) %>%
     as_epi_archive(compactify = TRUE)
 }
-
