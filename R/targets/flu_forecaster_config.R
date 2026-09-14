@@ -280,23 +280,85 @@ get_flu_forecaster_params <- function() {
     # Beds as revision proxy: only version history from Dec 2024+, so training
     # rows before that drop out (NA beds lags). Non-seasonal window keeps
     # everything the beds data does cover in play.
-    revision_aware_beds_no_season = tidyr::expand_grid(
-      forecaster = "scaled_pop_seasonal_revision",
-      trainer = "quantreg_fn",
-      lags = list2(c(0, 7), c(0, 7, 14, 21)),
-      extra_sources = list(
-        "inpatient_beds_ew",
-        c("inpatient_beds_ew", "inpatient_beds_occupied_pct_ew")
+    revision_aware_beds_no_season = bind_rows(
+      tidyr::expand_grid(
+        forecaster = "scaled_pop_seasonal_revision",
+        trainer = "quantreg_fn",
+        lags = list2(c(0, 7), c(0, 7, 14, 21)),
+        extra_sources = list(
+          "inpatient_beds_ew",
+          c("inpatient_beds_ew", "inpatient_beds_occupied_pct_ew")
+        ),
+        pop_scaling = TRUE,
+        filter_agg_level = "none",
+        scale_method = "none",
+        center_method = "none",
+        nonlin_method = "none",
+        use_seasonal_window = FALSE,
+        train_sources = list2(c("nhsn")),
+        needs_archive = TRUE,
+        outlier_n_weeks = c(NA_integer_, 4L)
       ),
-      pop_scaling = TRUE,
-      filter_agg_level = "none",
-      scale_method = "none",
-      center_method = "none",
-      nonlin_method = "none",
-      use_seasonal_window = FALSE,
-      train_sources = list2(c("nhsn")),
-      needs_archive = TRUE,
-      outlier_n_weeks = c(NA_integer_, 4L)
+      tidyr::expand_grid(
+        forecaster = "scaled_pop_seasonal_revision",
+        trainer = "quantreg_fn",
+        lags = list2(c(0, 7)),
+        extra_sources = list(
+          c("inpatient_beds_ew", "nssp"),
+          c("inpatient_beds_ew", "inpatient_beds_occupied_pct_ew", "nssp")
+        ),
+        pop_scaling = TRUE,
+        filter_agg_level = "none",
+        scale_method = "none",
+        center_method = "none",
+        nonlin_method = "none",
+        use_seasonal_window = FALSE,
+        train_sources = list2(c("nhsn")),
+        needs_archive = TRUE,
+        outlier_n_weeks = c(NA_integer_, 4L)
+      )
+    ),
+    revision_aware_beds_seasonal = bind_rows(
+      tidyr::expand_grid(
+        forecaster = "scaled_pop_seasonal_revision",
+        trainer = "quantreg_fn",
+        lags = list2(c(0, 7), c(0, 7, 14, 21)),
+        extra_sources = list(
+          "inpatient_beds_ew",
+          c("inpatient_beds_ew", "inpatient_beds_occupied_pct_ew")
+        ),
+        pop_scaling = TRUE,
+        filter_agg_level = "none",
+        scale_method = "none",
+        center_method = "none",
+        nonlin_method = "none",
+        use_seasonal_window = TRUE,
+        seasonal_backward_window = 5 * 7,
+        seasonal_forward_window = 3 * 7,
+        train_sources = list2(c("nhsn")),
+        needs_archive = TRUE,
+        outlier_n_weeks = c(NA_integer_, 4L)
+      ),
+      tidyr::expand_grid(
+        forecaster = "scaled_pop_seasonal_revision",
+        trainer = "quantreg_fn",
+        lags = list2(c(0, 7)),
+        extra_sources = list(
+          c("inpatient_beds_ew", "nssp"),
+          c("inpatient_beds_ew", "inpatient_beds_occupied_pct_ew", "nssp")
+        ),
+        pop_scaling = TRUE,
+        filter_agg_level = "none",
+        scale_method = "none",
+        center_method = "none",
+        nonlin_method = "none",
+        use_seasonal_window = TRUE,
+        seasonal_backward_window = 5 * 7,
+        seasonal_forward_window = 3 * 7,
+        train_sources = list2(c("nhsn")),
+        needs_archive = TRUE,
+        outlier_n_weeks = c(NA_integer_, 4L)
+      )
     ),
     climate_linear = bind_rows(
       expand_grid(
