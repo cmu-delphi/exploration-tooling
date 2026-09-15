@@ -75,6 +75,24 @@ confirm_sufficient_data <- function(epi_data, ahead, args_input, outcome, extra_
   )
 }
 
+#' Standard empty forecast tibble for insufficient-data early returns
+#'
+#' Returns a zero-row tibble in hub submission format. Use as the early return
+#' value when [confirm_sufficient_data] fails.
+#'
+#' @return a zero-row tibble with columns `geo_value`, `forecast_date`,
+#'   `target_end_date`, `quantile`, `value`
+#' @export
+make_null_forecast <- function() {
+  tibble(
+    geo_value = character(),
+    forecast_date = as.Date(character()),
+    target_end_date = as.Date(character()),
+    quantile = numeric(),
+    value = numeric()
+  )
+}
+
 #' if we want to filter the main data column in some way, this is a simple way to share that across forecasters
 filter_extraneous <- function(epi_data, filter_source, filter_agg_level) {
   if (filter_source != "") {
