@@ -142,13 +142,20 @@ This is likely a method that would benefit from using versioned data and not jus
 ### Direction detection
 
 Label each (geo, week) as `up` / `steady` / `down` / `low` using a rolling-sum relative-change comparison.
-Original was daily; weekly adaptation:
 
 - Compute a 2-week rolling sum of admissions.
 - Compare the rolling sum now to the rolling sum 2–4 weeks ahead (choice of horizon is a parameter).
-- Relative change > 10% → `up`; < −8.3% → `down`; otherwise `steady`.
-- If the lagging 2-week sum ≤ some threshold → `low` (censor; don't classify).
-  The original threshold was 130 admissions over 14 days; needs recalibration for weekly NHSN totals.
+- Relative change above some threshold → `up`; below the symmetric inverse → `down`; otherwise `steady`.
+- If the lagging 2-week sum is below some activity threshold → `low` (censor; don't classify).
+- For flu: the `low` threshold is floored at a high percentile (e.g. 90th) of the rolling sum during June–September, so the known-inactive summer period is captured by the threshold itself rather than a hard calendar override.
+
+Rather than porting the original hard-coded thresholds (which were tuned for daily COVID data and won't translate to weekly NHSN scale or flu), learn the bucket boundaries from the data:
+
+- **`low` threshold:** a low quantile (e.g. 10th–20th percentile) of the 2-week rolling sum distribution across all geos and dates.
+- **`up`/`down` thresholds:** symmetric quantiles of the relative-change distribution (e.g. top/bottom tercile or quartile), computed on the training window.
+
+This automatically adapts to disease and scale, and makes the bucket sizes roughly balanced rather than dependent on arbitrary constants.
+The quantiles themselves become tunable parameters to sweep.
 
 In the revised case, this part should all be on finalized data, and stop ~5w before the forecast date.
 

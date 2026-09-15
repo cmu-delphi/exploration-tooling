@@ -234,15 +234,8 @@ scaled_pop_seasonal_revision <- function(
   target_name <- paste0(outcome, "_target")
   lag_cols <- grep("_lag_", names(design), value = TRUE)
 
-  null_result <- tibble(
-    geo_value = character(),
-    forecast_date = as.Date(character()),
-    target_end_date = as.Date(character()),
-    quantile = numeric(),
-    value = numeric()
-  )
   if (nrow(design) == 0 || !(target_name %in% names(design))) {
-    return(null_result)
+    return(make_null_forecast())
   }
 
   # Whitening, learned per base column: the outcome from its finalized target,
@@ -347,7 +340,7 @@ scaled_pop_seasonal_revision <- function(
 
   n_geos <- n_distinct(train$geo_value)
   if (nrow(train) < max(n_geos * 3L, 20L, length(lag_cols) + 1L) || nrow(forecast_rows) == 0) {
-    return(null_result)
+    return(make_null_forecast())
   }
 
   message(format(epi_data$versions_end), " ahead=", ahead, " fitting nrow(train)=", nrow(train), " nrow(forecast_rows)=", nrow(forecast_rows))

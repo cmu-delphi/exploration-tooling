@@ -43,8 +43,8 @@ g_truth_data_date <- "2023-09-01"
 # If TRUE, we skip the weekly report notebook (each week's report is preserved
 # as an ASOF snapshot) and instead run the scoring notebook, which scores the
 # historical forecasts against the truth data and compares them to the ensemble.
-g_evaluation_mode <-
-  Sys.getenv("TAR_RUN_PROJECT", Sys.getenv("TAR_PROJECT", "flu_hosp_prod")) == "flu_hosp_evaluation"
+.g_project <- Sys.getenv("TAR_RUN_PROJECT", Sys.getenv("TAR_PROJECT", "flu_hosp_prod"))
+g_evaluation_mode <- .g_project %in% c("flu_hosp_evaluation", "flu_hosp_prod_regr")
 # The pipeline's notion of "today", read once here so a whole run can be pinned
 # for reproducible oracle captures (scripts/oracle/capture.R): forecast dates
 # and the "cheating" as-of slices otherwise move with the calendar. Unset ->
@@ -87,8 +87,12 @@ g_forecast_schedule <- tibble(
 )
 if (g_evaluation_mode) {
   # Optional: keep only the last N dates for a fast partial evaluation
-  # (scripts/oracle/capture.R). Inert when unset.
+  # (scripts/oracle/capture.R). Inert when unset or 0.
+  # flu_hosp_prod_regr defaults to 1 so a regression run is always fast.
   g_evaluation_n_dates <- as.integer(Sys.getenv("EVALUATION_N_DATES", "0"))
+  if (is.na(g_evaluation_n_dates) || g_evaluation_n_dates == 0) {
+    if (.g_project == "flu_hosp_prod_regr") g_evaluation_n_dates <- 1L
+  }
   if (!is.na(g_evaluation_n_dates) && g_evaluation_n_dates > 0) {
     g_forecast_schedule <- slice_tail(g_forecast_schedule, n = g_evaluation_n_dates)
   }

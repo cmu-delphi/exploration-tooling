@@ -33,14 +33,7 @@ flusion <- function(
   # this next part is basically unavoidable boilerplate you'll want to copy
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
   if (!confirm_sufficient_data(epi_data, ahead, args_input, outcome, extra_sources)) {
-    null_result <- tibble(
-      geo_value = character(),
-      forecast_date = lubridate::Date(),
-      target_end_date = lubridate::Date(),
-      quantile = numeric(),
-      value = numeric()
-    )
-    return(null_result)
+    return(make_null_forecast())
   }
   # this is to deal with grouping by source in tests that don't include it
   adding_source <- FALSE
@@ -76,63 +69,30 @@ flusion <- function(
   epi_data %<>% ungroup() %>% mutate(across(where(is.character), as.factor))
   # drop between-season values for actual training; we'll need them for prediction though
   full_data <- epi_data
-  if (drop_non_seasons) {
-    season_data <- epi_data %>% drop_non_seasons()
-  } else {
-    season_data <- epi_data
-  }
-
-  # whiten to get the sources on the same scale
-  learned_params <- calculate_whitening_params(season_data, predictors, scale_method, center_method, nonlin_method)
-  full_data %<>% data_whitening(predictors, learned_params, nonlin_method)
-  keys <- key_colnames(epi_data, exclude = "time_value")
-  # add the slightly smoothed values beforehand; this is about speed, since step_epi_slide isn't ready yet
-  full_data %<>%
-    group_by(across(all_of(keys))) %>%
-    epi_slide_mean(
-      all_of(predictors),
-      .window_size = as.difftime(2, units = glue::glue("{time_type}s"))
-    ) %>%
-    rename_with(~ gsub("slide_value_", "slide_value_2_", .x)) %>%
-    epi_slide_mean(
-      all_of(predictors),
-      .window_size = as.difftime(4, units = glue::glue("{time_type}s")),
-    ) %>%
-    rename_with(~ gsub("slide_value_(?!1wk)", "slide_value_4_", .x, perl = TRUE))
-  # this is actually for 7-8, epi_slide just needs an actual epi_df to run, and several of the later operations don't maintain type stability
-  # also, they're in the same step to speed up the epi_slide
-  if (derivative_estimator == "quadratic_regression") {
-    full_data <- full_data %<>%
-      group_by(across(all_of(keys))) %>%
-      epi_slide(
-        .f = \(x, gk, rtv) {
-          rel_col <- x[[predictors[1]]]
-          quad4 <- rel_col %>%
-            tail(n = 4) %>%
-            get_poly_coefs(degree = 2, n_points = 4) %>%
-            setNames(paste0("quad4_", names(.)))
-          quad6 <- rel_col %>%
-            tail(n = 6) %>%
-            get_poly_coefs(degree = 2, n_points = 6) %>%
-            setNames(paste0("quad6_", names(.)))
-          lin3 <- rel_col %>%
-            tail(n = 3) %>%
-            get_poly_coefs(degree = 2, n_points = 3) %>%
-            setNames(paste0("lin3_", names(.)))
-          lin5 <- rel_col %>%
-            tail(n = 5) %>%
-            get_poly_coefs(degree = 2, n_points = 5) %>%
-            setNames(paste0("lin5_", names(.)))
-          return(bind_cols(quad4, quad6, lin3, lin5))
-        },
-        .window_size = as.difftime(6, units = "weeks")
-      )
-  }
   # only train on the season, but we need the off-season data for prediction purposes
   season_data <- full_data %>%
     drop_non_seasons(min_window = 32)
   # preprocessing supported by epipredict
   preproc <- epi_recipe(full_data)
+  if (scale_method != "none") {
+    preproc %<>% step_epi_whitening(
+      colname = predictors,
+      scale_method = scale_method,
+      center_method = center_method,
+      nonlin_method = nonlin_method
+    )
+  }
+  preproc %<>%
+    step_epi_rolling_stats(colname = predictors, mean_width = 2) %>%
+    step_epi_rolling_stats(colname = predictors, mean_width = 4)
+  if (derivative_estimator == "quadratic_regression") {
+    preproc %<>% step_epi_poly_coefs(
+      colname = predictors[[1]],
+      windows = c(quad4 = 4L, quad6 = 6L, lin3 = 3L, lin5 = 5L),
+      degree = 2L,
+      slide_window = as.difftime(6, units = "weeks")
+    )
+  }
   if (pop_scaling && !is.null(sources_to_pop_scale)) {
     preproc %<>%
       step_population_scaling(
@@ -144,14 +104,12 @@ flusion <- function(
         by = c("geo_value" = "abbr")
       )
   }
-  # slide is currently done before for efficiency reasons, added as predictors here
   if (derivative_estimator == "quadratic_regression") {
-    # anything similar to quad4_c3, or lin3_c2, etc
     preproc %<>%
       add_role(matches("(lin|quad)[0-9]_c[1-3]"), new_role = "pre-predictor")
   }
   preproc %<>%
-    add_role(all_of(starts_with("slide_value")), new_role = "pre-predictor")
+    add_role(starts_with("slide_value"), new_role = "pre-predictor")
   # one-hot encoding of the data source
   if (all(levels(epi_data$source) != "nhsn") && dummy_source) {
     preproc %<>% step_dummy(source, one_hot = TRUE, keep_original_cols = TRUE, role = "pre-predictor")
@@ -189,28 +147,16 @@ flusion <- function(
         by = c("geo_value" = "abbr")
       )
   }
-  # with all the setup done, we execute and format
-  pred <- run_workflow_and_format(
+  if (scale_method != "none") {
+    postproc %<>% layer_epi_coloring(colname = outcome, nonlin_method = nonlin_method)
+  }
+  pred_final <- run_workflow_and_format(
     preproc,
     postproc,
     trainer,
     season_data,
     full_data
-  )
-  # now pred has the columns
-  # (geo_value, forecast_date, target_end_date, quantile, value)
-  # finally, any postprocessing not supported by epipredict
-  # reintroduce color into the value
-  pred_final <- pred %>%
-    rename({{ outcome }} := value) %>%
-    data_coloring(
-      outcome,
-      learned_params,
-      join_cols = key_colnames(epi_data, exclude = "time_value"),
-      nonlin_method = nonlin_method
-    ) %>%
-    rename(value = {{ outcome }}) %>%
-    mutate(value = pmax(0, value))
+  ) %>% mutate(value = pmax(0, value))
   if (adding_source) {
     pred_final %<>% select(-source)
   }
