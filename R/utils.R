@@ -318,6 +318,42 @@ exclude_geos <- function(geo_forecasters_weights) {
     unique()
 }
 
+#' Append a dated copy of the default weights block to a geo-exclusions CSV.
+#'
+#' Reads the file as raw text, copies every line whose date matches the earliest
+#' date in the file (the defaults block), replaces that date with
+#' `forecast_date`, and inserts the new lines immediately after the last default
+#' line. Does nothing if `forecast_date` is already present.
+stamp_default_weights <- function(filename, forecast_date) {
+  date_str <- format(as.Date(forecast_date), "%Y-%m-%d")
+  lines <- readLines(filename)
+  parsed <- readr::read_csv(filename, comment = "#", show_col_types = FALSE)
+  default_date_str <- format(min(parsed$forecast_date), "%Y-%m-%d")
+  if (date_str %in% format(parsed$forecast_date, "%Y-%m-%d")) {
+    return(invisible(NULL))
+  }
+  all_default_indices <- which(startsWith(trimws(lines), default_date_str))
+  if (length(all_default_indices) == 0) return(invisible(NULL))
+  # Only copy the first contiguous block (the actual defaults section).
+  # Later sections that reuse the default date are real dated entries.
+  if (length(all_default_indices) > 1) {
+    first_break <- which(diff(all_default_indices) > 1)[1]
+    if (!is.na(first_break)) all_default_indices <- all_default_indices[seq_len(first_break)]
+  }
+  header <- c(
+    "##################",
+    paste0("# ", format(as.Date(forecast_date), "%b %-d")),
+    "##################"
+  )
+  new_lines <- sub(default_date_str, date_str, lines[all_default_indices], fixed = TRUE)
+  last_idx <- max(all_default_indices)
+  writeLines(
+    c(lines[seq_len(last_idx)], header, new_lines, lines[seq(last_idx + 1L, length(lines))]),
+    filename
+  )
+  invisible(NULL)
+}
+
 `%nin%` <- function(x, y) !(x %in% y)
 
 get_population_data <- function() {

@@ -85,6 +85,11 @@ if (g_evaluation_mode) {
 g_forecast_dates <- g_forecast_schedule$forecast_date_int
 g_forecast_generation_dates <- g_forecast_schedule$forecast_generation_date_int
 
+if (!g_evaluation_mode) {
+  stamp_default_weights("scripts/covid_geo_exclusions.csv", g_forecast_dates[[1L]])
+  stamp_default_weights("scripts/covid_nssp_geo_exclusions.csv", g_forecast_dates[[1L]])
+}
+
 # Trainer used by the seasonal forecasters; stored as a global and referenced by
 # symbol in the grid params so tar_map embeds the symbol, not the model_spec.
 g_quantreg <- epipredict::quantile_reg()
