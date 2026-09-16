@@ -24,7 +24,9 @@ forecast_date,forecaster,geo_value,weight
 2026-09-16, climate_base, all, 2
 2026-09-16, climate_geo_agged, all, 0
 2026-09-16, climate_quantile_extrapolated, all, 0
-2026-09-16, climate_linear, hi, 0.0001
+2026-09-16, climate_linear, ca, 2
+2026-09-16, windowed_seasonal_extra_sources, ca, 0
+2026-09-16, windowed_seasonal, ca, 1
 ##################
 # Aug 26
 ##################
