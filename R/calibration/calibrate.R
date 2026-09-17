@@ -83,6 +83,41 @@ hub_series_matrix <- function(series, round_date, n_levels) {
 #'   all locations over the `lr_window` tail (and `lr_seasonal` extras), and
 #'   handed to each series scaled back to its own counts. The 0.1 floor is
 #'   applied in count space, so small geos are not floored to nothing.
+#' @param transform `"identity"` (the paper's method, additive offsets in count
+#'   space), `"log1p"`, `"sqrt"`, or `"quartic_root"` (the forecasters'
+#'   whitening map, `(x + 0.01)^0.25`). The tracker runs on the transformed
+#'   `Y` and `Yhat`, so the hidden offsets and eta live on that scale and the
+#'   played forecast is mapped back. Quantiles commute with monotone maps, so
+#'   the coverage guarantee is unchanged; what changes is how an offset learned
+#'   at the peak is sized when applied in the trough. `hidden` and `lr_level`
+#'   in the output stay in transformed units; `value_cal` and `offset` are in
+#'   counts. The 0.1 eta floor is a count-space constant: pass a smaller
+#'   `lr_args$floor` with any transform.
+#' @param scales `NULL`, or a tibble of `location`, `from` (Date), `scale`. Each
+#'   series' outcomes and base quantiles are divided by the scale whose `from`
+#'   is the latest one at or before the round date, before `transform` is
+#'   applied, and the played quantiles are multiplied back. This is how rounds
+#'   from different data sources (ILI+ percent history as burn-in, NHSN counts
+#'   live) share one tracker: offsets and eta live in scaled units. A location
+#'   with no row, or a round before its first `from`, gets scale 1.
+#' @param lr_slow `NULL`, or `list(mult = , window = )` adding a slow, persistent
+#'   offset term alongside the tracker's fast one; see [qt_track()]. A natural
+#'   pairing is `lr_slow = list(mult = 0.003, window = Inf)` with
+#'   `fast_decay = 0.1`. The slow term ignores `season_policy` and `off_after`
+#'   gating of updates is applied to both terms.
+#' @param fast_decay leak on the fast term per round, `[0, 1)`; see [qt_track()].
+#' @param slow_init `NULL`, or `"burn_in_quantile"`: before tracking, set the
+#'   slow term per (horizon, level) to the conformal offset implied by the
+#'   burn-in rounds pooled over locations, i.e. the `level`-quantile of
+#'   `Y - Yhat[level]` in the tracker's working units (after `scales` and
+#'   `transform`). A batch warm start for the persistent bias, so the slow
+#'   term does not have to accumulate it from tiny steps. Requires burn-in
+#'   seasons. The slow term is then applied from the first round, including
+#'   burn-in rounds, so burn-in metrics are no longer the base's.
+#' @param burn_in_learns_slow if `TRUE`, burn-in seasons train the slow term
+#'   (the fast term stays at zero there as before). With many historical
+#'   seasons this is how the persistent bias gets learned before the first
+#'   live season.
 #' @param progress show a progress bar.
 #' @return list with
 #'   `forecasts` long tibble, one row per (round, horizon, location, level), with
@@ -106,10 +141,31 @@ calibrate_hub_forecasts <- function(
   off_after = NULL,
   lr_seasonal = NULL,
   lr_geo_pool = NULL,
+  transform = c("identity", "log1p", "sqrt", "quartic_root"),
+  scales = NULL,
+  lr_slow = NULL,
+  fast_decay = 0,
+  burn_in_learns_slow = FALSE,
+  slow_init = NULL,
   progress = TRUE
 ) {
   season_policy <- rlang::arg_match(season_policy)
   projection <- rlang::arg_match(projection)
+  transform <- rlang::arg_match(transform)
+  fwd <- switch(transform,
+    identity = identity, log1p = log1p, sqrt = sqrt,
+    quartic_root = function(x) (x + 0.01)^0.25
+  )
+  inv <- switch(transform,
+    identity = identity, log1p = expm1, sqrt = function(x) x^2,
+    quartic_root = function(x) pmax(x, 0)^4 - 0.01
+  )
+  if ((transform != "identity" || !is.null(scales)) && !is.null(lr_geo_pool)) {
+    cli::cli_abort("{.arg lr_geo_pool} is defined in per-capita count space; it cannot be combined with {.arg transform} or {.arg scales}.")
+  }
+  if (!is.null(scales) && !all(c("location", "from", "scale") %in% names(scales))) {
+    cli::cli_abort("{.arg scales} needs columns {.field location}, {.field from}, {.field scale}.")
+  }
 
   rounds <- hub_label_seasons(unique(forecasts$reference_date))
   round_date <- rounds$round_date
@@ -128,12 +184,15 @@ calibrate_hub_forecasts <- function(
     shrink = shrink_factor
   )
 
+  # The slow term may train through burn-in; the fast term never does.
+  slow_update_from <- if (burn_in_learns_slow) rep(TRUE, n) else update_from
   apply <- rep(TRUE, n)
   if (!is.null(off_after)) {
     mmdd <- format(round_date, "%m-%d")
     off <- mmdd >= off_after & mmdd < "07-01"
     apply[off] <- FALSE
     update_from[off] <- FALSE
+    slow_update_from[off] <- FALSE
   }
 
   lr_extra <- if (!is.null(lr_seasonal)) {
@@ -180,6 +239,18 @@ calibrate_hub_forecasts <- function(
     )
   }
 
+  init_slow_by_h <- NULL
+  if (!is.null(slow_init)) {
+    slow_init <- rlang::arg_match(slow_init, "burn_in_quantile")
+    if (!any(rounds$season %in% burn_in_seasons)) {
+      cli::cli_abort("{.arg slow_init} needs at least one burn-in season.")
+    }
+    init_slow_by_h <- hub_burn_in_offsets(
+      chunks, keys, round_date, m, levels, truth_lookup,
+      burn = rounds$season %in% burn_in_seasons, scales = scales, fwd = fwd
+    )
+  }
+
   if (progress) cli::cli_progress_bar("tracking", total = nrow(keys))
   per_series <- vector("list", nrow(keys))
   diagnostics <- vector("list", nrow(keys))
@@ -203,13 +274,20 @@ calibrate_hub_forecasts <- function(
     lr_schedule <- if (!is.null(pooled_eta)) {
       pmax(0.1, pooled_eta[[as.character(h)]] * pop[[loc]])
     }
+    s_t <- hub_round_scales(scales, loc, round_date)
     res <- qt_track(
-      Y = Y, Yhat = Yhat, levels = levels, delay = delay,
+      Y = fwd(Y / s_t), Yhat = fwd(sweep(Yhat, 2L, s_t, "/")), levels = levels, delay = delay,
       lr = lr, lr_window = lr_window, lr_args = lr_args, projection = projection,
-      nonneg = nonneg,
+      nonneg = FALSE,
       update_from = update_from, hidden_scale = hidden_scale,
-      apply = apply, lr_extra = lr_extra, lr_schedule = lr_schedule
+      apply = apply, lr_extra = lr_extra, lr_schedule = lr_schedule,
+      lr_slow = lr_slow, fast_decay = fast_decay, slow_update_from = slow_update_from,
+      init_slow = if (is.null(init_slow_by_h)) 0 else init_slow_by_h[[as.character(h)]]
     )
+    # Back to counts. The clamp lives here rather than in qt_track() so that it
+    # applies after the inverse transform (expm1 of a negative is negative).
+    played <- sweep(inv(res$played), 2L, s_t, "*")
+    if (nonneg) played <- pmax(played, 0)
 
     per_series[[i]] <- tibble(
       location = loc,
@@ -218,9 +296,11 @@ calibrate_hub_forecasts <- function(
       level_index = rep(seq_len(m), times = n),
       level = rep(levels, times = n),
       value_base = as.vector(Yhat),
-      value_cal = as.vector(res$played),
-      offset = as.vector(res$offset),
+      value_cal = as.vector(played),
+      offset = as.vector(played - Yhat),
       hidden = as.vector(res$hidden),
+      slow = as.vector(res$slow),
+      fast = as.vector(res$fast),
       lr_level = as.vector(res$lr_levels),
       truth = rep(Y, each = m)
     )
@@ -249,8 +329,8 @@ calibrate_hub_forecasts <- function(
     select(
       "location", "horizon", "reference_date", "target_end_date", "season",
       "season_round", "round_index", "level_index", "level",
-      "value_base", "value_cal", "offset", "hidden", "lr_level", "truth",
-      "is_burn_in"
+      "value_base", "value_cal", "offset", "hidden", "slow", "fast", "lr_level",
+      "truth", "is_burn_in"
     )
 
   list(
@@ -396,6 +476,61 @@ hub_rolling_tradeoff <- function(cal, window = 20L, by = character(0), drop_burn
       qloss_cal = mean(.data$roll_loss_cal),
       .groups = "drop"
     )
+}
+
+
+#' Conformal warm start for the slow term: per (horizon, level), the
+#' `level`-quantile of `Y - Yhat[level]` over burn-in rounds, pooled across
+#' locations, in the tracker's working units.
+#' @keywords internal
+hub_burn_in_offsets <- function(chunks, keys, round_date, m, levels, truth_lookup, burn, scales, fwd) {
+  out <- list()
+  for (h in sort(unique(keys$horizon))) {
+    idx <- which(keys$horizon == h)
+    target_end_date <- round_date + 7L * h
+    resid <- purrr::map(idx, function(j) {
+      loc <- keys$location[j]
+      Yhat <- hub_series_matrix(chunks[[j]], round_date, m)
+      Y <- unname(truth_lookup[paste(loc, target_end_date)])
+      s_t <- hub_round_scales(scales, loc, round_date)
+      r <- fwd(matrix(Y / s_t, m, length(Y), byrow = TRUE)) - fwd(sweep(Yhat, 2L, s_t, "/"))
+      r[, burn & !is.na(Y) & !is.na(Yhat[1L, ]), drop = FALSE]
+    })
+    resid <- do.call(cbind, resid)
+    if (ncol(resid) == 0L) {
+      cli::cli_abort("No learnable burn-in rounds for horizon {h}; cannot warm-start the slow term.")
+    }
+    out[[as.character(h)]] <- vapply(
+      seq_len(m),
+      function(i) stats::quantile(resid[i, ], levels[i], names = FALSE, type = 7L),
+      numeric(1)
+    )
+  }
+  out
+}
+
+
+#' Per-round scale for one location from a `scales` table (see
+#' [calibrate_hub_forecasts()]); all ones when `scales` is `NULL`.
+#' @keywords internal
+hub_round_scales <- function(scales, loc, round_date) {
+  n <- length(round_date)
+  if (is.null(scales)) {
+    return(rep(1, n))
+  }
+  rows <- scales %>%
+    filter(.data$location == loc) %>%
+    arrange(.data$from)
+  if (nrow(rows) == 0L) {
+    return(rep(1, n))
+  }
+  idx <- findInterval(as.numeric(round_date), as.numeric(rows$from))
+  out <- rep(1, n)
+  out[idx > 0L] <- rows$scale[idx[idx > 0L]]
+  if (any(!is.finite(out) | out <= 0)) {
+    cli::cli_abort("{.arg scales} must be positive and finite (location {.val {loc}}).")
+  }
+  out
 }
 
 

@@ -158,6 +158,40 @@ As-of vintages come from `cache/calibration/nhsn_archive_flu.parquet` (a copy
 of an oracle-capture NHSN archive; provenance and staleness caveats in
 `notes/CALIBRATION.md`). `n_panels` is a YAML param (default 150).
 
+## 6. The seasons notebook
+
+Four states (best/worst by WIS and by median AE change, chosen from the
+baseline run) × two live seasons × six method variants, plus a by-month
+breakdown of where the baseline gains and loses. Chunks `load` and `variants`
+are knitr-cached; clear `cache/calibration/knitr_cache_seasons/` after
+changing anything in `R/calibration/`.
+
+```sh
+cd ~/repos/delphi/exploration-tooling
+distrobox enter rocker -- Rscript -e \
+  'rmarkdown::render("scripts/reports/calibration_qt_seasons.Rmd", output_dir = here::here("reports"))'
+```
+
+Output: `reports/calibration_qt_seasons.html`.
+
+## 7. ILI+ pseudo-hub backfill
+
+Runs flu prod's `windowed_seasonal` forecaster over the ILI+ state history and
+caches hub-schema forecasts and truth for multi-season calibration burn-in
+(design and caveats in `notes/CALIBRATION.md`, "ILI+ burn-in").
+
+```sh
+cd ~/repos/delphi/exploration-tooling
+distrobox enter rocker -- Rscript scripts/calibration_ili_backfill.R            # ~30 min
+distrobox enter rocker -- Rscript scripts/calibration_ili_backfill.R --refresh  # rebuild
+```
+
+Output: `cache/calibration/ili_pseudo_hub_forecasts.parquet` and
+`ili_pseudo_hub_truth.parquet`; read them with `ili_read_pseudo_hub()` after
+sourcing the script. To combine with the hub tables, bind the rows, pass every
+pre-2024-25 season as `burn_in_seasons`, and hand `calibrate_hub_forecasts()`
+a `scales` table with one ILI+-era and one NHSN-era divisor per location.
+
 ---
 
 ## Porting gotcha worth knowing about

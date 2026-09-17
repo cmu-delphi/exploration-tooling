@@ -231,10 +231,31 @@ qt_validate_delay <- function(delay, n) {
 #' @param lr_schedule `NULL`, or a positive numeric of length T giving the step
 #'   size to use at each round, overriding `lr`. Lets a caller pool eta across
 #'   series (e.g. per-capita across locations) and hand each series its slice.
+#' @param lr_slow `NULL` (single-term tracker, the paper's method) or a list
+#'   `list(mult = , window = , floor = )` describing a second, slow offset term.
+#'   The hidden offset is then `slow + fast`: both terms take the same gradient
+#'   each step, `fast` with the `lr`/`lr_window` eta and `slow` with an eta
+#'   from its own (long) window and (small) multiplier. `slow` never decays and
+#'   ignores `hidden_scale`, so it carries across seasons unconditionally: it
+#'   is meant to hold the persistent component of the base forecaster's bias.
+#'   Unset entries default to `window = Inf`, `floor = 0`, `mult = lr_args$mult / 10`.
+#' @param fast_decay in `[0, 1)`. Each round the fast term is multiplied by
+#'   `1 - fast_decay` before its update, so a correction that is not refreshed
+#'   by new outcomes leaks away instead of persisting. `0` (the default) is the
+#'   paper's non-leaky iterate. With no `lr_slow`, the fast term is the whole
+#'   offset, so a decay pulls the calibrated forecast back toward the base.
+#' @param init_slow scalar or length-m starting value of the slow term (in the
+#'   tracker's working units). A caller can warm-start it from burn-in residual
+#'   quantiles instead of waiting for small gradient steps to accumulate.
+#' @param slow_update_from logical of length T or `NULL`. When given, gates the
+#'   slow term's steps separately from `update_from`, which then gates only the
+#'   fast term. This lets a burn-in stretch train the slow term (many seasons of
+#'   persistent bias) while leaving the fast term at zero.
 #'
 #' @return list with
 #'   `played` (m x T, the calibrated forecasts),
-#'   `hidden` (m x T, the un-projected offsets),
+#'   `hidden` (m x T, the un-projected offsets, `slow + fast`),
+#'   `slow`, `fast` (m x T, the two terms; `slow` is all zero without `lr_slow`),
 #'   `offset` (m x T, `played - Yhat`, the realised total correction),
 #'   `lr` (length T, the step size used at each round; 0 where no update ran;
 #'   the level-mean when `lr_args$per_level = TRUE`),
@@ -262,7 +283,11 @@ qt_track <- function(
   lr_args = list(),
   apply = NULL,
   lr_extra = NULL,
-  lr_schedule = NULL
+  lr_schedule = NULL,
+  lr_slow = NULL,
+  fast_decay = 0,
+  slow_update_from = NULL,
+  init_slow = 0
 ) {
   projection <- rlang::arg_match(projection)
   eval_grad_at <- rlang::arg_match(eval_grad_at)
@@ -338,6 +363,25 @@ qt_track <- function(
     }
   }
 
+  if (!(is.numeric(fast_decay) && length(fast_decay) == 1L && fast_decay >= 0 && fast_decay < 1)) {
+    cli::cli_abort("{.arg fast_decay} must be a single value in [0, 1).")
+  }
+  if (!is.null(lr_slow)) {
+    if (!is.list(lr_slow)) {
+      cli::cli_abort("{.arg lr_slow} must be NULL or a list.")
+    }
+    lr_slow$window <- lr_slow$window %||% Inf
+    lr_slow$floor <- lr_slow$floor %||% 0
+    lr_slow$mult <- lr_slow$mult %||% ((lr_args$mult %||% 0.1) / 10)
+    if (!(is.numeric(lr_slow$window) && length(lr_slow$window) == 1L && lr_slow$window >= 1)) {
+      cli::cli_abort("{.arg lr_slow$window} must be a single value >= 1 (possibly Inf).")
+    }
+  }
+  slow_update_from <- slow_update_from %||% update_from
+  if (length(slow_update_from) != n || !is.logical(slow_update_from) || anyNA(slow_update_from)) {
+    cli::cli_abort("{.arg slow_update_from} must be a non-missing logical of length {n}.")
+  }
+
   delay <- delay %||% lapply(seq_len(n), function(t) t)
   qt_validate_delay(delay, n)
   revealed <- unlist(delay, use.names = FALSE)
@@ -364,6 +408,11 @@ qt_track <- function(
   # transposes the outcome onto the level axis.
   residual <- matrix(Y, nrow = m, ncol = n, byrow = TRUE) - Yhat
 
+  # The offset is the sum of a fast term (the paper's iterate, obeying the
+  # season policy and an optional leak) and a slow term (persistent, never
+  # scaled or decayed). Without `lr_slow` the slow term stays at zero.
+  fast <- matrix(0, nrow = m, ncol = n)
+  slow <- matrix(0, nrow = m, ncol = n)
   hidden <- matrix(0, nrow = m, ncol = n)
   played <- matrix(0, nrow = m, ncol = n)
   gradient <- matrix(0, nrow = m, ncol = n)
@@ -379,7 +428,9 @@ qt_track <- function(
     qt_project(off + Yhat[, t], projection)
   }
 
-  hidden[, 1L] <- init_hidden * hidden_scale[1L]
+  fast[, 1L] <- init_hidden * hidden_scale[1L]
+  slow[, 1L] <- init_slow
+  hidden[, 1L] <- fast[, 1L] + slow[, 1L]
   played[, 1L] <- play(1L)
 
   # Observed rounds in reveal order; the learning-rate window is the tail of
@@ -400,7 +451,8 @@ qt_track <- function(
     # which delay validation guarantees is never consumed.
     gradient[, t] <- as.numeric(Y[t] > eval_point) - (1 - levels)
 
-    hidden[, t + 1L] <- hidden[, t]
+    fast[, t + 1L] <- fast[, t] * (1 - fast_decay)
+    slow[, t + 1L] <- slow[, t]
     if (length(delay[[t]]) > 0L && length(observed) > 0L) {
       window <- if (is.finite(lr_window)) {
         utils::tail(observed, lr_window)
@@ -424,11 +476,22 @@ qt_track <- function(
       lr_levels[, t] <- eta
       if (update_from[t]) {
         for (s in delay[[t]]) {
-          hidden[, t + 1L] <- hidden[, t + 1L] + eta * gradient[, s]
+          fast[, t + 1L] <- fast[, t + 1L] + eta * gradient[, s]
+        }
+      }
+      if (!is.null(lr_slow) && slow_update_from[t]) {
+        slow_window <- if (is.finite(lr_slow$window)) utils::tail(observed, lr_slow$window) else observed
+        eta_slow <- qt_learning_rate(
+          lr, residual[, slow_window, drop = FALSE],
+          floor = lr_slow$floor, mult = lr_slow$mult, prob = lr_args$prob %||% 0.9
+        )
+        for (s in delay[[t]]) {
+          slow[, t + 1L] <- slow[, t + 1L] + eta_slow * gradient[, s]
         }
       }
     }
-    hidden[, t + 1L] <- hidden[, t + 1L] * hidden_scale[t + 1L]
+    fast[, t + 1L] <- fast[, t + 1L] * hidden_scale[t + 1L]
+    hidden[, t + 1L] <- fast[, t + 1L] + slow[, t + 1L]
     played[, t + 1L] <- play(t + 1L)
   }
   n_observed[n] <- length(c(observed, delay[[n]]))
@@ -445,6 +508,8 @@ qt_track <- function(
   list(
     played = played,
     hidden = hidden,
+    slow = slow,
+    fast = fast,
     offset = played - Yhat,
     lr = lr_used,
     lr_levels = lr_levels,

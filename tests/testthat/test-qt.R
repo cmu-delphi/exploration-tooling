@@ -387,3 +387,67 @@ test_that("lr_schedule overrides the adaptive learning rate", {
   expect_equal(res$lr[used], sched[used])
   expect_error(qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay, lr_schedule = -sched), "positive")
 })
+
+
+test_that("without lr_slow and with fast_decay = 0 the two-term tracker is the paper's", {
+  fx <- qt_read_fixture("hub_delay2")
+  res <- qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay)
+  expect_true(all(res$slow == 0))
+  expect_equal(res$fast, res$hidden)
+})
+
+test_that("lr_slow adds a persistent term that ignores hidden_scale", {
+  fx <- qt_read_fixture("hub_delay2")
+  n <- length(fx$Y)
+  boundary <- 45L
+  res <- qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay,
+    lr_args = list(mult = 0.1),
+    lr_slow = list(mult = 0.01, window = Inf),
+    hidden_scale = replace(rep(1, n), boundary, 0)
+  )
+  carry <- qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay,
+    lr_args = list(mult = 0.1),
+    lr_slow = list(mult = 0.01, window = Inf)
+  )
+  expect_equal(res$hidden, res$slow + res$fast)
+  expect_true(any(res$slow[, n] != 0))
+  # The reset zeroes the fast term only; the slow term is unaffected by it up
+  # to the boundary (afterwards the played values, hence gradients, differ).
+  expect_true(all(res$fast[, boundary] == 0))
+  expect_equal(res$slow[, seq_len(boundary)], carry$slow[, seq_len(boundary)])
+})
+
+test_that("fast_decay leaks the fast term when nothing is revealed", {
+  fx <- qt_read_fixture("hub_delay2")
+  n <- length(fx$Y)
+  # Reveal nothing after round 40: the fast term must then decay geometrically.
+  delay <- fx$delay
+  delay[41:n] <- list(integer(0))
+  res <- qt_track(fx$Y, fx$Yhat, fx$levels, delay, fast_decay = 0.2)
+  expect_equal(res$fast[, 60L], res$fast[, 41L] * 0.8^19, tolerance = 1e-12)
+  expect_error(qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay, fast_decay = 1), "fast_decay")
+})
+
+test_that("slow_update_from lets the slow term train through a burn-in", {
+  fx <- qt_read_fixture("hub_delay2")
+  n <- length(fx$Y)
+  burn <- seq_len(30L)
+  res <- qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay,
+    lr_args = list(mult = 0.1),
+    lr_slow = list(mult = 0.02),
+    update_from = !(seq_len(n) %in% burn),
+    slow_update_from = rep(TRUE, n)
+  )
+  expect_true(all(res$fast[, burn] == 0))
+  expect_true(any(res$slow[, 30L] != 0))
+})
+
+test_that("init_slow warm-starts the slow term and is applied from round one", {
+  fx <- qt_read_fixture("hub_delay2")
+  init <- seq(-1, 1, length.out = length(fx$levels))
+  res <- qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay, init_slow = init)
+  expect_equal(res$slow[, 1L], init)
+  # Without lr_slow the slow term is constant, so hidden = init + fast throughout.
+  expect_equal(res$hidden, res$fast + init)
+  expect_equal(res$played[, 1L], stats::isoreg(fx$Yhat[, 1L] + init)$yf)
+})
