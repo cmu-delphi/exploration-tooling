@@ -206,11 +206,15 @@ qt_validate_delay <- function(delay, n) {
 #' @param nonneg clamp played values at 0. Applied *after* the projection and
 #'   *outside* the learning loop, so it cannot corrupt the gradient path -- the
 #'   tracker always scores the value it actually played.
-#' @param update_from logical of length T. `FALSE` at round `t` means outcomes
-#'   revealed at `t` still enter the learning-rate residual pool but produce no
-#'   gradient step. This is what a burn-in season is: use the base forecasts and
-#'   their errors to warm up `eta`, but leave the offsets at zero so nothing is
-#'   calibrated on data we are only using to set a step size.
+#' @param update_from logical of length T, indexed by the round a forecast was
+#'   *issued* at. `FALSE` at round `s` means the outcome of round `s`, whenever
+#'   it is revealed, still enters the learning-rate residual pool but produces
+#'   no gradient step. This is what a burn-in season is: use the base forecasts
+#'   and their errors to warm up `eta`, but leave the offsets at zero so nothing
+#'   is calibrated on data we are only using to set a step size. Gating by issue
+#'   round rather than reveal round matters because of the delay: the last
+#'   `h + 2` burn-in rounds are revealed at the first live round, and must not
+#'   open the live season with a burst of stale burn-in gradients.
 #' @param hidden_scale numeric of length T, applied to the hidden offsets at the
 #'   start of each round. `1` everywhere (the default) is a no-op. Setting it at
 #'   a season boundary expresses the season-gap policy: `0` resets the offsets,
@@ -247,10 +251,11 @@ qt_validate_delay <- function(delay, n) {
 #' @param init_slow scalar or length-m starting value of the slow term (in the
 #'   tracker's working units). A caller can warm-start it from burn-in residual
 #'   quantiles instead of waiting for small gradient steps to accumulate.
-#' @param slow_update_from logical of length T or `NULL`. When given, gates the
-#'   slow term's steps separately from `update_from`, which then gates only the
-#'   fast term. This lets a burn-in stretch train the slow term (many seasons of
-#'   persistent bias) while leaving the fast term at zero.
+#' @param slow_update_from logical of length T or `NULL`, indexed by issue round
+#'   like `update_from`. When given, gates the slow term's steps separately from
+#'   `update_from`, which then gates only the fast term. This lets a burn-in
+#'   stretch train the slow term (many seasons of persistent bias) while leaving
+#'   the fast term at zero.
 #'
 #' @return list with
 #'   `played` (m x T, the calibrated forecasts),
@@ -474,18 +479,19 @@ qt_track <- function(
       # having a burn-in season at all.
       lr_used[t] <- mean(eta)
       lr_levels[, t] <- eta
-      if (update_from[t]) {
-        for (s in delay[[t]]) {
-          fast[, t + 1L] <- fast[, t + 1L] + eta * gradient[, s]
-        }
+      # Each revealed outcome steps only if the round it was issued at is one we
+      # learn from; the reveal round itself is irrelevant.
+      for (s in delay[[t]][update_from[delay[[t]]]]) {
+        fast[, t + 1L] <- fast[, t + 1L] + eta * gradient[, s]
       }
-      if (!is.null(lr_slow) && slow_update_from[t]) {
+      slow_steps <- delay[[t]][slow_update_from[delay[[t]]]]
+      if (!is.null(lr_slow) && length(slow_steps) > 0L) {
         slow_window <- if (is.finite(lr_slow$window)) utils::tail(observed, lr_slow$window) else observed
         eta_slow <- qt_learning_rate(
           lr, residual[, slow_window, drop = FALSE],
           floor = lr_slow$floor, mult = lr_slow$mult, prob = lr_args$prob %||% 0.9
         )
-        for (s in delay[[t]]) {
+        for (s in slow_steps) {
           slow[, t + 1L] <- slow[, t + 1L] + eta_slow * gradient[, s]
         }
       }

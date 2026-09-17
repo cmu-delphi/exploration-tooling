@@ -59,8 +59,9 @@ hub_series_matrix <- function(series, round_date, n_levels) {
 #'   14 gives exactly `horizon + 2` rounds of delay on hub coordinates.
 #' @param burn_in_seasons season labels (as produced by [hub_label_seasons()])
 #'   used only to warm up the learning rate: their residuals enter the `eta`
-#'   pool, but no gradient step is taken and the offsets stay at zero. Pass
-#'   `"2023-2024"` to reproduce the intended design.
+#'   pool, but outcomes of rounds issued in them never produce a gradient step,
+#'   even when revealed at a live round, so the offsets stay at zero through
+#'   the first live rounds. Pass `"2023-2024"` to reproduce the intended design.
 #' @param season_policy what happens to the offsets across an off-season gap.
 #'   `"carry"` keeps them, `"reset"` zeroes them, `"shrink"` multiplies by
 #'   `shrink_factor`. Not a free choice: the base forecaster changed between
@@ -69,9 +70,11 @@ hub_series_matrix <- function(series, round_date, n_levels) {
 #'   `lr_args = list(per_level = TRUE)` gives each quantile level its own eta.
 #' @param off_after `NULL`, or a `"MM-DD"` string. Rounds whose reference date
 #'   falls on or after this day of the year (and before July) play the base
-#'   forecast and take no gradient steps; the hidden offsets carry unchanged
-#'   into the next season. `"04-01"` switches calibration off for the spring
-#'   tail, where the peak-tuned offsets are out of regime.
+#'   forecast, and their outcomes never produce a gradient step (not even when
+#'   revealed the following autumn); outcomes of rounds issued before the cutoff
+#'   still step when revealed inside the off window. The hidden offsets carry
+#'   unchanged into the next season. `"04-01"` switches calibration off for the
+#'   spring tail, where the peak-tuned offsets are out of regime.
 #' @param lr_seasonal `NULL`, or `list(half_width_weeks = 5)`. Pools into the
 #'   eta residual window the rounds of every earlier season that fall within
 #'   `half_width_weeks` of the same point in the season (same calendar date
@@ -174,7 +177,8 @@ calibrate_hub_forecasts <- function(
   m <- length(levels)
 
   # Shared across every series: burn-in gating and the season-gap policy are
-  # properties of the calendar, not of a location.
+  # properties of the calendar, not of a location. Both masks are indexed by
+  # the round a forecast was issued at (see qt_track()).
   update_from <- !(rounds$season %in% burn_in_seasons)
   hidden_scale <- rep(1, n)
   boundary <- which(rounds$is_season_start & rounds$round_index > 1L)

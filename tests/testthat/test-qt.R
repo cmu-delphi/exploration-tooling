@@ -451,3 +451,19 @@ test_that("init_slow warm-starts the slow term and is applied from round one", {
   expect_equal(res$hidden, res$fast + init)
   expect_equal(res$played[, 1L], stats::isoreg(fx$Yhat[, 1L] + init)$yf)
 })
+
+test_that("update_from gates by issue round: burn-in outcomes revealed live take no step", {
+  fx <- qt_read_fixture("hub_delay2")
+  n <- length(fx$Y)
+  burn <- seq_len(30L)
+  res <- qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay, update_from = !(seq_len(n) %in% burn))
+  # The first round at which a live-issued outcome is revealed; before its
+  # update lands (the following round) the offsets must still be zero, even
+  # though burn-in outcomes were revealed at live rounds 31 and 32.
+  first_live_reveal <- min(which(vapply(fx$delay, function(i) any(i > 30L), logical(1))))
+  expect_gt(first_live_reveal, 31L)
+  expect_true(all(res$hidden[, seq_len(first_live_reveal)] == 0))
+  expect_true(any(res$hidden[, first_live_reveal + 1L] != 0))
+  # Eta is still warmed up by the burn-in reveals.
+  expect_true(all(res$lr[31:32] > 0))
+})
