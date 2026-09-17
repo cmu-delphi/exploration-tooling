@@ -28,6 +28,10 @@ projection. Full repro commands live in `notes/calibration-runbook.md`.
   two-term offset, below), `off_after`, `lr_seasonal`. (`lr_geo_pool`, the
   geo-pooled eta in the sweep table below, was removed 2026-09-17: it never
   beat the baseline.)
+- `scripts/calibration_ws_backfill.R` — replays flu prod's `windowed_seasonal`
+  over the NHSN seasons (hub schema, cached to
+  `cache/calibration/ws_pseudo_hub_forecasts.parquet`); `scripts/calibration_ws_experiments.R`
+  runs the one-forecaster-across-eras comparison (below).
 - `scripts/calibration_ili_backfill.R` — runs flu prod's `windowed_seasonal`
   forecaster on the ILI+ state history (2010–2024, Wednesday labels, snapshot
   truncated one week to mimic reporting lag) and writes a pseudo-hub
@@ -422,6 +426,91 @@ would run through the off window, so "frozen offset" would be false); the
 hub reader aborts on duplicate (round, level) rows; the accidentally committed
 `covid_hosp_prod/workspaces/` binaries were dropped from history and the
 pattern is now ignored. The notebooks have not been re-rendered since.
+
+### One forecaster across eras (2026-09-17)
+
+Question: are the hub-season gains an artifact of three seasons of one
+ensemble, and does the tracker behave the same on a decade of the *same*
+forecaster? `scripts/calibration_ws_backfill.R` replays flu prod's
+`windowed_seasonal` (prod archive, seed, substitutions) over the NHSN seasons
+in hub schema: 2024-25 and 2025-26 as honest as-of replays, 2023-24 with the
+`"cheating"` policy (NHSN vintages start 2024-11-19). With the ILI+ pseudo-hub
+(`scripts/calibration_ili_backfill.R`) this is one forecaster from 2011 to
+2026. `scripts/calibration_ws_experiments.R` runs three setups, all sqrt,
+mult 0.03, window 20, carry, on the 50 locations common to all sources and
+on the hub's submission rounds only:
+
+- **A** submitted ensemble, burn-in 2023-24 (the reference).
+- **B** `windowed_seasonal` on NHSN, burn-in 2023-24.
+- **C** `windowed_seasonal` on the ILI+ decade (2011-12 burn-in, 2012-2020 and
+  2022-23 tracked live) then NHSN 2023-26, whitened per location and era by
+  the 90th percentile of in-season truth (`scales`), offsets carried across
+  the source switch.
+
+Variants: `single` (paper's tracker), `leaky` (`fast_decay = 0.1`),
+`operating` (warm start + slow 0.003 + leaky fast). WIS change % vs base:
+
+| setup / variant | 2024-25 h−1…h3 | 2025-26 h−1…h3 |
+|---|---|---|
+| A single | +11.7 / +2.6 / +1.1 / −0.1 / −1.3 | −2.6 / +2.0 / −2.1 / −3.4 / −2.8 |
+| A operating | +11.2 / +3.8 / +2.6 / +2.5 / +3.8 | +0.4 / +3.9 / +0.2 / −0.5 / −0.7 |
+| B single | +0.7 / +2.0 / +0.3 / −0.7 / −1.5 | −1.4 / +2.3 / −0.5 / −0.7 / −0.3 |
+| B leaky | +1.4 / +2.1 / +0.8 / +0.3 / −0.3 | −0.3 / +1.7 / +0.4 / +0.8 / +1.3 |
+| B operating | +2.1 / +2.7 / +1.1 / +0.7 / +0.8 | −0.1 / +2.3 / +0.4 / +0.5 / +0.6 |
+| C single | −6.0 / −0.3 / −0.3 / +0.4 / +1.3 | −11.4 / −3.8 / −4.0 / −3.4 / −2.9 |
+| C leaky | +1.5 / +1.9 / +0.4 / −0.5 / −1.2 | −0.3 / +1.7 / +0.4 / +0.8 / +1.3 |
+| C operating | −0.7 / +5.1 / +2.9 / +3.3 / +4.1 | −10.1 / −1.1 / −2.0 / −1.3 / −0.6 |
+
+C on the first NHSN season (2023-24, live there): single −42 / −41 / −27 /
+−22 / −19, operating −24 / −23 / −15 / −10 / −6, leaky +1.4 / +0.5 / +0.4 /
++0.7 / +0.6. Calibration error (mean over levels; base first) for B:
+2024-25 base 0.074–0.168, single 0.053–0.088, operating 0.048–0.093;
+2025-26 base 0.044–0.088, single 0.007–0.016, operating 0.016–0.042.
+
+Fraction of truth above the base median (the sign of the bias):
+
+| base | 2023-24 h−1…h3 | 2024-25 | 2025-26 |
+|---|---|---|---|
+| ensemble | 0.56 / 0.55 / 0.55 / 0.53 / 0.52 | 0.83 / 0.74 / 0.73 / 0.74 / 0.76 | 0.58 / 0.63 / 0.59 / 0.60 / 0.60 |
+| windowed_seasonal on NHSN | 0.55 / 0.54 / 0.58 / 0.62 / 0.68 | 0.59 / 0.68 / 0.68 / 0.72 / 0.76 | 0.58 / 0.66 / 0.65 / 0.65 / 0.65 |
+| windowed_seasonal on ILI+ (2014-2019 seasons) | 0.25–0.45 | | |
+
+`windowed_seasonal` calibrated on ILI+ alone (2011-12 burn-in, ten seasons):
+`single` improves WIS in 8 of 10 seasons (+5 to +26%, losses in 2012-13 and
+2022-23) and cuts calibration error at h ≥ 0 from 0.019–0.036 to 0.013–0.017;
+`operating` is negative in 6 of 10 seasons and triples calibration error
+(0.046–0.053). Same numbers appear as the ILI+ rows of setup C.
+
+Reading:
+
+- **The low bias is not the ensemble's alone.** `windowed_seasonal` on NHSN
+  under-predicts in all three seasons (0.55–0.76), growing with horizon, so
+  there is something to correct; the gains are smaller than the ensemble's
+  (+0.4 to +2.7% at the operating point vs up to +11%) because the component
+  is less miscalibrated to begin with (base cal err 0.07–0.17 vs the
+  ensemble's 0.13–0.19 in 2024-25) and because the ensemble's h−1 is a
+  different, worse model (climate_linear).
+- **The same forecaster's bias flips sign with the data source.** On ILI+
+  it over-predicts (truth above median 25–45%); on NHSN it under-predicts.
+  Carrying ILI-era offsets into the NHSN era (C) therefore costs 20–40% WIS
+  in the first NHSN season, and the warm start learned on the ILI decade
+  keeps hurting through 2025-26. The ILI+ history is not a proxy for the
+  NHSN regime even with the same model, so the earlier negative result on
+  ILI+ burn-in was not a plumbing bug (date and geo alignment were checked
+  and hold) but a regime difference.
+- **What transfers across seasons is the plain tracker, not the warm start.**
+  Across ten ILI+ seasons the single-term tracker is reliably positive; the
+  warm start + slow term, chosen on two hub seasons, is reliably negative
+  there. On NHSN with one forecaster (B) the two are close, with `operating`
+  slightly ahead on WIS and `single` far ahead on coverage. The leaky
+  variant is the only one indifferent to history (identical in B and C):
+  small, consistent WIS gains, weakest coverage gains.
+- **Overfitting verdict.** The tracker itself is not overfit to the three
+  hub seasons; the operating point's extra machinery is fit to the ensemble's
+  persistent low bias and should not be assumed to carry over to a new base
+  or a new data source. A prod design should warm-start from the *current*
+  forecaster's most recent NHSN season only, or use the leaky tracker with no
+  warm start when that season is unavailable.
 
 ### Directions this points to, ranked
 
