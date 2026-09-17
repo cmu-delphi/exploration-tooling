@@ -357,7 +357,8 @@ calibrate_hub_forecasts <- function(
 #' @export
 hub_coverage <- function(cal, drop_burn_in = TRUE, by = character(0)) {
   fc <- if (is.list(cal) && !is.data.frame(cal)) cal$forecasts else cal
-  fc <- fc %>% filter(!is.na(.data$truth))
+  # Rounds a location was not forecast at are all-NA in value_base/value_cal.
+  fc <- fc %>% filter(!is.na(.data$truth), !is.na(.data$value_base))
   if (drop_burn_in) fc <- fc %>% filter(!.data$is_burn_in)
   fc %>%
     group_by(across(all_of(c(by, "horizon", "level")))) %>%
@@ -399,7 +400,8 @@ hub_coverage_summary <- function(cal, drop_burn_in = TRUE, by = character(0)) {
 #' @export
 hub_quantile_loss <- function(cal, drop_burn_in = TRUE, by = character(0)) {
   fc <- if (is.list(cal) && !is.data.frame(cal)) cal$forecasts else cal
-  fc <- fc %>% filter(!is.na(.data$truth))
+  # Rounds a location was not forecast at are all-NA in value_base/value_cal.
+  fc <- fc %>% filter(!is.na(.data$truth), !is.na(.data$value_base))
   if (drop_burn_in) fc <- fc %>% filter(!.data$is_burn_in)
   pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
   fc %>%
@@ -434,7 +436,8 @@ hub_quantile_loss <- function(cal, drop_burn_in = TRUE, by = character(0)) {
 #' @export
 hub_rolling_tradeoff <- function(cal, window = 20L, by = character(0), drop_burn_in = TRUE) {
   fc <- if (is.list(cal) && !is.data.frame(cal)) cal$forecasts else cal
-  fc <- fc %>% filter(!is.na(.data$truth))
+  # Rounds a location was not forecast at are all-NA in value_base/value_cal.
+  fc <- fc %>% filter(!is.na(.data$truth), !is.na(.data$value_base))
   if (drop_burn_in) fc <- fc %>% filter(!.data$is_burn_in)
   pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
 

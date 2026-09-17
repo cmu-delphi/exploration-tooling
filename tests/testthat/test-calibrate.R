@@ -78,3 +78,14 @@ test_that("hub_series_matrix rejects duplicate (round, level) rows", {
   expect_no_error(hub_series_matrix(series, rounds, 23L))
   expect_error(hub_series_matrix(bind_rows(series, series[1, ]), rounds, 23L), "more than one value")
 })
+
+test_that("metrics ignore rounds a location was not forecast at", {
+  hub <- make_synthetic_hub()
+  drop <- unique(hub$forecasts$reference_date)[c(35, 36)]
+  forecasts <- hub$forecasts %>% filter(!(location == "B" & reference_date %in% drop))
+  cal <- calibrate_hub_forecasts(forecasts, hub$truth, burn_in_seasons = "2023-2024", progress = FALSE)
+  expect_true(anyNA(cal$forecasts$value_base))
+  expect_false(anyNA(hub_quantile_loss(cal)$loss_cal))
+  expect_false(anyNA(hub_coverage(cal)$coverage_cal))
+  expect_false(anyNA(hub_rolling_tradeoff(cal, window = 5L)$qloss_cal))
+})
