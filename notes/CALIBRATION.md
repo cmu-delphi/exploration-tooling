@@ -383,6 +383,46 @@ The useful implication is the opposite one: the hub's own 2023-24 burn-in
 directly (`slow_init = "burn_in_quantile"`: the conformal offset per horizon
 and level, pooled over locations) rather than accumulated by gradient steps.
 
+### Correctness fixes (2026-09-17)
+
+A review of the calibration code found two defects that affect every table
+above dated 2026-09-16; the fixes are on `ds/calibrate` as separate commits.
+
+1. **`sqrt` inverse was `x^2`, not `pmax(x, 0)^2`.** The isotonic projection
+   runs on the sqrt scale, so a played vector with negative low quantiles is
+   monotone there but squaring folds the negative part back up and the
+   count-space quantiles cross. On the hub run this hit 578 of 20,393 forecast
+   sets in the single-term baseline and 1,708 at the operating point, almost
+   all at levels 0.01–0.05 in small geos at the trough. `quartic_root` already
+   clamped; `sqrt` now does the same, and `tests/testthat/test-calibrate.R`
+   exercises the negative regime.
+2. **Gating was by reveal round, not issue round.** `update_from[t]` gated the
+   step *taken at* round `t`, but that step applies gradients of the rounds in
+   `delay[[t]]`, which at the first live round are the last `h + 2` burn-in
+   rounds (revealed in a burst after the off-season gap). So the live season
+   opened with several stale spring gradients, and `off_after` rounds played at
+   base were learned from the following October. Both masks are now indexed by
+   the round a forecast was issued at; burn-in and switched-off outcomes still
+   feed the eta pool but never step.
+
+Re-measured after both fixes (sqrt, mult 0.03, floor 1e-3, window 20, carry,
+hub 2023-24 burn-in), WIS change vs base by horizon −1…3 and calibration error
+range. The issue-round gating is what removes most of the h2/h3 loss of the
+single-term tracker: the stale burst at season start was a large part of it.
+
+| variant | h−1 | h0 | h1 | h2 | h3 | cal err |
+|---|---|---|---|---|---|---|
+| sqrt, single term (was +8.0/+4.1/−0.4/−3.1/−3.4) | +8.0 | +4.5 | +0.8 | −0.6 | −1.4 | 0.022–0.043 |
+| operating point: warm start + slow 0.003 + fast decay 0.1 (was +9.0/+5.3/+1.9/+0.8/+0.5) | +9.0 | +5.6 | +2.7 | +1.9 | +1.9 | 0.040–0.072 |
+
+Also in the same set of commits: `lr_geo_pool` removed (never beat baseline);
+`lr_slow` aborts with a constant `lr` or per-level eta (it silently ignored its
+own `mult` before); `off_after` and `fast_decay` abort when combined (the leak
+would run through the off window, so "frozen offset" would be false); the
+hub reader aborts on duplicate (round, level) rows; the accidentally committed
+`covid_hosp_prod/workspaces/` binaries were dropped from history and the
+pattern is now ignored. The notebooks have not been re-rendered since.
+
 ### Directions this points to, ranked
 
 1. **Split the offset into a slow level term and a fast tracker.** Done
