@@ -109,6 +109,7 @@ hub_series_matrix <- function(series, round_date, n_levels) {
 #'   `fast_decay = 0.1`. The slow term ignores `season_policy` and `off_after`
 #'   gating of updates is applied to both terms.
 #' @param fast_decay leak on the fast term per round, `[0, 1)`; see [qt_track()].
+#'   Mutually exclusive with `off_after`.
 #' @param slow_init `NULL`, or `"burn_in_quantile"`: before tracking, set the
 #'   slow term per (horizon, level) to the conformal offset implied by the
 #'   burn-in rounds pooled over locations, i.e. the `level`-quantile of
@@ -168,6 +169,13 @@ calibrate_hub_forecasts <- function(
   }
   if (!is.null(scales) && !all(c("location", "from", "scale") %in% names(scales))) {
     cli::cli_abort("{.arg scales} needs columns {.field location}, {.field from}, {.field scale}.")
+  }
+  # Both are answers to the same question (what to do with a stale offset):
+  # off_after freezes it by the calendar, fast_decay leaks it every round. The
+  # leak would also run through the off window, so the frozen-offset reading of
+  # off_after would be false. Compare them, do not stack them.
+  if (!is.null(off_after) && fast_decay > 0) {
+    cli::cli_abort("{.arg off_after} and {.arg fast_decay} cannot be combined; choose one way of retiring stale offsets.")
   }
 
   rounds <- hub_label_seasons(unique(forecasts$reference_date))
