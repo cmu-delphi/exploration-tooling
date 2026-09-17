@@ -56,9 +56,6 @@ burn_in <- strsplit(params$burn_in_seasons, ",")[[1]]
 geo_map <- get_population_data() %>%
   distinct(state_id, .keep_all = TRUE) %>%
   transmute(state_id, abbrev = toupper(state_id), location = state_code)
-pop <- get_population_data() %>%
-  distinct(state_code, .keep_all = TRUE) %>%
-  transmute(location = state_code, population)
 
 archive <- nanoparquet::read_parquet(
   here::here("cache/calibration/nhsn_archive_flu.parquet")

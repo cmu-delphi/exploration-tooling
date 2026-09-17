@@ -25,7 +25,9 @@ projection. Full repro commands live in `notes/calibration-runbook.md`.
   Method options beyond the paper: `transform` (power/log space),
   `scales` (per-location, per-era divisors so rounds from different sources
   share one tracker), `lr_slow` + `fast_decay` + `burn_in_learns_slow` (the
-  two-term offset, below), `off_after`, `lr_seasonal`, `lr_geo_pool`.
+  two-term offset, below), `off_after`, `lr_seasonal`. (`lr_geo_pool`, the
+  geo-pooled eta in the sweep table below, was removed 2026-09-17: it never
+  beat the baseline.)
 - `scripts/calibration_ili_backfill.R` — runs flu prod's `windowed_seasonal`
   forecaster on the ILI+ state history (2010–2024, Wednesday labels, snapshot
   truncated one week to mimic reporting lag) and writes a pseudo-hub
@@ -131,7 +133,7 @@ horizon −1/0/1/2/3:
 | off after March 1 | `off_after = "03-01"` | +4.5 | +2.0 | +0.4 | 0.0 | +0.2 |
 | off after February 15 | `off_after = "02-15"` | +3.0 | +2.5 | +1.3 | +0.8 | +0.9 |
 | per-level eta | `lr_args$per_level = TRUE` | +4.2 | +1.8 | −1.3 | −3.4 | −5.4 |
-| geo-pooled eta | `lr_geo_pool = <pop>` | +4.4 | +2.0 | −2.2 | −5.5 | −7.7 |
+| geo-pooled eta (option since removed) | `lr_geo_pool = <pop>` | +4.4 | +2.0 | −2.2 | −5.5 | −7.7 |
 | seasonal eta window (carry) | `lr_window = 10, lr_seasonal = list(half_width_weeks = 5)` | +2.9 | +0.1 | −3.0 | −5.5 | −7.5 |
 | seasonal eta window (reset) | same + `season_policy = "reset"` | +3.2 | +1.1 | −2.1 | −4.7 | −7.0 |
 | log-space tracker | `transform = "log1p", lr_args = list(mult = 0.03, floor = 1e-3)` | +10.8 | +1.8 | −5.7 | −9.0 | −8.8 |

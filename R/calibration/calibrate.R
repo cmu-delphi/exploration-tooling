@@ -81,11 +81,6 @@ hub_series_matrix <- function(series, round_date, n_levels) {
 #'   shifted by whole 52-week years), so eta at the start of a ramp is sized by
 #'   last year's ramp rather than last year's trough. Typically paired with a
 #'   short `lr_window` (e.g. 10).
-#' @param lr_geo_pool `NULL`, or a tibble of `location`, `population`. Eta is
-#'   then computed once per (horizon, round) from the per-capita residuals of
-#'   all locations over the `lr_window` tail (and `lr_seasonal` extras), and
-#'   handed to each series scaled back to its own counts. The 0.1 floor is
-#'   applied in count space, so small geos are not floored to nothing.
 #' @param transform `"identity"` (the paper's method, additive offsets in count
 #'   space), `"log1p"`, `"sqrt"`, or `"quartic_root"` (the forecasters'
 #'   whitening map, `(x + 0.01)^0.25`). The tracker runs on the transformed
@@ -144,7 +139,6 @@ calibrate_hub_forecasts <- function(
   nonneg = TRUE,
   off_after = NULL,
   lr_seasonal = NULL,
-  lr_geo_pool = NULL,
   transform = c("identity", "log1p", "sqrt", "quartic_root"),
   scales = NULL,
   lr_slow = NULL,
@@ -164,9 +158,6 @@ calibrate_hub_forecasts <- function(
     identity = identity, log1p = expm1, sqrt = function(x) pmax(x, 0)^2,
     quartic_root = function(x) pmax(x, 0)^4 - 0.01
   )
-  if ((transform != "identity" || !is.null(scales)) && !is.null(lr_geo_pool)) {
-    cli::cli_abort("{.arg lr_geo_pool} is defined in per-capita count space; it cannot be combined with {.arg transform} or {.arg scales}.")
-  }
   if (!is.null(scales) && !all(c("location", "from", "scale") %in% names(scales))) {
     cli::cli_abort("{.arg scales} needs columns {.field location}, {.field from}, {.field scale}.")
   }
@@ -237,20 +228,6 @@ calibrate_hub_forecasts <- function(
   keys <- keys[ord, ]
   chunks <- chunks[ord]
 
-  # Geo-pooled eta: one per-capita schedule per horizon, computed on the same
-  # observed-window rule qt_track() uses, from the calendar delay alone.
-  pooled_eta <- NULL
-  if (!is.null(lr_geo_pool)) {
-    pop <- stats::setNames(lr_geo_pool$population, lr_geo_pool$location)
-    if (!all(keys$location %in% names(pop))) {
-      cli::cli_abort("{.arg lr_geo_pool} lacks population for some locations.")
-    }
-    pooled_eta <- hub_pooled_eta(
-      chunks, keys, round_date, m, truth_lookup, pop, settle_days,
-      lr_window, lr_extra, lr_args
-    )
-  }
-
   init_slow_by_h <- NULL
   if (!is.null(slow_init)) {
     slow_init <- rlang::arg_match(slow_init, "burn_in_quantile")
@@ -283,16 +260,13 @@ calibrate_hub_forecasts <- function(
     delay <- qt_delay_from_dates(round_date, target_end_date, settle_days)
     delay <- lapply(delay, function(idx) idx[learnable[idx]])
 
-    lr_schedule <- if (!is.null(pooled_eta)) {
-      pmax(0.1, pooled_eta[[as.character(h)]] * pop[[loc]])
-    }
     s_t <- hub_round_scales(scales, loc, round_date)
     res <- qt_track(
       Y = fwd(Y / s_t), Yhat = fwd(sweep(Yhat, 2L, s_t, "/")), levels = levels, delay = delay,
       lr = lr, lr_window = lr_window, lr_args = lr_args, projection = projection,
       nonneg = FALSE,
       update_from = update_from, hidden_scale = hidden_scale,
-      apply = apply, lr_extra = lr_extra, lr_schedule = lr_schedule,
+      apply = apply, lr_extra = lr_extra,
       lr_slow = lr_slow, fast_decay = fast_decay, slow_update_from = slow_update_from,
       init_slow = if (is.null(init_slow_by_h)) 0 else init_slow_by_h[[as.character(h)]]
     )
@@ -564,50 +538,4 @@ hub_seasonal_lr_extra <- function(round_date, half_width_weeks = 5) {
     }
     sort(unique(idx[idx < t]))
   })
-}
-
-
-#' Geo-pooled per-capita eta, one schedule per horizon.
-#'
-#' Reproduces qt_track()'s window rule -- the tail of the revealed rounds, in
-#' reveal order, plus `lr_extra` -- but over the per-capita residuals of every
-#' location at once. Returns eta per 1 capita, unfloored; the caller multiplies
-#' by population and applies the floor in count space.
-#' @keywords internal
-hub_pooled_eta <- function(
-  chunks, keys, round_date, m, truth_lookup, pop, settle_days,
-  lr_window, lr_extra, lr_args
-) {
-  n <- length(round_date)
-  mult <- lr_args$mult %||% 0.1
-  prob <- lr_args$prob %||% 0.9
-  out <- list()
-  for (h in sort(unique(keys$horizon))) {
-    idx <- which(keys$horizon == h)
-    target_end_date <- round_date + 7L * h
-    # m x n x L array of per-capita |residuals|; NA where unlearnable.
-    resid <- array(NA_real_, dim = c(m, n, length(idx)))
-    for (j in seq_along(idx)) {
-      loc <- keys$location[idx[j]]
-      Yhat <- hub_series_matrix(chunks[[idx[j]]], round_date, m)
-      Y <- unname(truth_lookup[paste(loc, target_end_date)])
-      resid[, , j] <- abs(matrix(Y, m, n, byrow = TRUE) - Yhat) / pop[[loc]]
-    }
-    delay <- qt_delay_from_dates(round_date, target_end_date, settle_days)
-    eta <- numeric(n)
-    observed <- integer(0)
-    for (t in seq_len(n)) {
-      observed <- c(observed, delay[[t]])
-      if (length(observed) == 0L) next
-      window <- if (is.finite(lr_window)) utils::tail(observed, lr_window) else observed
-      if (!is.null(lr_extra)) window <- union(window, intersect(lr_extra[[t]], observed))
-      r <- resid[, window, , drop = FALSE]
-      r <- r[!is.na(r)]
-      if (length(r) > 0L) {
-        eta[t] <- mult * stats::quantile(r, prob, names = FALSE, type = 7L)
-      }
-    }
-    out[[as.character(h)]] <- eta
-  }
-  out
 }
