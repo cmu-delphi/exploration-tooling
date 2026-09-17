@@ -36,6 +36,16 @@ hub_series_matrix <- function(series, round_date, n_levels) {
   if (!all(series$level_index %in% seq_len(n_levels))) {
     cli::cli_abort("Series carries a level index outside {.code 1:{n_levels}}.")
   }
+  # Matrix assignment would silently keep the last of two rows for the same
+  # cell, which is how a duplicated hub file or a re-submitted round would
+  # disappear without trace.
+  dup <- duplicated(cbind(ri, series$level_index))
+  if (any(dup)) {
+    cli::cli_abort(
+      "Round{?s} {.val {format(unique(round_date[ri[dup]]))}} carr{?ies/y}
+       more than one value for the same quantile level."
+    )
+  }
   out <- matrix(NA_real_, nrow = n_levels, ncol = n)
   out[cbind(series$level_index, ri)] <- series$value
 
