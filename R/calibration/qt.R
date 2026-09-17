@@ -243,6 +243,7 @@ qt_validate_delay <- function(delay, n) {
 #'   ignores `hidden_scale`, so it carries across seasons unconditionally: it
 #'   is meant to hold the persistent component of the base forecaster's bias.
 #'   Unset entries default to `window = Inf`, `floor = 0`, `mult = lr_args$mult / 10`.
+#'   Requires `lr = "adaptive+"` and pooled (not per-level) eta.
 #' @param fast_decay in `[0, 1)`. Each round the fast term is multiplied by
 #'   `1 - fast_decay` before its update, so a correction that is not refreshed
 #'   by new outcomes leaks away instead of persisting. `0` (the default) is the
@@ -380,6 +381,14 @@ qt_track <- function(
     lr_slow$mult <- lr_slow$mult %||% ((lr_args$mult %||% 0.1) / 10)
     if (!(is.numeric(lr_slow$window) && length(lr_slow$window) == 1L && lr_slow$window >= 1)) {
       cli::cli_abort("{.arg lr_slow$window} must be a single value >= 1 (possibly Inf).")
+    }
+    # The slow eta is always the pooled adaptive heuristic with its own mult and
+    # floor; a constant lr or per-level eta would silently apply to it as well.
+    if (is.numeric(lr)) {
+      cli::cli_abort("{.arg lr_slow} requires {.code lr = \"adaptive+\"}; a constant {.arg lr} would override the slow term's step size.")
+    }
+    if (isTRUE(lr_args$per_level)) {
+      cli::cli_abort("{.arg lr_slow} cannot be combined with {.code lr_args$per_level = TRUE}.")
     }
   }
   slow_update_from <- slow_update_from %||% update_from

@@ -467,3 +467,12 @@ test_that("update_from gates by issue round: burn-in outcomes revealed live take
   # Eta is still warmed up by the burn-in reveals.
   expect_true(all(res$lr[31:32] > 0))
 })
+
+test_that("lr_slow rejects a constant lr and per-level eta", {
+  fx <- qt_read_fixture("hub_delay2")
+  expect_error(qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay, lr = 1, lr_slow = list(mult = 0.01)), "adaptive")
+  expect_error(
+    qt_track(fx$Y, fx$Yhat, fx$levels, fx$delay, lr_args = list(per_level = TRUE), lr_slow = list(mult = 0.01)),
+    "per_level"
+  )
+})
