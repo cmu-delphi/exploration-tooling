@@ -157,7 +157,7 @@ calibrate_hub_forecasts <- function(
     quartic_root = function(x) (x + 0.01)^0.25
   )
   inv <- switch(transform,
-    identity = identity, log1p = expm1, sqrt = function(x) x^2,
+    identity = identity, log1p = expm1, sqrt = function(x) pmax(x, 0)^2,
     quartic_root = function(x) pmax(x, 0)^4 - 0.01
   )
   if ((transform != "identity" || !is.null(scales)) && !is.null(lr_geo_pool)) {
