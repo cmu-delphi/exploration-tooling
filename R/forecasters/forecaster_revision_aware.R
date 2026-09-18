@@ -370,6 +370,7 @@ scaled_pop_seasonal_revision <- function(
   outlier_threshold = 0.10,
   outlier_min_value = 30,
   outlier_min_obs = 5L,
+  finalization_coverage = 0.95,
   return_fit = FALSE,
   ...
 ) {
@@ -513,7 +514,7 @@ scaled_pop_seasonal_revision <- function(
   # gives a data-driven cutoff: targets this recent are often still actively
   # revised. forecast_rows is built separately above and is not filtered here.
   finalization_cutoff_days <- as.integer(
-    ceiling(compute_finalization_lag_weeks(epi_data, outcome) * 7)
+    ceiling(compute_finalization_lag_weeks(epi_data, outcome, coverage = finalization_coverage) * 7)
   )
   message(
     format(epi_data$versions_end), " ahead=", ahead,

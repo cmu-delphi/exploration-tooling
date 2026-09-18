@@ -6,7 +6,8 @@
 	eval-covid prune-covid-evaluation \
 	pull-covid-evaluation push-covid-evaluation get-covid-evaluation-errors \
 	pull-flu-evaluation push-flu-evaluation get-flu-evaluation-errors \
-	oracle-capture oracle-compare
+	oracle-capture oracle-compare \
+	prod-compare-covid prod-compare-flu
 
 # Long-running recipes tee to cache/logs/ and set pipefail inline so a failing
 # Rscript isn't masked by tee's exit status. bash is needed for pipefail; keep
@@ -61,6 +62,12 @@ explore-covid:
 
 explore-flu:
 	export TAR_RUN_PROJECT=flu_hosp_explore; Rscript scripts/run.R
+
+prod-compare-covid:
+	Rscript scripts/render_prod_explore_comparison.R covid
+
+prod-compare-flu:
+	Rscript scripts/render_prod_explore_comparison.R flu
 
 explore: explore-covid explore-flu update-site netlify
 
