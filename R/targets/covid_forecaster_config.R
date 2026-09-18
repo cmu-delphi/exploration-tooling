@@ -88,6 +88,7 @@ get_covid_forecaster_params <- function() {
       nonlin_method = c("quart_root", "none"),
       seasonal_backward_window = 5 * 7,
       seasonal_forward_window = 3 * 7,
+      finalization_coverage = 0.8,
       needs_archive = TRUE,
       sort_quantiles = TRUE
     ),
@@ -104,6 +105,7 @@ get_covid_forecaster_params <- function() {
       nonlin_method = "none",
       seasonal_backward_window = 5 * 7,
       seasonal_forward_window = 3 * 7,
+      finalization_coverage = 0.8,
       needs_archive = TRUE,
       sort_quantiles = TRUE,
       outlier_n_weeks = c(NA_integer_, 4L)
@@ -125,6 +127,7 @@ get_covid_forecaster_params <- function() {
         center_method = "none",
         nonlin_method = "none",
         use_seasonal_window = FALSE,
+        finalization_coverage = 0.8,
         needs_archive = TRUE,
         sort_quantiles = TRUE,
         outlier_n_weeks = c(NA_integer_, 4L)
@@ -142,6 +145,7 @@ get_covid_forecaster_params <- function() {
         center_method = "none",
         nonlin_method = "none",
         use_seasonal_window = FALSE,
+        finalization_coverage = 0.8,
         needs_archive = TRUE,
         sort_quantiles = TRUE,
         outlier_n_weeks = c(NA_integer_, 4L)
@@ -163,6 +167,7 @@ get_covid_forecaster_params <- function() {
         use_seasonal_window = TRUE,
         seasonal_backward_window = 5 * 7,
         seasonal_forward_window = 3 * 7,
+        finalization_coverage = 0.8,
         needs_archive = TRUE,
         sort_quantiles = TRUE,
         outlier_n_weeks = c(NA_integer_, 4L)
@@ -182,6 +187,7 @@ get_covid_forecaster_params <- function() {
         use_seasonal_window = TRUE,
         seasonal_backward_window = 5 * 7,
         seasonal_forward_window = 3 * 7,
+        finalization_coverage = 0.8,
         needs_archive = TRUE,
         sort_quantiles = TRUE,
         outlier_n_weeks = c(NA_integer_, 4L)

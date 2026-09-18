@@ -101,6 +101,11 @@ if (g_evaluation_mode) {
 g_forecast_dates <- g_forecast_schedule$forecast_date_int
 g_forecast_generation_dates <- g_forecast_schedule$forecast_generation_date_int
 
+if (!g_evaluation_mode) {
+  stamp_default_weights("scripts/flu_geo_exclusions.csv", g_forecast_dates[[1L]])
+  stamp_default_weights("scripts/flu_nssp_geo_exclusions.csv", g_forecast_dates[[1L]])
+}
+
 # Forecaster grid — behavior is defined by (id, bare forecaster function,
 # params). Per-forecaster wrapping that isn't a modeling parameter (ahead
 # multiplier, target-date shift, extra-source join, source/geo filtering, as-of

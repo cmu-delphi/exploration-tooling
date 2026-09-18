@@ -137,3 +137,7 @@ load-bearing.
 
 ## Run conventions
 Most runs of explore targets happen on a remote machine, and not locally
+
+### Worktrees
+
+- when using git worktrees, store them in the .worktrees directory in the root of the project folder

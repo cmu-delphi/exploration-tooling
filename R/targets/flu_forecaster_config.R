@@ -222,6 +222,7 @@ get_flu_forecaster_params <- function() {
       train_sources = list2(
         c("nhsn", "ILI+", "flusurv")
       ),
+      finalization_coverage = 0.8,
       needs_archive = TRUE
     ),
     # Revision-aware analog of the `window` seasonal method
@@ -239,6 +240,7 @@ get_flu_forecaster_params <- function() {
       train_sources = list2(
         c("nhsn")
       ),
+      finalization_coverage = 0.8,
       needs_archive = TRUE
     ),
     # Same as revision_aware but with nssp as an exogenous predictor. Restricts
@@ -258,6 +260,7 @@ get_flu_forecaster_params <- function() {
       seasonal_backward_window = 5 * 7,
       seasonal_forward_window = 3 * 7,
       train_sources = list2(c("nhsn")),
+      finalization_coverage = 0.8,
       needs_archive = TRUE,
       outlier_n_weeks = c(NA_integer_, 4L)
     ),
@@ -274,6 +277,7 @@ get_flu_forecaster_params <- function() {
       nonlin_method = "none",
       use_seasonal_window = FALSE,
       train_sources = list2(c("nhsn")),
+      finalization_coverage = 0.8,
       needs_archive = TRUE,
       outlier_n_weeks = c(NA_integer_, 4L)
     ),
@@ -296,6 +300,7 @@ get_flu_forecaster_params <- function() {
         nonlin_method = "none",
         use_seasonal_window = FALSE,
         train_sources = list2(c("nhsn")),
+        finalization_coverage = 0.8,
         needs_archive = TRUE,
         outlier_n_weeks = c(NA_integer_, 4L)
       ),
@@ -314,6 +319,7 @@ get_flu_forecaster_params <- function() {
         nonlin_method = "none",
         use_seasonal_window = FALSE,
         train_sources = list2(c("nhsn")),
+        finalization_coverage = 0.8,
         needs_archive = TRUE,
         outlier_n_weeks = c(NA_integer_, 4L)
       )
@@ -336,6 +342,7 @@ get_flu_forecaster_params <- function() {
         seasonal_backward_window = 5 * 7,
         seasonal_forward_window = 3 * 7,
         train_sources = list2(c("nhsn")),
+        finalization_coverage = 0.8,
         needs_archive = TRUE,
         outlier_n_weeks = c(NA_integer_, 4L)
       ),
@@ -356,6 +363,7 @@ get_flu_forecaster_params <- function() {
         seasonal_backward_window = 5 * 7,
         seasonal_forward_window = 3 * 7,
         train_sources = list2(c("nhsn")),
+        finalization_coverage = 0.8,
         needs_archive = TRUE,
         outlier_n_weeks = c(NA_integer_, 4L)
       )
