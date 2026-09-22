@@ -51,7 +51,7 @@ if (!g_evaluation_mode) {
   # It's used for stamping the data and picking the as_of. Usually forecast_date
   # equals it, but forecast_date can be overridden and should be a Wednesday.
   gen_dates <- g_reference_date
-  fc_dates <- round_date(gen_dates, "weeks", week_start = 3)
+  fc_dates <- floor_date(gen_dates, "weeks", week_start = 3)
   # the forecast is actually for the wednesday beforehand for these days
   if (gen_dates %in% as.Date(c("2025-12-29"))) {
     fc_dates <- as.Date("2025-12-24")
@@ -101,11 +101,6 @@ g_quantreg <- epipredict::quantile_reg()
 # reject; monotone-by-construction forecasters stay unsorted so a crossing
 # there surfaces as an error.
 g_forecaster_params_grid <- list(
-  cdc_baseline = tibble(
-    id = "cdc_baseline",
-    forecaster = "g_baseline_forecaster",
-    min_train_date = list(as.Date("2024-11-09"))
-  ),
   linear = tibble(
     id = "linear",
     forecaster = "forecaster_baseline_linear",
@@ -553,6 +548,96 @@ joined_targets <- list2(
 
 combined_targets <- build_combined_targets(external_forecast_targets)
 
+# ============================== CALIBRATION TARGETS ============================
+# Same design as flu; see flu_hosp_prod.R and notes/CALIBRATION.md. No 2023-24
+# burn-in for covid (hub started 2024-11-23), so slow_init is NULL.
+calibration_targets <- list(
+  tar_target(
+    calibrated_ensemble_nhsn,
+    command = {
+      if (g_submission_directory == "cache") {
+        cli::cli_alert_info("Skipping covid calibration (no hub checkout; set COVID_SUBMISSION_DIRECTORY)")
+        return(NULL)
+      }
+      historical_fc <- hub_read_forecasts(
+        hub_dir = g_submission_directory,
+        target = HUB_COVID_TARGET
+      )
+      current_ref <- get_forecast_reference_date(max(g_forecast_dates))
+      if (!current_ref %in% unique(historical_fc$reference_date)) {
+        current_fc <- local_forecasts_and_ensembles_nhsn %>%
+          filter(.data$forecaster == "ensemble_mix") %>%
+          internal_to_hub_forecasts(disease = "covid")
+        historical_fc <- bind_rows(historical_fc, current_fc)
+      }
+      truth <- hub_read_covid_truth(hub_dir = g_submission_directory)
+      calibrate_hub_forecasts(
+        historical_fc, truth,
+        burn_in_seasons = character(0),
+        transform = "sqrt",
+        lr_args = list(mult = 0.03, floor = 1e-3),
+        lr_window = 20,
+        season_policy = "carry",
+        slow_init = NULL,
+        lr_slow = list(mult = 0.003),
+        fast_decay = 0.1
+      )
+    },
+    cue = tar_cue("always")
+  ),
+  tar_target(
+    make_calibrated_submission_csv,
+    command = {
+      if (is.null(calibrated_ensemble_nhsn) || g_submission_directory == "cache" || g_evaluation_mode) {
+        cli::cli_alert_info("Not making calibrated covid submission csv")
+        return(invisible(NULL))
+      }
+      current_ref <- get_forecast_reference_date(max(g_forecast_dates))
+      out_dir <- file.path(g_submission_directory, "model-output/CMU-TimeSeries-Calibrated")
+      dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+      calibrated_ensemble_nhsn$forecasts %>%
+        filter(.data$reference_date == current_ref, !.data$is_burn_in) %>%
+        mutate(
+          target = HUB_COVID_TARGET,
+          output_type = "quantile",
+          output_type_id = as.character(.data$level)
+        ) %>%
+        select(
+          "reference_date", "target", "horizon", "target_end_date",
+          "location", "output_type", "output_type_id", value = "value_cal"
+        ) %>%
+        write_submission_file(
+          current_ref,
+          out_dir,
+          file_name = "CMU-TimeSeries-Calibrated"
+        )
+    },
+    cue = tar_cue("always")
+  ),
+  tar_target(
+    local_calibrated_scores_nhsn,
+    command = {
+      if (is.null(calibrated_ensemble_nhsn)) return(tibble())
+      calibrated_ensemble_nhsn$forecasts %>%
+        filter(!.data$is_burn_in, !is.na(.data$value_cal)) %>%
+        left_join(
+          get_population_data() %>% select("state_code", "state_id"),
+          by = c("location" = "state_code")
+        ) %>%
+        transmute(
+          geo_value = .data$state_id,
+          forecast_date = .data$reference_date,
+          target_end_date = .data$target_end_date,
+          quantile = .data$level,
+          value = .data$value_cal,
+          forecaster = "CMU-TimeSeries-Calibrated"
+        ) %>%
+        score_forecasts(nhsn_latest_data, ., "wk inc covid hosp")
+    },
+    cue = tar_cue("always")
+  )
+)
+
 if (g_evaluation_mode) {
   score_notebook <- build_backtest_score_targets()
 } else {
@@ -584,7 +669,7 @@ if (g_evaluation_mode) {
             target = "nhsn",
             external_forecasts = external_forecasts_full %>% filter(target == "wk inc covid hosp") %>% select(-target),
             archive = nhsn_archive_data,
-            scores = external_scores_nhsn_full
+            scores = bind_rows(external_scores_nhsn_full, local_calibrated_scores_nhsn)
           )
         )
       }
@@ -647,5 +732,6 @@ list2(
   external_forecast_targets,
   combined_targets,
   joined_targets,
+  calibration_targets,
   score_notebook
 )

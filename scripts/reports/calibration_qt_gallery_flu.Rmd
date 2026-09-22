@@ -20,11 +20,11 @@ editor_options:
 
 ```{r setup, echo=FALSE}
 # cache = TRUE chunks are keyed on chunk code + cache.extra, NOT on functions
-# in R/ -- after changing calibration code, clear cache/calibration/knitr_cache_gallery/.
+# in R/ -- after changing calibration code, clear cache/calibration/knitr_cache_gallery_flu/.
 knitr::opts_chunk$set(
   fig.align = "center", fig.width = 10, fig.height = 6,
   message = FALSE, warning = FALSE, cache = FALSE,
-  cache.path = here::here("cache/calibration/knitr_cache_gallery/")
+  cache.path = here::here("cache/calibration/knitr_cache_gallery_flu/")
 )
 knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw())
@@ -53,7 +53,7 @@ cal <- calibrate_hub_forecasts(
 )
 ```
 
-This document contains a gallery of forecasts that were adjusted the most (in mean absolute deviation, see below) (`calibration_qt.Rmd` has the parameter-sweeps, this notebook gets more granular about forecast adjustments; see
+This document contains a gallery of forecasts that were adjusted the most (in mean absolute deviation, see below) (`calibration_qt_flu.Rmd` has the parameter-sweeps, this notebook gets more granular about forecast adjustments; see
 `notes/CALIBRATION.md` for the project state).
 
 The parameters for the calibration method are fixed:

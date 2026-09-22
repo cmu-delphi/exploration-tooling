@@ -1,5 +1,5 @@
 ---
-title: Online quantile calibration (MultiQT) on submitted FluSight forecasts
+title: Online quantile calibration (MultiQT) on submitted COVID hub forecasts
 date: "`r format(Sys.time(), '%d %B %Y')`"
 output:
   html_document:
@@ -8,7 +8,7 @@ output:
     toc: true
     toc_float: true
 params:
-  burn_in_seasons: "2023-2024"
+  burn_in_seasons: ""
   season_policy: "carry"
   lr_window: 50
   lr_mult: 0.1
@@ -19,11 +19,11 @@ editor_options:
 
 ```{r setup, echo=FALSE}
 # cache = TRUE chunks are keyed on chunk code + cache.extra, NOT on functions
-# in R/ -- after changing calibration code, clear cache/calibration/knitr_cache/.
+# in R/ -- after changing calibration code, clear cache/calibration/knitr_cache_covid/.
 knitr::opts_chunk$set(
   fig.align = "center", fig.width = 10, fig.height = 6,
   message = FALSE, warning = FALSE, cache = FALSE,
-  cache.path = here::here("cache/calibration/knitr_cache/")
+  cache.path = here::here("cache/calibration/knitr_cache_covid/")
 )
 knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw())
@@ -32,8 +32,8 @@ ggplot2::theme_set(ggplot2::theme_bw())
 ```{r load, cache=TRUE, cache.extra=list(params)}
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))
 
-forecasts <- hub_read_forecasts()
-truth <- hub_read_truth()
+forecasts <- hub_read_forecasts(hub_dir = HUB_COVID_DIR, target = HUB_COVID_TARGET)
+truth <- hub_read_covid_truth()
 rounds <- hub_label_seasons(unique(forecasts$reference_date))
 
 burn_in <- if (nzchar(params$burn_in_seasons)) {
@@ -52,11 +52,11 @@ cal <- calibrate_hub_forecasts(
 )
 ```
 
-We calibrate the forecasts CMU-TimeSeries submitted to FluSight. https://github.com/cdcepi/FluSight-forecast-hub The hub
-ships one consistent truth series (`target-data/target-hospital-admissions.csv`)
-covering every season. The method is MultiQT (Ding, Gibbs & Tibshirani 2025); our
-port is `R/calibration/qt.R`, verified against the authors' Python in
-`tests/testthat/test-qt.R` (same input, same output).
+We calibrate the forecasts CMU-TimeSeries submitted to the COVID hub. https://github.com/cdcepi/covid19-forecast-hub
+The hub ships one consistent truth series (`target-data/covid-hospital-admissions.csv`).
+The method is MultiQT (Ding, Gibbs & Tibshirani 2025); our port is `R/calibration/qt.R`, verified against the authors' Python in `tests/testthat/test-qt.R`.
+
+COVID submissions run year-round with no meaningful off-season gap, so there is no burn-in season.
 
 Data facts:
 
@@ -82,14 +82,11 @@ Notes:
    `target_end_date = reference_date + 7 * horizon`, so waiting 14 days for NHSN
    to settle puts the delay at exactly `h + 2` rounds. The offset applied at
    horizon 3 is therefore always 5 rounds stale.
-2. 2023-24 is incomplete: horizon -1 exists in only 5 of 28 rounds and
-   locations drop in and out, so it is used as a burn-in season. Its residuals
-   warm up the learning rate, but no gradient step is taken and the offsets
-   stay at zero.
-3. Per-series coverage cannot be measured at the extreme levels: ~27 rounds
-   per season minus delay means the 1% and 99% levels see ~0.3 expected
-   exceedances per series. Every coverage number below is pooled over the 53
-   locations.
+2. Unlike flu, COVID has no off-season: all rounds are treated as live.
+   Season policy (`carry`/`reset`/`shrink`) therefore has no effect on these results.
+3. Per-series coverage cannot be measured at the extreme levels: the 1% and 99%
+   levels see ~0.3 expected exceedances per season per series. Every coverage
+   number below is pooled over the 53 locations.
 
 # Score results
 
@@ -119,36 +116,7 @@ Calibration error here is the mean over the 23 quantile levels of
 `|geo-pooled empirical coverage at a - a|`. WIS is reported with the standard
 factor-of-two convention (2 x the level-averaged pinball loss on this level
 set), so it is directly comparable to hub scores; improvement percentages are
-identical either way. The two metrics move in opposite directions, and the WIS
-cost grows with the horizon. This is consistent with the `h + 2` staleness: a
-stale additive offset in count space does the most damage where the seasonal
-ramp is steep relative to the offset.
-
-## By season
-
-```{r headline-by-season}
-left_join(
-  hub_coverage_summary(cal, by = "season"),
-  select(hub_quantile_loss(cal, by = "season"),
-    season, horizon, loss_base, loss_cal, loss_pct = pct_improvement
-  ),
-  by = c("season", "horizon")
-) %>%
-  transmute(
-    season, horizon,
-    `cal err (base)` = round(cal_error_base, 4),
-    `cal err (calibrated)` = round(cal_error_cal, 4),
-    `cal err improvement %` = round(pct_improvement, 1),
-    `WIS (base)` = round(2 * loss_base, 1),
-    `WIS (calibrated)` = round(2 * loss_cal, 1),
-    `WIS improvement %` = round(loss_pct, 1)
-  ) %>%
-  arrange(season, horizon)
-```
-
-The burn-in season (2023-24) is excluded throughout. In the per-season view,
-season 2 is the tracker's first live season; season 3 shows the effect of a
-second season of accumulated state (under `carry` across the off-season gap).
+identical either way.
 
 # 1. What feeds the learning rate
 
@@ -180,10 +148,6 @@ resid %>%
     x = NULL, y = "q90 |residual| (log)", colour = "horizon"
   )
 ```
-
-The residual scale swings by 1-2 orders of magnitude within a season, so an
-additive offset learned near the peak is badly sized for the trough, and vice
-versa.
 
 ## Does the window length matter?
 
@@ -232,12 +196,6 @@ lr_by_window %>%
   )
 ```
 
-The expanding window is monotone by construction: once a peak-season residual
-enters the pool it never leaves, so `eta` rises to peak scale and stays there
-through the following low season. A short window decays back. On 83 rounds the
-difference in outcome is small (below), but it would likely grow over more
-seasons.
-
 # 2. Actual vs nominal coverage, per location
 
 ```{r coverage-plot, fig.height=6}
@@ -263,7 +221,7 @@ cov_long %>%
   coord_equal(xlim = c(0, 1), ylim = c(0, 1)) +
   labs(
     title = "Empirical vs nominal coverage, one line per location",
-    subtitle = "Dashed line is perfect calibration. Each line is one of 53 locations, over all non-burn-in rounds.",
+    subtitle = "Dashed line is perfect calibration. Each line is one of 53 locations, over all rounds.",
     x = "nominal level", y = "empirical coverage"
   )
 ```
@@ -287,16 +245,10 @@ hub_coverage(cal) %>%
   )
 ```
 
-The per-location spread is not visible in the pooled number: it shows whether
-the pooled improvement is a per-series effect or an averaging artefact, and it
-bears on whether the offsets themselves should be pooled across geos.
-
 # 3. Calibration error against quantile loss
 
 Both axes are rolling averages over the last `r params$roll_window` rounds, pooled
-over locations. Moving down is better calibrated; moving left is sharper. A
-trajectory that goes down and to the right means calibration is being bought
-with sharpness.
+over locations. Moving down is better calibrated; moving left is sharper.
 
 ```{r tradeoff, fig.height=6}
 tradeoff <- hub_rolling_tradeoff(cal, window = params$roll_window)
@@ -332,7 +284,7 @@ tradeoff %>%
   facet_wrap(~horizon, labeller = label_both, nrow = 1) +
   labs(
     title = "Rolling calibration error over time",
-    subtitle = "How fast the tracker converges after the burn-in season, and what the off-season gap does to it.",
+    subtitle = "How fast the tracker converges and what it looks like without an off-season gap.",
     x = NULL, y = "rolling calibration error", colour = NULL
   )
 ```
@@ -340,10 +292,7 @@ tradeoff %>%
 # 4. Interval widths
 
 The WIS cost has to show up somewhere in the quantiles; central interval widths
-are the direct measure. For three central intervals -- 20% (0.4 to 0.6), 60%
-(0.2 to 0.8), 80% (0.1 to 0.9) -- we compare the calibrated width to the base
-width, per (round, location, horizon). Widths are geo-pooled by mean, matching
-the implicit weighting of the WIS aggregate (large-count series dominate both).
+are the direct measure.
 
 ```{r interval-widths}
 interval_defs <- tibble::tribble(
@@ -389,7 +338,6 @@ widths %>%
   facet_grid(interval ~ horizon, scales = "free_y", labeller = label_both) +
   labs(
     title = "Geo-pooled mean central interval width, base vs calibrated",
-    subtitle = "Mean over the 53 locations, per round. The gap between the lines is the sharpness cost.",
     x = NULL, y = "mean interval width (admissions)", colour = NULL
   )
 ```
@@ -412,18 +360,7 @@ widths %>%
   )
 ```
 
-Wider intervals where the base under-covers are the intended correction; the
-question is whether the widening is concentrated in the intervals and horizons
-where the coverage plots (section 2) show a deficit, or spread indiscriminately.
-
 # 5. Sensitivity: window or multiplier?
-
-The learning rate has two knobs: how far back the residual pool reaches
-(`lr_window`) and what fraction of its 90th percentile becomes the step size
-(`lr_mult`). The factorial sweep below shows which one matters: if the lines
-for different windows sit on top of each other while the multiplier moves
-everything, the multiplier is the tuning parameter and the window is a detail
-(and vice versa).
 
 ```{r sweep, cache=TRUE, dependson="load"}
 sweep_grid <- tidyr::expand_grid(
@@ -454,9 +391,8 @@ sweep <- purrr::pmap(sweep_grid, function(season_policy, lr_window, lr_mult) {
     mutate(season_policy = season_policy, lr_window = lr_window, lr_mult = lr_mult)
 }) %>% bind_rows()
 
-# Keep the sweep around for analysis outside the notebook.
 dir.create(here::here("cache/calibration"), showWarnings = FALSE, recursive = TRUE)
-saveRDS(sweep, here::here("cache/calibration/sweep.rds"))
+saveRDS(sweep, here::here("cache/calibration/sweep_covid.rds"))
 ```
 
 ```{r sweep-cal-error, fig.height=5}
@@ -469,7 +405,6 @@ sweep %>%
   facet_grid(season_policy ~ horizon, labeller = label_both) +
   labs(
     title = "Calibration error by multiplier, one line per window",
-    subtitle = "Separated lines would indicate a window effect; sloped lines indicate a multiplier effect.",
     x = "lr mult (log)", y = "calibration error (calibrated)",
     colour = "lr_window"
   )
@@ -486,14 +421,11 @@ sweep %>%
   facet_grid(season_policy ~ horizon, labeller = label_both) +
   labs(
     title = "WIS improvement by multiplier, one line per window",
-    subtitle = "Dashed line is WIS parity with the raw submission; above it calibration has no WIS cost.",
+    subtitle = "Dashed line is WIS parity with the raw submission.",
     x = "lr mult (log)", y = "WIS improvement (%)",
     colour = "lr_window"
   )
 ```
-
-The target region is the combination of low calibration error and WIS at or
-above parity.
 
 ```{r sweep-corner, fig.height=5}
 sweep %>%
@@ -509,26 +441,6 @@ sweep %>%
     subtitle = "Upper-left is the target region: well calibrated and no worse on WIS.",
     x = "calibration error (calibrated)", y = "WIS change (%)",
     colour = "lr mult", shape = "lr_window"
-  )
-```
-
-If the expanding window's monotone behavior matters, its effect should grow
-with history: season 2 starts with at most one season in the pool, season 3
-with two. The per-season view checks that.
-
-```{r sweep-by-season, fig.height=5}
-sweep %>%
-  filter(season != "all", season_policy == "carry", horizon == 2) %>%
-  ggplot(aes(lr_mult, cal_error_cal, colour = factor(lr_window))) +
-  geom_line() +
-  geom_point(size = 1.6) +
-  scale_x_log10() +
-  facet_wrap(~season, labeller = label_both) +
-  labs(
-    title = "Calibration error by season (horizon 2, season_policy = carry)",
-    subtitle = "Does the window matter more once multiple seasons of residuals are available?",
-    x = "lr mult (log)", y = "calibration error (calibrated)",
-    colour = "lr_window"
   )
 ```
 
@@ -557,7 +469,6 @@ cal$forecasts %>%
   facet_wrap(~location, scales = "free_y", ncol = 1) +
   labs(
     title = "Realised offset (played - base), horizon 2",
-    subtitle = "Zero through the burn-in season by construction. With season_policy='carry' the offset is held across the off-season gap.",
     x = NULL, y = "offset (admissions)", colour = "level"
   )
 ```
@@ -576,7 +487,6 @@ cal$forecasts %>%
   scale_y_continuous(labels = scales::percent) +
   labs(
     title = "Median |offset| as a fraction of the base forecast",
-    subtitle = "How large a correction the tracker is applying, and how that scales with horizon.",
     x = "quantile level", y = "median |offset| / base", colour = "horizon"
   )
 ```

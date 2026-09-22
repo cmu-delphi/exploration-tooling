@@ -60,7 +60,7 @@ vintages exist before 2024-11-19 anywhere). Note: the S3
 polling job appears to have stopped; refresh the copy from a newer oracle
 capture if one exists.
 
-## Findings (factorial sweep, `scripts/reports/calibration_qt.Rmd`)
+## Findings (factorial sweep, `scripts/reports/calibration_qt_flu.Rmd`)
 
 Sweep: `season_policy` {carry, reset} × `lr_window` {8, 20, 50, Inf} ×
 `lr_mult` {0.3, 0.1, 0.03, 0.01}; results in `cache/calibration/sweep.rds`.
@@ -99,9 +99,9 @@ start" below for the table.
 
 ## Notebooks
 
-- `scripts/reports/calibration_qt.Rmd` — the parameter-sweep EDA. Frozen as
+- `scripts/reports/calibration_qt_flu.Rmd` — the parameter-sweep EDA. Frozen as
   the sweep record; rendered HTML alongside.
-- `scripts/reports/calibration_qt_seasons.Rmd` — whole-season views of four
+- `scripts/reports/calibration_qt_seasons_flu.Rmd` — whole-season views of four
   states × two live seasons, one panel per (state, season): every-other-round
   fans (80% band) for h 0–3, the NHSN vintage each round saw painted over its
   fortnight, finalized truth, and an eta strip; plus collapsible internals
@@ -115,7 +115,7 @@ start" below for the table.
   WIS/calibration-error comparison at the top, plus a by-month breakdown of the
   baseline (WIS change, share of base WIS, median shift) that shows where in
   the season the method gains and loses.
-- `scripts/reports/calibration_qt_gallery.Rmd` — fixed operating point. Slim
+- `scripts/reports/calibration_qt_gallery_flu.Rmd` — fixed operating point. Slim
   headline table (WIS + calibration error per horizon per season), then a
   ranked per-forecast gallery: top-N (location, round) panels ordered by mean
   absolute quantile displacement relative to the base median. Each panel:
@@ -227,7 +227,7 @@ the seasons notebook's by-month tables.
   season start slows the unwind of last spring's offsets) and why the
   cutoff variants win (they stop the chase where it is wrong-signed and,
   with carry, hand the next season a mid-February offset instead of a May
-  one). The multiplier sweep in `calibration_qt.Rmd` said the same thing
+  one). The multiplier sweep in `calibration_qt_flu.Rmd` said the same thing
   from the other side: mult trades convergence speed against overshoot with
   no setting that wins both.
 
@@ -534,6 +534,30 @@ Reading:
 4. **Scale-aware offsets via a smooth proxy**, given the log-space failure.
 5. **Eta variants** (seasonal, per-level, pooled): parked. None can fix a
    wrong-signed step.
+
+## Production integration (2026-09-21)
+
+Calibrated forecasts are now threaded into both flu and covid production pipelines as a secondary submission, `CMU-TimeSeries-Calibrated`, leaving the primary `CMU-TimeSeries` ensemble unchanged.
+
+**Architecture:** three new targets added to each prod script, executed after the ensemble:
+
+- `calibrated_ensemble_nhsn` (`cue = tar_cue("always")`) — reads all past `CMU-TimeSeries` submissions from the hub checkout via `hub_read_forecasts()`, appends the current round's `ensemble_mix` output converted to hub schema via `internal_to_hub_forecasts()` if not already present, reads finalized truth, and calls `calibrate_hub_forecasts()`.
+  Skips (returns `NULL`) when `g_submission_directory == "cache"` (no hub checkout set).
+- `make_calibrated_submission_csv` — writes the calibrated quantiles to `model-output/CMU-TimeSeries-Calibrated/<reference_date>-CMU-TimeSeries-Calibrated.csv` in the hub checkout.
+- `local_calibrated_scores_nhsn` — scores the calibrated forecasts against `nhsn_latest_data` via `score_forecasts()`; fed into the ongoing score report alongside the base forecasters.
+
+**Operating point (flu):** `transform = "sqrt"`, `lr_args = list(mult = 0.03, floor = 1e-3)`, `lr_window = 20`, `season_policy = "carry"`, `slow_init = "burn_in_quantile"`, `lr_slow = list(mult = 0.003)`, `fast_decay = 0.1`, `burn_in_seasons = "2023-2024"`.
+Flu gets the 2023-24 burn-in for free: the hub checkout already contains all past CMU-TimeSeries flu submissions.
+
+**Operating point (covid):** same except `burn_in_seasons = character(0)`, `slow_init = NULL` (no hub burn-in available; covid submissions begin 2024-11-23).
+
+**Notebooks:** `CMU-TimeSeries-Calibrated` is added to `ongoing_score_report.Rmd` (`our_forecasters`, score table styling, line width).
+The per-date `forecast_report.Rmd` notebook receives calibrated forecasts for the current round's reference date, converted back to internal schema (state abbr, Wednesday `forecast_date`, count-space quantile values) via the `notebook` target in `prod_shared.R`.
+
+**Model metadata:** `CMU-TimeSeries-Calibrated.yml` created in both `../FluSight-forecast-hub/model-metadata/` and `../covid19-forecast-hub/model-metadata/` (`designated_model: false`).
+
+**Bug fixed en route:** `nssp_archive` in both `flu_data_targets.R` and `covid_data_targets.R` had a duplicate-key error (pre-existing since August 2026): `compactify = TRUE` can retain multiple rows per `(geo_value, time_value)` when the value changed across issues, and the subsequent `mutate(version = time_value + 7)` flattened all to the same version, producing duplicate keys in `as_epi_archive()`.
+Fix: `group_by(geo_value, time_value) %>% slice_max(version, n = 1L, with_ties = FALSE) %>% ungroup()` before the version clobber.
 
 # Roadmap
 

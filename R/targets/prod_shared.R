@@ -334,6 +334,29 @@ build_prod_ensemble_targets <- function(
       command = {
         if (!g_evaluation_mode) {
           if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
+          base_nhsn <- forecasts_and_ensembles$nhsn %>%
+            ungroup() %>%
+            filter(forecaster %in% c("climate_linear", "ensemble_mix", "windowed_seasonal", "windowed_seasonal_extra_sources", "revision_aware"))
+          cal_nhsn <- if (!is.null(calibrated_ensemble_nhsn)) {
+            calibrated_ensemble_nhsn$forecasts %>%
+              filter(
+                .data$reference_date == get_forecast_reference_date(forecast_date_int),
+                !.data$is_burn_in,
+                !is.na(.data$value_cal)
+              ) %>%
+              left_join(
+                get_population_data() %>% select("state_code", "state_id"),
+                by = c("location" = "state_code")
+              ) %>%
+              transmute(
+                geo_value = .data$state_id,
+                forecast_date = as.Date(forecast_date_int),
+                target_end_date = .data$target_end_date,
+                quantile = .data$level,
+                value = .data$value_cal,
+                forecaster = "CMU-TimeSeries-Calibrated"
+              )
+          } else tibble()
           rmarkdown::render(
             forecast_report_rmd,
             output_file = here::here(
@@ -342,8 +365,8 @@ build_prod_ensemble_targets <- function(
             ),
             params = list(
               disease = disease,
-              forecast_nhsn = forecasts_and_ensembles$nhsn %>% ungroup() %>% filter(forecaster %in% c("cdc_baseline", "climate_linear", "ensemble_mix", "windowed_seasonal", "windowed_seasonal_extra_sources", "revision_aware")),
-              forecast_nssp = forecasts_and_ensembles$nssp %>% ungroup() %>% filter(forecaster %in% c("cdc_baseline", "climate_linear", "ensemble_mix", "windowed_seasonal", "windowed_seasonal_extra_sources", "revision_aware")),
+              forecast_nhsn = bind_rows(base_nhsn, cal_nhsn),
+              forecast_nssp = forecasts_and_ensembles$nssp %>% ungroup() %>% filter(forecaster %in% c("climate_linear", "ensemble_mix", "windowed_seasonal", "windowed_seasonal_extra_sources", "revision_aware")),
               forecast_date = as.Date(forecast_date_int),
               truth_data_nhsn = truth_data$nhsn,
               truth_data_nssp = truth_data$nssp

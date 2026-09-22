@@ -63,7 +63,7 @@ if (!g_evaluation_mode) {
   # It's used for stamping the data and picking the as_of. Usually forecast_date
   # equals it, but forecast_date can be overridden and should be a Wednesday.
   gen_dates <- g_reference_date
-  fc_dates <- round_date(gen_dates, "weeks", week_start = 3)
+  fc_dates <- floor_date(gen_dates, "weeks", week_start = 3)
   # the forecast is actually for the wednesday beforehand for these days
   if (gen_dates %in% as.Date(c("2025-12-29"))) {
     fc_dates <- as.Date("2025-12-24")
@@ -106,10 +106,6 @@ g_forecast_generation_dates <- g_forecast_schedule$forecast_generation_date_int
 # row is built via make_forecaster_grid() so the params list-column matches the
 # exploration convention (trainer stored as a symbol, lags unwrapped).
 g_forecaster_params_grid <- list(
-  cdc_baseline = tibble(
-    id = "cdc_baseline",
-    forecaster = "g_baseline_forecaster"
-  ),
   linear = tibble(
     id = "linear",
     forecaster = "forecaster_baseline_linear",
@@ -565,6 +561,101 @@ joined_targets <- list2(
 
 combined_targets <- build_combined_targets(external_forecast_targets)
 
+# ============================== CALIBRATION TARGETS ============================
+# Online-calibrated submission for CMU-TimeSeries-Calibrated. Reads all
+# historical CMU-TimeSeries rounds from the hub checkout (giving us the 2023-24
+# burn-in for free), appends the current week's ensemble_mix if not yet
+# submitted, and runs calibrate_hub_forecasts() over the full history. The
+# current round's value_cal is then written as the CMU-TimeSeries-Calibrated
+# submission. Skipped in cache/evaluation mode. See notes/CALIBRATION.md for
+# the parameter choices.
+calibration_targets <- list(
+  tar_target(
+    calibrated_ensemble_nhsn,
+    command = {
+      if (g_submission_directory == "cache") {
+        cli::cli_alert_info("Skipping flu calibration (no hub checkout; set FLU_SUBMISSION_DIRECTORY)")
+        return(NULL)
+      }
+      historical_fc <- hub_read_forecasts(
+        hub_dir = g_submission_directory,
+        target = HUB_FLU_TARGET
+      )
+      current_ref <- get_forecast_reference_date(max(g_forecast_dates))
+      if (!current_ref %in% unique(historical_fc$reference_date)) {
+        current_fc <- local_forecasts_and_ensembles_nhsn %>%
+          filter(.data$forecaster == "ensemble_mix") %>%
+          internal_to_hub_forecasts(disease = "flu")
+        historical_fc <- bind_rows(historical_fc, current_fc)
+      }
+      truth <- hub_read_truth(refresh = TRUE)
+      calibrate_hub_forecasts(
+        historical_fc, truth,
+        burn_in_seasons = "2023-2024",
+        transform = "sqrt",
+        lr_args = list(mult = 0.03, floor = 1e-3),
+        lr_window = 20,
+        season_policy = "carry",
+        slow_init = "burn_in_quantile",
+        lr_slow = list(mult = 0.003),
+        fast_decay = 0.1
+      )
+    },
+    cue = tar_cue("always")
+  ),
+  tar_target(
+    make_calibrated_submission_csv,
+    command = {
+      if (is.null(calibrated_ensemble_nhsn) || g_submission_directory == "cache" || g_evaluation_mode) {
+        cli::cli_alert_info("Not making calibrated flu submission csv")
+        return(invisible(NULL))
+      }
+      current_ref <- get_forecast_reference_date(max(g_forecast_dates))
+      out_dir <- file.path(g_submission_directory, "model-output/CMU-TimeSeries-Calibrated")
+      dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+      calibrated_ensemble_nhsn$forecasts %>%
+        filter(.data$reference_date == current_ref, !.data$is_burn_in) %>%
+        mutate(
+          target = HUB_FLU_TARGET,
+          output_type = "quantile",
+          output_type_id = as.character(.data$level)
+        ) %>%
+        select(
+          "reference_date", "target", "horizon", "target_end_date",
+          "location", "output_type", "output_type_id", value = "value_cal"
+        ) %>%
+        write_submission_file(
+          current_ref,
+          out_dir,
+          file_name = "CMU-TimeSeries-Calibrated"
+        )
+    },
+    cue = tar_cue("always")
+  ),
+  tar_target(
+    local_calibrated_scores_nhsn,
+    command = {
+      if (is.null(calibrated_ensemble_nhsn)) return(tibble())
+      calibrated_ensemble_nhsn$forecasts %>%
+        filter(!.data$is_burn_in, !is.na(.data$value_cal)) %>%
+        left_join(
+          get_population_data() %>% select("state_code", "state_id"),
+          by = c("location" = "state_code")
+        ) %>%
+        transmute(
+          geo_value = .data$state_id,
+          forecast_date = .data$reference_date,
+          target_end_date = .data$target_end_date,
+          quantile = .data$level,
+          value = .data$value_cal,
+          forecaster = "CMU-TimeSeries-Calibrated"
+        ) %>%
+        score_forecasts(nhsn_latest_data, ., "wk inc flu hosp")
+    },
+    cue = tar_cue("always")
+  )
+)
+
 if (g_evaluation_mode) {
   score_notebook <- build_backtest_score_targets()
 } else {
@@ -597,7 +688,7 @@ if (g_evaluation_mode) {
             target = "nhsn",
             external_forecasts = external_forecasts_full %>% filter(target == "wk inc flu hosp") %>% select(-target),
             archive = nhsn_archive_data,
-            scores = external_scores_nhsn_full,
+            scores = bind_rows(external_scores_nhsn_full, local_calibrated_scores_nhsn),
             averaging_method = "individual"
           )
         )
@@ -612,7 +703,7 @@ if (g_evaluation_mode) {
             target = "nhsn",
             external_forecasts = external_forecasts_full %>% filter(target == "wk inc flu hosp") %>% select(-target),
             archive = nhsn_archive_data,
-            scores = external_scores_nhsn_full,
+            scores = bind_rows(external_scores_nhsn_full, local_calibrated_scores_nhsn),
             averaging_method = "common"
           )
         )
@@ -674,5 +765,6 @@ list2(
   external_forecast_targets,
   combined_targets,
   joined_targets,
+  calibration_targets,
   score_notebook
 )

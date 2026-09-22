@@ -143,6 +143,13 @@ create_flu_data_targets <- function() {
           extract2("DT") %>%
           # weekly data is indexed from the start of the week
           mutate(time_value = time_value + 6 - g_time_value_adjust) %>%
+          # Keep only the latest revision per (geo_value, time_value) before
+          # clobbering version. compactify retains rows where value changed
+          # between revisions, so multiple rows can share the same time_value;
+          # the artificial latency assignment would then produce duplicate keys.
+          group_by(.data$geo_value, .data$time_value) %>%
+          slice_max(.data$version, n = 1L, with_ties = FALSE) %>%
+          ungroup() %>%
           # Artifically add in a one-week latency.
           mutate(version = time_value + 7) %>%
           mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%

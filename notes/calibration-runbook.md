@@ -5,9 +5,10 @@ Three repos are involved:
 
 | path | role |
 |---|---|
-| `~/repos/delphi/exploration-tooling` | the R implementation, tests, driver, notebook |
-| `~/repos/delphi/multiQT` | the authors' code plus our upstreamed bugfixes (branch `delphi-fixes`) — the oracle for the R tests |
-| `~/repos/delphi/FluSight-forecast-hub` | submitted forecasts (sparse checkout: CMU model-output only) |
+| `~/allHail/delphi/exploration-tooling` | the R implementation, tests, driver, notebook |
+| `~/allHail/delphi/multiQT` | the authors' code plus our upstreamed bugfixes (branch `delphi-fixes`) — the oracle for the R tests |
+| `~/allHail/delphi/FluSight-forecast-hub` | flu submitted forecasts (sparse checkout: CMU model-output only) |
+| `~/allHail/delphi/covid19-forecast-hub` | covid submitted forecasts + truth CSV |
 
 The multiQT clone must be on `delphi-fixes`. The as-published code had a
 handful of defects (a learning-rate window that sliced the level axis instead
@@ -28,14 +29,14 @@ container.
 ```sh
 # Python deps are supplied per-invocation by uv; nothing to install.
 # The multiQT oracle must be on the bugfix branch:
-cd ~/repos/delphi/multiQT && git checkout delphi-fixes
+cd ~/allHail/delphi/multiQT && git checkout delphi-fixes
 
 # Refresh the hub submissions (83 CMU-TimeSeries rounds, 2023-10-14 .. 2026-05-30):
-cd ~/repos/delphi/FluSight-forecast-hub && git pull --ff-only
+cd ~/allHail/delphi/FluSight-forecast-hub && git pull --ff-only
 
 # The hub's truth file is downloaded and cached on first use by hub_read_truth();
 # to force a refresh:
-cd ~/repos/delphi/exploration-tooling
+cd ~/allHail/delphi/exploration-tooling
 rm -f cache/calibration/target-hospital-admissions.csv
 ```
 
@@ -48,7 +49,7 @@ alone is 84 MB, and we fetch the 570 KB truth file over HTTP instead.
 ## 1. R implementation and its oracle tests
 
 ```sh
-cd ~/repos/delphi/exploration-tooling
+cd ~/allHail/delphi/exploration-tooling
 
 # just the tracker's tests (bit-exact oracle fixtures + properties)
 distrobox enter rocker -- Rscript -e \
@@ -67,10 +68,10 @@ R side uses, so `test-qt.R` calls `qt_track()` with its defaults (plus
 copy:
 
 ```sh
-cd ~/repos/delphi/multiQT      # on delphi-fixes
+cd ~/allHail/delphi/multiQT      # on delphi-fixes
 uv run --with numpy --with scikit-learn --with matplotlib \
     python make_r_fixtures.py
-cp r_fixtures/*.csv ~/repos/delphi/exploration-tooling/tests/testthat/fixtures/qt/
+cp r_fixtures/*.csv ~/allHail/delphi/exploration-tooling/tests/testthat/fixtures/qt/
 ```
 
 ---
@@ -81,11 +82,11 @@ The fixtures are synthetic. This runs the same comparison on real submitted
 forecasts, real hub truth, and the real `horizon + 2` delay.
 
 ```sh
-cd ~/repos/delphi/exploration-tooling
+cd ~/allHail/delphi/exploration-tooling
 distrobox enter rocker -- Rscript scripts/calibration_export_series.R
 # optional: Rscript scripts/calibration_export_series.R <outdir> <n_series>
 
-cd ~/repos/delphi/multiQT
+cd ~/allHail/delphi/multiQT
 uv run --with numpy --with scikit-learn --with matplotlib \
     python check_r_port_real_series.py
 ```
@@ -99,7 +100,7 @@ tolerance of 1e-8. Only series complete across all 83 rounds are exported (52 of
 ## 3. Run the calibration
 
 ```sh
-cd ~/repos/delphi/exploration-tooling
+cd ~/allHail/delphi/exploration-tooling
 distrobox enter rocker -- Rscript -e '
 suppressPackageStartupMessages(source("R/load_all.R"))
 fc  <- hub_read_forecasts()
@@ -122,21 +123,49 @@ Takes ~5 s for all 265 (location, horizon) series. Other entry points:
 - `cal$series` — per-series learning-rate trajectory and reveal counts
 - `cal$rounds` — the global round axis with season labels, burn-in flags, `hidden_scale`
 
+## 3b. COVID calibration
+
+The COVID hub checkout at `~/allHail/delphi/covid19-forecast-hub` carries all
+model-output for CMU-TimeSeries (89 rounds, 2024-11-23 … present) and a local
+truth CSV — no HTTP download required.
+
+```sh
+cd ~/allHail/delphi/exploration-tooling
+distrobox enter rocker -- Rscript -e '
+suppressPackageStartupMessages(source("R/load_all.R"))
+fc  <- hub_read_forecasts(hub_dir = HUB_COVID_DIR, target = HUB_COVID_TARGET)
+tr  <- hub_read_covid_truth()
+cal <- calibrate_hub_forecasts(fc, tr,
+         burn_in_seasons = character(0),  # no off-season in covid data yet
+         season_policy   = "carry",
+         transform       = "sqrt",
+         lr_window       = 20,
+         lr_args         = list(mult = 0.03, floor = 1e-3))
+print(as.data.frame(hub_coverage_summary(cal)))
+print(as.data.frame(hub_quantile_loss(cal)))
+'
+```
+
+Takes ~5 s for all 265 (location, horizon) series.
+Refresh the submissions before running: `cd ~/allHail/delphi/covid19-forecast-hub && git pull --ff-only`.
+
+---
+
 ## 4. The EDA notebook
 
 ```sh
-cd ~/repos/delphi/exploration-tooling
+cd ~/allHail/delphi/exploration-tooling
 distrobox enter rocker -- Rscript -e \
-  'rmarkdown::render("scripts/reports/calibration_qt.Rmd", output_file = "calibration_qt.html")'
+  'rmarkdown::render("scripts/reports/calibration_qt_flu.Rmd", output_file = "calibration_qt_flu.html")'
 ```
 
-Output: `scripts/reports/calibration_qt.html`. Parameters (`burn_in_seasons`,
+Output: `scripts/reports/calibration_qt_flu.html`. Parameters (`burn_in_seasons`,
 `season_policy`, `lr_window`, `lr_mult`, `roll_window`) are in the YAML header;
 override per-render with:
 
 ```sh
 distrobox enter rocker -- Rscript -e '
-rmarkdown::render("scripts/reports/calibration_qt.Rmd",
+rmarkdown::render("scripts/reports/calibration_qt_flu.Rmd",
   output_file = "calibration_qt_mult003.html",
   params = list(lr_mult = 0.03, season_policy = "reset"))'
 ```
@@ -149,9 +178,9 @@ Fixed operating point (`lr_mult = 0.03`, `lr_window = 20`, carry) plus a
 ranked per-forecast panel gallery; see `notes/CALIBRATION.md` for the design.
 
 ```sh
-cd ~/repos/delphi/exploration-tooling
+cd ~/allHail/delphi/exploration-tooling
 distrobox enter rocker -- Rscript -e \
-  'rmarkdown::render("scripts/reports/calibration_qt_gallery.Rmd", output_file = "calibration_qt_gallery.html")'
+  'rmarkdown::render("scripts/reports/calibration_qt_gallery_flu.Rmd", output_file = "calibration_qt_gallery.html")'
 ```
 
 As-of vintages come from `cache/calibration/nhsn_archive_flu.parquet` (a copy
@@ -167,9 +196,9 @@ are knitr-cached; clear `cache/calibration/knitr_cache_seasons/` after
 changing anything in `R/calibration/`.
 
 ```sh
-cd ~/repos/delphi/exploration-tooling
+cd ~/allHail/delphi/exploration-tooling
 distrobox enter rocker -- Rscript -e \
-  'rmarkdown::render("scripts/reports/calibration_qt_seasons.Rmd", output_dir = here::here("reports"))'
+  'rmarkdown::render("scripts/reports/calibration_qt_seasons_flu.Rmd", output_dir = here::here("reports"))'
 ```
 
 Output: `reports/calibration_qt_seasons.html`.
@@ -181,7 +210,7 @@ caches hub-schema forecasts and truth for multi-season calibration burn-in
 (design and caveats in `notes/CALIBRATION.md`, "ILI+ burn-in").
 
 ```sh
-cd ~/repos/delphi/exploration-tooling
+cd ~/allHail/delphi/exploration-tooling
 distrobox enter rocker -- Rscript scripts/calibration_ili_backfill.R            # ~30 min
 distrobox enter rocker -- Rscript scripts/calibration_ili_backfill.R --refresh  # rebuild
 ```

@@ -89,6 +89,9 @@ create_covid_data_targets <- function() {
           extract2("DT") %>%
           # weekly data is indexed from the start of the week
           mutate(time_value = time_value + 6 - g_time_value_adjust) %>%
+          group_by(.data$geo_value, .data$time_value) %>%
+          slice_max(.data$version, n = 1L, with_ties = FALSE) %>%
+          ungroup() %>%
           # Artifically add in a one-week latency.
           mutate(version = time_value + 7) %>%
           # Always convert to data.frame after dplyr operations on data.table.

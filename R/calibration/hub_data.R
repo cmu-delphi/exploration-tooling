@@ -27,10 +27,20 @@ HUB_QUANTILE_LEVELS <- c(
 )
 
 HUB_FLU_TARGET <- "wk inc flu hosp"
+HUB_COVID_TARGET <- "wk inc covid hosp"
+
 HUB_TRUTH_URL <- paste0(
   "https://raw.githubusercontent.com/cdcepi/FluSight-forecast-hub/",
   "main/target-data/target-hospital-admissions.csv"
 )
+
+# Parent directory containing both hub checkouts. Override with DELPHI_HUB_PARENT_DIR
+# or the individual vars to point at a different layout.
+.hub_parent <- function() {
+  Sys.getenv("DELPHI_HUB_PARENT_DIR", path.expand("~/allHail/delphi"))
+}
+HUB_FLU_DIR <- Sys.getenv("HUB_FLU_DIR", file.path(.hub_parent(), "FluSight-forecast-hub"))
+HUB_COVID_DIR <- Sys.getenv("HUB_COVID_DIR", file.path(.hub_parent(), "covid19-forecast-hub"))
 
 
 #' Snap parsed quantile levels onto the canonical vector.
@@ -61,9 +71,9 @@ hub_level_index <- function(x, levels = HUB_QUANTILE_LEVELS, tol = 1e-8) {
 
 #' Read one model's quantile forecasts for one target out of a hub checkout.
 #'
-#' @param hub_dir a FluSight-forecast-hub checkout. The sparse checkout at
-#'   ~/repos/delphi/FluSight-forecast-hub carries only the CMU model-output
-#'   directories, which is all this needs.
+#' @param hub_dir local hub checkout. For flu, use `HUB_FLU_DIR`
+#'   (cdcepi/FluSight-forecast-hub); for covid, use `HUB_COVID_DIR`
+#'   (cdcepi/covid19-forecast-hub). Only the model-output directory is needed.
 #' @param model model-output subdirectory.
 #' @param target hub target string. 2023-24 files also carry
 #'   `wk flu hosp rate change` pmf rows, so both `target` and
@@ -73,7 +83,7 @@ hub_level_index <- function(x, levels = HUB_QUANTILE_LEVELS, tol = 1e-8) {
 #'   `location`, `level_index`, `level`, `value`.
 #' @export
 hub_read_forecasts <- function(
-  hub_dir = "~/repos/delphi/FluSight-forecast-hub",
+  hub_dir = HUB_FLU_DIR,
   model = "CMU-TimeSeries",
   target = HUB_FLU_TARGET,
   locations = NULL
@@ -169,6 +179,80 @@ hub_read_truth <- function(
     cli::cli_abort("Hub target data has duplicate (location, date) rows.")
   }
   truth
+}
+
+
+#' Read the COVID hub's finalized target data from a local checkout.
+#'
+#' Reads `target-data/covid-hospital-admissions.csv` from the hub checkout.
+#' The COVID hub does not have meaningful off-seasons, so there is no URL-based
+#' download path -- pull the checkout instead (`git pull` in `hub_dir`).
+#' @param hub_dir local checkout of cdcepi/covid19-forecast-hub.
+#' @return tibble with columns `target_end_date`, `location`, `truth`.
+#' @export
+hub_read_covid_truth <- function(hub_dir = HUB_COVID_DIR) {
+  path <- path.expand(file.path(hub_dir, "target-data", "covid-hospital-admissions.csv"))
+  if (!file.exists(path)) {
+    cli::cli_abort(
+      "COVID truth not found at {.path {path}}.
+       Pull the hub checkout at {.path {hub_dir}} or pass a different {.arg hub_dir}."
+    )
+  }
+  truth <- readr::read_csv(
+    path,
+    col_types = readr::cols(
+      state = readr::col_character(),
+      target_end_date = readr::col_date(),
+      value = readr::col_double(),
+      location = readr::col_character()
+    ),
+    progress = FALSE
+  ) %>%
+    select("target_end_date", "location", truth = "value") %>%
+    filter(!is.na(.data$truth)) %>%
+    arrange(.data$location, .data$target_end_date)
+  if (any(duplicated(truth[c("location", "target_end_date")]))) {
+    cli::cli_abort("COVID hub target data has duplicate (location, date) rows.")
+  }
+  truth
+}
+
+#' Convert an internal-format forecast tibble to hub forecast format.
+#'
+#' The internal format uses geo_value (state abbreviation), forecast_date
+#' (Wednesday), and target_end_date (already Saturday when target_date_shift=3
+#' is set, as in prod). The hub format uses location (FIPS code), reference_date
+#' (Saturday end of epiweek), and integer horizon.
+#'
+#' @param forecasts tibble with columns geo_value, forecast_date,
+#'   target_end_date, quantile, value. All 23 canonical quantile levels must be
+#'   present; any extra columns are dropped.
+#' @param disease passed to [format_flusight()] for the target string (unused
+#'   in the output of this function, but validates the input).
+#' @return tibble in [hub_read_forecasts()] format: reference_date, horizon,
+#'   target_end_date, location, level_index, level, value.
+#' @export
+internal_to_hub_forecasts <- function(forecasts, disease = c("flu", "covid", "rsv")) {
+  disease <- rlang::arg_match(disease)
+  forecasts %>%
+    mutate(
+      reference_date = get_forecast_reference_date(.data$forecast_date),
+      horizon = as.integer(.data$target_end_date - .data$reference_date) %/% 7L
+    ) %>%
+    left_join(
+      get_population_data() %>% select("state_id", "state_code"),
+      by = c("geo_value" = "state_id")
+    ) %>%
+    mutate(
+      location = .data$state_code,
+      level_index = hub_level_index(as.character(.data$quantile)),
+      level = HUB_QUANTILE_LEVELS[.data$level_index]
+    ) %>%
+    select(
+      "reference_date", "horizon", "target_end_date",
+      "location", "level_index", "level", "value"
+    ) %>%
+    arrange(.data$reference_date, .data$horizon, .data$location, .data$level_index)
 }
 
 
