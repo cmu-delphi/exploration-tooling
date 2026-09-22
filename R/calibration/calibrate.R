@@ -1,0 +1,554 @@
+# Driver: run the quantile tracker over every (location, horizon) series of a
+# hub model's submitted forecasts.
+#
+# All the date and schema reasoning lives here; qt_track() sees only matrices.
+# The two things this layer owns that are easy to get wrong:
+#
+#   1. A single GLOBAL round axis shared by every series, taken from the union of
+#      submission dates. Per-series axes would let one location's round 40 mean a
+#      different week from another's, which would make the season/burn-in vectors
+#      and every diagnostic silently incomparable.
+#   2. Pruning the delay for rounds whose truth is missing. qt_delay_from_dates()
+#      only knows the calendar; it will happily reveal a round whose outcome does
+#      not exist yet (the live tail of a season) and qt_track() refuses to learn
+#      from NA, so the pruning has to happen in between.
+
+
+#' Reshape one (location, horizon) series onto the global round axis as the
+#' levels x rounds matrix qt_track() wants.
+#'
+#' Rounds the series does not cover become all-NA columns -- "inactive" rounds,
+#' which qt_track carries the offsets across without playing or scoring anything.
+#' This is the common case, not an edge case: CMU-TimeSeries' 2023-24 rounds omit
+#' horizon -1 in 23 of 28 rounds and drop locations in and out (78% cell
+#' completeness), so only 52 of 265 series span all 83 rounds. Restricting to the
+#' complete rectangle instead would throw away most of the burn-in season.
+#'
+#' A round that is present but incomplete is still an error: that is a partial
+#' submission, which we want to hear about rather than silently pad.
+#' @keywords internal
+hub_series_matrix <- function(series, round_date, n_levels) {
+  n <- length(round_date)
+  ri <- match(series$reference_date, round_date)
+  if (anyNA(ri)) {
+    cli::cli_abort("Series has rounds absent from the global round axis.")
+  }
+  if (!all(series$level_index %in% seq_len(n_levels))) {
+    cli::cli_abort("Series carries a level index outside {.code 1:{n_levels}}.")
+  }
+  # Matrix assignment would silently keep the last of two rows for the same
+  # cell, which is how a duplicated hub file or a re-submitted round would
+  # disappear without trace.
+  dup <- duplicated(cbind(ri, series$level_index))
+  if (any(dup)) {
+    cli::cli_abort(
+      "Round{?s} {.val {format(unique(round_date[ri[dup]]))}} carr{?ies/y}
+       more than one value for the same quantile level."
+    )
+  }
+  out <- matrix(NA_real_, nrow = n_levels, ncol = n)
+  out[cbind(series$level_index, ri)] <- series$value
+
+  filled <- colSums(!is.na(out))
+  partial <- which(filled > 0L & filled < n_levels)
+  if (length(partial) > 0L) {
+    cli::cli_abort(
+      "Round{?s} {.val {format(round_date[partial])}} carr{?ies/y} only some
+       quantile levels; expected {n_levels} or none."
+    )
+  }
+  out
+}
+
+
+#' Online-calibrate a hub model's submitted forecasts, per (location, horizon).
+#'
+#' @param forecasts [hub_read_forecasts()] output.
+#' @param truth [hub_read_truth()] output.
+#' @param settle_days how long after `target_end_date` the outcome is trusted.
+#'   14 gives exactly `horizon + 2` rounds of delay on hub coordinates.
+#' @param burn_in_seasons season labels (as produced by [hub_label_seasons()])
+#'   used only to warm up the learning rate: their residuals enter the `eta`
+#'   pool, but outcomes of rounds issued in them never produce a gradient step,
+#'   even when revealed at a live round, so the offsets stay at zero through
+#'   the first live rounds. Pass `"2023-2024"` to reproduce the intended design.
+#' @param season_policy what happens to the offsets across an off-season gap.
+#'   `"carry"` keeps them, `"reset"` zeroes them, `"shrink"` multiplies by
+#'   `shrink_factor`. Not a free choice: the base forecaster changed between
+#'   seasons, so carrying is a bet that the miscalibration outlived the model.
+#' @param lr,lr_window,lr_args,projection,nonneg passed to [qt_track()].
+#'   `lr_args = list(per_level = TRUE)` gives each quantile level its own eta.
+#' @param off_after `NULL`, or a `"MM-DD"` string. Rounds whose reference date
+#'   falls on or after this day of the year (and before July) play the base
+#'   forecast, and their outcomes never produce a gradient step (not even when
+#'   revealed the following autumn); outcomes of rounds issued before the cutoff
+#'   still step when revealed inside the off window. The hidden offsets carry
+#'   unchanged into the next season. `"04-01"` switches calibration off for the
+#'   spring tail, where the peak-tuned offsets are out of regime.
+#' @param lr_seasonal `NULL`, or `list(half_width_weeks = 5)`. Pools into the
+#'   eta residual window the rounds of every earlier season that fall within
+#'   `half_width_weeks` of the same point in the season (same calendar date
+#'   shifted by whole 52-week years), so eta at the start of a ramp is sized by
+#'   last year's ramp rather than last year's trough. Typically paired with a
+#'   short `lr_window` (e.g. 10).
+#' @param transform `"identity"` (the paper's method, additive offsets in count
+#'   space), `"log1p"`, `"sqrt"`, or `"quartic_root"` (the forecasters'
+#'   whitening map, `(x + 0.01)^0.25`). The tracker runs on the transformed
+#'   `Y` and `Yhat`, so the hidden offsets and eta live on that scale and the
+#'   played forecast is mapped back. Quantiles commute with monotone maps, so
+#'   the coverage guarantee is unchanged; what changes is how an offset learned
+#'   at the peak is sized when applied in the trough. `hidden` and `lr_level`
+#'   in the output stay in transformed units; `value_cal` and `offset` are in
+#'   counts. The 0.1 eta floor is a count-space constant: pass a smaller
+#'   `lr_args$floor` with any transform.
+#' @param scales `NULL`, or a tibble of `location`, `from` (Date), `scale`. Each
+#'   series' outcomes and base quantiles are divided by the scale whose `from`
+#'   is the latest one at or before the round date, before `transform` is
+#'   applied, and the played quantiles are multiplied back. This is how rounds
+#'   from different data sources (ILI+ percent history as burn-in, NHSN counts
+#'   live) share one tracker: offsets and eta live in scaled units. A location
+#'   with no row, or a round before its first `from`, gets scale 1.
+#' @param lr_slow `NULL`, or `list(mult = , window = )` adding a slow, persistent
+#'   offset term alongside the tracker's fast one; see [qt_track()]. A natural
+#'   pairing is `lr_slow = list(mult = 0.003, window = Inf)` with
+#'   `fast_decay = 0.1`. The slow term ignores `season_policy` and `off_after`
+#'   gating of updates is applied to both terms.
+#' @param fast_decay leak on the fast term per round, `[0, 1)`; see [qt_track()].
+#'   Mutually exclusive with `off_after`.
+#' @param slow_init `NULL`, or `"burn_in_quantile"`: before tracking, set the
+#'   slow term per (horizon, level) to the conformal offset implied by the
+#'   burn-in rounds pooled over locations, i.e. the `level`-quantile of
+#'   `Y - Yhat[level]` in the tracker's working units (after `scales` and
+#'   `transform`). A batch warm start for the persistent bias, so the slow
+#'   term does not have to accumulate it from tiny steps. Requires burn-in
+#'   seasons. The slow term is then applied from the first round, including
+#'   burn-in rounds, so burn-in metrics are no longer the base's.
+#' @param burn_in_learns_slow if `TRUE`, burn-in seasons train the slow term
+#'   (the fast term stays at zero there as before). With many historical
+#'   seasons this is how the persistent bias gets learned before the first
+#'   live season.
+#' @param progress show a progress bar.
+#' @return list with
+#'   `forecasts` long tibble, one row per (round, horizon, location, level), with
+#'     `value_base`, `value_cal`, `offset`, `truth`, plus round metadata;
+#'   `rounds` the global round axis with season labels;
+#'   `series` per-series diagnostics: the `lr` trajectory, `n_observed`, and how
+#'     many rounds actually produced an update.
+#' @export
+calibrate_hub_forecasts <- function(
+  forecasts,
+  truth,
+  settle_days = 14L,
+  burn_in_seasons = character(0),
+  season_policy = c("carry", "reset", "shrink"),
+  shrink_factor = 0.5,
+  lr = "adaptive+",
+  lr_window = 50,
+  lr_args = list(),
+  projection = c("isotonic", "sort", "none"),
+  nonneg = TRUE,
+  off_after = NULL,
+  lr_seasonal = NULL,
+  transform = c("identity", "log1p", "sqrt", "quartic_root"),
+  scales = NULL,
+  lr_slow = NULL,
+  fast_decay = 0,
+  burn_in_learns_slow = FALSE,
+  slow_init = NULL,
+  progress = TRUE
+) {
+  season_policy <- rlang::arg_match(season_policy)
+  projection <- rlang::arg_match(projection)
+  transform <- rlang::arg_match(transform)
+  fwd <- switch(transform,
+    identity = identity, log1p = log1p, sqrt = sqrt,
+    quartic_root = function(x) (x + 0.01)^0.25
+  )
+  inv <- switch(transform,
+    identity = identity, log1p = expm1, sqrt = function(x) pmax(x, 0)^2,
+    quartic_root = function(x) pmax(x, 0)^4 - 0.01
+  )
+  if (!is.null(scales) && !all(c("location", "from", "scale") %in% names(scales))) {
+    cli::cli_abort("{.arg scales} needs columns {.field location}, {.field from}, {.field scale}.")
+  }
+  # Both are answers to the same question (what to do with a stale offset):
+  # off_after freezes it by the calendar, fast_decay leaks it every round. The
+  # leak would also run through the off window, so the frozen-offset reading of
+  # off_after would be false. Compare them, do not stack them.
+  if (!is.null(off_after) && fast_decay > 0) {
+    cli::cli_abort("{.arg off_after} and {.arg fast_decay} cannot be combined; choose one way of retiring stale offsets.")
+  }
+
+  rounds <- hub_label_seasons(unique(forecasts$reference_date))
+  round_date <- rounds$round_date
+  n <- nrow(rounds)
+  levels <- sort(unique(forecasts$level))
+  m <- length(levels)
+
+  # Shared across every series: burn-in gating and the season-gap policy are
+  # properties of the calendar, not of a location. Both masks are indexed by
+  # the round a forecast was issued at (see qt_track()).
+  update_from <- !(rounds$season %in% burn_in_seasons)
+  hidden_scale <- rep(1, n)
+  boundary <- which(rounds$is_season_start & rounds$round_index > 1L)
+  hidden_scale[boundary] <- switch(season_policy,
+    carry = 1,
+    reset = 0,
+    shrink = shrink_factor
+  )
+
+  # The slow term may train through burn-in; the fast term never does.
+  slow_update_from <- if (burn_in_learns_slow) rep(TRUE, n) else update_from
+  apply <- rep(TRUE, n)
+  if (!is.null(off_after)) {
+    mmdd <- format(round_date, "%m-%d")
+    off <- mmdd >= off_after & mmdd < "07-01"
+    apply[off] <- FALSE
+    update_from[off] <- FALSE
+    slow_update_from[off] <- FALSE
+  }
+
+  lr_extra <- if (!is.null(lr_seasonal)) {
+    hub_seasonal_lr_extra(round_date, lr_seasonal$half_width_weeks %||% 5)
+  }
+
+  if (all(!update_from)) {
+    cli::cli_abort(
+      "Every season is a burn-in season; nothing would be calibrated.
+       Seasons present: {.val {unique(rounds$season)}}."
+    )
+  }
+  cli::cli_alert_info(
+    "Calibrating {.val {n}} round{?s} across season{?s} {.val {unique(rounds$season)}};
+     burn-in {.val {if (length(burn_in_seasons)) burn_in_seasons else 'none'}},
+     season gap policy {.val {season_policy}}."
+  )
+
+  truth_lookup <- stats::setNames(
+    truth$truth, paste(truth$location, truth$target_end_date)
+  )
+
+  grid <- forecasts %>%
+    distinct(.data$location, .data$horizon) %>%
+    arrange(.data$location, .data$horizon)
+  keyed <- forecasts %>% group_by(.data$location, .data$horizon)
+  keys <- keyed %>% group_keys()
+  chunks <- keyed %>% group_split()
+  ord <- order(keys$location, keys$horizon)
+  keys <- keys[ord, ]
+  chunks <- chunks[ord]
+
+  init_slow_by_h <- NULL
+  if (!is.null(slow_init)) {
+    slow_init <- rlang::arg_match(slow_init, "burn_in_quantile")
+    if (!any(rounds$season %in% burn_in_seasons)) {
+      cli::cli_abort("{.arg slow_init} needs at least one burn-in season.")
+    }
+    init_slow_by_h <- hub_burn_in_offsets(
+      chunks, keys, round_date, m, levels, truth_lookup,
+      burn = rounds$season %in% burn_in_seasons, scales = scales, fwd = fwd
+    )
+  }
+
+  if (progress) cli::cli_progress_bar("tracking", total = nrow(keys))
+  per_series <- vector("list", nrow(keys))
+  diagnostics <- vector("list", nrow(keys))
+  for (i in seq_len(nrow(keys))) {
+    if (progress) cli::cli_progress_update(set = i)
+    loc <- keys$location[i]
+    h <- keys$horizon[i]
+    Yhat <- hub_series_matrix(chunks[[i]], round_date, m)
+
+    target_end_date <- round_date + 7L * h
+    Y <- unname(truth_lookup[paste(loc, target_end_date)])
+
+    # Calendar rule first, then drop anything that cannot be learned from: no
+    # truth yet (the live tail of a season), or no base forecast at that round
+    # (nothing was played, so there is no coverage). A round pruned here is not
+    # "revealed late", it is never learned from at all.
+    learnable <- !is.na(Y) & !apply(is.na(Yhat), 2, any)
+    delay <- qt_delay_from_dates(round_date, target_end_date, settle_days)
+    delay <- lapply(delay, function(idx) idx[learnable[idx]])
+
+    s_t <- hub_round_scales(scales, loc, round_date)
+    res <- qt_track(
+      Y = fwd(Y / s_t), Yhat = fwd(sweep(Yhat, 2L, s_t, "/")), levels = levels, delay = delay,
+      lr = lr, lr_window = lr_window, lr_args = lr_args, projection = projection,
+      nonneg = FALSE,
+      update_from = update_from, hidden_scale = hidden_scale,
+      apply = apply, lr_extra = lr_extra,
+      lr_slow = lr_slow, fast_decay = fast_decay, slow_update_from = slow_update_from,
+      init_slow = if (is.null(init_slow_by_h)) 0 else init_slow_by_h[[as.character(h)]]
+    )
+    # Back to counts. The clamp lives here rather than in qt_track() so that it
+    # applies after the inverse transform (expm1 of a negative is negative).
+    played <- sweep(inv(res$played), 2L, s_t, "*")
+    if (nonneg) played <- pmax(played, 0)
+
+    per_series[[i]] <- tibble(
+      location = loc,
+      horizon = h,
+      round_index = rep(seq_len(n), each = m),
+      level_index = rep(seq_len(m), times = n),
+      level = rep(levels, times = n),
+      value_base = as.vector(Yhat),
+      value_cal = as.vector(played),
+      offset = as.vector(played - Yhat),
+      hidden = as.vector(res$hidden),
+      slow = as.vector(res$slow),
+      fast = as.vector(res$fast),
+      lr_level = as.vector(res$lr_levels),
+      truth = rep(Y, each = m)
+    )
+    diagnostics[[i]] <- tibble(
+      location = loc,
+      horizon = h,
+      round_index = seq_len(n),
+      lr = res$lr,
+      n_observed = res$n_observed,
+      n_revealed = lengths(res$delay)
+    )
+    if (progress) NULL
+  }
+  if (progress) cli::cli_progress_done()
+
+  round_meta <- rounds %>%
+    select("round_index", "round_date", "season", "season_round", "gap_weeks")
+
+  out_forecasts <- bind_rows(per_series) %>%
+    left_join(round_meta, by = "round_index") %>%
+    mutate(
+      reference_date = .data$round_date,
+      target_end_date = .data$round_date + 7L * .data$horizon,
+      is_burn_in = .data$season %in% burn_in_seasons
+    ) %>%
+    select(
+      "location", "horizon", "reference_date", "target_end_date", "season",
+      "season_round", "round_index", "level_index", "level",
+      "value_base", "value_cal", "offset", "hidden", "slow", "fast", "lr_level",
+      "truth", "is_burn_in"
+    )
+
+  list(
+    forecasts = out_forecasts,
+    rounds = rounds %>% mutate(
+      is_burn_in = .data$season %in% burn_in_seasons,
+      hidden_scale = hidden_scale,
+      updates = update_from,
+      applies = apply
+    ),
+    series = bind_rows(diagnostics) %>% left_join(round_meta, by = "round_index")
+  )
+}
+
+
+#' Geo-pooled coverage per (horizon, level), base vs calibrated.
+#'
+#' Pooling across locations is not a convenience: per (location, horizon, level)
+#' a season is only ~25-30 rounds minus delay, so a single series cannot resolve
+#' the 1% or 99% levels at all (~0.3 expected exceedances). Pooled over 53
+#' locations there are ~1500 observations per (horizon, level) per season, which
+#' resolves the middle of the distribution and marginally the 2.5%/97.5% levels.
+#' Nothing should be tuned on per-series coverage.
+#'
+#' @param cal [calibrate_hub_forecasts()] output, or its `forecasts` element.
+#' @param drop_burn_in exclude burn-in-season rounds, which by construction have
+#'   zero offsets and would dilute the comparison toward "no effect".
+#' @export
+hub_coverage <- function(cal, drop_burn_in = TRUE, by = character(0)) {
+  fc <- if (is.list(cal) && !is.data.frame(cal)) cal$forecasts else cal
+  # Rounds a location was not forecast at are all-NA in value_base/value_cal.
+  fc <- fc %>% filter(!is.na(.data$truth), !is.na(.data$value_base))
+  if (drop_burn_in) fc <- fc %>% filter(!.data$is_burn_in)
+  fc %>%
+    group_by(across(all_of(c(by, "horizon", "level")))) %>%
+    summarize(
+      n = dplyr::n(),
+      coverage_base = mean(.data$truth <= .data$value_base),
+      coverage_cal = mean(.data$truth <= .data$value_cal),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      gap_base = .data$coverage_base - .data$level,
+      gap_cal = .data$coverage_cal - .data$level
+    )
+}
+
+
+#' Headline number: mean |coverage - nominal| over levels, per horizon.
+#' @export
+hub_coverage_summary <- function(cal, drop_burn_in = TRUE, by = character(0)) {
+  hub_coverage(cal, drop_burn_in = drop_burn_in, by = by) %>%
+    group_by(across(all_of(c(by, "horizon")))) %>%
+    summarize(
+      n_obs = sum(.data$n),
+      cal_error_base = mean(abs(.data$gap_base)),
+      cal_error_cal = mean(abs(.data$gap_cal)),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      improvement = .data$cal_error_base - .data$cal_error_cal,
+      pct_improvement = 100 * .data$improvement / .data$cal_error_base
+    )
+}
+
+
+#' Mean pinball (quantile) loss per (horizon), base vs calibrated.
+#'
+#' Averaged over quantile levels, so this is WIS up to the usual factor-of-two
+#' convention and directly comparable between the two columns.
+#' @export
+hub_quantile_loss <- function(cal, drop_burn_in = TRUE, by = character(0)) {
+  fc <- if (is.list(cal) && !is.data.frame(cal)) cal$forecasts else cal
+  # Rounds a location was not forecast at are all-NA in value_base/value_cal.
+  fc <- fc %>% filter(!is.na(.data$truth), !is.na(.data$value_base))
+  if (drop_burn_in) fc <- fc %>% filter(!.data$is_burn_in)
+  pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
+  fc %>%
+    mutate(
+      loss_base = pinball(.data$truth, .data$value_base, .data$level),
+      loss_cal = pinball(.data$truth, .data$value_cal, .data$level)
+    ) %>%
+    group_by(across(all_of(c(by, "horizon")))) %>%
+    summarize(
+      n_obs = dplyr::n(),
+      loss_base = mean(.data$loss_base),
+      loss_cal = mean(.data$loss_cal),
+      .groups = "drop"
+    ) %>%
+    mutate(pct_improvement = 100 * (.data$loss_base - .data$loss_cal) / .data$loss_base)
+}
+
+
+#' Rolling calibration error against rolling quantile loss, the trade-off curve.
+#'
+#' Both quantities are rolling averages over the last `window` rounds of one
+#' series (or of a geo-pooled set of series):
+#'   calibration error = mean over levels of |rolling coverage at a - a|
+#'   quantile loss     = mean over levels and rounds of the pinball loss
+#' Plotting one against the other shows whether calibration is being bought at
+#' the cost of sharpness, which is the thing a tracker can quietly get wrong.
+#'
+#' @param cal [calibrate_hub_forecasts()] output.
+#' @param window number of rounds in the rolling window.
+#' @param by grouping columns; `character(0)` pools all locations, which is the
+#'   default because per-series rolling coverage over 20 rounds is mostly noise.
+#' @export
+hub_rolling_tradeoff <- function(cal, window = 20L, by = character(0), drop_burn_in = TRUE) {
+  fc <- if (is.list(cal) && !is.data.frame(cal)) cal$forecasts else cal
+  # Rounds a location was not forecast at are all-NA in value_base/value_cal.
+  fc <- fc %>% filter(!is.na(.data$truth), !is.na(.data$value_base))
+  if (drop_burn_in) fc <- fc %>% filter(!.data$is_burn_in)
+  pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
+
+  # Per (round, level) within each group: coverage indicator and pinball loss,
+  # pooled over whatever `by` does not name (locations, by default).
+  per_round <- fc %>%
+    group_by(across(all_of(c(by, "horizon", "round_index", "reference_date", "level")))) %>%
+    summarize(
+      cov_base = mean(.data$truth <= .data$value_base),
+      cov_cal = mean(.data$truth <= .data$value_cal),
+      loss_base = mean(pinball(.data$truth, .data$value_base, .data$level)),
+      loss_cal = mean(pinball(.data$truth, .data$value_cal, .data$level)),
+      .groups = "drop"
+    )
+
+  roll <- function(x) slider::slide_dbl(x, mean, .before = window - 1L, .complete = TRUE)
+  per_round %>%
+    group_by(across(all_of(c(by, "horizon", "level")))) %>%
+    arrange(.data$round_index, .by_group = TRUE) %>%
+    mutate(
+      roll_cov_base = roll(.data$cov_base),
+      roll_cov_cal = roll(.data$cov_cal),
+      roll_loss_base = roll(.data$loss_base),
+      roll_loss_cal = roll(.data$loss_cal)
+    ) %>%
+    ungroup() %>%
+    filter(!is.na(.data$roll_cov_base)) %>%
+    # Now collapse the level axis: calibration error is the mean over levels of
+    # |rolling coverage - nominal|.
+    group_by(across(all_of(c(by, "horizon", "round_index", "reference_date")))) %>%
+    summarize(
+      cal_error_base = mean(abs(.data$roll_cov_base - .data$level)),
+      cal_error_cal = mean(abs(.data$roll_cov_cal - .data$level)),
+      qloss_base = mean(.data$roll_loss_base),
+      qloss_cal = mean(.data$roll_loss_cal),
+      .groups = "drop"
+    )
+}
+
+
+#' Conformal warm start for the slow term: per (horizon, level), the
+#' `level`-quantile of `Y - Yhat[level]` over burn-in rounds, pooled across
+#' locations, in the tracker's working units.
+#' @keywords internal
+hub_burn_in_offsets <- function(chunks, keys, round_date, m, levels, truth_lookup, burn, scales, fwd) {
+  out <- list()
+  for (h in sort(unique(keys$horizon))) {
+    idx <- which(keys$horizon == h)
+    target_end_date <- round_date + 7L * h
+    resid <- purrr::map(idx, function(j) {
+      loc <- keys$location[j]
+      Yhat <- hub_series_matrix(chunks[[j]], round_date, m)
+      Y <- unname(truth_lookup[paste(loc, target_end_date)])
+      s_t <- hub_round_scales(scales, loc, round_date)
+      r <- fwd(matrix(Y / s_t, m, length(Y), byrow = TRUE)) - fwd(sweep(Yhat, 2L, s_t, "/"))
+      r[, burn & !is.na(Y) & !is.na(Yhat[1L, ]), drop = FALSE]
+    })
+    resid <- do.call(cbind, resid)
+    if (ncol(resid) == 0L) {
+      cli::cli_abort("No learnable burn-in rounds for horizon {h}; cannot warm-start the slow term.")
+    }
+    out[[as.character(h)]] <- vapply(
+      seq_len(m),
+      function(i) stats::quantile(resid[i, ], levels[i], names = FALSE, type = 7L),
+      numeric(1)
+    )
+  }
+  out
+}
+
+
+#' Per-round scale for one location from a `scales` table (see
+#' [calibrate_hub_forecasts()]); all ones when `scales` is `NULL`.
+#' @keywords internal
+hub_round_scales <- function(scales, loc, round_date) {
+  n <- length(round_date)
+  if (is.null(scales)) {
+    return(rep(1, n))
+  }
+  rows <- scales %>%
+    filter(.data$location == loc) %>%
+    arrange(.data$from)
+  if (nrow(rows) == 0L) {
+    return(rep(1, n))
+  }
+  idx <- findInterval(as.numeric(round_date), as.numeric(rows$from))
+  out <- rep(1, n)
+  out[idx > 0L] <- rows$scale[idx[idx > 0L]]
+  if (any(!is.finite(out) | out <= 0)) {
+    cli::cli_abort("{.arg scales} must be positive and finite (location {.val {loc}}).")
+  }
+  out
+}
+
+
+#' Rounds of earlier seasons near the same point in the season, per round.
+#'
+#' Seasons are aligned by shifting the round date back whole 52-week years
+#' (364 days keeps the weekday), so "same point" is the same epi week. Only
+#' earlier seasons are pooled; later ones would be lookahead.
+#' @keywords internal
+hub_seasonal_lr_extra <- function(round_date, half_width_weeks = 5) {
+  n <- length(round_date)
+  hw <- 7L * half_width_weeks
+  lapply(seq_len(n), function(t) {
+    d <- round_date[t]
+    idx <- integer(0)
+    for (k in 1:3) {
+      anchor <- d - 364L * k
+      idx <- c(idx, which(abs(as.numeric(round_date - anchor)) <= hw))
+    }
+    sort(unique(idx[idx < t]))
+  })
+}

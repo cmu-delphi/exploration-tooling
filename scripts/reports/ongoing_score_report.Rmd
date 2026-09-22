@@ -57,7 +57,7 @@ if (averaging_method == "individual") {
 } else {
   stop("Unknown averaging method")
 }
-our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "seasonal_nssp_latest")
+our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "CMU-TimeSeries-Calibrated", "seasonal_nssp_latest")
 scores <- scores %>%
   mutate(
     forecaster =
@@ -171,7 +171,7 @@ datatable_function <- function(score_summary) {
     )
   ) %>%
     formatStyle("forecaster", target = c("cell"),
-                textDecoration = styleEqual("CMU-TimeSeries", "underline")) %>%
+                textDecoration = styleEqual(c("CMU-TimeSeries", "CMU-TimeSeries-Calibrated"), c("underline", "underline"))) %>%
     formatStyle(
       "mean_wis",
       background = styleColorBar(c(0, max(score_summary$mean_wis)), 'lightblue'),
@@ -259,7 +259,7 @@ sliding_ordered <- ordered_scores %>%
   ) %>%
   group_by(forecaster, forecast_date) %>%
   slice(1)
-baseline_only <- sliding_ordered %>% filter(forecaster == "CovidHub-baseline")
+baseline_only <- sliding_ordered %>% filter(forecaster == "CMU-TimeSeries")
 sliding_ordered <- sliding_ordered %>%
   group_by(forecast_date) %>%
   left_join(baseline_only, by = "forecast_date", suffix = c("", ".baseline")) %>%
@@ -272,13 +272,13 @@ plotted_forecasters <- sliding_ordered %>% ungroup() %>% distinct(forecaster) %>
 top_5_and_CMU <- score_summary_short %>%
   pull(forecaster) %>%
   `[`(1:5) %>%
-  append("CMU-TimeSeries") %>%
+  append(c("CMU-TimeSeries", "CMU-TimeSeries-Calibrated")) %>%
   unique()
 start_hidden <- setdiff(plotted_forecasters, top_5_and_CMU)
 
 plotting_score <- function(sliding_plot, score_to_plot) {
   resulting_plot <- sliding_plot %>%
-    ggplot(aes(x = forecast_date, y = {{ score_to_plot }}, color = forecaster, linewidth = ifelse(forecaster == "CMU-TimeSeries", 1, 0.5))) +
+    ggplot(aes(x = forecast_date, y = {{ score_to_plot }}, color = forecaster, linewidth = ifelse(forecaster %in% c("CMU-TimeSeries", "CMU-TimeSeries-Calibrated"), 1, 0.5))) +
     geom_line() +
     scale_color_viridis_d(option = "turbo") +
     scale_y_continuous(breaks = breaks_pretty(n = 20), limits = c(0, NA)) +

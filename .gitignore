@@ -40,3 +40,4 @@ covid_hosp_prod_2
 covid_hosp_prod_backup
 covid_nssp_explore
 run_garbage.R
+*_hosp_*/workspaces/

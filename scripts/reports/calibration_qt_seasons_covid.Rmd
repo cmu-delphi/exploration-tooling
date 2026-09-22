@@ -1,0 +1,351 @@
+---
+title: MultiQT calibration — whole-season views of four states, COVID hub
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  burn_in_seasons: ""
+  season_policy: "carry"
+  lr_window: 20
+  lr_mult: 0.03
+  lr_floor: 0.001
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+# cache = TRUE chunks are keyed on chunk code + cache.extra, NOT on functions
+# in R/ -- after changing calibration code, clear cache/calibration/knitr_cache_seasons_covid/.
+knitr::opts_chunk$set(
+  fig.align = "center", fig.width = 10, fig.height = 6,
+  message = FALSE, warning = FALSE, cache = FALSE,
+  cache.path = here::here("cache/calibration/knitr_cache_seasons_covid/")
+)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+This notebook takes the sqrt-space operating point (`transform = "sqrt"`,
+`lr_mult = 0.03`, `lr_window = 20`, carry, no burn-in) and looks at four
+states across the available season of COVID hub submissions.
+COVID runs year-round with no off-season gap, so season policy has no practical
+effect; burn-in-dependent variants (conformal warm start) are not included.
+The states are chosen by how much the baseline calibration changed them, pooled
+over horizons −1…3.
+
+```{r load, cache=TRUE}
+suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+
+forecasts <- hub_read_forecasts(hub_dir = HUB_COVID_DIR, target = HUB_COVID_TARGET)
+truth <- hub_read_covid_truth()
+rounds <- hub_label_seasons(unique(forecasts$reference_date))
+burn_in <- if (nzchar(params$burn_in_seasons)) {
+  strsplit(params$burn_in_seasons, ",")[[1]]
+} else {
+  character(0)
+}
+
+geo_map <- get_population_data() %>%
+  distinct(state_id, .keep_all = TRUE) %>%
+  transmute(state_id, abbrev = toupper(state_id), location = state_code)
+
+archive <- nanoparquet::read_parquet(
+  here::here("cache/calibration/nhsn_archive_covid.parquet")
+) %>%
+  as_epi_archive(compactify = TRUE)
+
+live_rounds <- rounds %>% filter(!season %in% burn_in)
+min_version <- min(archive$DT$version)
+max_version <- archive$versions_end
+snapshots <- purrr::map(live_rounds$round_date, function(rd) {
+  as_of <- rd - 3L
+  if (as_of < min_version || as_of > max_version) {
+    return(NULL)
+  }
+  epix_as_of(archive, as_of) %>%
+    as_tibble() %>%
+    inner_join(geo_map, by = c("geo_value" = "state_id")) %>%
+    transmute(reference_date = rd, location, time_value, value)
+}) %>% bind_rows()
+
+seasons <- unique(live_rounds$season)
+```
+
+```{r variants, cache=TRUE, dependson="load"}
+base_args <- list(
+  burn_in_seasons = burn_in, season_policy = params$season_policy,
+  lr_window = params$lr_window, transform = "sqrt",
+  lr_args = list(mult = params$lr_mult, floor = params$lr_floor),
+  progress = FALSE
+)
+# Burn-in-dependent variants (warm_static, warm_fast, warm_slow_fast) are not
+# included: COVID has no burn-in season so slow_init = "burn_in_quantile" has
+# no data to warm from. off_feb is also excluded -- COVID has no spring tail.
+variant_args <- list(
+  baseline = list(),
+  count_space = list(transform = "identity", lr_args = list(mult = params$lr_mult)),
+  slow_term = list(lr_slow = list(mult = 0.003)),
+  slow_fast = list(lr_slow = list(mult = 0.003), fast_decay = 0.1)
+)
+variant_titles <- c(
+  baseline = "Sqrt-space tracker (baseline)",
+  count_space = "Count-space tracker (the paper's method)",
+  slow_term = "Sqrt tracker + persistent slow term",
+  slow_fast = "Sqrt tracker + slow term + leaky fast term"
+)
+
+cals <- purrr::map(variant_args, function(v) {
+  do.call(calibrate_hub_forecasts, c(list(forecasts, truth), modifyList(base_args, v)))
+})
+```
+
+```{r select-states, dependson="variants"}
+pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
+
+by_state <- cals$baseline$forecasts %>%
+  filter(!is_burn_in, !is.na(truth)) %>%
+  group_by(location) %>%
+  summarize(
+    wis_pct = 100 * (1 - sum(pinball(truth, value_cal, level)) / sum(pinball(truth, value_base, level))),
+    ae_pct = 100 * (1 - sum(abs(truth - value_cal)[level == 0.5]) / sum(abs(truth - value_base)[level == 0.5])),
+    .groups = "drop"
+  ) %>%
+  inner_join(select(geo_map, location, abbrev), by = "location")
+
+pick <- function(ranked, taken) ranked$location[!ranked$location %in% taken][1]
+roles <- list(
+  `best WIS` = arrange(by_state, desc(wis_pct)),
+  `worst WIS` = arrange(by_state, wis_pct),
+  `best AE` = arrange(by_state, desc(ae_pct)),
+  `worst AE` = arrange(by_state, ae_pct)
+)
+taken <- character(0)
+for (r in names(roles)) taken <- c(taken, pick(roles[[r]], taken))
+states <- tibble(location = taken, role = names(roles)) %>%
+  left_join(by_state, by = "location") %>%
+  mutate(label = sprintf("%s (%s: WIS %+.1f%%, AE %+.1f%%)", abbrev, role, wis_pct, ae_pct))
+```
+
+# Which states, and why
+
+Per-state change from baseline calibration over all rounds, all horizons pooled.
+
+```{r state-table}
+knitr::kable(states %>% transmute(state = abbrev, role, `WIS change %` = round(wis_pct, 1), `AE change %` = round(ae_pct, 1)))
+```
+
+# Summary across variants
+
+WIS % improvement over the base forecast (all rounds), per horizon.
+
+```{r variant-summary}
+purrr::imap(cals, function(cal, nm) {
+  hub_quantile_loss(cal) %>% transmute(variant = variant_titles[[nm]], horizon, pct = round(pct_improvement, 1))
+}) %>%
+  bind_rows() %>%
+  tidyr::pivot_wider(names_from = horizon, values_from = pct, names_prefix = "h")
+```
+
+## Where in the year the baseline gains and loses
+
+Baseline variant, pooled over all locations, by calendar month of the reference
+date.
+
+```{r by-month}
+by_month <- cals$baseline$forecasts %>%
+  filter(!is_burn_in, !is.na(truth)) %>%
+  mutate(month = format(reference_date, "%b"), month_n = as.integer(format(reference_date, "%m"))) %>%
+  group_by(horizon, month, month_n) %>%
+  summarize(
+    base = sum(pinball(truth, value_base, level)),
+    cal = sum(pinball(truth, value_cal, level)),
+    shift = 100 * sum((value_cal - value_base)[level == 0.5]) / sum(truth[level == 0.5]),
+    .groups = "drop"
+  ) %>%
+  group_by(horizon) %>%
+  mutate(pct = 100 * (base - cal) / base, share = 100 * base / sum(base)) %>%
+  ungroup() %>%
+  mutate(month = factor(month, levels = unique(month[order(month_n)])))
+
+show_wide <- function(col, digits = 1) {
+  by_month %>%
+    select(horizon, month, value = all_of(col)) %>%
+    mutate(value = round(value, digits)) %>%
+    tidyr::pivot_wider(names_from = horizon, values_from = value, names_prefix = "h") %>%
+    arrange(month)
+}
+knitr::kable(show_wide("pct"), caption = "WIS change % (calibrated vs base)")
+knitr::kable(show_wide("share"), caption = "Share of base WIS %")
+knitr::kable(show_wide("shift"), caption = "Median shift % of truth")
+```
+
+```{r helpers}
+headline_table <- function(cal) {
+  bind_rows(
+    left_join(
+      hub_coverage_summary(cal),
+      select(hub_quantile_loss(cal), horizon, loss_base, loss_cal, loss_pct = pct_improvement),
+      by = "horizon"
+    ) %>% mutate(season = "all"),
+    left_join(
+      hub_coverage_summary(cal, by = "season"),
+      select(hub_quantile_loss(cal, by = "season"),
+        season, horizon, loss_base, loss_cal, loss_pct = pct_improvement
+      ),
+      by = c("season", "horizon")
+    )
+  ) %>%
+    transmute(
+      season, horizon,
+      `cal err (base)` = round(cal_error_base, 4),
+      `cal err (calibrated)` = round(cal_error_cal, 4),
+      `cal err improvement %` = round(pct_improvement, 1),
+      `WIS (base)` = round(2 * loss_base, 1),
+      `WIS (calibrated)` = round(2 * loss_cal, 1),
+      `WIS improvement %` = round(loss_pct, 1)
+    ) %>%
+    arrange(season, horizon)
+}
+
+fan_cols <- c(base = "#0072B2", calibrated = "#D55E00")
+
+season_plot <- function(cal, loc, season) {
+  rr <- cal$rounds %>% filter(season == !!season, season_round %% 2 == 1)
+  ref_dates <- sort(rr$round_date)
+
+  fin <- truth %>%
+    filter(location == loc, target_end_date >= min(ref_dates) - 21L, target_end_date <= max(ref_dates) + 28L)
+
+  fan <- cal$forecasts %>%
+    filter(location == loc, reference_date %in% ref_dates, horizon %in% 0:3, level %in% c(0.1, 0.5, 0.9)) %>%
+    mutate(
+      target_end_date = reference_date + 7L * horizon,
+      lvl = c(`0.1` = "lo", `0.5` = "med", `0.9` = "hi")[as.character(level)]
+    ) %>%
+    select(reference_date, target_end_date, lvl, base = value_base, calibrated = value_cal) %>%
+    tidyr::pivot_longer(c(base, calibrated), names_to = "which") %>%
+    tidyr::pivot_wider(names_from = lvl, values_from = value)
+
+  vint_windows <- tibble(ref = ref_dates) %>%
+    mutate(
+      win_start = dplyr::lag(ref, default = ref[1] - 14L) - 3L,
+      win_end = ref - 3L
+    )
+  vint <- purrr::pmap(vint_windows, function(ref, win_start, win_end) {
+    snapshots %>%
+      filter(reference_date == ref, location == loc, time_value >= win_start, time_value <= win_end)
+  }) %>% bind_rows()
+
+  main <- ggplot() +
+    geom_line(data = fin, aes(target_end_date, truth), colour = "grey65") +
+    geom_point(data = fin, aes(target_end_date, truth), colour = "grey65", size = 0.7) +
+    geom_ribbon(
+      data = filter(fan, which == "base"),
+      aes(target_end_date, ymin = lo, ymax = hi, fill = which, group = reference_date),
+      alpha = 0.2
+    ) +
+    geom_line(
+      data = filter(fan, which == "calibrated"),
+      aes(target_end_date, lo, colour = which, group = reference_date), linewidth = 0.3
+    ) +
+    geom_line(
+      data = filter(fan, which == "calibrated"),
+      aes(target_end_date, hi, colour = which, group = reference_date), linewidth = 0.3
+    ) +
+    geom_line(
+      data = fan,
+      aes(target_end_date, med, colour = which, group = interaction(reference_date, which))
+    ) +
+    geom_line(data = vint, aes(time_value, value), colour = "black") +
+    geom_point(data = vint, aes(time_value, value), colour = "black", size = 0.6) +
+    geom_vline(xintercept = ref_dates - 3L, linetype = "dashed", colour = "grey40", linewidth = 0.3) +
+    scale_fill_manual(values = fan_cols, aesthetics = c("fill", "colour")) +
+    labs(x = NULL, y = "admissions", colour = NULL, fill = NULL) +
+    theme(legend.position = "top")
+
+  eta <- cal$series %>%
+    filter(location == loc, season == !!season, horizon %in% 0:3) %>%
+    mutate(lr = if_else(lr > 0, lr, NA_real_)) %>%
+    ggplot(aes(round_date, lr, colour = factor(horizon))) +
+    geom_line(na.rm = TRUE) +
+    geom_point(size = 0.6, na.rm = TRUE) +
+    labs(x = NULL, y = "eta", colour = "horizon") +
+    theme(legend.position = "top")
+
+  title <- paste0(geo_map$abbrev[match(loc, geo_map$location)], " — ", season)
+  cowplot::plot_grid(
+    cowplot::ggdraw() + cowplot::draw_label(title, fontface = "bold"),
+    cowplot::plot_grid(main, eta, ncol = 1, rel_heights = c(3, 1), align = "v", axis = "lr"),
+    ncol = 1, rel_heights = c(0.08, 1)
+  )
+}
+
+oh_table <- function(cal, loc, h, season) {
+  cal$forecasts %>%
+    filter(location == loc, horizon == h, season == !!season, level %in% c(0.05, 0.25, 0.5, 0.75, 0.95)) %>%
+    mutate(level = paste0("q", level)) %>%
+    select(reference_date, level, lr_level, truth, hidden, offset, value_base, value_cal) %>%
+    tidyr::pivot_wider(
+      names_from = level,
+      values_from = c(hidden, offset, value_base, value_cal, lr_level),
+      names_glue = "{level}_{.value}"
+    ) %>%
+    mutate(
+      eta = round(q0.5_lr_level, 3),
+      across(c(truth, matches("hidden|offset|value_base|value_cal")), ~ round(.x))
+    ) %>%
+    select(
+      reference_date, eta, truth,
+      matches("^q.*_hidden$"), matches("^q.*_offset$"),
+      matches("^q.*_value_base$"), matches("^q.*_value_cal$")
+    ) %>%
+    arrange(reference_date)
+}
+
+internals_block <- function(cal, season) {
+  for (i in seq_len(nrow(states))) {
+    loc <- states$location[i]
+    cat(sprintf("\n\n<details><summary>%s internals (h=2)</summary>\n\n", states$label[i]))
+    print(knitr::kable(oh_table(cal, loc, 2L, season)))
+    cat("\n\n</details>\n\n")
+  }
+}
+```
+
+```{r sections, results='asis'}
+for (nm in names(cals)) {
+  cal <- cals[[nm]]
+  cat(sprintf("\n\n# %s\n\n", variant_titles[[nm]]))
+
+  desc <- switch(nm,
+    baseline = "The single-term tracker run on sqrt(counts). lr_mult = 0.03, lr_window = 20, carry, isotonic projection.",
+    count_space = "The paper's method as originally run: additive offsets in count space, same multiplier and window.",
+    slow_term = "Sqrt tracker plus a slow persistent offset term (mult 0.003, expanding window). No fast decay.",
+    slow_fast = "Sqrt tracker plus slow persistent term (mult 0.003) and a 10% per-round leak on the fast term."
+  )
+  cat(desc, "\n\n")
+
+  cat("## Headline\n\n")
+  print(knitr::kable(headline_table(cal)))
+
+  for (season in seasons) {
+    cat(sprintf("\n\n## %s\n\n", season))
+    for (i in seq_len(nrow(states))) {
+      loc <- states$location[i]
+      cat(sprintf("\n\n### %s — %s\n\n", states$label[i], season))
+      print(season_plot(cal, loc, season))
+    }
+  }
+
+  cat("\n\n## Internals\n\n")
+  for (season in seasons) {
+    cat(sprintf("\n\n### %s\n\n", season))
+    internals_block(cal, season)
+  }
+}
+```

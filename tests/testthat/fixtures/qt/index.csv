@@ -1,0 +1,9 @@
+name,T,m,projection,lr,has_delay
+small_nodelay,60,5,isotonic,adaptive+,0
+small_delay3,60,5,isotonic,adaptive+,1
+hub_delay2,90,23,isotonic,adaptive+,1
+hub_delay5,90,23,isotonic,adaptive+,1
+hub_ragged,90,23,isotonic,adaptive+,1
+hub_sort,90,23,sort,adaptive+,1
+hub_none,90,23,none,adaptive+,1
+hub_constlr,90,23,isotonic,2.5,1
