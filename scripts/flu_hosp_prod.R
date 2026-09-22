@@ -616,7 +616,7 @@ calibration_targets <- list(
         return(invisible(NULL))
       }
       current_ref <- get_forecast_reference_date(max(g_forecast_dates))
-      out_dir <- file.path(g_submission_directory, "model-output/CMU-TimeSeries-Calibrated")
+      out_dir <- file.path(g_submission_directory, "model-output/CMU-TimeSeries_Cal")
       dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
       calibrated_ensemble_nhsn$forecasts %>%
         filter(.data$reference_date == current_ref, !.data$is_burn_in) %>%
@@ -632,7 +632,7 @@ calibration_targets <- list(
         write_submission_file(
           current_ref,
           out_dir,
-          file_name = "CMU-TimeSeries-Calibrated"
+          file_name = "CMU-TimeSeries_Cal"
         )
     },
     cue = tar_cue("always")
