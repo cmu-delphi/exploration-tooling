@@ -692,7 +692,7 @@ if (g_evaluation_mode) {
         rmarkdown::render(
           ongoing_score_report_rmd,
           output_file = here::here(
-            "reports",
+            "rendered_reports",
             sprintf("%s_covid_nhsn_scoring.html", as.Date(Sys.Date()))
           ),
           params = list(
@@ -723,7 +723,7 @@ if (g_evaluation_mode) {
         rmarkdown::render(
           ongoing_score_report_rmd,
           output_file = here::here(
-            "reports",
+            "rendered_reports",
             sprintf("%s_covid_nssp_scoring_individual.html", as.Date(Sys.Date()))
           ),
           params = list(
@@ -738,7 +738,7 @@ if (g_evaluation_mode) {
         rmarkdown::render(
           ongoing_score_report_rmd,
           output_file = here::here(
-            "reports",
+            "rendered_reports",
             sprintf("%s_covid_nssp_scoring_common.html", as.Date(Sys.Date()))
           ),
           params = list(

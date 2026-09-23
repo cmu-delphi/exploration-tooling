@@ -125,7 +125,7 @@ render_score_plot <- function(score_report_rmd, scores, forecast_dates, disease,
       target = target
     ),
     output_file = here::here(
-      "reports",
+      "rendered_reports",
       glue::glue("{disease}_{target}_backtesting_{season}_on_{as.Date(Sys.Date())}")
     )
   )

@@ -360,7 +360,7 @@ build_prod_ensemble_targets <- function(
           rmarkdown::render(
             forecast_report_rmd,
             output_file = here::here(
-              "reports",
+              "rendered_reports",
               sprintf("%s_%s_prod_on_%s.html", as.Date(forecast_date_int), disease, as.Date(Sys.Date()))
             ),
             params = list(
