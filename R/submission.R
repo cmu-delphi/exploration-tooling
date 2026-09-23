@@ -28,12 +28,12 @@ update_site <- function() {
   library(stringr)
   insert_after_section <- function(content, header, link) {
     idx <- which(grepl(header, content, fixed = TRUE))
-    if (length(idx) == 0) stop(glue("Template is missing section '{header}' — add it to reports/template.md"))
+    if (length(idx) == 0) stop(glue("Template is missing section '{header}' — add it to rendered_reports/template.md"))
     append(content, link, after = idx[[1]] + 1L)
   }
   # Define the directories
-  reports_dir <- "reports"
-  template_path <- "reports/template.md"
+  reports_dir <- "rendered_reports"
+  template_path <- "rendered_reports/template.md"
 
   # Create the reports directory if it doesn't exist
   if (!dir_exists(reports_dir)) {
@@ -216,6 +216,6 @@ update_site <- function() {
 
   # Convert the markdown file to HTML
   system(
-    "pandoc reports/report.md -s -o reports/index.html --css=style.css --mathjax='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js' --metadata pagetitle='Delphi Reports'"
+    "pandoc rendered_reports/report.md -s -o rendered_reports/index.html --css=style.css --mathjax='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js' --metadata pagetitle='Delphi Reports'"
   )
 }

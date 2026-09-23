@@ -2,8 +2,6 @@
 .idea
 *.log
 tmp/
-scripts/**.html
-*.pdf
 .Renviron
 .renvignore
 nohup.out
@@ -13,8 +11,6 @@ tmp.R
 aux_data
 # Local Netlify folder
 .netlify
-reports/*.html
-reports/report.md
 *cache*
 data/
 .vscode/
@@ -23,21 +19,54 @@ data/
 .nhsn_flu_cache.parquet
 meta/
 **/unnamed-chunk*
-decreasing_forecasters_cache/
-reports/tachyons-minimal.css
-reports/season_summary_2025_presentation_files/
-reports/gfx/
-reports/**/
-scripts/reports/season_2025_talk/season_summary_2025_presentation_files/
-scripts/reports/season_2025_talk/season_summary_2025_presentation.html
-scripts/reports/season_2025_talk/season_summary_2025_presentation_cache/
 test_proj
 .RData
 .Rhistory
 *objects*
-*.png
 covid_hosp_prod_2
 covid_hosp_prod_backup
 covid_nssp_explore
 run_garbage.R
 *_hosp_*/workspaces/
+
+# Generated data / archives
+nhsn_archive_data
+nhsn_archive_data.parquet
+raw_nhsn_data.zip
+ca_nhsn_version_history.csv
+tx_nhsn_version_history.csv
+seasonal_features/
+
+# Regression test artifacts
+*_regr/
+*_regr_prod/
+
+# Rendered report artifacts
+rendered_reports/*.html
+rendered_reports/report.md
+rendered_reports/tachyons-minimal.css
+rendered_reports/season_summary_2025_presentation_files/
+rendered_reports/gfx/
+rendered_reports/**/
+reports/*_cache/
+reports/**/*_cache/
+reports/*_files/
+reports/**/*_files/
+reports/**/*.html
+reports/**/*.png
+reports/writeups/presentations/season_2025_talk/season_summary_2025_presentation_files/
+reports/writeups/presentations/season_2025_talk/season_summary_2025_presentation.html
+reports/writeups/presentations/season_2025_talk/season_summary_2025_presentation_cache/
+
+# one_offs render artifacts
+scripts/one_offs/*.pdf
+scripts/one_offs/*.png
+scripts/one_offs/*_cache/
+scripts/one_offs/*_files/
+
+# Scratch
+temp.R
+tmp2.R
+slide_forecaster_error.rds
+reportsBackup2/
+notes.org

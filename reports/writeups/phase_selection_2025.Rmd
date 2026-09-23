@@ -1,0 +1,164 @@
+---
+title: "Phase Selection"
+date: "compiled on `r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: True
+editor_options:
+  chunk_output_type: console
+---
+
+```{css, echo=FALSE}
+body {
+  display: block;
+  max-width: 1280px !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+body .main-container {
+  max-width: 1280px !important;
+  width: 1280px !important;
+}
+```
+
+$$\\[.4in]$$
+
+```{r echo=FALSE, warning=FALSE,message=FALSE}
+knitr::opts_chunk$set(
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+source(here::here("R/load_all.R"))
+```
+
+```{r setup, include=FALSE}
+library(scales)
+library(DT)
+
+# Define aggregation functions
+Mean <- function(x) mean(x, na.rm = TRUE)
+GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
+our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "seasonal_nssp_latest")
+flu_scores <-
+  qs2::qs_read(here::here("flu_hosp_prod", "objects", "scores")) %>%
+  mutate(forecaster = case_match(
+           forecaster,
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = forecaster
+    )) %>%
+  mutate(our_forecaster = forecaster %in% our_forecasters)
+flu_forecasts <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "joined_forecasts_and_ensembles"))
+flu_forecasts$forecaster %<>% case_match(
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = flu_forecasts$forecaster
+    )
+forecast_dates <- qs2::qs_read(here::here("flu_hosp_prod", "objects", "forecast_dates"))
+covid_scores <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "scores")) %>%
+  mutate(forecaster = case_match(
+           forecaster,
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = forecaster
+    ))
+covid_forecasts <- qs2::qs_read(here::here("covid_hosp_prod", "objects", "joined_forecasts_and_ensembles")) %>% ungroup()
+covid_forecasts$forecaster %<>% case_match(
+    "windowed_seasonal_extra_sources" ~ "windowed_seasonal_nssp",
+    "ensemble_linclim_windowed_seasonal" ~ "retro_submission",
+    "ens_ar_only" ~ "ensemble_windowed",
+    .default = covid_forecasts$forecaster
+    )
+
+forecast_week <- flu_scores$forecast_date %>% unique()
+forecast_weeks_to_plot <- c(seq.Date(min(forecast_week), max(forecast_week), by = 3*7), as.Date("2025-01-18"), as.Date("2025-02-01"))
+forecast_weeks_to_plot %in% (flu_scores$forecast_date %>% unique())
+forecast_weeks_to_plot %in% (covid_scores$forecast_date %>% unique())
+```
+
+
+# Appendix
+## Methods of selecting season phase
+There's a lot of flexibility in this decision.
+Here's some alternatives that we looked at.
+
+```{r}
+flu_gr <- flu_current %>%
+  group_by(geo_value) %>%
+  mutate(gr = growth_rate(value, method = "linear_reg", h = 3)) %>%
+  filter(time_value > "2024-11-01")
+flu_gr %>% autoplot(gr, .facet_by = "geo_value")
+flu_max_dates <- flu_current %>%
+  group_by(geo_value) %>%
+  slice_max(value) %>%
+  select(geo_value, time_value_max = time_value)
+flu_peak_season <- flu_max_dates %>% ungroup() %>% summarize(peak_start = min(time_value_max), peak_end = max(time_value_max)) %>% pivot_longer(cols = c(peak_start, peak_end))
+flu_gr %>%
+  mutate(value = value / max(value)) %>%
+  mutate(neg = gr < 0) %>%
+  group_by(geo_value) %>%
+  arrange(desc(time_value)) %>%
+  mutate(count_so_far = TRUE, count_so_far = cumsum(count_so_far), frac_neg = (cumsum(neg)) / sum(neg)) %>%
+  arrange(geo_value) %>%
+  left_join(flu_max_dates, by = "geo_value") %>%
+  ggplot(aes(x = time_value, y = frac_neg)) +
+  geom_point() +
+  geom_line(aes(y = gr)) +
+  geom_line(aes(y = value)) +
+  geom_vline(data = flu_peak_season, aes(xintercept = value)) +
+  facet_wrap(~geo_value, scale = "free")
+flu_gr %>%
+  left_join(flu_max_dates, by = "geo_value") %>%
+  filter(time_value > time_value_max) %>%
+  arrange(time_value)
+```
+
+```{r}
+flu_current %>%
+  filter(time_value > "2024-11-01") %>%
+  autoplot(value, .facet_by = "geo_value") +
+  geom_vline(data = flu_within_max, aes(xintercept = first_above)) +
+  geom_vline(data = flu_within_max, aes(xintercept = last_above)) +
+  geom_vline(data = flu_peak_season, aes(xintercept = value, color = "green")) +
+  facet_wrap(~geo_value, scale = "free")
+```
+
+```{r}
+covid_gr <- covid_archive %>%
+  epix_as_of_current() %>%
+  filter(geo_value %nin% c("as", "gu", "mp")) %>%
+  group_by(geo_value) %>%
+  mutate(gr = growth_rate(value, method = "linear_reg", h = 3)) %>%
+  filter(time_value > "2024-09-01")
+covid_gr %>% autoplot(gr, .facet_by = "geo_value")
+```
+
+```{r}
+covid_gr %>%
+  mutate(value = value / max(value)) %>%
+  mutate(neg = gr < 0) %>%
+  group_by(geo_value) %>%
+  arrange(desc(time_value)) %>%
+  mutate(count_so_far = TRUE, count_so_far = cumsum(count_so_far), frac_neg = (cumsum(neg)) / sum(neg)) %>%
+  arrange(geo_value) %>%
+  ggplot(aes(x = time_value, y = frac_neg)) +
+  geom_point() +
+  geom_line(aes(y = gr)) +
+  geom_line(aes(y = value)) +
+  facet_wrap(~geo_value, scale = "free")
+covid_max_dates <- covid_gr %>%
+  slice_max(gr) %>%
+  select(geo_value, time_value_max = time_value)
+covid_gr %>%
+  left_join(covid_max_dates, by = "geo_value") %>%
+  filter(time_value > time_value_max) %>%
+  arrange(time_value)
+```

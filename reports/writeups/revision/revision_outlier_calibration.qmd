@@ -1,0 +1,500 @@
+---
+title: "Revision Training Data: Outlier Filter Calibration"
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+format:
+  html:
+    code-fold: true
+    toc: true
+    embed-resources: true
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup}
+#| message: false
+#| warning: false
+knitr::opts_chunk$set(fig.align = "center", warning = FALSE, message = FALSE, cache = FALSE)
+ggplot2::theme_set(ggplot2::theme_bw())
+
+library(data.table)
+library(patchwork)
+source(here::here("R/load_all.R"))
+```
+
+Two filters are under consideration for the revision-aware forecaster's training data:
+
+1. **Late-revision filter**: drop `(geo_value, time_value)` rows where the reported value changed by more than 10% *after* the first N weeks.
+Early revisions are expected; large revisions after data should have settled indicate data corruption (e.g. Arizona substituting nonsense values for ~3 weeks).
+The key parameter to calibrate is **N** — the report below shows when typical revisions tail off so N can be chosen as "after this lag, >10% is anomalous."
+
+2. **MAD filter**: drop `(geo_value, time_value)` rows where the *finalized* value is more than k × MAD from the per-geo median.
+This catches persistent outliers that survived revision.
+
+Both filters target training data only; they do not affect the forecast row (the most recent vintage).
+
+# Data
+
+```{r load-archive, cache=TRUE}
+nhsn_raw <- get_nhsn_data_archive("flu")
+
+align_version_to_wednesday <- function(dt) {
+  dt |>
+    as_tibble() |>
+    mutate(
+      version_wed = lubridate::floor_date(version, "week", week_start = 3L),
+      is_wednesday = lubridate::wday(version, week_start = 1L) == 3L
+    ) |>
+    group_by(geo_value, time_value, version_wed) |>
+    arrange(desc(is_wednesday)) |>
+    slice(1) |>
+    ungroup() |>
+    mutate(version = version_wed) |>
+    select(-version_wed, -is_wednesday)
+}
+
+nhsn_dt <- nhsn_raw$DT |>
+  align_version_to_wednesday() |>
+  mutate(time_value = lubridate::floor_date(time_value, "week", week_start = 3L)) |>
+  distinct(geo_value, time_value, version, .keep_all = TRUE) |>
+  filter(!is.na(value)) |>
+  filter(time_value >= min(version)) |>
+  arrange(geo_value, time_value, version)
+
+cat("Archive spans", format(min(nhsn_dt$time_value)), "to", format(max(nhsn_dt$time_value)), "\n")
+cat("Version range:", format(min(nhsn_dt$version)), "to", format(max(nhsn_dt$version)), "\n")
+cat("Geos:", length(unique(nhsn_dt$geo_value)), "\n")
+cat("Total rows:", nrow(nhsn_dt), "\n")
+```
+
+```{r finalized-values}
+# Finalized = value at the most recent version per (geo, time_value).
+finalized <- nhsn_dt |>
+  group_by(geo_value, time_value) |>
+  slice_max(version, n = 1) |>
+  ungroup() |>
+  rename(value_final = value)
+```
+
+# Filter 1: Late-Revision Filter
+
+For each `(geo_value, time_value)`, compute the revision magnitude relative to
+the finalized value as a function of lag (weeks since report date).
+The key question: at what lag N do typical revisions tail off, making a >10%
+change after that point anomalous?
+
+```{r revision-by-lag}
+# Compute lag in weeks and % deviation from finalized value for every archive row.
+revision_by_lag <- nhsn_dt |>
+  left_join(select(finalized, geo_value, time_value, value_final),
+            by = c("geo_value", "time_value")) |>
+  mutate(
+    lag_weeks = as.numeric(version - time_value) / 7,
+    pct_from_final = abs(value - value_final) / (abs(value_final) + 1e-6)
+  ) |>
+  filter(lag_weeks >= 0)
+```
+
+## Revision magnitude vs. lag
+
+The median and 90th-percentile deviation from the finalized value at each lag.
+Look for where the median line flattens — that's roughly where data settles.
+
+```{r lag-curve}
+#| fig-height: 4
+lag_summary <- revision_by_lag |>
+  group_by(lag_weeks) |>
+  summarise(
+    median_pct = median(pct_from_final, na.rm = TRUE),
+    p90_pct = quantile(pct_from_final, 0.9, na.rm = TRUE),
+    p99_pct = quantile(pct_from_final, 0.99, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+lag_summary |>
+  filter(lag_weeks <= 26) |>
+  tidyr::pivot_longer(c(median_pct, p90_pct, p99_pct), names_to = "stat", values_to = "pct") |>
+  mutate(stat = factor(stat,
+    levels = c("median_pct", "p90_pct", "p99_pct"),
+    labels = c("Median", "90th pctile", "99th pctile")
+  )) |>
+  ggplot(aes(x = lag_weeks, y = pct, colour = stat)) +
+  geom_line() +
+  geom_hline(yintercept = 0.10, linetype = "dashed", colour = "grey40") +
+  scale_x_continuous(breaks = seq(0, 26, by = 2), minor_breaks = seq(0, 26, by = 1)) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_colour_manual(values = c("steelblue", "darkorange", "firebrick")) +
+  labs(
+    x = "Weeks since report date",
+    y = "% deviation from finalized value",
+    colour = NULL,
+    title = "Revision magnitude by lag",
+    subtitle = "Dashed line = 10% threshold. Pick N where the curves flatten."
+  )
+```
+
+## Flagged (geo, version) pairs at each N
+
+A `(geo_value, version)` is flagged if any `time_value` with `lag_weeks > N`
+has a value that differs by >10% from its finalized value.
+All design rows for that geo at that report date are then excluded from training.
+
+```{r late-revision-flag}
+candidate_n_weeks <- 1:12
+
+flag_late_revisions <- function(dt, n_weeks, threshold = 0.10, min_value = 30, min_obs = 5) {
+  dt |>
+    filter(lag_weeks > n_weeks) |>
+    group_by(geo_value, version) |>
+    summarise(
+      flagged = any(pct_from_final > threshold & abs(value_final) >= min_value),
+      max_late_change = max(pct_from_final),
+      n_late_obs = n(),
+      .groups = "drop"
+    ) |>
+    filter(flagged, n_late_obs >= min_obs)
+}
+
+n_flag_counts <- tibble(n_weeks = candidate_n_weeks) |>
+  mutate(
+    n_flagged = map_int(n_weeks, ~ nrow(flag_late_revisions(revision_by_lag, .x))),
+    pct_of_versions = n_flagged / n_distinct(nhsn_dt$geo_value, nhsn_dt$version)
+  )
+knitr::kable(n_flag_counts, digits = 3,
+             col.names = c("N (weeks)", "Flagged (geo, version) pairs", "% of all (geo, version) pairs"))
+```
+
+## Timeline of flagged pairs (N = 6 weeks)
+
+```{r late-revision-timeline}
+#| fig-height: 5
+flagged_late <- flag_late_revisions(revision_by_lag, n_weeks = 6)
+
+flagged_late |>
+  mutate(geo_value = factor(geo_value, levels = rev(sort(unique(geo_value))))) |>
+  ggplot(aes(x = version, y = geo_value, fill = pmin(max_late_change, 2))) +
+  geom_tile() +
+  scale_fill_viridis_c(
+    option = "plasma",
+    labels = scales::percent,
+    name = "max late\nchange\n(capped 200%)"
+  ) +
+  labs(
+    x = "report date (version)",
+    y = "geo_value",
+    title = "Late-revision flagged (geo, version) pairs  [N = 6 weeks, threshold = 10%]"
+  ) +
+  theme(axis.text.y = element_text(size = 6))
+```
+
+## Largest N that flags each (geo, version) pair
+
+For each `(geo_value, version)`, the colour shows the largest N (in weeks) such that
+setting the window to N would still flag this pair — i.e. `max(lag_weeks)` among
+observations where `pct_from_final > 10%`.
+Zero (grey) means no observation for this pair ever exceeded 10%.
+
+```{r late-revision-max-n}
+#| fig-height: 5
+max_n_heatmap <- revision_by_lag |>
+  group_by(geo_value, version) |>
+  summarise(
+    max_flagging_n = max(lag_weeks[pct_from_final > 0.10], default = 0),
+    .groups = "drop"
+  )
+
+all_versions <- nhsn_dt |> distinct(geo_value, version)
+
+all_versions |>
+  left_join(max_n_heatmap, by = c("geo_value", "version")) |>
+  mutate(
+    max_flagging_n = replace_na(max_flagging_n, 0),
+    geo_value = factor(geo_value, levels = rev(sort(unique(geo_value))))
+  ) |>
+  ggplot(aes(x = version, y = geo_value, fill = max_flagging_n)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "plasma", name = "largest N\n(weeks)") +
+  labs(
+    x = "report date (version)",
+    y = "geo_value",
+    title = "Largest N (weeks) that would flag each (geo, version) pair  [threshold = 10%]",
+    subtitle = "Grey = never exceeds 10%; bright = anomalous revisions persist to large lags"
+  ) +
+  theme(axis.text.y = element_text(size = 6))
+```
+
+# Filter 2: MAD Outlier on Revision Magnitude
+
+For each `(geo_value, time_value)`, summarise the total revision experienced as
+`max(pct_from_final)` across all versions — how far did this observation ever
+get from its finalized value?
+Then flag `(geo_value, time_value)` where that summary is anomalously large
+relative to the per-geo MAD of revision magnitudes.
+This compares revision noise to revision noise, not raw values to raw values,
+so it is immune to seasonal swings in hospitalization levels.
+
+```{r mad-stats}
+revision_summary <- revision_by_lag |>
+  group_by(geo_value, time_value) |>
+  summarise(max_revision = max(pct_from_final, na.rm = TRUE), .groups = "drop")
+
+geo_revision_stats <- revision_summary |>
+  group_by(geo_value) |>
+  summarise(
+    med_rev = median(max_revision, na.rm = TRUE),
+    mad_rev = mad(max_revision, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+finalized_mad <- revision_summary |>
+  left_join(geo_revision_stats, by = "geo_value") |>
+  mutate(z_mad = (max_revision - med_rev) / (mad_rev + 1e-6))
+```
+
+## Distribution of MAD scores
+
+```{r mad-distribution}
+#| fig-height: 4
+k_lines <- c(3, 5, 6, 8, 10)
+
+ggplot(finalized_mad, aes(x = pmin(z_mad, 20))) +
+  geom_histogram(bins = 80, fill = "steelblue", colour = "white") +
+  geom_vline(
+    xintercept = k_lines,
+    colour = "firebrick",
+    linetype = "dashed",
+    alpha = 0.6
+  ) +
+  annotate("text", x = k_lines, y = Inf, label = paste0("k=", k_lines),
+           vjust = 2, hjust = -0.1, colour = "firebrick", size = 3) +
+  scale_x_continuous(breaks = seq(0, 20, by = 2)) +
+  labs(
+    x = "(max revision from final - geo median) / geo MAD  (capped at 20)",
+    y = "Count",
+    title = "Distribution of per-geo MAD scores for revision magnitude"
+  )
+```
+
+## Flagged row counts at each k
+
+```{r mad-counts}
+mad_counts <- tibble(k = k_lines) |>
+  mutate(
+    n_flagged = map_int(k, ~ sum(finalized_mad$z_mad > .x)),
+    pct_flagged = n_flagged / nrow(finalized_mad)
+  )
+knitr::kable(mad_counts, digits = 3,
+             col.names = c("k", "Rows flagged", "% of (geo, time_value) pairs"))
+```
+
+## Flagged rows at k = 6
+
+```{r mad-flagged-rows}
+finalized_mad |>
+  filter(z_mad > 6) |>
+  arrange(desc(z_mad)) |>
+  select(geo_value, time_value, max_revision, med_rev, mad_rev, z_mad) |>
+  mutate(across(where(is.numeric), ~ round(.x, 3))) |>
+  knitr::kable()
+```
+
+## Per-geo timeline at k = 6
+
+```{r mad-timeline}
+#| fig-height: 5
+finalized_mad |>
+  filter(z_mad > 6) |>
+  mutate(geo_value = factor(geo_value, levels = rev(sort(unique(geo_value))))) |>
+  ggplot(aes(x = time_value, y = geo_value, fill = pmin(z_mad, 20))) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "plasma", name = "MAD score\n(capped 20)") +
+  labs(
+    x = "time_value",
+    y = "geo_value",
+    title = "MAD-flagged (geo, time_value) pairs by revision magnitude (k > 6)"
+  ) +
+  theme(axis.text.y = element_text(size = 6))
+```
+
+# Combined Filter Impact
+
+How much training data do both filters together remove, and is there overlap?
+
+The late-revision filter operates on `(geo_value, version)` pairs (dropping all design rows at a corrupted report date).
+The MAD filter operates on `(geo_value, time_value)` pairs (dropping a time series observation regardless of version).
+They are independent and complementary.
+
+```{r combined}
+flagged_diff <- flag_late_revisions(revision_by_lag, n_weeks = 6) |>
+  select(geo_value, version) |>
+  mutate(flagged_diff = TRUE)
+
+all_versions <- nhsn_dt |> distinct(geo_value, version)
+
+combined_versions <- all_versions |>
+  left_join(flagged_diff, by = c("geo_value", "version")) |>
+  mutate(flagged_diff = !is.na(flagged_diff))
+
+combined_versions |>
+  summarise(
+    total = n(),
+    flagged = sum(flagged_diff),
+    pct_removed = mean(flagged_diff)
+  ) |>
+  knitr::kable(digits = 3, col.names = c("Total (geo, version) pairs", "Flagged by late-revision", "% removed"))
+```
+
+## Late-revision flagged pairs by geo
+
+```{r combined-by-geo}
+combined_versions |>
+  group_by(geo_value) |>
+  summarise(
+    total = n(),
+    removed = sum(flagged_diff),
+    pct_removed = removed / total
+  ) |>
+  filter(removed > 0) |>
+  arrange(desc(removed)) |>
+  knitr::kable(digits = 3)
+```
+
+# Arizona Case Study
+
+Zoom in on Arizona to verify the filters catch the known bad period.
+
+```{r az-case}
+#| fig-height: 8
+az_final <- finalized |> filter(geo_value == "az")
+az_mad_flagged <- finalized_mad |> filter(geo_value == "az", z_mad > 6)
+az_late <- flag_late_revisions(revision_by_lag, n_weeks = 4) |> filter(geo_value == "az")
+
+# As-of snapshots for each flagged report date, overlaid on finalized values.
+az_flagged_snapshots <- nhsn_dt |>
+  filter(geo_value == "az") |>
+  semi_join(az_late, by = c("geo_value", "version")) |>
+  mutate(version_label = format(version))
+
+p_az1 <- ggplot(az_final, aes(x = time_value, y = value_final)) +
+  geom_line(colour = "steelblue", linewidth = 0.8) +
+  geom_line(
+    data = az_flagged_snapshots,
+    aes(y = value, group = version_label, colour = version_label),
+    linetype = "dashed", linewidth = 0.5
+  ) +
+  geom_point(data = semi_join(az_final, az_mad_flagged, by = c("geo_value", "time_value")), colour = "firebrick", size = 2) +
+  scale_colour_viridis_d(option = "plasma", name = "flagged\nreport date") +
+  scale_y_log10() +
+  labs(
+    title = "AZ: finalized values (blue) vs. as-of snapshots at flagged report dates (dashed)",
+    subtitle = "Red points = MAD k>6; log scale",
+    y = "value (log scale)", x = NULL
+  )
+
+# Which report dates (versions) are flagged by the late-revision filter.
+p_az2 <- az_late |>
+  ggplot(aes(x = version, y = max_late_change)) +
+  geom_col(fill = "darkorange", width = 7) +
+  geom_hline(yintercept = 0.10, linetype = "dashed", colour = "grey40") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "AZ: flagged report dates (version) — max late-revision change",
+    subtitle = "Each bar = a report_date where some historical obs changed >10% after 4 weeks",
+    y = "max % change (lag > 4 wks)", x = "report date (version)"
+  )
+
+# Raw deviation-from-final scatter coloured by whether lag > 4 weeks.
+p_az3 <- revision_by_lag |>
+  filter(geo_value == "az") |>
+  ggplot(aes(x = version, y = pct_from_final, colour = lag_weeks > 6)) +
+  geom_point(alpha = 0.4, size = 1) +
+  geom_hline(yintercept = 0.10, linetype = "dashed", colour = "grey40") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_colour_manual(values = c("steelblue", "firebrick"),
+                      labels = c("lag ≤ 4 wks", "lag > 4 wks")) +
+  labs(title = "AZ: all observations % from final, by report date", y = "% from final",
+       x = "report date (version)", colour = NULL)
+
+az_x_range <- range(c(az_final$time_value, az_late$version,
+                       revision_by_lag$version[revision_by_lag$geo_value == "az"]))
+
+p_az1 / p_az2 / p_az3 &
+  scale_x_date(limits = az_x_range)
+```
+
+## Per-report-date snapshots
+
+```{r az-per-version}
+#| fig-height: 10
+az_flagged_snapshots |>
+  group_by(version_label) |>
+  mutate(x_max = max(time_value) + 6 * 7) |>
+  ungroup() |>
+  left_join(
+    az_final |> select(time_value, value_final),
+    by = "time_value"
+  ) |>
+  ggplot(aes(x = time_value)) +
+  geom_line(aes(y = value_final), colour = "steelblue", linewidth = 0.8, na.rm = TRUE) +
+  geom_line(aes(y = value), colour = "darkorange", linewidth = 0.6) +
+  facet_wrap(~version_label, ncol = 1, scales = "free") +
+  geom_blank(aes(x = x_max)) +
+  labs(
+    title = "AZ: each flagged report date (orange) vs. finalized (blue)",
+    subtitle = "Finalized shown up to 6 weeks after last reported time_value",
+    x = "time_value", y = "value (log scale)"
+  )
+```
+
+# All Flagged Pairs (N = 4 weeks)
+
+All `(geo_value, version)` pairs flagged by the late-revision filter at N = 4 weeks,
+excluding `2025-11-12` (a wholesale missing-report-date artefact that flags every geo).
+Sorted by max late change descending.
+
+```{r all-flagged-n4}
+flagged_n4 <- flag_late_revisions(revision_by_lag, n_weeks = 4) |>
+  filter(version != as.Date("2025-11-12"), geo_value != "pr") |>
+  arrange(desc(max_late_change)) |>
+  mutate(facet_label = paste0(
+    geo_value, " @ ", format(version),
+    " (", scales::percent(max_late_change, accuracy = 0.1), ")"
+  ))
+
+cat("Flagged pairs (N=4, excl. 2025-11-12):", nrow(flagged_n4), "\n")
+knitr::kable(
+  flagged_n4 |> select(geo_value, version, max_late_change) |>
+    mutate(max_late_change = scales::percent(max_late_change, accuracy = 0.1)),
+  col.names = c("geo", "version", "max late change")
+)
+```
+
+```{r all-flagged-n4-plot}
+#| fig-height: !expr ceiling(nrow(flagged_n4) / 3) * 3
+all_flagged_n4_snapshots <- nhsn_dt |>
+  semi_join(flagged_n4, by = c("geo_value", "version")) |>
+  left_join(flagged_n4 |> select(geo_value, version, facet_label),
+            by = c("geo_value", "version")) |>
+  left_join(finalized |> select(geo_value, time_value, value_final),
+            by = c("geo_value", "time_value")) |>
+  group_by(facet_label) |>
+  mutate(x_max = max(time_value) + 6 * 7) |>
+  ungroup() |>
+  mutate(facet_label = factor(facet_label, levels = unique(flagged_n4$facet_label)))
+
+ggplot(all_flagged_n4_snapshots, aes(x = time_value)) +
+  geom_line(aes(y = value_final), colour = "steelblue", linewidth = 0.8, na.rm = TRUE) +
+  geom_line(aes(y = value), colour = "darkorange", linewidth = 0.6) +
+  geom_blank(aes(x = x_max)) +
+  scale_y_log10() +
+  facet_wrap(~facet_label, ncol = 2, scales = "free") +
+  labs(
+    title = "All flagged (geo, version) pairs — N = 4 weeks, sorted by max late change",
+    subtitle = "Orange = snapshot at flagged report date; blue = finalized. Excludes 2025-11-12.",
+    x = "time_value",
+    y = "value (log scale)"
+  ) +
+  theme(
+    strip.text = element_text(size = 7),
+    axis.text.x = element_text(size = 6, angle = 30, hjust = 1)
+  )
+```

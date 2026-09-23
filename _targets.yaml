@@ -1,34 +1,34 @@
 covid_hosp_explore:
-  script: scripts/covid_hosp_explore.R
+  script: pipelines/covid_hosp_explore.R
   store: covid_hosp_explore
   use_crew: yes
   reporter_make: timestamp
 flu_hosp_explore:
-  script: scripts/flu_hosp_explore.R
+  script: pipelines/flu_hosp_explore.R
   store: flu_hosp_explore
   use_crew: yes
   reporter_make: timestamp
 flu_hosp_prod:
-  script: scripts/flu_hosp_prod.R
+  script: pipelines/flu_hosp_prod.R
   store: flu_hosp_prod
   use_crew: yes
   reporter_make: timestamp
 flu_hosp_evaluation:
   # Same script as flu_hosp_prod; it dispatches on the project name. Separate
   # store so evaluation runs don't invalidate the production cache.
-  script: scripts/flu_hosp_prod.R
+  script: pipelines/flu_hosp_prod.R
   store: flu_hosp_evaluation
   use_crew: yes
   reporter_make: timestamp
 covid_hosp_prod:
-  script: scripts/covid_hosp_prod.R
+  script: pipelines/covid_hosp_prod.R
   store: covid_hosp_prod
   use_crew: yes
   reporter_make: timestamp
 covid_hosp_evaluation:
   # Same script as covid_hosp_prod; it dispatches on the project name. Separate
   # store so evaluation runs don't invalidate the production cache.
-  script: scripts/covid_hosp_prod.R
+  script: pipelines/covid_hosp_prod.R
   store: covid_hosp_evaluation
   use_crew: yes
   reporter_make: timestamp
@@ -38,7 +38,7 @@ flu_hosp_prod_regr:
   # its nominal Wednesday (generation_date == forecast_date).
   # Usage: FORECAST_REFERENCE_DATE=<last-prod-wednesday> TAR_RUN_PROJECT=flu_hosp_prod_regr \
   #          Rscript scripts/oracle/capture.R
-  script: scripts/flu_hosp_prod.R
+  script: pipelines/flu_hosp_prod.R
   store: flu_hosp_prod_regr
   use_crew: yes
   reporter_make: timestamp
@@ -48,7 +48,7 @@ flu_hosp_prod_regr_prod:
   # the actual run date; generation_date=run_date, forecast_date=nearest Wednesday.
   # Usage: FORECAST_REFERENCE_DATE=<actual-run-date> ORACLE_LABEL=refactored \
   #          TAR_RUN_PROJECT=flu_hosp_prod_regr_prod Rscript scripts/oracle/capture.R
-  script: scripts/flu_hosp_prod.R
+  script: pipelines/flu_hosp_prod.R
   store: flu_hosp_prod_regr_prod
   use_crew: yes
   reporter_make: timestamp
@@ -58,7 +58,7 @@ covid_hosp_prod_regr:
   # happened on its nominal Wednesday (generation_date == forecast_date).
   # Usage: FORECAST_REFERENCE_DATE=<last-prod-wednesday> TAR_RUN_PROJECT=covid_hosp_prod_regr \
   #          Rscript scripts/oracle/capture.R
-  script: scripts/covid_hosp_prod.R
+  script: pipelines/covid_hosp_prod.R
   store: covid_hosp_prod_regr
   use_crew: yes
   reporter_make: timestamp
@@ -70,7 +70,7 @@ covid_hosp_prod_regr_prod:
   # forecast_date=round_date(run_date, "weeks", week_start=3).
   # Usage: FORECAST_REFERENCE_DATE=<actual-run-date> ORACLE_LABEL=refactored \
   #          TAR_RUN_PROJECT=covid_hosp_prod_regr_prod Rscript scripts/oracle/capture.R
-  script: scripts/covid_hosp_prod.R
+  script: pipelines/covid_hosp_prod.R
   store: covid_hosp_prod_regr_prod
   use_crew: yes
   reporter_make: timestamp

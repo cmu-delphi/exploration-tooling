@@ -1,9 +1,9 @@
-# The COVID Hospitalization Production Forecasting Pipeline.
+# The Flu Hospitalization Production Forecasting Pipeline.
 #
 # Two targets projects share this script (see _targets.yaml):
-#   covid_hosp_prod        - weekly production run, as_of = today
-#   covid_hosp_evaluation  - historical replay over past forecast dates, scored
-#                            against latest truth
+#   flu_hosp_prod        - weekly production run, as_of = today
+#   flu_hosp_evaluation  - historical replay over past forecast dates, scored
+#                          against latest truth
 # Dispatch is on the project name; each project keeps its own store, so an
 # evaluation run cannot invalidate the production cache.
 suppressPackageStartupMessages(source("R/load_all.R"))
@@ -17,34 +17,46 @@ suppressPackageStartupMessages(source("R/load_all.R"))
 # Setup targets config.
 set_targets_config()
 g_aheads <- -1:3
-g_submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
+g_submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
 g_insufficient_data_geos <- c("as", "mp", "vi", "gu")
 g_insufficient_data_geos_nssp <- g_insufficient_data_geos
 g_time_value_adjust <- 3
 g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
-g_disease <- "covid"
+g_disease <- "flu"
 g_s3_prefix <- "exploration"
-g_external_object_name <- glue::glue("exploration/2024-2025_{g_disease}_hosp_forecasts.parquet")
-# date to cut the truth data off at, so we don't have too much of the past
+# Trainer used by the seasonal forecasters; stored as a global and referenced by
+# symbol in the grid params so tar_map embeds the symbol, not the model_spec.
+g_quantreg <- epipredict::quantile_reg()
+g_external_object_name <- glue::glue("2024/2024-2025_{g_disease}_hosp_forecasts.parquet")
+# needed for windowed_seasonal
+g_very_latent_locations <- list(list(
+  c("source"),
+  c("flusurv", "ILI+")
+))
+# Date to cut the truth data off at, so we don't have too much of the past for
+# plotting.
 g_truth_data_date <- "2023-09-01"
 # Whether we're running in evaluation (historical replay) mode. Dispatch is on
-# the targets project name (see flu_hosp_prod.R for the full rationale);
+# the targets project name: scripts/run.R and the oracle pass TAR_RUN_PROJECT;
+# direct tar_* invocations (e.g. make prune-flu-evaluation) set TAR_PROJECT.
 # TAR_RUN_PROJECT wins so a stale TAR_PROJECT in the shell can't flip the mode.
 # If TRUE, we skip the weekly report notebook (each week's report is preserved
 # as an ASOF snapshot) and instead run the scoring notebook, which scores the
 # historical forecasts against the truth data and compares them to the ensemble.
-.g_project <- Sys.getenv("TAR_RUN_PROJECT", Sys.getenv("TAR_PROJECT", "covid_hosp_prod"))
-g_evaluation_mode <- .g_project %in% c("covid_hosp_evaluation", "covid_hosp_prod_regr")
+.g_project <- Sys.getenv("TAR_RUN_PROJECT", Sys.getenv("TAR_PROJECT", "flu_hosp_prod"))
+g_evaluation_mode <- .g_project %in% c("flu_hosp_evaluation", "flu_hosp_prod_regr")
 # The pipeline's notion of "today", read once here so a whole run can be pinned
 # for reproducible oracle captures (scripts/oracle/capture.R): forecast dates
-# and the latest-data as-of slices otherwise move with the calendar. Unset ->
+# and the "cheating" as-of slices otherwise move with the calendar. Unset ->
 # Sys.Date(), i.e. current production behavior.
 g_reference_date <- {
   raw <- Sys.getenv("FORECAST_REFERENCE_DATE", "")
   if (nzchar(raw)) as.Date(raw) else Sys.Date()
 }
 # The forecast schedule, held as one tibble so forecast_date / generation_date
-# stay row-aligned by construction (see flu_hosp_prod.R for column docs).
+# stay row-aligned by construction. Columns are consumed directly by the
+# forecast/ensemble tar_maps: forecast_date_int/forecast_generation_date_int are
+# Date objects; forecast_date_chr is the tar_map branch-naming key.
 if (!g_evaluation_mode) {
   # generation_date is the as_of for the forecast. If run on our typical
   # schedule, it's today, a Wednesday; on a delayed forecast it's a Thursday.
@@ -57,10 +69,10 @@ if (!g_evaluation_mode) {
     fc_dates <- as.Date("2025-12-24")
   }
 } else {
-  # Pin FORECAST_REFERENCE_DATE for a reproducible replay window; must be
+  # Pin FORECAST_REFERENCE_DATE for a reproducible evaluation window; must be
   # >= 2025-12-31 so the trailing seq.Date() stays non-empty.
   gen_dates <- c(
-    as.Date(c("2024-11-20", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")),
+    as.Date(c("2024-11-21", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-26", "2025-01-02")),
     seq.Date(as.Date("2025-01-08"), as.Date("2025-12-17"), by = 7L),
     as.Date(c("2025-12-29")),
     seq.Date(as.Date("2025-12-31"), g_reference_date, by = 7L)
@@ -76,10 +88,10 @@ g_forecast_schedule <- tibble(
 if (g_evaluation_mode) {
   # Optional: keep only the last N dates for a fast partial evaluation
   # (scripts/oracle/capture.R). Inert when unset or 0.
-  # covid_hosp_prod_regr defaults to 1 so a regression run is always fast.
+  # flu_hosp_prod_regr defaults to 1 so a regression run is always fast.
   g_evaluation_n_dates <- as.integer(Sys.getenv("EVALUATION_N_DATES", "0"))
   if (is.na(g_evaluation_n_dates) || g_evaluation_n_dates == 0) {
-    if (.g_project == "covid_hosp_prod_regr") g_evaluation_n_dates <- 1L
+    if (.g_project == "flu_hosp_prod_regr") g_evaluation_n_dates <- 1L
   }
   if (!is.na(g_evaluation_n_dates) && g_evaluation_n_dates > 0) {
     g_forecast_schedule <- slice_tail(g_forecast_schedule, n = g_evaluation_n_dates)
@@ -90,50 +102,49 @@ g_forecast_dates <- g_forecast_schedule$forecast_date_int
 g_forecast_generation_dates <- g_forecast_schedule$forecast_generation_date_int
 
 if (!g_evaluation_mode) {
-  stamp_default_weights("scripts/covid_geo_exclusions.csv", g_forecast_dates[[1L]])
-  stamp_default_weights("scripts/covid_nssp_geo_exclusions.csv", g_forecast_dates[[1L]])
+  stamp_default_weights("scripts/flu_geo_exclusions.csv", g_forecast_dates[[1L]])
+  stamp_default_weights("scripts/flu_nssp_geo_exclusions.csv", g_forecast_dates[[1L]])
 }
 
-# Trainer used by the seasonal forecasters; stored as a global and referenced by
-# symbol in the grid params so tar_map embeds the symbol, not the model_spec.
-g_quantreg <- epipredict::quantile_reg()
-
 # Forecaster grid — behavior is defined by (id, bare forecaster function,
-# params). Per-forecaster wrapping that isn't a modeling parameter is declared
-# inline as spec columns and applied by run_forecaster()/the data targets;
+# params). Per-forecaster wrapping that isn't a modeling parameter (ahead
+# multiplier, target-date shift, extra-source join, source/geo filtering, as-of
+# policy) is declared inline as spec columns and applied by run_forecaster();
 # make_forecaster_grid() separates them from the params list-column and fills
-# defaults (see FORECASTER_SPEC_DEFAULTS). The *_latest forecasters are the
-# base rows plus as_of_policy = "cheating" (train on the latest revision as a
-# limit test). The scaled_pop_seasonal family opts into sort_quantiles: its
-# whitening step has edge cases that emit crossing quantiles (~12% of tasks on
-# the 2026-06-24 replay), which validate_forecast_output() would otherwise
-# reject; monotone-by-construction forecasters stay unsorted so a crossing
-# there surfaces as an error.
+# defaults (see FORECASTER_SPEC_DEFAULTS) for whatever a forecaster omits. Each
+# row is built via make_forecaster_grid() so the params list-column matches the
+# exploration convention (trainer stored as a symbol, lags unwrapped).
 g_forecaster_params_grid <- list(
   linear = tibble(
     id = "linear",
     forecaster = "forecaster_baseline_linear",
-    residual_tail = 0.97,
-    residual_center = 0.097,
-    no_intercept = TRUE
+    residual_tail = 0.99,
+    residual_center = 0.35,
+    no_intercept = TRUE,
+    filter_sources = list(c("nhsn", "nssp"))
   ),
   linear_no_population_scale = tibble(
     id = "linear_no_population_scale",
     forecaster = "forecaster_baseline_linear",
-    residual_tail = 0.97,
-    residual_center = 0.097,
+    residual_tail = 0.99,
+    residual_center = 0.35,
     no_intercept = TRUE,
     population_scale = FALSE
   ),
+  # The scaled_pop_seasonal family opts into sort_quantiles: its whitening step
+  # has edge cases that emit crossing quantiles, and explore evaluates these
+  # forecasters sorted, so shipping them unsorted would drift from what was
+  # validated. Forecasters that are monotone by construction stay unsorted so
+  # a crossing there surfaces as an error (validate_forecast_output).
   windowed_seasonal = tibble(
     id = "windowed_seasonal",
     forecaster = "scaled_pop_seasonal",
     outcome = "value",
     trainer = "g_quantreg",
-    seasonal_method = "none",
-    drop_non_seasons = TRUE,
+    seasonal_method = "window",
     pop_scaling = FALSE,
     lags = list(c(0, 7)),
+    keys_to_ignore = g_very_latent_locations,
     ahead_multiplier = 7L,
     target_date_shift = 3L,
     sort_quantiles = TRUE
@@ -148,6 +159,7 @@ g_forecaster_params_grid <- list(
     drop_non_seasons = TRUE,
     pop_scaling = FALSE,
     lags = list(list(c(0, 7), c(0, 7))),
+    keys_to_ignore = g_very_latent_locations,
     ahead_multiplier = 7L,
     target_date_shift = 3L,
     join_extra_data = TRUE,
@@ -156,20 +168,21 @@ g_forecaster_params_grid <- list(
   ),
   climate_base = tibble(
     id = "climate_base",
-    forecaster = "climatological_model"
+    forecaster = "climatological_model",
+    filter_sources = list(c("nhsn", "nssp"))
   ),
   climate_geo_agged = tibble(
     id = "climate_geo_agged",
     forecaster = "climatological_model",
-    geo_agg = TRUE
+    geo_agg = TRUE,
+    filter_sources = list(c("nhsn", "nssp"))
   ),
   revision_aware = tibble(
     id = "revision_aware",
     forecaster = "scaled_pop_seasonal_revision",
     outcome = "value",
     trainer = "g_quantreg",
-    lags = list(list(c(0, 7, 14), c(0, 7))),
-    extra_sources = "nssp",
+    lags = list(c(0, 7)),
     pop_scaling = TRUE,
     sort_quantiles = TRUE,
     scale_method = "none",
@@ -181,22 +194,9 @@ g_forecaster_params_grid <- list(
     ahead_multiplier = 7L,
     target_date_shift = 3L
   ),
-  windowed_seasonal_latest = tibble(
-    id = "windowed_seasonal_latest",
-    forecaster = "scaled_pop_seasonal",
-    outcome = "value",
-    trainer = "g_quantreg",
-    seasonal_method = "none",
-    drop_non_seasons = TRUE,
-    pop_scaling = FALSE,
-    lags = list(c(0, 7)),
-    as_of_policy = "cheating",
-    ahead_multiplier = 7L,
-    target_date_shift = 3L,
-    sort_quantiles = TRUE
-  ),
-  seasonal_nssp_latest = tibble(
-    id = "seasonal_nssp_latest",
+  # Cheats by always using the latest available data revision (as a limit test).
+  seasonal_nssp_cheating = tibble(
+    id = "seasonal_nssp_cheating",
     forecaster = "scaled_pop_seasonal",
     outcome = "value",
     extra_sources = "nssp",
@@ -205,6 +205,7 @@ g_forecaster_params_grid <- list(
     drop_non_seasons = TRUE,
     pop_scaling = FALSE,
     lags = list(list(c(0, 7), c(0, 7))),
+    keys_to_ignore = g_very_latent_locations,
     as_of_policy = "cheating",
     ahead_multiplier = 7L,
     target_date_shift = 3L,
@@ -221,66 +222,88 @@ g_forecaster_params_grid <- list(
 # ================================ PARAMETERS AND DATA TARGETS ================================
 parameters_and_date_targets <- rlang::list2(
   tar_target(aheads, command = g_aheads),
+  # Needed by create_flu_data_targets()
+  tar_target(forecast_dates, command = g_forecast_dates),
   tar_file(
     forecast_report_rmd,
-    command = "scripts/reports/forecast_report.Rmd"
+    command = "pipelines/templates/forecast_report.Rmd"
   ),
   tar_file(
     ongoing_score_report_rmd,
-    command = "scripts/reports/ongoing_score_report.Rmd"
+    command = "pipelines/templates/ongoing_score_report.Rmd"
   ),
   tar_file(
     name = score_report_rmd,
-    command = "scripts/reports/score_report.Rmd"
+    command = "pipelines/templates/score_report.Rmd"
   ),
   tar_file(
-    name = covid_geo_exclusions,
-    command = "scripts/covid_geo_exclusions.csv"
+    flu_geo_exclusions,
+    command = "scripts/flu_geo_exclusions.csv"
   ),
   tar_file(
-    name = covid_nssp_geo_exclusions,
-    command = "scripts/covid_nssp_geo_exclusions.csv"
+    flu_nssp_geo_exclusions,
+    command = "scripts/flu_nssp_geo_exclusions.csv"
   ),
   tar_file(
-    name = covid_data_substitutions,
-    command = "scripts/covid_data_substitutions.csv"
+    flu_data_substitutions,
+    command = "scripts/flu_data_substitutions.csv"
   ),
+  create_flu_data_targets(),
   tar_target(
     name = nhsn_archive_data,
     command = {
-      get_nhsn_data_archive("covid")
+      get_nhsn_data_archive("flu")
     },
     cue = tar_cue("always")
   ),
   # Canonical training archive: the version-independent munging that used to run
-  # per (forecaster x date) inside forecast_nhsn, hoisted here so it runs once.
-  # Unlike flu there are no augmentation extras to fold in. Source is stamped
-  # honestly here (matching flu) rather than relying on the forecasters'
-  # missing-source fallback, which used to mislabel these rows "nhsn" as a
-  # side effect of not declaring a source at all -- true here too, but now
-  # explicit.
+  # per (forecaster x date) inside full_data, hoisted here so it runs once. The
+  # per-date full_data target is now just an as-of slice + data substitutions +
+  # metadata stamping.
   tar_target(
     name = nhsn_prod_archive,
     command = {
-      # season info is computed on the Saturday-labeled time_values (matching
-      # the old per-date order) *before* the Wednesday shift, so the season
-      # columns are identical to the previous per-date computation.
-      nhsn_archive_data$DT %>%
+      # season info is computed on the Saturday-labeled time_values (matching the
+      # old order) *before* the Wednesday shift, so the season columns are
+      # identical to the previous per-date computation.
+      nhsn_dt <- nhsn_archive_data$DT %>%
         add_season_info() %>%
         mutate(
           geo_value = ifelse(geo_value == "usa", "us", geo_value),
-          time_value = floor_date(time_value, "week", week_start = 7) + 3,
+          time_value = time_value - 3,
           source = "nhsn"
         ) %>%
-        filter(geo_value %nin% g_insufficient_data_geos) %>%
+        filter(geo_value %nin% g_insufficient_data_geos)
+      # ILI+/flusurv historical augmentation rows (static, finalized data for the
+      # seasonal forecasters). Previously bound at joined_archive_data's
+      # versions_end into every full_data snapshot. Folded in here as faux-
+      # versioned rows with version = time_value: these are historical seasons
+      # (time_values predate the forecast window), so every as-of slice includes
+      # all of them exactly as the old unconditional bind did, while keeping the
+      # archive honestly versioned like the explore pipeline.
+      extra_dt <- joined_archive_data %>%
+        epix_as_of(joined_archive_data$versions_end) %>%
+        mutate(epiweek = epiweek(time_value), epiyear = epiyear(time_value)) %>%
+        filter((agg_level == "state") | (agg_level == "nation")) %>%
+        select(geo_value, source, time_value, hhs, season, season_week, epiweek, epiyear) %>%
+        rename(value = hhs) %>%
+        filter(source != "nhsn") %>%
+        mutate(version = time_value)
+      # The faux-versioning above is only equivalent to the old unconditional
+      # bind if no augmentation row lands inside the forecast window (flusurv is
+      # a live fetch, currently bounded at 2020 by the burden-estimate join;
+      # ILI+ ends mid-2024). Fail loudly if that ever drifts.
+      stopifnot(max(extra_dt$time_value) < min(as.Date(g_forecast_generation_dates)))
+      bind_rows(nhsn_dt, extra_dt) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
     }
   ),
   tar_target(
     name = nhsn_latest_data,
     command = {
-      # Uses the *raw* archive on purpose: truth_data and scoring want the raw
-      # time labels and geo set, not the canonical Wednesday-shifted archive.
+      # Uses the *raw* archive on purpose: truth_data and scoring want
+      # Saturday-labeled time_values and the raw `value`/geo names, not the
+      # canonical Wednesday-shifted archive.
       nhsn_archive_data %>%
         epix_as_of(min(g_reference_date, nhsn_archive_data$versions_end)) %>%
         filter(geo_value %nin% g_insufficient_data_geos)
@@ -289,54 +312,35 @@ parameters_and_date_targets <- rlang::list2(
   tar_target(
     name = nssp_archive_data,
     command = {
-      up_to_date_nssp_state_archive("covid")
+      up_to_date_nssp_state_archive("influenza")
     },
     cue = tar_cue("always")
   ),
-  # Canonical nssp-as-target archive: rename nssp -> value so nssp plays the
-  # target role, season info, geo normalization/drops -- hoisted out of the
-  # per-date forecast_nssp target. The raw covid nssp archive is already
-  # Wednesday-aligned, so the week-align mutate is kept verbatim as a no-op
-  # guard. Ordering (rename -> season info -> mutate -> filter) matches the old
-  # in-target code. Source is stamped honestly as "nssp" (like flu's
-  # nssp_target_archive) rather than left for the forecasters' missing-source
-  # fallback to mislabel "nhsn"; forecast_nssp points scaled_pop_seasonal at
-  # these rows via run_forecaster(primary_source = "nssp").
+  # Canonical nssp-as-target archive: the version-independent transforms (rename
+  # nssp -> value so nssp plays the target role, week-align to Wednesday, stamp
+  # source honestly, add season info) hoisted out of the per-date forecast_nssp
+  # target. The forecaster is pointed at these `nssp`-stamped rows via
+  # run_forecaster(primary_source = "nssp") rather than mislabeling them "nhsn".
   tar_target(
     name = nssp_target_archive,
     command = {
       nssp_archive_data$DT %>%
         rename(value = nssp) %>%
-        add_season_info() %>%
         mutate(
-          geo_value = ifelse(geo_value == "usa", "us", geo_value),
           time_value = floor_date(time_value, "week", week_start = 7) + 3,
           source = "nssp"
         ) %>%
-        filter(geo_value %nin% g_insufficient_data_geos_nssp) %>%
+        add_season_info() %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
     }
   ),
   tar_target(
     name = nssp_latest_data,
     command = {
-      # Raw archive on purpose (see nhsn_latest_data): keeps the `nssp` column
-      # for truth_data / scoring.
+      # Raw archive on purpose (see nhsn_latest_data): keeps the `nssp` column and
+      # Saturday time_values for truth_data / scoring.
       nssp_archive_data %>%
         epix_as_of(min(g_reference_date, nssp_archive_data$versions_end))
-    }
-  ),
-  # Merged nhsn+nssp archive for the revision-aware forecaster. Strips source
-  # (nhsn_prod_archive has source as an other_key; nssp_archive_data does not),
-  # then merges to add the versioned nssp column as an exogenous predictor.
-  tar_target(
-    name = nhsn_nssp_revision_archive,
-    command = {
-      nhsn_only <- nhsn_prod_archive$DT %>%
-        filter(source == "nhsn") %>%
-        select(-source) %>%
-        as_epi_archive(compactify = TRUE)
-      epix_merge(nhsn_only, nssp_archive_data, sync = "locf")
     }
   ),
 )
@@ -349,19 +353,22 @@ forecast_targets <- tar_map(
   tar_target(
     name = full_data,
     command = {
-      # As-of slice of the canonical archive (season info, geo normalization,
-      # Wednesday shift, insufficient-geo drop already baked in). Only the
-      # version-dependent steps remain here.
+      # As-of slice of the canonical archive (season info, geo rename, Wednesday
+      # shift, source stamp, insufficient-geo drop, and the ILI+/flusurv extras
+      # are already baked in). Only the version-dependent steps remain here.
       make_forecast_snapshot(
         nhsn_prod_archive,
         forecast_date = forecast_date_int,
         generation_date = forecast_generation_date_int,
         as_of_policy = as_of_policy,
-        substitutions = covid_data_substitutions
+        substitutions = flu_data_substitutions
       )
     }
   ),
-  # As-of slice of the canonical nssp-as-target archive.
+  # As-of slice of the canonical nssp-as-target archive (rename, week-align,
+  # source stamp, season info already baked in). Hoisted into its own snapshot
+  # target so forecast_nssp mirrors forecast_nhsn: one snapshot target feeding a
+  # single run_forecaster call, with only the exogenous extra_data prep inline.
   tar_target(
     name = nssp_forecast_data,
     command = {
@@ -373,9 +380,52 @@ forecast_targets <- tar_map(
       )
     }
   ),
+  tar_target(
+    name = forecast_nssp,
+    command = {
+      # Seed from the semantic cell key, not the target name. `targets` otherwise
+      # derives each target's seed from its name, so renaming a target silently
+      # moves the forecast for the stochastic forecasters (linear, cdc_baseline,
+      # linear_no_population_scale). Seeded here rather than inside the
+      # forecasters because only the harness knows (signal, date, ahead), and so
+      # the set of stochastic forecasters doesn't have to be tracked by hand.
+      set.seed(targets::tar_seed_create(
+        paste(id, "nssp", forecast_date_chr, aheads, sep = "/")
+      ))
+      # Exogenous input: full_data (nhsn) spoofed into the `nssp` column to switch
+      # its role from target to predictor for the nssp-as-target forecast.
+      full_data_modified <- full_data %>%
+        rename(nssp = value) %>%
+        filter(source == "nhsn") %>%
+        select(-c(source, epiweek, epiyear, season, season_week))
+      # Revision-aware forecasters need the archive; non-revision ones use the
+      # pre-sliced nssp_forecast_data epi_df.
+      nssp_input <- if (needs_archive) {
+        make_forecast_archive_snapshot(
+          nssp_target_archive,
+          forecast_date = forecast_date_int,
+          generation_date = forecast_generation_date_int
+        )
+      } else {
+        nssp_forecast_data
+      }
+      run_forecaster(
+        snapshot = nssp_input, forecaster = forecaster, aheads = aheads * ahead_multiplier,
+        params = params, id = id,
+        target_date_shift = target_date_shift,
+        join_extra_data = join_extra_data, extra_data = full_data_modified,
+        filter_sources = filter_sources, excluded_geos = excluded_geos,
+        sort_quantiles = sort_quantiles,
+        # nssp is the target here; snapshot rows are stamped source = "nssp".
+        primary_source = "nssp"
+      )
+    },
+    pattern = map(aheads)
+  ),
   # As-of slice of the raw nssp archive used as an exogenous predictor
   # (extra_sources = "nssp"). Keeps the `nssp` column, unlike nssp_forecast_data
-  # (the renamed nssp-as-target archive).
+  # (the renamed nssp-as-target archive). Routed through make_forecast_snapshot
+  # so the cheating cutoff is generation_date, matching full_data.
   tar_target(
     name = nssp_exogenous_data,
     command = {
@@ -390,25 +440,18 @@ forecast_targets <- tar_map(
   tar_target(
     name = forecast_nhsn,
     command = {
-      # Seed from the semantic cell key, not the target name. `targets` otherwise
-      # derives each target's seed from its name, so renaming a target silently
-      # moves the forecast for the stochastic forecasters (linear,
-      # linear_no_population_scale, cdc_baseline). Seeded here rather than inside
-      # the forecasters because only the harness knows (signal, date, ahead).
+      # See forecast_nssp: seed from the semantic cell key, not the target name.
       set.seed(targets::tar_seed_create(
         paste(id, "nhsn", forecast_date_chr, aheads, sep = "/")
       ))
       snapshot <- if (needs_archive) {
         make_forecast_archive_snapshot(
-          nhsn_nssp_revision_archive,
+          nhsn_prod_archive,
           forecast_date = forecast_date_int,
           generation_date = forecast_generation_date_int
         )
       } else {
         full_data
-      }
-      if (!is.null(min_train_date) && !inherits(snapshot, "epi_archive")) {
-        snapshot <- snapshot %>% filter(time_value >= min_train_date)
       }
       run_forecaster(
         snapshot = snapshot, forecaster = forecaster, aheads = aheads * ahead_multiplier,
@@ -420,55 +463,6 @@ forecast_targets <- tar_map(
       )
     },
     pattern = map(aheads)
-  ),
-  tar_target(
-    name = forecast_nssp,
-    command = {
-      # See forecast_nhsn: seed from the semantic cell key, not the target name.
-      set.seed(targets::tar_seed_create(
-        paste(id, "nssp", forecast_date_chr, aheads, sep = "/")
-      ))
-      # Exogenous input: full_data (nhsn) spoofed into the `nssp` column to
-      # switch its role from target to predictor for the nssp-as-target
-      # forecast. Selected down to the join columns so the extra join adds only
-      # `nssp` (the old extra data carried no season columns).
-      full_data_modified <- full_data %>%
-        rename(nssp = value) %>%
-        select(geo_value, time_value, nssp)
-      # For revision-aware forecasters on the nssp path: nssp_target_archive has
-      # no nssp predictor column (nssp was renamed to value). Strip extra_sources
-      # from params so the forecaster only uses the value column.
-      params_effective <- if (needs_archive) {
-        p <- params[setdiff(names(params), "extra_sources")]
-        if (is.list(p$lags)) p$lags <- p$lags[[1L]]
-        p
-      } else {
-        params
-      }
-      snapshot <- if (needs_archive) {
-        make_forecast_archive_snapshot(
-          nssp_target_archive,
-          forecast_date = forecast_date_int,
-          generation_date = forecast_generation_date_int
-        )
-      } else {
-        nssp_forecast_data
-      }
-      if (!is.null(min_train_date) && !inherits(snapshot, "epi_archive")) {
-        snapshot <- snapshot %>% filter(time_value >= min_train_date)
-      }
-      run_forecaster(
-        snapshot = snapshot, forecaster = forecaster, aheads = aheads * ahead_multiplier,
-        params = params_effective, id = id,
-        target_date_shift = target_date_shift,
-        join_extra_data = join_extra_data, extra_data = full_data_modified,
-        filter_sources = filter_sources, excluded_geos = excluded_geos,
-        sort_quantiles = sort_quantiles,
-        # nssp is the target here; snapshot rows are stamped source = "nssp".
-        primary_source = "nssp"
-      )
-    },
-    pattern = map(aheads)
   )
 )
 
@@ -476,7 +470,7 @@ combined_forecast_targets <- build_combined_forecast_targets(forecast_targets)
 
 
 # ================================ ENSEMBLE TARGETS ================================
-# Shared with flu (build_prod_ensemble_targets / run_ensemble in
+# Shared with covid (build_prod_ensemble_targets / run_ensemble in
 # R/targets/prod_shared.R, R/targets/ensemble_runner.R); per-disease asymmetries
 # are the spec values below. AR components are windowed_seasonal(_extra_sources);
 # climate_linear's declared components are used only for run_ensemble()'s
@@ -489,7 +483,8 @@ g_ensemble_specs <- list(
       nhsn = c("climate_base", "climate_geo_agged", "linear"),
       nssp = c("climate_base", "climate_geo_agged", "linear_no_population_scale")
     ),
-    climate_caps = list(nhsn = c(0.6, 0.6), nssp = c(0.6, 0.6)),
+    # flu nhsn historically ran uncapped, i.e. the ensemble_climate_linear defaults
+    climate_caps = list(nhsn = c(0.9, 1), nssp = c(0.6, 0.6)),
     apply_geo_exclusions = TRUE,
     sort_quantiles = TRUE
   ),
@@ -504,23 +499,21 @@ g_ensemble_specs <- list(
     id = "ensemble_mix",
     method = "weighted",
     components = list(
-      nhsn = c("windowed_seasonal", "windowed_seasonal_extra_sources", "revision_aware"),
+      nhsn = c("windowed_seasonal", "windowed_seasonal_extra_sources"),
       nssp = c("windowed_seasonal", "windowed_seasonal_extra_sources")
     ),
-    drop_negative_aheads = list(nhsn = TRUE, nssp = FALSE),
-    # Restrict revision_aware to aheads -1 (day offset -4) and 0 (day offset +3).
-    # drop_negative_aheads is not applied to components listed here.
-    component_ahead_days = list(nhsn = list(revision_aware = c(-4L, 3L))),
+    drop_negative_aheads = list(nhsn = FALSE, nssp = TRUE),
     apply_geo_exclusions = FALSE,
     sort_quantiles = FALSE
   )
 )
 ensemble_targets <- build_prod_ensemble_targets(
   g_forecast_schedule,
-  disease = "covid",
-  geo_exclusions_file = "covid_geo_exclusions",
-  nssp_geo_exclusions_file = "covid_nssp_geo_exclusions",
-  ensemble_spec = g_ensemble_specs
+  disease = "flu",
+  geo_exclusions_file = "flu_geo_exclusions",
+  nssp_geo_exclusions_file = "flu_nssp_geo_exclusions",
+  ensemble_spec = g_ensemble_specs,
+  climate_submission_excluded_geos = c("as", "gu", "mh")
 )
 
 
@@ -541,7 +534,7 @@ joined_targets <- list2(
   tar_target(
     name = local_scores_nhsn,
     command = {
-      score_forecasts(nhsn_latest_data, local_forecasts_and_ensembles_nhsn, "wk inc covid hosp")
+      score_forecasts(nhsn_latest_data, local_forecasts_and_ensembles_nhsn, "wk inc flu hosp")
     }
   ),
   tar_target(
@@ -550,44 +543,69 @@ joined_targets <- list2(
       nssp_latest_data %>%
         rename(value = nssp) %>%
         mutate(time_value = ceiling_date(time_value, unit = "week") - 1) %>%
-        score_forecasts(local_forecasts_and_ensembles_nssp %>% mutate(value = value / 100), "wk inc covid prop ed visits")
+        score_forecasts(local_forecasts_and_ensembles_nssp %>% mutate(value = value / 100), "wk inc flu prop ed visits")
     }
+  ),
+  tar_combine(
+    name = joined_forecasts_and_ensembles_nhsn,
+    ensemble_targets[["forecasts_and_ensembles"]],
+    command = filter_shared_geo_dates(
+      purrr::map(list(!!!.x), "nhsn") %>% dplyr::bind_rows(),
+      external_forecasts_full %>% filter(target == "wk inc flu hosp") %>% select(-target),
+      min_locations = 52,
+      min_dates = 40
+    )
+  ),
+  tar_combine(
+    name = joined_forecasts_and_ensembles_nssp,
+    ensemble_targets[["forecasts_and_ensembles"]],
+    command = filter_shared_geo_dates(
+      purrr::map(list(!!!.x), "nssp") %>% dplyr::bind_rows(),
+      external_forecasts_full %>% filter(target == "wk inc flu prop ed visits") %>% select(-target) %>% mutate(value = value * 100),
+      min_locations = 50,
+      min_dates = 14
+    )
   )
 )
 
 combined_targets <- build_combined_targets(external_forecast_targets)
 
 # ============================== CALIBRATION TARGETS ============================
-# Same design as flu; see flu_hosp_prod.R and notes/CALIBRATION.md. No 2023-24
-# burn-in for covid (hub started 2024-11-23), so slow_init is NULL.
+# Online-calibrated submission for CMU-TimeSeries-Calibrated. Reads all
+# historical CMU-TimeSeries rounds from the hub checkout (giving us the 2023-24
+# burn-in for free), appends the current week's ensemble_mix if not yet
+# submitted, and runs calibrate_hub_forecasts() over the full history. The
+# current round's value_cal is then written as the CMU-TimeSeries-Calibrated
+# submission. Skipped in cache/evaluation mode. See notes/CALIBRATION.md for
+# the parameter choices.
 calibration_targets <- list(
   tar_target(
     calibrated_ensemble_nhsn,
     command = {
       if (g_submission_directory == "cache") {
-        cli::cli_alert_info("Skipping covid calibration (no hub checkout; set COVID_SUBMISSION_DIRECTORY)")
+        cli::cli_alert_info("Skipping flu calibration (no hub checkout; set FLU_SUBMISSION_DIRECTORY)")
         return(NULL)
       }
       historical_fc <- hub_read_forecasts(
         hub_dir = g_submission_directory,
-        target = HUB_COVID_TARGET
+        target = HUB_FLU_TARGET
       )
       current_ref <- get_forecast_reference_date(max(g_forecast_dates))
       if (!current_ref %in% unique(historical_fc$reference_date)) {
         current_fc <- local_forecasts_and_ensembles_nhsn %>%
           filter(.data$forecaster == "ensemble_mix") %>%
-          internal_to_hub_forecasts(disease = "covid")
+          internal_to_hub_forecasts(disease = "flu")
         historical_fc <- bind_rows(historical_fc, current_fc)
       }
-      truth <- hub_read_covid_truth(hub_dir = g_submission_directory)
+      truth <- hub_read_truth(refresh = TRUE)
       calibrate_hub_forecasts(
         historical_fc, truth,
-        burn_in_seasons = character(0),
+        burn_in_seasons = "2023-2024",
         transform = "sqrt",
         lr_args = list(mult = 0.03, floor = 1e-3),
         lr_window = 20,
         season_policy = "carry",
-        slow_init = NULL,
+        slow_init = "burn_in_quantile",
         lr_slow = list(mult = 0.003),
         fast_decay = 0.1
       )
@@ -598,7 +616,7 @@ calibration_targets <- list(
     make_calibrated_submission_csv,
     command = {
       if (is.null(calibrated_ensemble_nhsn) || g_submission_directory == "cache" || g_evaluation_mode) {
-        cli::cli_alert_info("Not making calibrated covid submission csv")
+        cli::cli_alert_info("Not making calibrated flu submission csv")
         return(invisible(NULL))
       }
       current_ref <- get_forecast_reference_date(max(g_forecast_dates))
@@ -607,7 +625,7 @@ calibration_targets <- list(
       calibrated_ensemble_nhsn$forecasts %>%
         filter(.data$reference_date == current_ref, !.data$is_burn_in) %>%
         mutate(
-          target = HUB_COVID_TARGET,
+          target = HUB_FLU_TARGET,
           output_type = "quantile",
           output_type_id = as.character(.data$level)
         ) %>%
@@ -641,7 +659,7 @@ calibration_targets <- list(
           value = .data$value_cal,
           forecaster = "CMU-TimeSeries-Calibrated"
         ) %>%
-        score_forecasts(nhsn_latest_data, ., "wk inc covid hosp")
+        score_forecasts(nhsn_latest_data, ., "wk inc flu hosp")
     },
     cue = tar_cue("always")
   )
@@ -650,35 +668,52 @@ calibration_targets <- list(
 if (g_evaluation_mode) {
   score_notebook <- build_backtest_score_targets()
 } else {
-  # Only render the report if there is only one forecast date
-  # i.e. we're running this in prod on schedule
   score_notebook <- list2(
     tar_target(
       ongoing_nhsn_score_notebook,
       command = {
-        if (!dir.exists(here::here("reports"))) {
-          dir.create(here::here("reports"))
+        if (!dir.exists(here::here("rendered_reports"))) {
+          dir.create(here::here("rendered_reports"))
         }
-        # Don't run if there aren't forecasts in the past 4 weeks to evaluate
-        if (external_forecasts_full %>%
-          filter(
-            forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4 * 7,
-            target == "wk inc covid hosp"
-          ) %>% distinct(forecast_date) %>% nrow() == 0) {
+        if (
+          external_forecasts_full %>%
+            filter(
+              forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4 * 7,
+              target == "wk inc flu hosp"
+            ) %>%
+            distinct(forecast_date) %>%
+            nrow() == 0
+        ) {
           return()
         }
         rmarkdown::render(
           ongoing_score_report_rmd,
           output_file = here::here(
             "reports",
-            sprintf("%s_covid_nhsn_scoring.html", as.Date(Sys.Date()))
+            sprintf("%s_flu_nhsn_scoring_individual.html", as.Date(Sys.Date()))
           ),
           params = list(
-            disease = "covid",
+            disease = "flu",
             target = "nhsn",
-            external_forecasts = external_forecasts_full %>% filter(target == "wk inc covid hosp") %>% select(-target),
+            external_forecasts = external_forecasts_full %>% filter(target == "wk inc flu hosp") %>% select(-target),
             archive = nhsn_archive_data,
-            scores = bind_rows(external_scores_nhsn_full, local_calibrated_scores_nhsn)
+            scores = bind_rows(external_scores_nhsn_full, local_calibrated_scores_nhsn),
+            averaging_method = "individual"
+          )
+        )
+        rmarkdown::render(
+          ongoing_score_report_rmd,
+          output_file = here::here(
+            "reports",
+            sprintf("%s_flu_nhsn_scoring_common.html", as.Date(Sys.Date()))
+          ),
+          params = list(
+            disease = "flu",
+            target = "nhsn",
+            external_forecasts = external_forecasts_full %>% filter(target == "wk inc flu hosp") %>% select(-target),
+            archive = nhsn_archive_data,
+            scores = bind_rows(external_scores_nhsn_full, local_calibrated_scores_nhsn),
+            averaging_method = "common"
           )
         )
       }
@@ -686,28 +721,26 @@ if (g_evaluation_mode) {
     tar_target(
       ongoing_nssp_score_notebook,
       command = {
-        if (!dir.exists(here::here("reports"))) {
-          dir.create(here::here("reports"))
+        if (!dir.exists(here::here("rendered_reports"))) {
+          dir.create(here::here("rendered_reports"))
         }
-        # Don't run if there aren't forecasts in the past 4 weeks to evaluate
         if (external_forecasts_full %>%
           filter(
             forecast_date >= round_date(Sys.Date() - 3, "week", 6) - 4 * 7,
-            target == "wk inc covid prop ed visits"
+            target == "wk inc flu prop ed visits"
           ) %>% distinct(forecast_date) %>% nrow() == 0) {
           return()
         }
-        # Score notebook individual average (see ongoing_score_report_rmd for documentation)
         rmarkdown::render(
           ongoing_score_report_rmd,
           output_file = here::here(
             "reports",
-            sprintf("%s_covid_nssp_scoring_individual.html", as.Date(Sys.Date()))
+            sprintf("%s_flu_nssp_scoring_individual.html", as.Date(Sys.Date()))
           ),
           params = list(
-            disease = "covid",
+            disease = "flu",
             target = "nssp",
-            external_forecasts = external_forecasts_full %>% filter(target == "wk inc covid prop ed visits") %>% select(-target),
+            external_forecasts = external_forecasts_full %>% filter(target == "wk inc flu prop ed visits") %>% select(-target),
             archive = nssp_archive_data,
             scores = external_scores_nssp_full,
             averaging_method = "individual"
@@ -717,19 +750,19 @@ if (g_evaluation_mode) {
           ongoing_score_report_rmd,
           output_file = here::here(
             "reports",
-            sprintf("%s_covid_nssp_scoring_common.html", as.Date(Sys.Date()))
+            sprintf("%s_flu_nssp_scoring_common.html", as.Date(Sys.Date()))
           ),
           params = list(
-            disease = "covid",
+            disease = "flu",
             target = "nssp",
-            external_forecasts = external_forecasts_full %>% filter(target == "wk inc covid prop ed visits") %>% select(-target),
+            external_forecasts = external_forecasts_full %>% filter(target == "wk inc flu prop ed visits") %>% select(-target),
             archive = nssp_archive_data,
             scores = external_scores_nssp_full,
             averaging_method = "common"
           )
         )
       }
-    ),
+    )
   )
 }
 
