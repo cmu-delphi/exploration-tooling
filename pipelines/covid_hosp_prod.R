@@ -579,7 +579,12 @@ calibration_targets <- list(
           internal_to_hub_forecasts(disease = "covid")
         historical_fc <- bind_rows(historical_fc, current_fc)
       }
-      truth <- hub_read_covid_truth(hub_dir = g_submission_directory)
+      truth <- hhs_evaluation_data %>%
+        left_join(
+          get_population_data() %>% select("state_id", location = "state_code"),
+          by = c("geo_value" = "state_id")
+        ) %>%
+        select("target_end_date", "location", truth = "true_value")
       calibrate_hub_forecasts(
         historical_fc, truth,
         burn_in_seasons = character(0),

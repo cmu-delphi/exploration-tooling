@@ -173,7 +173,7 @@ for (slug in sort(unique(combined_scores$season_slug))) {
   out_file <- here::here(reports_dir, paste0(disease, "-prod-explore-comparison-", slug, ".html"))
   cli::cli_inform("Rendering {slug} -> {out_file}")
   rmarkdown::render(
-    "scripts/reports/prod-explore-comparison.Rmd",
+    "reports/writeups/prod-explore-comparison.Rmd",
     params = list(
       scores = combined_scores %>% filter(season_slug == slug) %>% select(-season_slug),
       forecasts = combined_forecasts %>% filter(season_slug == slug) %>% select(-season_slug),
