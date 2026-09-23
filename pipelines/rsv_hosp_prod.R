@@ -98,11 +98,11 @@ parameters_and_date_targets <- rlang::list2(
   ),
   tar_file(
     name = rsv_geo_exclusions,
-    command = "scripts/rsv_geo_exclusions.csv"
+    command = "pipelines/rsv_geo_exclusions.csv"
   ),
   tar_file(
     name = rsv_nssp_geo_exclusions,
-    command = "scripts/rsv_nssp_geo_exclusions.csv"
+    command = "pipelines/rsv_nssp_geo_exclusions.csv"
   ),
   tar_file(
     name = rsv_data_substitutions,

@@ -102,8 +102,8 @@ g_forecast_dates <- g_forecast_schedule$forecast_date_int
 g_forecast_generation_dates <- g_forecast_schedule$forecast_generation_date_int
 
 if (!g_evaluation_mode) {
-  stamp_default_weights("scripts/flu_geo_exclusions.csv", g_forecast_dates[[1L]])
-  stamp_default_weights("scripts/flu_nssp_geo_exclusions.csv", g_forecast_dates[[1L]])
+  stamp_default_weights("pipelines/flu_geo_exclusions.csv", g_forecast_dates[[1L]])
+  stamp_default_weights("pipelines/flu_nssp_geo_exclusions.csv", g_forecast_dates[[1L]])
 }
 
 # Forecaster grid — behavior is defined by (id, bare forecaster function,
@@ -238,11 +238,11 @@ parameters_and_date_targets <- rlang::list2(
   ),
   tar_file(
     flu_geo_exclusions,
-    command = "scripts/flu_geo_exclusions.csv"
+    command = "pipelines/flu_geo_exclusions.csv"
   ),
   tar_file(
     flu_nssp_geo_exclusions,
-    command = "scripts/flu_nssp_geo_exclusions.csv"
+    command = "pipelines/flu_nssp_geo_exclusions.csv"
   ),
   tar_file(
     flu_data_substitutions,

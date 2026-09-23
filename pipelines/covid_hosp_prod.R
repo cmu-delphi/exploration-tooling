@@ -90,8 +90,8 @@ g_forecast_dates <- g_forecast_schedule$forecast_date_int
 g_forecast_generation_dates <- g_forecast_schedule$forecast_generation_date_int
 
 if (!g_evaluation_mode) {
-  stamp_default_weights("scripts/covid_geo_exclusions.csv", g_forecast_dates[[1L]])
-  stamp_default_weights("scripts/covid_nssp_geo_exclusions.csv", g_forecast_dates[[1L]])
+  stamp_default_weights("pipelines/covid_geo_exclusions.csv", g_forecast_dates[[1L]])
+  stamp_default_weights("pipelines/covid_nssp_geo_exclusions.csv", g_forecast_dates[[1L]])
 }
 
 # Trainer used by the seasonal forecasters; stored as a global and referenced by
@@ -235,11 +235,11 @@ parameters_and_date_targets <- rlang::list2(
   ),
   tar_file(
     name = covid_geo_exclusions,
-    command = "scripts/covid_geo_exclusions.csv"
+    command = "pipelines/covid_geo_exclusions.csv"
   ),
   tar_file(
     name = covid_nssp_geo_exclusions,
-    command = "scripts/covid_nssp_geo_exclusions.csv"
+    command = "pipelines/covid_nssp_geo_exclusions.csv"
   ),
   tar_file(
     name = covid_data_substitutions,
