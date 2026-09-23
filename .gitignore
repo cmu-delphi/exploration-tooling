@@ -41,6 +41,9 @@ seasonal_features/
 *_regr/
 *_regr_prod/
 
+# Generated graphics
+**/gfx/
+
 # Rendered report artifacts
 rendered_reports/*.html
 rendered_reports/report.md
