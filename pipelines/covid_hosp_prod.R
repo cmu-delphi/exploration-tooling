@@ -287,6 +287,20 @@ parameters_and_date_targets <- rlang::list2(
     }
   ),
   tar_target(
+    name = hhs_evaluation_data,
+    command = {
+      nhsn_archive_data %>%
+        epix_as_of(nhsn_archive_data$versions_end) %>%
+        transmute(
+          geo_value = ifelse(geo_value == "usa", "us", geo_value),
+          target_end_date = time_value,
+          true_value = value
+        ) %>%
+        filter(geo_value %nin% g_insufficient_data_geos) %>%
+        drop_na(true_value)
+    }
+  ),
+  tar_target(
     name = nssp_archive_data,
     command = {
       up_to_date_nssp_state_archive("covid")
