@@ -451,10 +451,13 @@ forecast_targets <- tar_map(
         select(geo_value, time_value, nssp)
       # For revision-aware forecasters on the nssp path: nssp_target_archive has
       # no nssp predictor column (nssp was renamed to value). Strip extra_sources
-      # from params so the forecaster only uses the value column.
+      # from params so the forecaster only uses the value column. Also override
+      # finalization_min_value: it defaults to a count-scale threshold (10) that
+      # zeroes out nssp's proportion-scale values entirely.
       params_effective <- if (needs_archive) {
         p <- params[setdiff(names(params), "extra_sources")]
         if (is.list(p$lags)) p$lags <- p$lags[[1L]]
+        p$finalization_min_value <- 0
         p
       } else {
         params

@@ -409,9 +409,18 @@ forecast_targets <- tar_map(
       } else {
         nssp_forecast_data
       }
+      # finalization_min_value defaults to a count-scale threshold (10) that
+      # zeroes out nssp's proportion-scale values entirely.
+      params_effective <- if (needs_archive) {
+        p <- params
+        p$finalization_min_value <- 0
+        p
+      } else {
+        params
+      }
       run_forecaster(
         snapshot = nssp_input, forecaster = forecaster, aheads = aheads * ahead_multiplier,
-        params = params, id = id,
+        params = params_effective, id = id,
         target_date_shift = target_date_shift,
         join_extra_data = join_extra_data, extra_data = full_data_modified,
         filter_sources = filter_sources, excluded_geos = excluded_geos,

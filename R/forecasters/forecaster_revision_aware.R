@@ -151,6 +151,11 @@ compute_finalization_lag_weeks <- function(
 #' @param trainer the (quantile) trainer; must be an [epipredict::quantile_reg].
 #' @param quantile_levels the quantile levels to predict.
 #' @param clip_lower whether to clip predictions at zero.
+#' @param finalization_min_value passed to [compute_finalization_lag_weeks] as
+#'   `min_final_value`. Default (10) suits count-scale outcomes (e.g. nhsn
+#'   hospitalizations); a proportion-scale outcome (e.g. nssp) needs a much
+#'   smaller value, or the finalized-value filter drops every training row and
+#'   the forecaster falls back to [make_null_forecast].
 #' @seealso [archive_to_revision_predictors], [scaled_pop_seasonal]
 #'
 #' @importFrom epipredict quantile_reg
@@ -180,6 +185,7 @@ scaled_pop_seasonal_revision <- function(
   outlier_min_value = 30,
   outlier_min_obs = 5L,
   finalization_coverage = 0.95,
+  finalization_min_value = 10L,
   return_fit = FALSE,
   ...
 ) {
@@ -316,7 +322,11 @@ scaled_pop_seasonal_revision <- function(
   # gives a data-driven cutoff: targets this recent are often still actively
   # revised. forecast_rows is built separately above and is not filtered here.
   finalization_cutoff_days <- as.integer(
-    ceiling(compute_finalization_lag_weeks(epi_data, outcome, coverage = finalization_coverage) * 7)
+    ceiling(compute_finalization_lag_weeks(
+      epi_data, outcome,
+      coverage = finalization_coverage,
+      min_final_value = finalization_min_value
+    ) * 7)
   )
   message(
     format(epi_data$versions_end), " ahead=", ahead,
