@@ -64,7 +64,7 @@ hub_series_matrix <- function(series, round_date, n_levels) {
 #' Online-calibrate a hub model's submitted forecasts, per (location, horizon).
 #'
 #' @param forecasts [hub_read_forecasts()] output.
-#' @param truth [hub_read_truth()] output.
+#' @param truth tibble with columns `target_end_date`, `location` (FIPS), `truth` (raw count).
 #' @param settle_days how long after `target_end_date` the outcome is trusted.
 #'   14 gives exactly `horizon + 2` rounds of delay on hub coordinates.
 #' @param burn_in_seasons season labels (as produced by [hub_label_seasons()])

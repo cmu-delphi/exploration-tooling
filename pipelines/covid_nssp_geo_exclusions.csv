@@ -12,6 +12,18 @@ forecast_date,forecaster,geo_value,weight
 2024-10-01, climate_geo_agged, all, 0
 2024-10-01, climate_quantile_extrapolated, all, 0
 ##################
+# Sep 23
+##################
+2026-09-23, all, mp, 0
+2026-09-23, windowed_seasonal, all, 3
+2026-09-23, windowed_seasonal_extra_sources, all, 0.5
+2026-09-23, climate_linear, all, 0.001
+2026-09-23, linear_no_population_scale, all, 3
+2026-09-23, linearlog, all, 0
+2026-09-23, climate_base, all, 2
+2026-09-23, climate_geo_agged, all, 0
+2026-09-23, climate_quantile_extrapolated, all, 0
+##################
 # Sep 16
 ##################
 2026-09-16, all, mp, 0

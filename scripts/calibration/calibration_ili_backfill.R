@@ -131,7 +131,7 @@ ili_backfill <- function(refresh = FALSE) {
   invisible(list(forecasts = forecasts, truth = truth, failures = failures))
 }
 
-#' Read the cached pseudo-hub tables in hub_read_forecasts()/hub_read_truth() shape.
+#' Read the cached pseudo-hub tables in hub_read_forecasts() shape (forecasts) and NHSN truth shape.
 ili_read_pseudo_hub <- function() {
   list(
     forecasts = nanoparquet::read_parquet(ILI_FORECASTS_FILE) %>%

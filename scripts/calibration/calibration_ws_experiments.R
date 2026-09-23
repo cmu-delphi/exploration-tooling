@@ -18,7 +18,19 @@ source(here::here("scripts/calibration_ws_backfill.R"))
 ili <- ili_read_pseudo_hub()
 ws <- ws_read_pseudo_hub()
 hub_fc <- hub_read_forecasts()
-hub_truth <- hub_read_truth()
+hub_truth <- {
+  arch <- get_nhsn_data_archive("flu")
+  arch %>%
+    epix_as_of(arch$versions_end) %>%
+    mutate(geo_value = ifelse(geo_value == "usa", "us", geo_value)) %>%
+    left_join(
+      get_population_data() %>% select("state_id", location = "state_code"),
+      by = c("geo_value" = "state_id")
+    ) %>%
+    select(target_end_date = time_value, location, truth = value) %>%
+    filter(!is.na(truth)) %>%
+    arrange(location, target_end_date)
+}
 LIVE_SEASONS <- c("2024-2025", "2025-2026")
 ERA_SPLIT <- as.Date("2023-08-01") # ILI+ history before, NHSN after
 

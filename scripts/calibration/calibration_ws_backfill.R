@@ -15,7 +15,7 @@
 #
 # Usage, from the repo root (~10 min cold, cached in cache/calibration/):
 #   distrobox enter rocker -- Rscript scripts/calibration_ws_backfill.R
-# Then in R: ws <- ws_read_pseudo_hub()  # forecasts; truth is hub_read_truth()
+# Then in R: ws <- ws_read_pseudo_hub()  # forecasts; truth from get_nhsn_data_archive("flu")
 
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))
 

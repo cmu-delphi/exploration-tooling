@@ -248,7 +248,7 @@ parameters_and_date_targets <- rlang::list2(
     flu_data_substitutions,
     command = "pipelines/flu_data_substitutions.csv"
   ),
-  create_flu_data_targets(),
+  !!!create_flu_data_targets(),
   tar_target(
     name = nhsn_archive_data,
     command = {

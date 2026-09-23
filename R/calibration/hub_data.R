@@ -29,18 +29,13 @@ HUB_QUANTILE_LEVELS <- c(
 HUB_FLU_TARGET <- "wk inc flu hosp"
 HUB_COVID_TARGET <- "wk inc covid hosp"
 
-HUB_TRUTH_URL <- paste0(
-  "https://raw.githubusercontent.com/cdcepi/FluSight-forecast-hub/",
-  "main/target-data/target-hospital-admissions.csv"
-)
 
-# Parent directory containing both hub checkouts. Override with DELPHI_HUB_PARENT_DIR
-# or the individual vars to point at a different layout.
+# Parent directory containing the flu hub checkout. Override with DELPHI_HUB_PARENT_DIR
+# or HUB_FLU_DIR to point at a different layout.
 .hub_parent <- function() {
   Sys.getenv("DELPHI_HUB_PARENT_DIR", path.expand("~/allHail/delphi"))
 }
 HUB_FLU_DIR <- Sys.getenv("HUB_FLU_DIR", file.path(.hub_parent(), "FluSight-forecast-hub"))
-HUB_COVID_DIR <- Sys.getenv("HUB_COVID_DIR", file.path(.hub_parent(), "covid19-forecast-hub"))
 
 
 #' Snap parsed quantile levels onto the canonical vector.
@@ -140,82 +135,6 @@ hub_read_forecasts <- function(
   out %>% arrange(.data$reference_date, .data$horizon, .data$location, .data$level_index)
 }
 
-
-#' Read the hub's finalized target data, caching the download.
-#'
-#' This is the oracle: one consistent admissions series per location across every
-#' season, Saturday-indexed on the same grid as `target_end_date`. It is the
-#' *current* vintage, not as-of. That is deliberate -- the hub scores against
-#' finalized truth, so finalized truth is the right learning target; the only
-#' optimism is that at round `t` we would really have seen a not-quite-settled
-#' value, which the `settle_days` lag is there to bound.
-#' @export
-hub_read_truth <- function(
-  cache_dir = here::here("cache", "calibration"),
-  url = HUB_TRUTH_URL,
-  refresh = FALSE
-) {
-  dir.create(cache_dir, showWarnings = FALSE, recursive = TRUE)
-  path <- file.path(cache_dir, "target-hospital-admissions.csv")
-  if (!file.exists(path) || refresh) {
-    cli::cli_alert_info("Downloading hub target data to {.path {path}}")
-    utils::download.file(url, path, quiet = TRUE)
-  }
-  truth <- readr::read_csv(
-    path,
-    col_types = readr::cols(
-      date = readr::col_date(),
-      location = readr::col_character(),
-      location_name = readr::col_character(),
-      value = readr::col_double(),
-      .default = readr::col_double()
-    ),
-    progress = FALSE
-  ) %>%
-    select(target_end_date = "date", "location", truth = "value") %>%
-    filter(!is.na(.data$truth)) %>%
-    arrange(.data$location, .data$target_end_date)
-  if (any(duplicated(truth[c("location", "target_end_date")]))) {
-    cli::cli_abort("Hub target data has duplicate (location, date) rows.")
-  }
-  truth
-}
-
-
-#' Read the COVID hub's finalized target data from a local checkout.
-#'
-#' Reads `target-data/covid-hospital-admissions.csv` from the hub checkout.
-#' The COVID hub does not have meaningful off-seasons, so there is no URL-based
-#' download path -- pull the checkout instead (`git pull` in `hub_dir`).
-#' @param hub_dir local checkout of cdcepi/covid19-forecast-hub.
-#' @return tibble with columns `target_end_date`, `location`, `truth`.
-#' @export
-hub_read_covid_truth <- function(hub_dir = HUB_COVID_DIR) {
-  path <- path.expand(file.path(hub_dir, "target-data", "covid-hospital-admissions.csv"))
-  if (!file.exists(path)) {
-    cli::cli_abort(
-      "COVID truth not found at {.path {path}}.
-       Pull the hub checkout at {.path {hub_dir}} or pass a different {.arg hub_dir}."
-    )
-  }
-  truth <- readr::read_csv(
-    path,
-    col_types = readr::cols(
-      state = readr::col_character(),
-      target_end_date = readr::col_date(),
-      value = readr::col_double(),
-      location = readr::col_character()
-    ),
-    progress = FALSE
-  ) %>%
-    select("target_end_date", "location", truth = "value") %>%
-    filter(!is.na(.data$truth)) %>%
-    arrange(.data$location, .data$target_end_date)
-  if (any(duplicated(truth[c("location", "target_end_date")]))) {
-    cli::cli_abort("COVID hub target data has duplicate (location, date) rows.")
-  }
-  truth
-}
 
 #' Convert an internal-format forecast tibble to hub forecast format.
 #'

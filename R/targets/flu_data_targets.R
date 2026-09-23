@@ -135,8 +135,9 @@ create_flu_data_targets <- function() {
         ) %>%
           as_epi_archive(compactify = TRUE) %>%
           extract2("DT") %>%
-          # weekly data is indexed from the start of the week
-          mutate(time_value = as.Date(time_value) + 6 - g_time_value_adjust) %>%
+          # reference_time is the last day of the epi week (Saturday); shift to
+          # Wednesday label matching NHSN (Saturday - 3).
+          mutate(time_value = as.Date(time_value) - g_time_value_adjust) %>%
           mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
           unnest(cols = "source") %>%
           # Always convert to data.frame after dplyr operations on data.table.
