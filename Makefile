@@ -224,8 +224,8 @@ dashboard:
 	Rscript scripts/dashboard.R
 
 sync-reports:
-	aws s3 sync rendered_reports/ s3://forecasting-team-data/2024/reports/; \
-	aws s3 sync s3://forecasting-team-data/2024/reports/ rendered_reports/
+	aws s3 sync reports/ s3://forecasting-team-data/2024/reports/; \
+	aws s3 sync s3://forecasting-team-data/2024/reports/ reports/
 
 update-site: sync-reports
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()"
@@ -249,18 +249,18 @@ get-rsv-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'rsv_hosp_prod')"
 
 summary-reports:
-	Rscript -e "rmarkdown::render('reports/writeups/revision/revision_summary_report_2025.Rmd', output_file = here::here('rendered_reports', 'revision_summary_2025.html'))"; \
-	Rscript -e "rmarkdown::render('reports/writeups/decreasing_forecasters.Rmd', output_file = here::here('rendered_reports', 'decreasing_forecasters.html'))"; \
-	Rscript -e "rmarkdown::render('reports/writeups/season_summary_2025.Rmd', output_file = here::here('rendered_reports', 'season_summary_2025.html'))"; \
-	Rscript -e "rmarkdown::render('reports/writeups/first_day_wrong.Rmd', output_file = here::here('rendered_reports', 'first_day_wrong.html'))";
+	Rscript -e "rmarkdown::render('scripts/reports/revision_summary_report_2025.Rmd', output_file = here::here('reports', 'revision_summary_2025.html'))"; \
+	Rscript -e "rmarkdown::render('scripts/reports/decreasing_forecasters.Rmd', output_file = here::here('reports', 'decreasing_forecasters.html'))"; \
+	Rscript -e "rmarkdown::render('scripts/reports/season_summary_2025.Rmd', output_file = here::here('reports', 'season_summary_2025.html'))"; \
+	Rscript -e "rmarkdown::render('scripts/reports/first_day_wrong.Rmd', output_file = here::here('reports', 'first_day_wrong.html'))";
 
 season-summary-2025-talk:
-	quarto render reports/writeups/presentations/season_2025_talk/season_summary_2025_presentation.qmd --to revealjs --output-dir "../../../rendered_reports"; \
-	cp reports/writeups/presentations/season_2025_talk/tachyons-minimal.css reports/; \
-	cp -r reports/writeups/presentations/season_2025_talk/gfx reports/
+	quarto render scripts/reports/season_2025_talk/season_summary_2025_presentation.qmd --to revealjs --output-dir "../../../reports"; \
+	cp scripts/reports/season_2025_talk/tachyons-minimal.css reports/; \
+	cp -r scripts/reports/season_2025_talk/gfx reports/
 
 season-summary-2025-talk-preview:
-	quarto preview reports/writeups/presentations/season_2025_talk/season_summary_2025_presentation.qmd
+	quarto preview scripts/reports/season_2025_talk/season_summary_2025_presentation.qmd
 
 check-socrata-updates:
 	echo "NHSN Regular Update:"

@@ -79,7 +79,14 @@ scaled_pop_seasonal <- function(
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
   if (!confirm_sufficient_data(epi_data, ahead, args_input, outcome, extra_sources)) {
-    return(make_null_forecast())
+    null_result <- tibble(
+      geo_value = character(),
+      forecast_date = lubridate::Date(),
+      target_end_date = lubridate::Date(),
+      quantile = numeric(),
+      value = numeric()
+    )
+    return(null_result)
   }
   # this is to deal with grouping by source in tests that don't include it;
   # stamp primary_source so the source filters below still match

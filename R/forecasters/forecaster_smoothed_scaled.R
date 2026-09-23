@@ -87,7 +87,14 @@ smoothed_scaled <- function(
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
   if (!confirm_sufficient_data(epi_data, ahead, args_input, outcome, extra_sources)) {
-    return(make_null_forecast())
+    null_result <- epi_data[0L, c("geo_value", attr(epi_data, "metadata", exact = TRUE)[["other_keys"]])] %>%
+      mutate(
+        forecast_date = epi_data$time_value[0],
+        target_end_date = epi_data$time_value[0],
+        quantile = numeric(),
+        value = numeric()
+      )
+    return(null_result)
   }
   # this is to deal with grouping by source in tests that don't include it
   adding_source <- FALSE
@@ -107,6 +114,18 @@ smoothed_scaled <- function(
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
 
+  #######################
+  # robust whitening
+  #######################
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
+  }
+  # whiten to get the sources on the same scale
+  learned_params <- calculate_whitening_params(season_data, predictors, scale_method, center_method, nonlin_method)
+  epi_data %<>% data_whitening(predictors, learned_params, nonlin_method)
+
   ###############
   # smoothing
   ###############
@@ -114,71 +133,66 @@ smoothed_scaled <- function(
     !is.na(sd_width) &&
     !is.na(sd_width) &&
     !is.null(sd_mean_width) &&
-    smooth_width == sd_mean_width
+    smooth_width == sd_mean_width # do we (not) need to do the mean separately?
+  # since we're adding columns, we need to figure out which to exclude
   all_names <- get_nonkey_names(epi_data)
   unused_columns <- all_names[!(all_names %in% predictors)]
   if (is.null(smooth_cols)) {
     smooth_cols <- predictors
   }
+  # if we smooth it, we're not using the original version for prediction
   unused_columns <- c(unused_columns, smooth_cols[!(smooth_cols %in% unused_columns)])
+
   if (is.null(sd_cols)) {
     sd_cols <- predictors
   }
+  # same idea for sd if we're keeping the mean
   if (keep_mean) {
     unused_columns <- c(unused_columns, sd_cols[!(sd_cols %in% unused_columns)])
   }
 
-  # Run rolling stats on a copy of epi_data to discover the resulting predictor
-  # column names for arx_preprocess; the recipe steps apply rolling stats to
-  # whitened data during fit so epi_data itself is left unmodified.
-  time_type <- attributes(epi_data)$metadata$time_type %||% "week"
-  units_str <- if (time_type == "day") "days" else "weeks"
-  resolve_w <- function(w) if (is.null(w) || is.na(w) || inherits(w, "difftime")) w else as.difftime(w, units = units_str)
-  smooth_width_dt <- resolve_w(smooth_width)
-  sd_width_dt <- resolve_w(sd_width)
-  sd_mean_width_dt <- resolve_w(sd_mean_width)
+  # make sure that sd_width etc have the right units; the process of going through targets strips the type
+  time_type <- attributes(epi_data)$metadata$time_type
+  if (time_type != "day") {
+    sd_width <- as.difftime(sd_width, units = paste0(time_type, "s"))
+    sd_mean_width <- as.difftime(sd_mean_width, units = paste0(time_type, "s"))
+    smooth_width <- as.difftime(smooth_width, units = paste0(time_type, "s"))
+  }
 
-  epi_data_for_setup <- epi_data
+  # TODO: Remove? We don't use these anymore.
   if (!is.null(smooth_width) && !is.na(smooth_width) && !keep_mean) {
-    epi_data_for_setup %<>% rolling_mean(width = smooth_width_dt, cols_to_mean = smooth_cols)
+    epi_data %<>%
+      rolling_mean(
+        width = smooth_width,
+        cols_to_mean = smooth_cols
+      )
   }
-  if (!is.null(sd_width) && !is.na(sd_width)) {
-    epi_data_for_setup %<>% rolling_sd(
-      sd_width = sd_width_dt, mean_width = sd_mean_width_dt,
-      cols_to_sd = sd_cols, keep_mean = keep_mean
-    )
-  }
-  all_names <- get_nonkey_names(epi_data_for_setup)
-  predictors <- all_names[!(all_names %in% unused_columns)]
-  c(args_list, predictors, trainer) %<-%
-    sanitize_args_predictors_trainer(epi_data_for_setup, outcome, predictors, trainer, args_list)
 
+  # measuring standard deviation
+  if (!is.null(sd_width) && !is.na(sd_width)) {
+    epi_data %<>%
+      rolling_sd(
+        sd_width = sd_width,
+        mean_width = sd_mean_width,
+        cols_to_sd = sd_cols,
+        keep_mean = keep_mean
+      )
+  }
+
+  # need to make a version with the non seasonal and problematic flu seasons removed
   if (drop_non_seasons) {
     season_data <- epi_data %>% drop_non_seasons()
   } else {
     season_data <- epi_data
   }
+
+  # and need to make sure we exclude the original variables as predictors
+  all_names <- get_nonkey_names(epi_data)
+  predictors <- all_names[!(all_names %in% unused_columns)]
+  c(args_list, predictors, trainer) %<-%
+    sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
-  if (scale_method != "none") {
-    preproc %<>% step_epi_whitening(
-      colname = c(outcome, extra_sources),
-      scale_method = scale_method,
-      center_method = center_method,
-      nonlin_method = nonlin_method
-    )
-  }
-  if (!is.null(smooth_width) && !is.na(smooth_width) && !keep_mean) {
-    preproc %<>% step_epi_rolling_stats(colname = smooth_cols, mean_width = smooth_width)
-  }
-  if (!is.null(sd_width) && !is.na(sd_width)) {
-    preproc %<>% step_epi_rolling_stats(
-      colname = sd_cols,
-      sd_width = sd_width,
-      sd_mean_width = sd_mean_width,
-      keep_mean = keep_mean
-    )
-  }
   if (pop_scaling) {
     preproc %<>%
       step_population_scaling(
@@ -207,16 +221,28 @@ smoothed_scaled <- function(
         by = c("geo_value" = "abbr")
       )
   }
-  if (scale_method != "none") {
-    postproc %<>% layer_epi_coloring(colname = outcome, nonlin_method = nonlin_method)
-  }
-  pred_final <- run_workflow_and_format(
+  # with all the setup done, we execute and format
+  pred <- run_workflow_and_format(
     preproc,
     postproc,
     trainer,
     season_data,
     epi_data
-  ) %>% mutate(value = pmax(0, value))
+  )
+  # now pred has the columns
+  # (geo_value, forecast_date, target_end_date, quantile, value)
+  # finally, any postprocessing not supported by epipredict e.g. calibration
+  # reintroduce color into the value
+  pred_final <- pred %>%
+    rename({{ outcome }} := value) %>%
+    data_coloring(
+      outcome,
+      learned_params,
+      join_cols = key_colnames(epi_data, exclude = "time_value"),
+      nonlin_method = nonlin_method
+    ) %>%
+    rename(value = {{ outcome }}) %>%
+    mutate(value = pmax(0, value))
   if (adding_source) {
     pred_final %<>% select(-source)
   }

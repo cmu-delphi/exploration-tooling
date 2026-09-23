@@ -76,7 +76,14 @@ scaled_pop <- function(
   args_input <- list(...)
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
   if (!confirm_sufficient_data(epi_data, ahead, args_input, outcome, extra_sources)) {
-    return(make_null_forecast())
+    null_result <- tibble(
+      geo_value = character(),
+      forecast_date = lubridate::Date(),
+      target_end_date = lubridate::Date(),
+      quantile = numeric(),
+      value = numeric()
+    )
+    return(null_result)
   }
   # this is to deal with grouping by source in tests that don't include it
   adding_source <- FALSE
@@ -104,16 +111,18 @@ scaled_pop <- function(
     season_data <- epi_data
   }
 
+  # whiten to get the sources on the same scale
+  learned_params <- calculate_whitening_params(season_data, predictors, scale_method, center_method, nonlin_method)
+  epi_data %<>% data_whitening(predictors, learned_params, nonlin_method)
+
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
+  }
+
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
-  if (scale_method != "none") {
-    preproc %<>% step_epi_whitening(
-      colname = predictors,
-      scale_method = scale_method,
-      center_method = center_method,
-      nonlin_method = nonlin_method
-    )
-  }
   if (pop_scaling) {
     preproc %<>%
       step_population_scaling(
@@ -141,10 +150,21 @@ scaled_pop <- function(
         by = c("geo_value" = "abbr")
       )
   }
-  if (scale_method != "none") {
-    postproc %<>% layer_epi_coloring(colname = outcome, nonlin_method = nonlin_method)
-  }
-  pred_final <- run_workflow_and_format(preproc, postproc, trainer, season_data, epi_data) %>%
+  # with all the setup done, we execute and format
+  pred <- run_workflow_and_format(preproc, postproc, trainer, season_data, epi_data)
+  # now pred has the columns
+  # (geo_value, forecast_date, target_end_date, quantile, value)
+  # finally, any postprocessing not supported by epipredict e.g. calibration
+  # reintroduce color into the value
+  pred_final <- pred %>%
+    rename({{ outcome }} := value) %>%
+    data_coloring(
+      outcome,
+      learned_params,
+      join_cols = key_colnames(epi_data, exclude = "time_value"),
+      nonlin_method = nonlin_method
+    ) %>%
+    rename(value = {{ outcome }}) %>%
     mutate(value = pmax(0, value))
   if (adding_source) {
     pred_final %<>% select(-source)

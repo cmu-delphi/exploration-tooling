@@ -333,7 +333,7 @@ build_prod_ensemble_targets <- function(
       notebook,
       command = {
         if (!g_evaluation_mode) {
-          if (!dir.exists(here::here("rendered_reports"))) dir.create(here::here("rendered_reports"))
+          if (!dir.exists(here::here("reports"))) dir.create(here::here("reports"))
           base_nhsn <- forecasts_and_ensembles$nhsn %>%
             ungroup() %>%
             filter(forecaster %in% c("climate_linear", "ensemble_mix", "windowed_seasonal", "windowed_seasonal_extra_sources", "revision_aware"))

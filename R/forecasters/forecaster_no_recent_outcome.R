@@ -34,7 +34,14 @@ no_recent_outcome <- function(
   # this next part is basically unavoidable boilerplate you'll want to copy
   # edge case where there is no data or less data than the lags; eventually epipredict will handle this
   if (!confirm_sufficient_data(epi_data, ahead, args_input, outcome, extra_sources)) {
-    return(make_null_forecast())
+    null_result <- tibble(
+      geo_value = character(),
+      forecast_date = lubridate::Date(),
+      target_end_date = lubridate::Date(),
+      quantile = numeric(),
+      value = numeric()
+    )
+    return(null_result)
   }
   # perform any preprocessing not supported by epipredict
   # make sure we've got the seasonweek
@@ -75,17 +82,18 @@ no_recent_outcome <- function(
   keys <- key_colnames(epi_data, exclude = "time_value")
 
   full_data <- epi_data
+  if (drop_non_seasons) {
+    season_data <- epi_data %>% drop_non_seasons()
+  } else {
+    season_data <- epi_data
+  }
+  if (scale_method != "none") {
+    learned_params <- calculate_whitening_params(season_data, outcome, scale_method, center_method, nonlin_method)
+    full_data %<>% data_whitening(outcome, learned_params, nonlin_method = nonlin_method)
+  }
   season_data <- full_data %>% drop_non_seasons()
   # preprocessing supported by epipredict
-  preproc <- epi_recipe(full_data)
-  if (scale_method != "none") {
-    preproc %<>% step_epi_whitening(
-      colname = outcome,
-      scale_method = scale_method,
-      center_method = center_method,
-      nonlin_method = nonlin_method
-    )
-  }
+  preproc <- epi_recipe(season_data)
   if (use_population) {
     # population
     preproc %<>%
@@ -119,19 +127,37 @@ no_recent_outcome <- function(
         by = c("geo_value" = "abbr")
       )
   }
-  if (scale_method != "none") {
-    postproc %<>% layer_epi_coloring(colname = outcome, nonlin_method = nonlin_method)
-  }
+  # with all the setup done, we execute and format
   pred <- run_workflow_and_format(
     preproc,
     postproc,
     trainer,
     season_data,
     full_data
-  ) %>% mutate(value = pmax(0, value))
+  )
+
+  # now pred has the columns
+  # (geo_value, forecast_date, target_end_date, quantile, value)
+  # finally, any postprocessing not supported by epipredict
+  # reintroduce color into the value
+  if (scale_method != "none") {
+    pred <- pred %>%
+      rename({{ outcome }} := value) %>%
+      data_coloring(
+        outcome,
+        learned_params,
+        join_cols = key_colnames(epi_data, exclude = "time_value"),
+        nonlin_method = nonlin_method
+      ) %>%
+      rename(value = {{ outcome }}) %>%
+      mutate(value = pmax(0, value))
+  }
   if (adding_source) {
     pred %<>% select(-source)
   }
+  # now pred has the columns
+  # (geo_value, forecast_date, target_end_date, quantile, value)
+  # finally, any postprocessing not supported by epipredict
   gc()
   return(pred)
 }
