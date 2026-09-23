@@ -1,0 +1,312 @@
+---
+title: "Prod/Explore Comparison: `r params$disease`"
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+params:
+  scores: ""
+  forecasts: ""
+  truth_data: ""
+  asof_data: ""
+  disease: ""
+editor_options:
+  chunk_output_type: console
+---
+
+```{css, echo=FALSE}
+body { display: block; max-width: 1280px !important; margin-left: auto; margin-right: auto; }
+body .main-container { max-width: 1280px !important; width: 1280px !important; }
+```
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", message = FALSE, warning = FALSE, cache = FALSE)
+ggplot2::theme_set(ggplot2::theme_bw())
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+```
+
+```{r setup}
+if (params$disease == "flu") {
+  base_forecaster_name <- "FluSight-baseline"
+} else {
+  base_forecaster_name <- "CovidHub-baseline"
+}
+
+Mean <- function(x) mean(x, na.rm = TRUE)
+GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
+
+scores <- params$scores %>%
+  filter(ahead >= 0) %>%
+  left_join(select(epidatasets::state_census, abbr, pop), by = join_by(geo_value == abbr)) %>%
+  mutate(wis_rate = wis * 1e5 / pop)
+
+forecast_dates <- sort(unique(scores$forecast_date))
+```
+
+Forecasts made `r format(min(forecast_dates), "%Y-%m-%d")` to `r format(max(forecast_dates), "%Y-%m-%d")`.
+
+Scores relative to `r base_forecaster_name` (rel < 1 = better than baseline).
+Prod models shown with their actual IDs; explore models show best-in-class per family.
+
+```{r score_functions}
+scores_by_state <- function(sc) {
+  sc %>%
+    group_by(forecaster, geo_value) %>%
+    summarize(mean_wis = Mean(wis), mean_wis_rate = Mean(wis_rate), .groups = "drop")
+}
+
+se_mean_states <- function(sc) {
+  scores_by_state(sc) %>%
+    group_by(forecaster) %>%
+    summarize(
+      se_mean_wis = round(sd(mean_wis, na.rm = TRUE) / sqrt(n()), 2),
+      se_mean_wis_rate = round(sd(mean_wis_rate, na.rm = TRUE) / sqrt(n()), 2),
+      .groups = "drop"
+    )
+}
+
+score_summary <- function(sc) {
+  baseline_wis <- sc %>% filter(forecaster == base_forecaster_name) %>% summarize(b = Mean(wis)) %>% pull(b)
+  baseline_wis_rate <- sc %>% filter(forecaster == base_forecaster_name) %>% summarize(b = Mean(wis_rate)) %>% pull(b)
+  baseline_geomean <- sc %>%
+    filter(forecaster == base_forecaster_name) %>%
+    summarize(b = GeoMean(wis, min(wis[wis > 1e-5]))) %>%
+    pull(b)
+  sc %>%
+    group_by(forecaster) %>%
+    summarize(
+      mean_wis = round(Mean(wis), 2),
+      mean_wis_rate = round(Mean(wis_rate), 2),
+      geomean_wis = round(GeoMean(wis, min(wis[wis > 1e-5])), 2),
+      mean_cov_50 = round(Mean(coverage_50), 2),
+      mean_cov_90 = round(Mean(coverage_90), 2),
+      n = n(),
+      .groups = "drop"
+    ) %>%
+    left_join(se_mean_states(sc), by = "forecaster") %>%
+    mutate(
+      rel_wis = round(mean_wis / baseline_wis, 3),
+      rel_wis_rate = round(mean_wis_rate / baseline_wis_rate, 3),
+      rel_geomean_wis = round(geomean_wis / baseline_geomean, 3)
+    ) %>%
+    arrange(rel_geomean_wis) %>%
+    select(forecaster, geomean_wis, rel_geomean_wis, mean_wis, se_mean_wis, rel_wis,
+           mean_wis_rate, se_mean_wis_rate, rel_wis_rate, mean_cov_50, mean_cov_90, n)
+}
+
+datatable_function <- function(summary_df) {
+  DT::datatable(
+    summary_df,
+    fillContainer = FALSE,
+    options = list(
+      initComplete = htmlwidgets::JS(
+        "function(settings, json) {",
+        "$(this.api().table().container()).css({'font-size': '10pt'});",
+        "}"
+      ),
+      pageLength = 30
+    )
+  ) %>%
+    DT::formatStyle("forecaster", target = "cell",
+      textDecoration = DT::styleEqual("CMU-TimeSeries", "underline")) %>%
+    DT::formatStyle("geomean_wis",
+      background = DT::styleColorBar(c(0, max(summary_df$geomean_wis, na.rm = TRUE)), "lightblue"),
+      backgroundSize = "98% 88%", backgroundRepeat = "no-repeat", backgroundPosition = "center") %>%
+    DT::formatStyle("mean_wis",
+      background = DT::styleColorBar(c(0, max(summary_df$mean_wis, na.rm = TRUE)), "lightblue"),
+      backgroundSize = "98% 88%", backgroundRepeat = "no-repeat", backgroundPosition = "center") %>%
+    DT::formatStyle("mean_wis_rate",
+      background = DT::styleColorBar(c(0, max(summary_df$mean_wis_rate, na.rm = TRUE)), "lightblue"),
+      backgroundSize = "98% 88%", backgroundRepeat = "no-repeat", backgroundPosition = "center")
+}
+```
+
+# Overall summary
+
+```{r overall_table}
+summary_df <- score_summary(scores)
+forecasters_ordered <- summary_df$forecaster
+datatable_function(summary_df)
+```
+
+# Scores by ahead {.tabset}
+
+```{r ahead_prep}
+baseline_by_ahead <- scores %>%
+  filter(forecaster == base_forecaster_name) %>%
+  summarize(baseline_wis = Mean(wis), baseline_ae = Mean(ae), .by = ahead)
+```
+
+## WIS relative to baseline
+
+```{r wis_by_ahead, fig.height=5, fig.width=8}
+plot_df <- scores %>%
+  summarize(mean_wis = Mean(wis), .by = c(forecaster, ahead)) %>%
+  left_join(baseline_by_ahead %>% select(ahead, baseline_wis), by = "ahead") %>%
+  mutate(rel_wis = mean_wis / baseline_wis) %>%
+  filter(forecaster != base_forecaster_name, !is.na(rel_wis))
+
+ggplot(plot_df, aes(x = ahead, y = rel_wis, color = forecaster)) +
+  geom_line() + geom_point() +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  scale_y_log10(n.breaks = 10) +
+  labs(x = "Days ahead", y = "Mean WIS / Baseline WIS") +
+  theme(legend.position = "bottom") +
+  guides(color = guide_legend(nrow = 3, title = NULL))
+```
+
+## AE relative to baseline
+
+```{r ae_by_ahead, fig.height=5, fig.width=8}
+plot_df <- scores %>%
+  summarize(mean_ae = Mean(ae), .by = c(forecaster, ahead)) %>%
+  left_join(baseline_by_ahead %>% select(ahead, baseline_ae), by = "ahead") %>%
+  mutate(rel_ae = mean_ae / baseline_ae) %>%
+  filter(forecaster != base_forecaster_name, !is.na(rel_ae))
+
+ggplot(plot_df, aes(x = ahead, y = rel_ae, color = forecaster)) +
+  geom_line() + geom_point() +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  scale_y_log10(n.breaks = 10) +
+  labs(x = "Days ahead", y = "Mean AE / Baseline AE") +
+  theme(legend.position = "bottom") +
+  guides(color = guide_legend(nrow = 3, title = NULL))
+```
+
+# Calibration curves
+
+For each nominal quantile level q, the empirical fraction of observations where the true value fell below the predicted q-th quantile.
+A perfectly calibrated forecaster lies on the diagonal.
+
+```{r calibration, fig.height=5, fig.width=8}
+calibration <- params$forecasts %>%
+  filter(forecaster %in% forecasters_ordered) %>%
+  left_join(
+    params$truth_data %>% select(geo_value, target_end_date, true_value),
+    by = c("geo_value", "target_end_date")
+  ) %>%
+  drop_na(true_value) %>%
+  group_by(forecaster, quantile) %>%
+  summarize(empirical = mean(true_value <= value, na.rm = TRUE), .groups = "drop")
+
+ggplot(calibration, aes(x = quantile, y = empirical, color = forecaster)) +
+  geom_line() + geom_point(size = 0.8) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black") +
+  scale_x_continuous(breaks = seq(0, 1, 0.1)) +
+  scale_y_continuous(breaks = seq(0, 1, 0.1)) +
+  labs(x = "Nominal quantile", y = "Empirical coverage") +
+  theme(legend.position = "bottom") +
+  guides(color = guide_legend(nrow = 3, title = NULL))
+```
+
+# Forecast coverage
+
+Number of distinct aheads forecasted per model per week.
+Expected maximum is 5 (aheads 0–4 weeks).
+
+```{r coverage_heatmap, fig.height=max(2, length(forecasters_ordered)*0.4 + 1), fig.width=12}
+coverage_df <- params$forecasts %>%
+  filter(forecaster %in% forecasters_ordered) %>%
+  mutate(ahead = as.integer(target_end_date - forecast_date)) %>%
+  summarize(n_aheads = n_distinct(ahead), .by = c(forecaster, forecast_date))
+
+ggplot(coverage_df, aes(x = forecast_date, y = factor(forecaster, levels = rev(forecasters_ordered)), fill = n_aheads)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "# aheads", limits = c(0, 5), breaks = 0:5) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
+  labs(x = NULL, y = NULL) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Fan plots {.tabset}
+
+80% prediction intervals (0.1–0.9 quantiles) for a subset of forecast dates. Black line is finalized data; coloured lines show data available at each forecast date.
+
+```{r fan_setup}
+available_fc_dates <- sort(unique(params$forecasts$forecast_date))
+plot_dates <- if (length(forecast_dates) > 0) {
+  intersect(
+    forecast_dates[seq(1, length(forecast_dates), by = 4)],
+    available_fc_dates
+  ) %>% as.Date(origin = "1970-01-01")
+} else {
+  as.Date(character(0))
+}
+
+fan_plot <- function(geo_vals) {
+  if (length(plot_dates) == 0 || length(forecasters_ordered) == 0) return(invisible(NULL))
+  fc_sub <- params$forecasts %>%
+    filter(forecaster %in% forecasters_ordered, geo_value %in% geo_vals, forecast_date %in% plot_dates) %>%
+    select(forecaster, geo_value, forecast_date, target_end_date, quantile, value) %>%
+    mutate(
+      quantile = as.character(quantile),
+      date_label = factor(format(forecast_date, "%b %d"), levels = format(sort(unique(forecast_date)), "%b %d"))
+    ) %>%
+    pivot_wider(names_from = quantile, values_from = value)
+  if (nrow(fc_sub) == 0) {
+    message("No forecast data for these states in this season.")
+    return(invisible(NULL))
+  }
+  truth_sub <- params$truth_data %>%
+    filter(
+      geo_value %in% geo_vals,
+      target_end_date >= min(plot_dates) - 12 * 7,
+      target_end_date <= max(plot_dates) + 5 * 7
+    )
+  asof_sub <- if (is.data.frame(params$asof_data) && nrow(params$asof_data) > 0) {
+    params$asof_data %>%
+      filter(
+        geo_value %in% geo_vals,
+        forecast_date %in% plot_dates,
+        time_value >= min(plot_dates) - 12 * 7,
+        time_value <= max(plot_dates)
+      ) %>%
+      mutate(date_label = factor(
+        format(forecast_date, "%b %d"),
+        levels = levels(fc_sub$date_label)
+      ))
+  } else {
+    tibble::tibble()
+  }
+  n_dates <- length(unique(fc_sub$date_label))
+  ggplot(fc_sub, aes(x = target_end_date, group = date_label)) +
+    geom_ribbon(aes(ymin = `0.1`, ymax = `0.9`, fill = date_label), alpha = 0.3) +
+    geom_line(aes(y = `0.5`, color = date_label), linetype = 2L) +
+    geom_point(aes(y = `0.5`, color = date_label), size = 0.75) +
+    { if (nrow(asof_sub) > 0)
+        geom_line(data = asof_sub, aes(x = time_value, y = value, color = date_label, group = date_label),
+                  alpha = 0.6, linewidth = 0.5)
+    } +
+    geom_line(data = truth_sub, aes(x = target_end_date, y = true_value), inherit.aes = FALSE, color = "black", linewidth = 0.4) +
+    scale_fill_viridis_d(name = "forecast date", direction = -1) +
+    scale_color_viridis_d(name = "forecast date", direction = -1) +
+    scale_y_continuous(n.breaks = 6) +
+    facet_grid(factor(forecaster, levels = forecasters_ordered) ~ geo_value, scales = "free_y") +
+    labs(x = NULL, y = "Weekly hospitalizations") +
+    theme(
+      legend.position = "bottom",
+      strip.text.y = element_text(size = 7)
+    ) +
+    guides(fill = guide_legend(nrow = ceiling(n_dates / 5), title.position = "top"),
+           color = guide_legend(nrow = ceiling(n_dates / 5), title.position = "top"))
+}
+```
+
+## Large states
+
+```{r fan_large, fig.height=max(2, length(forecasters_ordered)*2), fig.width=10}
+fan_plot(c("ca", "fl", "pa", "tx", "ny"))
+```
+
+## Medium states
+
+```{r fan_medium, fig.height=max(2, length(forecasters_ordered)*2), fig.width=10}
+fan_plot(c("mn", "co", "ky", "md", "or"))
+```
+
+## Small states
+
+```{r fan_small, fig.height=max(2, length(forecasters_ordered)*2), fig.width=10}
+fan_plot(c("vt", "de", "ri", "nm", "mt"))
+```

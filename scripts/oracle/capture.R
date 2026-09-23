@@ -8,14 +8,25 @@
 #     env TAR_RUN_PROJECT=flu_hosp_prod ORACLE_LABEL=baseline \
 #     Rscript scripts/oracle/capture.R
 #
+# Regression test workflow (compare old prod cache vs new code, same date):
+#   # Step 1: snapshot existing prod store without rerunning (fast)
+#   ORACLE_SKIP_MAKE=TRUE ORACLE_LABEL=baseline \
+#     Rscript scripts/oracle/capture.R
+#   # Step 2: run new code in a separate store for the same forecast date
+#   FORECAST_REFERENCE_DATE=<last-prod-wednesday> ORACLE_LABEL=refactored \
+#     TAR_RUN_PROJECT=flu_hosp_prod_regr Rscript scripts/oracle/capture.R
+#   # Step 3: compare (filter to the overlapping date range)
+#   Rscript scripts/oracle/compare.R flu_hosp_prod:baseline flu_hosp_prod_regr:refactored
+#
 # Env:
 #   TAR_RUN_PROJECT   targets project (default flu_hosp_prod)
 #   ORACLE_LABEL      label subdir, e.g. baseline | refactored (default baseline)
 #   ORACLE_OUT_DIR    output root (default cache/oracle)
 #   ORACLE_SKIP_MAKE  "TRUE" to read an existing store without rebuilding
 #   BACKTEST_MODE     forwarded to the covid pipeline (FALSE = prod-latest)
-#   EVALUATION_N_DATES  for the flu_hosp_evaluation project, keep only the last N dates
-#   FORECAST_REFERENCE_DATE  pins the flu pipeline's "today" (forecast dates + the
+#   EVALUATION_N_DATES  for evaluation/regression projects, keep only the last N dates
+#                     (flu_hosp_prod_regr / covid_hosp_prod_regr default to 1)
+#   FORECAST_REFERENCE_DATE  pins the pipeline's "today" (forecast dates + the
 #                     prod-latest as-of slice). MUST be set for a reproducible
 #                     capture; unset falls back to Sys.Date() (calendar-dependent).
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))

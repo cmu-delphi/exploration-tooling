@@ -206,7 +206,7 @@ create_joined_targets <- function() {
             mutate(season_slug = season_of_date(forecast_date))
           for (slug in sort(unique(family_forecasts$season_slug))) {
             rmarkdown::render(
-              "scripts/reports/comparison-notebook.Rmd",
+              "pipelines/templates/comparison-notebook.Rmd",
               params = list(
                 forecaster_parameters = params_subset,
                 forecaster_family = forecaster_family,
@@ -228,7 +228,7 @@ create_joined_targets <- function() {
         all_scores <- joined_scores %>% mutate(season_slug = season_of_date(forecast_date))
         for (slug in sort(unique(all_forecasts$season_slug))) {
           rmarkdown::render(
-            "scripts/reports/overall-comparison-notebook.Rmd",
+            "pipelines/templates/overall-comparison-notebook.Rmd",
             params = list(
               forecaster_parameters = g_forecaster_parameter_combinations,
               forecasts = all_forecasts %>% filter(season_slug == slug) %>% select(-season_slug),

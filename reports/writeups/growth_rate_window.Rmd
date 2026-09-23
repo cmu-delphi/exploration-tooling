@@ -1,0 +1,46 @@
+---
+title: "Windowing via the growth rate"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+params:
+  forecaster_parameters: ""
+  forecaster_family: ""
+  forecasts: ""
+  scores: ""
+  truth_data: ""
+  disease: "flu"
+editor_options:
+  chunk_output_type: console
+---
+
+$$\\[.4in]$$
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{r}
+library(data.table)
+library(dplyr)
+library(DT)
+library(ggplot2)
+library(plotly)
+library(readr)
+library(stringr)
+library(tidyr)
+library(purrr)
+```
+
+# Description
+Given that the best forecaster by far for flu has been one that windows based on the time of year using past data, we probably want to figure out a way of replicating similar behavior for covid.
+However, given that it is less seasonal, this is harder to execute on, in addition to having less data.
+In an
+# Visual inspection

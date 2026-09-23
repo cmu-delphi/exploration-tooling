@@ -109,49 +109,30 @@ create_flu_data_targets <- function() {
     tar_target(
       name = nssp_archive,
       command = {
-        nssp_state <- retry_fn(
-          max_attempts = 10,
-          wait_seconds = 1,
-          fn = pub_covidcast,
-          source = "nssp",
-          signals = "pct_ed_visits_influenza",
-          time_type = "week",
-          geo_type = "state",
-          geo_values = "*",
-          fetch_args = g_fetch_args
-        )
-        nssp_hhs <- retry_fn(
-          max_attempts = 10,
-          wait_seconds = 1,
-          fn = pub_covidcast,
-          source = "nssp",
-          signals = "pct_ed_visits_influenza",
-          time_type = "week",
-          geo_type = "hhs",
-          geo_values = "*",
-          fetch_args = g_fetch_args
-        )
-        nssp <- nssp_state %>%
-          select(geo_value, time_value, issue, nssp = value) %>%
-          append_us_aggregate("nssp", group_keys = c("time_value", "issue")) %>%
-          # nssp_hhs must get the same select: left raw it keeps pub_covidcast's
-          # `signal` column, which makes as_epi_archive() treat the frame as long
-          # format and pivot every column into junk (pct_ed_visits_influenza / NA),
-          # dropping `nssp` entirely.
-          bind_rows(nssp_hhs %>% select(geo_value, time_value, issue, nssp = value)) %>%
+        fetch_nssp <- function(geo_type, geo_values = "*") {
+          retry_fn(
+            max_attempts = 10,
+            wait_seconds = 1,
+            fn = epidatr::epidata_archive,
+            source = "nssp",
+            signals = "pct_ed_visits_influenza",
+            geo_type = geo_type,
+            geo_values = geo_values,
+            fetch_args = g_fetch_args
+          ) %>%
+            select(geo_value, time_value = reference_time, version = report_time, nssp = value)
+        }
+        nssp <- bind_rows(
+          fetch_nssp("state"),
+          # National fetched directly so us geo has the correct percentage, not a
+          # sum of all state percentages.
+          fetch_nssp("nation", "us"),
+          fetch_nssp("hhs")
+        ) %>%
           as_epi_archive(compactify = TRUE) %>%
           extract2("DT") %>%
           # weekly data is indexed from the start of the week
           mutate(time_value = time_value + 6 - g_time_value_adjust) %>%
-          # Keep only the latest revision per (geo_value, time_value) before
-          # clobbering version. compactify retains rows where value changed
-          # between revisions, so multiple rows can share the same time_value;
-          # the artificial latency assignment would then produce duplicate keys.
-          group_by(.data$geo_value, .data$time_value) %>%
-          slice_max(.data$version, n = 1L, with_ties = FALSE) %>%
-          ungroup() %>%
-          # Artifically add in a one-week latency.
-          mutate(version = time_value + 7) %>%
           mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
           unnest(cols = "source") %>%
           # Always convert to data.frame after dplyr operations on data.table.

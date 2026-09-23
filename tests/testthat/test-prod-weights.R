@@ -90,10 +90,10 @@ test_that("all four hand-edited prod weights csvs pass schema validation", {
   )
   date_int <- as.integer(as.Date("2026-01-07"))
   files <- list(
-    list(f = here::here("scripts", "flu_geo_exclusions.csv"), ids = flu_ids),
-    list(f = here::here("scripts", "flu_nssp_geo_exclusions.csv"), ids = flu_ids),
-    list(f = here::here("scripts", "covid_geo_exclusions.csv"), ids = covid_ids),
-    list(f = here::here("scripts", "covid_nssp_geo_exclusions.csv"), ids = covid_ids)
+    list(f = here::here("pipelines", "flu_geo_exclusions.csv"), ids = flu_ids),
+    list(f = here::here("pipelines", "flu_nssp_geo_exclusions.csv"), ids = flu_ids),
+    list(f = here::here("pipelines", "covid_geo_exclusions.csv"), ids = covid_ids),
+    list(f = here::here("pipelines", "covid_nssp_geo_exclusions.csv"), ids = covid_ids)
   )
   for (x in files) {
     expect_no_error(parse_prod_weights(x$f, date_int, x$ids))
