@@ -246,7 +246,7 @@ parameters_and_date_targets <- rlang::list2(
   ),
   tar_file(
     flu_data_substitutions,
-    command = "scripts/flu_data_substitutions.csv"
+    command = "pipelines/flu_data_substitutions.csv"
   ),
   create_flu_data_targets(),
   tar_target(

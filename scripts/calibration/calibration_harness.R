@@ -459,7 +459,7 @@ ch_verify_against_store <- function(store = CH_STORE, n_dates = 2, tolerance = 0
     faithful,
     aheads = intersect(CH_AHEADS, 0:3),
     schedule = ch_schedule(through = max(dates)) %>% filter(forecast_date %in% dates),
-    substitutions = here::here("scripts/covid_data_substitutions.csv"),
+    substitutions = here::here("pipelines/covid_data_substitutions.csv"),
     excluded_geos = CH_DROP_GEOS,
     cache_dir = file.path(CH_CACHE_DIR, "verify")
   )

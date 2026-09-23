@@ -24,7 +24,7 @@ WS_FORECASTS_FILE <- file.path(WS_CACHE_DIR, "ws_pseudo_hub_forecasts.parquet")
 WS_HORIZONS <- -1:3
 WS_ID <- "windowed_seasonal"
 WS_STORE <- "flu_hosp_evaluation"
-WS_SUBSTITUTIONS <- here::here("scripts/flu_data_substitutions.csv")
+WS_SUBSTITUTIONS <- here::here("pipelines/flu_data_substitutions.csv")
 # scripts/flu_hosp_prod.R: windowed_seasonal grid row, modeling params only.
 WS_PARAMS <- list(
   outcome = "value",

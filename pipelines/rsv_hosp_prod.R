@@ -106,7 +106,7 @@ parameters_and_date_targets <- rlang::list2(
   ),
   tar_file(
     name = rsv_data_substitutions,
-    command = "scripts/rsv_data_substitutions.csv"
+    command = "pipelines/rsv_data_substitutions.csv"
   ),
   tar_target(
     name = nhsn_archive_data,

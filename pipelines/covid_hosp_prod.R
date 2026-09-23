@@ -243,7 +243,7 @@ parameters_and_date_targets <- rlang::list2(
   ),
   tar_file(
     name = covid_data_substitutions,
-    command = "scripts/covid_data_substitutions.csv"
+    command = "pipelines/covid_data_substitutions.csv"
   ),
   tar_target(
     name = nhsn_archive_data,
