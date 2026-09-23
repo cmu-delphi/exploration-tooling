@@ -120,6 +120,9 @@ create_flu_data_targets <- function() {
             geo_values = geo_values,
             fetch_args = g_fetch_args
           ) %>%
+            # HHS geo_type returns two rows per key: fill_method "zero" and "ave".
+            # Filter to "ave" before dropping the column.
+            filter(is.na(fill_method) | fill_method == "ave") %>%
             select(geo_value, time_value = reference_time, version = report_time, nssp = value)
         }
         nssp <- bind_rows(
