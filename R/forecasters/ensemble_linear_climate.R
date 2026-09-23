@@ -62,7 +62,8 @@ ensemble_climate_linear <- function(
       filter(
         geo_value %in% unique(forecasts$geo_value),
         forecaster %in% forecasters
-      )
+      ) %>%
+      select(-any_of("ahead"))
     full_weights <- full_weights %>%
       left_join(
         other_weights,
