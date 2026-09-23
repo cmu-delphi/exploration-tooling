@@ -522,9 +522,9 @@ g_ensemble_specs <- list(
       nssp = c("windowed_seasonal", "windowed_seasonal_extra_sources")
     ),
     drop_negative_aheads = list(nhsn = TRUE, nssp = FALSE),
-    # Restrict revision_aware to aheads -1 (day offset -4) and 0 (day offset +3).
-    # drop_negative_aheads is not applied to components listed here.
-    component_ahead_days = list(nhsn = list(revision_aware = c(-4L, 3L))),
+    # revision_aware is exempt from the negative-ahead drop; which aheads it
+    # actually contributes to is controlled by the weights CSV (ahead column).
+    drop_negative_aheads_exempt = list(nhsn = c("revision_aware")),
     apply_geo_exclusions = FALSE,
     sort_quantiles = FALSE
   )

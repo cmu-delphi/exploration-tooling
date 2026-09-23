@@ -499,10 +499,13 @@ g_ensemble_specs <- list(
     id = "ensemble_mix",
     method = "weighted",
     components = list(
-      nhsn = c("windowed_seasonal", "windowed_seasonal_extra_sources"),
+      nhsn = c("windowed_seasonal", "windowed_seasonal_extra_sources", "revision_aware"),
       nssp = c("windowed_seasonal", "windowed_seasonal_extra_sources")
     ),
-    drop_negative_aheads = list(nhsn = FALSE, nssp = TRUE),
+    drop_negative_aheads = list(nhsn = TRUE, nssp = TRUE),
+    # revision_aware is exempt from the negative-ahead drop; which aheads it
+    # actually contributes to is controlled by the weights CSV (ahead column).
+    drop_negative_aheads_exempt = list(nhsn = c("revision_aware")),
     apply_geo_exclusions = FALSE,
     sort_quantiles = FALSE
   )

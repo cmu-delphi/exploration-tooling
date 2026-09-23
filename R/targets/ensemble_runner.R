@@ -44,6 +44,10 @@ assert_components_present <- function(forecasts, components, id) {
 #' @param drop_negative_aheads for "weighted": keep only `forecast_date <
 #'                           target_end_date` rows (positive aheads) of the AR
 #'                           components before combining.
+#' @param drop_negative_aheads_exempt for "weighted": forecaster ids exempt from
+#'                           `drop_negative_aheads`. These forecasters supply
+#'                           their negative-ahead rows, with which aheads they
+#'                           contribute controlled by the weights CSV.
 #' @param extra_forecasts    for "weighted": additional already-computed rows
 #'                           (the ensemble_clim_lin output) bound in before
 #'                           ensemble_weighted().
@@ -55,7 +59,7 @@ run_ensemble <- function(
   method, id, forecasts, components,
   weights = NULL, aheads = NULL, climate_caps = NULL,
   geo_exclusions = NULL, drop_negative_aheads = FALSE,
-  component_ahead_days = NULL,
+  drop_negative_aheads_exempt = NULL,
   extra_forecasts = NULL, sort_quantiles = FALSE
 ) {
   assert_components_present(forecasts, components, id)
@@ -79,19 +83,8 @@ run_ensemble <- function(
     },
     weighted = {
       ar <- forecasts %>% filter(forecaster %in% components)
-      # Apply explicit per-component ahead restrictions. Components listed in
-      # component_ahead_days are exempt from drop_negative_aheads so they can
-      # supply negative-ahead rows the global filter would otherwise remove.
-      if (!is.null(component_ahead_days)) {
-        restricted <- names(component_ahead_days)
-        ar_restricted <- purrr::imap_dfr(component_ahead_days, function(allowed_days, comp) {
-          ar %>%
-            filter(forecaster == comp, as.integer(target_end_date - forecast_date) %in% allowed_days)
-        })
-        ar <- bind_rows(ar %>% filter(forecaster %nin% restricted), ar_restricted)
-      }
       if (drop_negative_aheads) {
-        exempt <- if (!is.null(component_ahead_days)) names(component_ahead_days) else character(0)
+        exempt <- drop_negative_aheads_exempt %||% character(0)
         ar <- ar %>% filter(forecaster %in% exempt | forecast_date < target_end_date)
       }
       bind_rows(extra_forecasts, ar) %>%

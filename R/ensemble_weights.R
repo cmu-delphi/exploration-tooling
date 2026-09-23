@@ -79,6 +79,7 @@ parse_prod_weights <- function(filename, forecast_date_int, forecaster_fn_names)
   )
   all_prod_weights <- readr::read_csv(filename, comment = "#", show_col_types = FALSE)
   validate_prod_weights_columns(all_prod_weights, filename)
+  has_ahead <- "ahead" %in% names(all_prod_weights)
   # if we haven't set specific weights, use the overall defaults
   useful_prod_weights <- filter(all_prod_weights, forecast_date == forecast_date_val)
   if (nrow(useful_prod_weights) == 0) {
@@ -101,10 +102,14 @@ parse_prod_weights <- function(filename, forecast_date_int, forecaster_fn_names)
       geo_value = list(all_states)
     ) %>%
     unnest_longer(geo_value)
-  # bind together and overwrite any generic weights with geo_specific ones
+  # bind together and overwrite any generic weights with geo_specific ones.
+  # Group includes `ahead` when present so ahead-specific rows override only
+  # their matching (forecaster, geo_value, ahead) combination.
+  group_cols <- c("forecast_date", "forecaster", "geo_value")
+  if (has_ahead) group_cols <- c(group_cols, "ahead")
   forecaster_weights %>%
     bind_rows(state_weights) %>%
-    group_by(forecast_date, forecaster, geo_value) %>%
+    group_by(across(all_of(group_cols))) %>%
     filter(row_number() == n()) %>%
     mutate(forecast_date = as.Date(forecast_date_int)) %>%
     ungroup()

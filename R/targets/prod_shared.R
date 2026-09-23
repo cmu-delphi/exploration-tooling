@@ -200,7 +200,7 @@ build_prod_ensemble_targets <- function(
             weights = weights,
             geo_exclusions = if (spec$apply_geo_exclusions) geo_exclusions else NULL,
             drop_negative_aheads = spec$drop_negative_aheads[[signal]],
-            component_ahead_days = spec$component_ahead_days[[signal]],
+            drop_negative_aheads_exempt = spec$drop_negative_aheads_exempt[[signal]],
             extra_forecasts = clim_lin,
             sort_quantiles = spec$sort_quantiles
           )

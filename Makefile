@@ -229,9 +229,10 @@ sync-reports:
 
 update-site: sync-reports
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); update_site()"
+	aws s3 sync rendered_reports/ s3://forecasting-team-data/2024/reports/
 
 netlify:
-	netlify deploy --dir=reports --prod
+	netlify deploy --dir=rendered_reports --prod
 
 get-flu-prod-errors:
 	Rscript -e "suppressPackageStartupMessages(source(here::here('R', 'load_all.R'))); get_targets_errors(project = 'flu_hosp_prod')"

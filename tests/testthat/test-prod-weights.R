@@ -81,12 +81,13 @@ test_that("validate_prod_weights_columns aborts on an unparseable forecast_date"
 test_that("all four hand-edited prod weights csvs pass schema validation", {
   flu_ids <- c(
     "cdc_baseline", "linear", "linear_no_population_scale", "windowed_seasonal",
-    "windowed_seasonal_extra_sources", "climate_base", "climate_geo_agged", "seasonal_nssp_cheating"
+    "windowed_seasonal_extra_sources", "climate_base", "climate_geo_agged",
+    "seasonal_nssp_cheating", "revision_aware"
   )
   covid_ids <- c(
     "cdc_baseline", "linear", "linear_no_population_scale", "windowed_seasonal",
     "windowed_seasonal_extra_sources", "climate_base", "climate_geo_agged",
-    "windowed_seasonal_latest", "seasonal_nssp_latest"
+    "windowed_seasonal_latest", "seasonal_nssp_latest", "revision_aware"
   )
   date_int <- as.integer(as.Date("2026-01-07"))
   files <- list(

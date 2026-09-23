@@ -147,12 +147,32 @@ ensemble_weighted <- function(forecasts, other_weights) {
       forecasts %>% distinct(forecaster, geo_value),
       by = c("forecaster", "geo_value"),
     )
-  full_weights <- filtered_weights %>%
-    left_join(
-      forecasts %>% mutate(ahead = target_end_date - forecast_date) %>% distinct(forecaster, ahead),
-      by = "forecaster",
-      relationship = "many-to-many"
-    )
+  # ahead in weeks: all prod forecasters use ahead_multiplier=7, target_date_shift=3,
+  # so week = (target_end_date - forecast_date - 3) / 7.
+  week_ahead <- function(tbl) {
+    mutate(tbl, ahead = as.integer(target_end_date - forecast_date - 3L) %/% 7L)
+  }
+  forecast_aheads <- forecasts %>%
+    week_ahead() %>%
+    distinct(forecaster, ahead)
+  # Weights with a specific `ahead` value apply only to that ahead; general
+  # weights (ahead = NA or column absent) cross-join to all aheads as before.
+  # A forecaster with any ahead-specific row uses ONLY its specific rows.
+  if ("ahead" %in% names(filtered_weights) && any(!is.na(filtered_weights$ahead))) {
+    specific_forecasters <- unique(filtered_weights$forecaster[!is.na(filtered_weights$ahead)])
+    w_specific <- filtered_weights %>%
+      filter(forecaster %in% specific_forecasters, !is.na(ahead)) %>%
+      mutate(ahead = as.integer(ahead))
+    w_general <- filtered_weights %>%
+      filter(forecaster %nin% specific_forecasters) %>%
+      select(-ahead) %>%
+      left_join(forecast_aheads, by = "forecaster", relationship = "many-to-many")
+    full_weights <- bind_rows(w_general, w_specific)
+  } else {
+    full_weights <- filtered_weights %>%
+      { if ("ahead" %in% names(.)) select(., -ahead) else . } %>%
+      left_join(forecast_aheads, by = "forecaster", relationship = "many-to-many")
+  }
   grouping_cols <- c("geo_value", "ahead")
   renorm <-
     full_weights %>%
@@ -164,7 +184,7 @@ ensemble_weighted <- function(forecasts, other_weights) {
     select(-mass)
   weighted_forecasts <-
     forecasts %>%
-    mutate(ahead = target_end_date - forecast_date) %>%
+    week_ahead() %>%
     left_join(
       full_weights,
       by = c("forecaster", "forecast_date", grouping_cols)
