@@ -7,33 +7,40 @@
 # changes.
 
 # Take command line input for directory switch
-[ $# -ne 1 ] && { echo "Usage: $0 <target-directory>"; exit 1; }
+[ $# -ne 1 ] && {
+	echo "Usage: $0 <target-directory>"
+	exit 1
+}
 
 echo "Committing to hub in directory: $1"
 
-cd $1 || { echo "Directory not found: $1"; exit 1; }
+cd $1 || {
+	echo "Directory not found: $1"
+	exit 1
+}
 
 # 1. Update remotes
-git fetch origin main;
-git fetch delphi main;
+git fetch origin main
+git fetch delphi main
 
 # 2. Save current "dirty" state (including untracked files) to a temp branch
-git checkout -b work-backup;
-git add .;
-git commit -m "Temp backup of today's work";
+git checkout -b work-backup
+git add .
+git commit -m "Temp backup of today's work"
 
 # 3. Switch back to main and hard-reset to the clean origin/main
-git checkout main;
-git reset --hard origin/main;
+git checkout main
+git reset --hard origin/main
 
 # 4. Rely on git checkout to selectively restore only the different files
 # (If this doesn't work, just use the date pattern to select the right file.)
-git checkout work-backup -- model-output/CMU-TimeSeries/;
+git checkout work-backup -- model-output/CMU-TimeSeries/ model-output/CMU-TimeSeries_Cal/
 
 # 5. Add, commit, and push
-git add model-output/CMU-TimeSeries/*;
-git commit -m "CMU-Delphi submission $(date +%Y-%m-%d)";
-git push --force delphi main;
+git add model-output/CMU-TimeSeries/*
+git add model-output/CMU-TimeSeries_Cal/*
+git commit -m "CMU-Delphi submission $(date +%Y-%m-%d)"
+git push --force delphi main
 
 # 6. Cleanup the temp branch
-git branch -D work-backup;
+git branch -D work-backup
