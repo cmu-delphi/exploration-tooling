@@ -136,6 +136,28 @@ hub_read_forecasts <- function(
 }
 
 
+#' Latest-vintage NHSN admissions as calibration truth, on hub coordinates.
+#'
+#' NHSN `time_value` is the Saturday week end, the same grid as the hub's
+#' `target_end_date`.
+#' @param archive an NHSN `epi_archive`, by default [get_nhsn_data_archive()].
+#' @return tibble with `target_end_date`, `location` (FIPS), `truth`.
+#' @export
+nhsn_read_truth <- function(disease = "flu", archive = get_nhsn_data_archive(disease)) {
+  archive %>%
+    epix_as_of(archive$versions_end) %>%
+    as_tibble() %>%
+    mutate(geo_value = ifelse(.data$geo_value == "usa", "us", .data$geo_value)) %>%
+    inner_join(
+      get_population_data() %>% distinct(.data$state_id, .keep_all = TRUE) %>% select("state_id", location = "state_code"),
+      by = c("geo_value" = "state_id")
+    ) %>%
+    select(target_end_date = "time_value", "location", truth = "value") %>%
+    filter(!is.na(.data$truth)) %>%
+    arrange(.data$location, .data$target_end_date)
+}
+
+
 #' Convert an internal-format forecast tibble to hub forecast format.
 #'
 #' The internal format uses geo_value (state abbreviation), forecast_date

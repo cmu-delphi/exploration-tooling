@@ -5,32 +5,20 @@
 # results are recorded in notes/CALIBRATION.md.
 #
 # Inputs (all cached in cache/calibration/):
-#   scripts/calibration_ili_backfill.R  -> windowed_seasonal on ILI+, 2010-2024
-#   scripts/calibration_ws_backfill.R   -> windowed_seasonal on NHSN, 2023-2026
-#   hub_read_forecasts()/hub_read_truth() -> the submitted ensemble and hub truth
+#   scripts/calibration/calibration_ili_backfill.R  -> windowed_seasonal on ILI+, 2010-2024
+#   scripts/calibration/calibration_ws_backfill.R   -> windowed_seasonal on NHSN, 2023-2026
+#   hub_read_forecasts()/nhsn_read_truth() -> the submitted ensemble and NHSN truth
 #
-# Usage: distrobox enter rocker -- Rscript scripts/calibration_ws_experiments.R
+# Usage: distrobox enter rocker -- Rscript scripts/calibration/calibration_ws_experiments.R
 
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))
-source(here::here("scripts/calibration_ili_backfill.R"))
-source(here::here("scripts/calibration_ws_backfill.R"))
+source(here::here("scripts/calibration/calibration_ili_backfill.R"))
+source(here::here("scripts/calibration/calibration_ws_backfill.R"))
 
 ili <- ili_read_pseudo_hub()
 ws <- ws_read_pseudo_hub()
 hub_fc <- hub_read_forecasts()
-hub_truth <- {
-  arch <- get_nhsn_data_archive("flu")
-  arch %>%
-    epix_as_of(arch$versions_end) %>%
-    mutate(geo_value = ifelse(geo_value == "usa", "us", geo_value)) %>%
-    left_join(
-      get_population_data() %>% select("state_id", location = "state_code"),
-      by = c("geo_value" = "state_id")
-    ) %>%
-    select(target_end_date = time_value, location, truth = value) %>%
-    filter(!is.na(truth)) %>%
-    arrange(location, target_end_date)
-}
+hub_truth <- nhsn_read_truth("flu")
 LIVE_SEASONS <- c("2024-2025", "2025-2026")
 ERA_SPLIT <- as.Date("2023-08-01") # ILI+ history before, NHSN after
 
