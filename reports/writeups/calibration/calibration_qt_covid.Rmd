@@ -8,6 +8,7 @@ output:
     toc: true
     toc_float: true
 params:
+  hub_dir: "../covid19-forecast-hub"
   burn_in_seasons: ""
   season_policy: "carry"
   lr_window: 50
@@ -29,11 +30,14 @@ knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw())
 ```
 
-```{r load, cache=TRUE, cache.extra=list(params)}
+```{r libs}
+# Not cached: attaches packages every render.
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+```
 
-forecasts <- hub_read_forecasts(hub_dir = HUB_COVID_DIR, target = HUB_COVID_TARGET)
-truth <- hub_read_covid_truth()
+```{r load, cache=TRUE, cache.extra=list(params)}
+forecasts <- hub_read_forecasts(hub_dir = here::here(params$hub_dir), target = HUB_COVID_TARGET)
+truth <- nhsn_read_truth("covid")
 rounds <- hub_label_seasons(unique(forecasts$reference_date))
 
 burn_in <- if (nzchar(params$burn_in_seasons)) {

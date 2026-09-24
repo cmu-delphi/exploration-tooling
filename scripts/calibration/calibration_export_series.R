@@ -7,7 +7,7 @@
 # the identical problem otherwise.
 #
 # Usage:
-#   Rscript scripts/calibration_export_series.R [outdir] [n_series]
+#   Rscript scripts/calibration/calibration_export_series.R [outdir] [n_series]
 
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))
 
@@ -18,19 +18,7 @@ n_series <- if (length(args) >= 2) as.integer(args[[2]]) else 4L
 dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
 
 forecasts <- hub_read_forecasts()
-truth <- {
-  arch <- get_nhsn_data_archive("flu")
-  arch %>%
-    epix_as_of(arch$versions_end) %>%
-    mutate(geo_value = ifelse(geo_value == "usa", "us", geo_value)) %>%
-    left_join(
-      get_population_data() %>% select("state_id", location = "state_code"),
-      by = c("geo_value" = "state_id")
-    ) %>%
-    select(target_end_date = time_value, location, truth = value) %>%
-    filter(!is.na(truth)) %>%
-    arrange(location, target_end_date)
-}
+truth <- nhsn_read_truth("flu")
 rounds <- hub_label_seasons(unique(forecasts$reference_date))
 round_date <- rounds$round_date
 

@@ -34,10 +34,8 @@ cd ~/allHail/delphi/multiQT && git checkout delphi-fixes
 # Refresh the hub submissions (83 CMU-TimeSeries rounds, 2023-10-14 .. 2026-05-30):
 cd ~/allHail/delphi/FluSight-forecast-hub && git pull --ff-only
 
-# The hub's truth file is downloaded and cached on first use by hub_read_truth();
-# to force a refresh:
-cd ~/allHail/delphi/exploration-tooling
-rm -f cache/calibration/target-hospital-admissions.csv
+# Truth is the latest NHSN vintage (nhsn_read_truth()), fetched from the
+# Delphi API; nothing to download by hand.
 ```
 
 The hub checkout is sparse (`hub-config`, `model-output/CMU-TimeSeries`,
@@ -104,7 +102,7 @@ cd ~/allHail/delphi/exploration-tooling
 distrobox enter rocker -- Rscript -e '
 suppressPackageStartupMessages(source("R/load_all.R"))
 fc  <- hub_read_forecasts()
-tr  <- hub_read_truth()
+tr  <- nhsn_read_truth("flu")
 cal <- calibrate_hub_forecasts(fc, tr,
          burn_in_seasons = "2023-2024",
          season_policy   = "carry",     # or "reset" / "shrink"
@@ -126,15 +124,15 @@ Takes ~5 s for all 265 (location, horizon) series. Other entry points:
 ## 3b. COVID calibration
 
 The COVID hub checkout at `~/allHail/delphi/covid19-forecast-hub` carries all
-model-output for CMU-TimeSeries (89 rounds, 2024-11-23 … present) and a local
-truth CSV — no HTTP download required.
+model-output for CMU-TimeSeries (89 rounds, 2024-11-23 … present); truth is
+the latest NHSN covid vintage.
 
 ```sh
 cd ~/allHail/delphi/exploration-tooling
 distrobox enter rocker -- Rscript -e '
 suppressPackageStartupMessages(source("R/load_all.R"))
-fc  <- hub_read_forecasts(hub_dir = HUB_COVID_DIR, target = HUB_COVID_TARGET)
-tr  <- hub_read_covid_truth()
+fc  <- hub_read_forecasts(hub_dir = "../covid19-forecast-hub", target = HUB_COVID_TARGET)
+tr  <- nhsn_read_truth("covid")
 cal <- calibrate_hub_forecasts(fc, tr,
          burn_in_seasons = character(0),  # no off-season in covid data yet
          season_policy   = "carry",

@@ -18,7 +18,7 @@
 # ~14% windowed_seasonal, ~0.03% climate_linear.
 #
 # Usage, from the repo root:
-#   source("scripts/calibration_harness.R")
+#   source("scripts/calibration/calibration_harness.R")
 #   inp <- ch_inputs()               # archives, geos dropped
 #   raw <- ch_backfill(inp)          # ~6 min cold, instant warm (cached)
 #   ch_verify_against_store(raw)     # prove the harness == the DAG

@@ -9,6 +9,7 @@ output:
     toc_float: true
     toc_depth: 2
 params:
+  hub_dir: "../covid19-forecast-hub"
   burn_in_seasons: ""
   season_policy: "carry"
   lr_window: 20
@@ -38,11 +39,14 @@ effect; burn-in-dependent variants (conformal warm start) are not included.
 The states are chosen by how much the baseline calibration changed them, pooled
 over horizons −1…3.
 
-```{r load, cache=TRUE}
+```{r libs}
+# Not cached: attaches packages every render.
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+```
 
-forecasts <- hub_read_forecasts(hub_dir = HUB_COVID_DIR, target = HUB_COVID_TARGET)
-truth <- hub_read_covid_truth()
+```{r load, cache=TRUE}
+forecasts <- hub_read_forecasts(hub_dir = here::here(params$hub_dir), target = HUB_COVID_TARGET)
+truth <- nhsn_read_truth("covid")
 rounds <- hub_label_seasons(unique(forecasts$reference_date))
 burn_in <- if (nzchar(params$burn_in_seasons)) {
   strsplit(params$burn_in_seasons, ",")[[1]]
@@ -54,9 +58,8 @@ geo_map <- get_population_data() %>%
   distinct(state_id, .keep_all = TRUE) %>%
   transmute(state_id, abbrev = toupper(state_id), location = state_code)
 
-archive <- nanoparquet::read_parquet(
-  here::here("cache/calibration/nhsn_archive_covid.parquet")
-) %>%
+archive <- get_nhsn_data_archive("covid")$DT %>%
+  mutate(geo_value = ifelse(geo_value == "usa", "us", geo_value)) %>%
   as_epi_archive(compactify = TRUE)
 
 live_rounds <- rounds %>% filter(!season %in% burn_in)
