@@ -14,7 +14,7 @@
 # forecast date, so hub horizon 0 is one week past the last observation.
 #
 # Usage, from the repo root (~30 min cold, cached in cache/calibration/):
-#   distrobox enter rocker -- Rscript scripts/calibration_ili_backfill.R
+#   distrobox enter rocker -- Rscript scripts/calibration/calibration_ili_backfill.R
 # Then in R: ili <- ili_read_pseudo_hub()  # list(forecasts, truth)
 
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))
@@ -72,10 +72,21 @@ ili_schedule <- function(archive) {
 ili_forecast_one <- function(archive, fd, geo_map) {
   snapshot <- make_forecast_snapshot(archive, forecast_date = fd, generation_date = fd, as_of_policy = "asof") %>%
     filter(time_value <= fd - 7L)
+  # extend_lags uses the worst latency across geos, so one state whose ILI+
+  # series ended (DC stops in 2015) would push every lag years back. Leave
+  # such states out of the latency check; they still train, they just get no forecast.
+  stale <- snapshot %>%
+    as_tibble() %>%
+    group_by(geo_value) %>%
+    summarize(last = max(time_value)) %>%
+    filter(last < max(snapshot$time_value)) %>%
+    pull(geo_value)
+  params <- ILI_PARAMS
+  if (length(stale) > 0) params$keys_to_ignore <- list(list("geo_value", stale))
   purrr::map(ILI_HORIZONS, function(h) {
     run_forecaster(
       snapshot = snapshot, forecaster = scaled_pop_seasonal, aheads = h * 7L,
-      params = ILI_PARAMS, id = "windowed_seasonal_ili",
+      params = params, id = "windowed_seasonal_ili",
       target_date_shift = 3L, sort_quantiles = TRUE
     ) %>%
       mutate(horizon = h)

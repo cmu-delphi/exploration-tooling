@@ -2,7 +2,7 @@
 # forecaster (scaled_pop_seasonal, seasonal_method = "window", trained on the
 # nhsn + ILI+ + flusurv prod archive) over the NHSN seasons and write the result
 # in the FluSight hub schema that calibrate_hub_forecasts() consumes. Together
-# with scripts/calibration_ili_backfill.R this gives one forecaster's history
+# with scripts/calibration/calibration_ili_backfill.R this gives one forecaster's history
 # from 2011 to today, so calibration can be studied without the submitted
 # ensemble's changing composition in the way.
 #
@@ -14,7 +14,7 @@
 # (finalized data cut at the forecast date) and is marked as such in the output.
 #
 # Usage, from the repo root (~10 min cold, cached in cache/calibration/):
-#   distrobox enter rocker -- Rscript scripts/calibration_ws_backfill.R
+#   distrobox enter rocker -- Rscript scripts/calibration/calibration_ws_backfill.R
 # Then in R: ws <- ws_read_pseudo_hub()  # forecasts; truth from get_nhsn_data_archive("flu")
 
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))

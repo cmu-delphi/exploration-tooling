@@ -15,10 +15,12 @@ projection. Full repro commands live in `notes/calibration-runbook.md`.
   on the `delphi-fixes` branch of `~/repos/delphi/multiQT` (their published
   code had several bugs we fixed and reported; see that branch's commit
   message). Oracle fixtures in `tests/testthat/test-qt.R`, plus a real-series
-  cross-check (`scripts/calibration_export_series.R`).
+  cross-check (`scripts/calibration/calibration_export_series.R`).
 - `R/calibration/hub_data.R` — FluSight hub adapters: `hub_read_forecasts()`
   (CMU-TimeSeries submissions from the sparse hub checkout),
-  `hub_read_truth()` (hub finalized truth CSV), `hub_label_seasons()`.
+  `nhsn_read_truth()` (latest NHSN vintage from `get_nhsn_data_archive()`, on
+  the hub's Saturday grid; replaced the hub target-data CSV on 2026-09-23),
+  `hub_label_seasons()`.
 - `R/calibration/calibrate.R` — `calibrate_hub_forecasts()` driver (burn-in,
   season policy, ~5 s for all 265 series) and metrics: `hub_coverage()`,
   `hub_coverage_summary()`, `hub_quantile_loss()`, `hub_rolling_tradeoff()`.
@@ -28,16 +30,17 @@ projection. Full repro commands live in `notes/calibration-runbook.md`.
   two-term offset, below), `off_after`, `lr_seasonal`. (`lr_geo_pool`, the
   geo-pooled eta in the sweep table below, was removed 2026-09-17: it never
   beat the baseline.)
-- `scripts/calibration_ws_backfill.R` — replays flu prod's `windowed_seasonal`
+- `scripts/calibration/calibration_ws_backfill.R` — replays flu prod's `windowed_seasonal`
   over the NHSN seasons (hub schema, cached to
-  `cache/calibration/ws_pseudo_hub_forecasts.parquet`); `scripts/calibration_ws_experiments.R`
+  `cache/calibration/ws_pseudo_hub_forecasts.parquet`); `scripts/calibration/calibration_ws_experiments.R`
   runs the one-forecaster-across-eras comparison (below).
-- `scripts/calibration_ili_backfill.R` — runs flu prod's `windowed_seasonal`
+- `scripts/calibration/calibration_ili_backfill.R` — runs flu prod's `windowed_seasonal`
   forecaster on the ILI+ state history (2010–2024, Wednesday labels, snapshot
   truncated one week to mimic reporting lag) and writes a pseudo-hub
   `forecasts`/`truth` pair in hub schema to `cache/calibration/ili_pseudo_hub_*.parquet`
-  (~30 min). Multi-season burn-in material for the slow term.
-- `scripts/calibration_harness.R` — targets-based harness for calibrating our
+  (~30 min). **Its forecasts are broken** (see "The ILI+ replay is broken"
+  below); nothing built on it should be trusted until it is fixed and rebuilt.
+- `scripts/calibration/calibration_harness.R` — targets-based harness for calibrating our
   own forecasters outside the hub path (covid
   `windowed_seasonal_extra_sources`, aheads 0:4, `covid_hosp_evaluation`
   store). WIP.
@@ -58,9 +61,11 @@ As-of NHSN vintages for the gallery come from
 vintages exist before 2024-11-19 anywhere). Note: the S3
 `nhsn_data_archive.parquet` object stalled at version 2026-01-30 — the
 polling job appears to have stopped; refresh the copy from a newer oracle
-capture if one exists.
+capture if one exists. Since 2026-09-23 `get_nhsn_data_archive("flu")` (the
+cast API, versions 2024-11-19 onward) serves both truth (`nhsn_read_truth()`)
+and vintages live; the findings notebook uses it.
 
-## Findings (factorial sweep, `scripts/reports/calibration_qt_flu.Rmd`)
+## Findings (factorial sweep, `calibration_qt_flu.Rmd`; count space, pre-fix)
 
 Sweep: `season_policy` {carry, reset} × `lr_window` {8, 20, 50, Inf} ×
 `lr_mult` {0.3, 0.1, 0.03, 0.01}; results in `cache/calibration/sweep.rds`.
@@ -90,18 +95,36 @@ validated grid point and the window is immaterial). At this multiplier the
 tracker needs most of a season to warm up, which makes burn-in/state-carrying
 the central integration design issue.
 
-**Current operating point (2026-09-16): `transform = "sqrt"`, `lr_mult = 0.03`,
+**Current operating point: `transform = "sqrt"`, `lr_mult = 0.03`,
 `floor = 1e-3`, `lr_window = 20`, carry, `slow_init = "burn_in_quantile"`,
-`lr_slow = list(mult = 0.003)`, `fast_decay = 0.1`.** WIS-positive at every
-horizon in both live seasons (+9.0/+5.3/+1.9/+0.8/+0.5 at h−1…3) with
-calibration error 0.044–0.072 against 0.095–0.118 uncalibrated. See "Warm
-start" below for the table.
+`lr_slow = list(mult = 0.003)`, `fast_decay = 0.1`.** Re-measured 2026-09-23
+(after the correctness fixes, NHSN truth, all 53 hub locations): WIS change
++8.9/+5.4/+2.6/+1.9/+1.9 at h−1…3 over both live seasons, calibration error
+0.040–0.073 against 0.098–0.118 uncalibrated. Current numbers for every
+variant are in `reports/writeups/calibration/calibration_findings_flu.Rmd`
+(section "Current numbers" below).
+
+**Numbers dated before 2026-09-17 predate the two correctness fixes**
+("Correctness fixes" below) and used the hub target-data CSV as truth. The
+sqrt-space tables from 2026-09-16 were also hit by the unclamped sqrt
+inverse, so they have been replaced; the count-space and 2026-08-27 tables are
+kept as a record of how the design was reached, not as current numbers.
 
 ## Notebooks
 
-- `scripts/reports/calibration_qt_flu.Rmd` — the parameter-sweep EDA. Frozen as
-  the sweep record; rendered HTML alongside.
-- `scripts/reports/calibration_qt_seasons_flu.Rmd` — whole-season views of four
+All in `reports/writeups/calibration/`, rendered into `rendered_reports/`.
+Only `calibration_findings_flu.Rmd` runs as-is: the other six still call
+`hub_read_truth()` / `hub_read_covid_truth()` (and the covid ones
+`HUB_COVID_DIR`), which were removed on 2026-09-23. Switching the flu ones to
+`nhsn_read_truth("flu")` is a one-line change each.
+
+- `calibration_findings_flu.Rmd` — the current summary: base bias on NHSN,
+  the broken ILI+ replay, staleness (lagged correlation of played vs needed
+  shift), the leak by month, count vs sqrt, ensemble vs `windowed_seasonal`.
+  All numbers are post-fix.
+- `calibration_qt_flu.Rmd` — the parameter-sweep EDA. Frozen as
+  the sweep record.
+- `calibration_qt_seasons_flu.Rmd` — whole-season views of four
   states × two live seasons, one panel per (state, season): every-other-round
   fans (80% band) for h 0–3, the NHSN vintage each round saw painted over its
   fortnight, finalized truth, and an eta strip; plus collapsible internals
@@ -115,7 +138,7 @@ start" below for the table.
   WIS/calibration-error comparison at the top, plus a by-month breakdown of the
   baseline (WIS change, share of base WIS, median shift) that shows where in
   the season the method gains and loses.
-- `scripts/reports/calibration_qt_gallery_flu.Rmd` — fixed operating point. Slim
+- `calibration_qt_gallery_flu.Rmd` — fixed operating point. Slim
   headline table (WIS + calibration error per horizon per season), then a
   ranked per-forecast gallery: top-N (location, round) panels ordered by mean
   absolute quantile displacement relative to the base median. Each panel:
@@ -125,10 +148,11 @@ start" below for the table.
   2025-26 only, flu only. A dynamic/paginated app version was considered and
   rejected for now in favor of static top-N HTML.
 
-## Method variants (`calibrate_hub_forecasts()` options; 2026-08-27)
+## Method variants (`calibrate_hub_forecasts()` options; 2026-08-27, pre-fix)
 
-All at the operating point above; WIS change vs base, both live seasons, by
-horizon −1/0/1/2/3:
+All count space at the original operating point; WIS change vs base, both
+live seasons, by horizon −1/0/1/2/3. Pre-fix numbers (see above); the
+transform rows measured on 2026-09-16 were removed, see "Current numbers":
 
 | variant | option | h−1 | h0 | h1 | h2 | h3 |
 |---|---|---|---|---|---|---|
@@ -140,11 +164,6 @@ horizon −1/0/1/2/3:
 | geo-pooled eta (option since removed) | `lr_geo_pool = <pop>` | +4.4 | +2.0 | −2.2 | −5.5 | −7.7 |
 | seasonal eta window (carry) | `lr_window = 10, lr_seasonal = list(half_width_weeks = 5)` | +2.9 | +0.1 | −3.0 | −5.5 | −7.5 |
 | seasonal eta window (reset) | same + `season_policy = "reset"` | +3.2 | +1.1 | −2.1 | −4.7 | −7.0 |
-| log-space tracker | `transform = "log1p", lr_args = list(mult = 0.03, floor = 1e-3)` | +10.8 | +1.8 | −5.7 | −9.0 | −8.8 |
-| log-space, mult 0.1 | `transform = "log1p", lr_args = list(mult = 0.1, floor = 1e-3)` | +5.3 | −5.8 | −21.8 | −30.9 | −37.8 |
-| sqrt-space | `transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3)` | +8.0 | +4.1 | −0.4 | −3.1 | −3.4 |
-| fourth-root space | `transform = "quartic_root", lr_args = list(mult = 0.03, floor = 1e-3)` | +9.6 | +4.1 | −2.2 | −4.9 | −5.0 |
-| fourth-root, mult 0.1 | same, `mult = 0.1` | +12.3 | +0.9 | −9.8 | −17.8 | −17.6 |
 
 - Eta was never pooled across horizons: each (location, horizon) series has its
   own tracker and its own eta (pooled over the 23 levels and the window).
@@ -169,35 +188,27 @@ horizon −1/0/1/2/3:
   Reset instead of carry recovers some of that (h2 −4.7) but still trails
   baseline; 2024-25 is fine (+5.7/+2.8/+0.1 at h−1/0/1), 2025-26 is uniformly
   worse. The notebook's seasonal section now runs the reset variant.
-- **Log-space tracking** (offsets relative instead of in counts; 2026-09-16)
-  is worse at every horizon except h−1 and degrades fast with the multiplier
-  (mult 0.3: −50 to −270%). Calibration error does fall with a larger
-  multiplier (0.011–0.030 at mult 0.1 vs 0.022–0.035 baseline), so it buys
-  coverage, but relative residuals at trough counts (base 1–5) are large and
-  noisy and the staleness problem is untouched. Not in the notebook. If
-  scale-awareness is retried, normalize by a smooth scale proxy (trailing
-  4-week truth, floored) rather than a log.
-- **Power transforms** (2026-09-16; `transform = "sqrt"` / `"quartic_root"`,
-  the latter being the forecasters' whitening map `(x + 0.01)^0.25`). The
-  bookkeeping: Y and all 23 base quantiles are mapped, residuals/eta/offsets/
-  PAVA all live in the mapped space, the played quantiles are mapped back and
-  clamped, and scoring is on counts. Coverage indicators are invariant under
-  a monotone map, so the gradient is identical to count space; only the
-  step geometry changes. Multipliers are not comparable across spaces, so
-  compare at matched calibration error. `sqrt` at mult 0.03 matches the
-  baseline's calibration error (0.029–0.043 vs 0.022–0.035) with better WIS
-  at every horizon, and beats the baseline in the Nov–Feb core at every
-  horizon (+7.8/+4.5/+0.5/−1.5/−1.2 vs +5.3/+1.9/−1.4/−3.2/−3.1); the spring
-  tail is still lost at h2/h3 (−19/−33% vs −26/−55%). Fourth root at 0.03
-  under-steps (calibration error 0.037–0.049) and at 0.1 over-pays like every
-  other aggressive setting. Staleness is untouched by any transform; the
-  transform only bounds how badly a stale offset is sized. Window 20 vs 50
-  is again immaterial. Worth a small sweep over power × mult.
+- **Transforms** (`transform = "log1p"` / `"sqrt"` / `"quartic_root"`, the
+  last being the forecasters' whitening map `(x + 0.01)^0.25`). Y and all 23
+  base quantiles are mapped, residuals/eta/offsets/PAVA all live in the mapped
+  space, the played quantiles are mapped back and clamped at zero, and scoring
+  is on counts. Coverage indicators are invariant under a monotone map, so the
+  gradient is identical to count space; only the step geometry changes, and
+  multipliers are not comparable across spaces. The 2026-09-16 measurements
+  of these variants predate the correctness fixes (the sqrt ones were also hit
+  by the unclamped inverse) and were removed. Re-measured since: sqrt vs
+  count only, in "Current numbers" below. Log space and fourth root have not
+  been re-run; before the fixes log space was worse than count space at h ≥ 1
+  and fourth root at mult 0.03 under-stepped, but neither result should be
+  relied on. If scale-awareness is retried beyond sqrt, normalize by a smooth
+  scale proxy (trailing 4-week truth, floored) rather than a log.
 
-## Where the WIS moves (2026-09-16, baseline, both live seasons pooled)
+## Where the WIS moves (2026-09-16, count-space baseline, pre-fix)
 
-By calendar month of the reference date; scratch numbers, reproduced live in
-the seasons notebook's by-month tables.
+By calendar month of the reference date, both live seasons pooled. These are
+pre-fix count-space numbers; the mechanism (the spring and October losses,
+the stale wrong-signed offset) is re-confirmed post-fix for the sqrt variants
+in the findings notebook, with the numbers in "Current numbers" below.
 
 - **The mass is in December–February.** At h3, Dec + Jan carry ~75% of the
   season's base WIS and Mar–May ~7%. Calibration is −2% in Dec/Jan at h2/h3
@@ -240,33 +251,21 @@ and small multiplier, never decays, ignores the season policy, and may train
 through burn-in (`burn_in_learns_slow`). Without `lr_slow` and with
 `fast_decay = 0` the output is bit-identical to before (tests pin this).
 
-All on `transform = "sqrt"`, mult 0.03, floor 1e-3, window 20, carry, hub
-2023-24 burn-in. WIS change vs base by horizon −1…3, then calibration error
-range, then Mar–May WIS change at h2/h3:
+The 2026-09-16 comparison table for this section (sqrt space) predated the
+correctness fixes and was removed; the post-fix numbers for the variants that
+were re-run (single term, leak 0.1, and the warm-start combinations) are in
+"Current numbers" below. What still holds:
 
-| variant | h−1 | h0 | h1 | h2 | h3 | cal err | spring h2/h3 |
-|---|---|---|---|---|---|---|---|
-| sqrt, single term | +8.0 | +4.1 | −0.4 | −3.1 | −3.4 | 0.029–0.043 | −19 / −33 |
-| + fast_decay 0.1 | +8.2 | +4.3 | +1.3 | +0.1 | −0.8 | 0.074–0.089 | −1 / −9 |
-| + fast_decay 0.2 | +6.5 | +3.2 | +1.1 | +0.3 | −0.1 | 0.084–0.101 | 0 / −5 |
-| + slow 0.01 (no decay) | +8.9 | +4.2 | −1.3 | −3.5 | −4.8 | 0.024–0.034 | −20 / −44 |
-| + slow 0.01, decay 0.1 | +9.9 | +5.1 | +0.8 | −0.9 | −2.2 | 0.056–0.066 | −7 / −21 |
-| + slow 0.01, decay 0.1, slow trains in burn-in | +10.1 | +5.7 | +1.1 | −0.8 | −1.6 | 0.052–0.066 | −8 / −24 |
-| + slow 0.03, decay 0.2, slow trains in burn-in | +11.6 | +5.7 | −0.1 | −2.7 | −3.0 | 0.034–0.041 | −20 / −48 |
-
-- **The leak is what fixes the spring and h2/h3.** Decay 0.1–0.2 alone makes
-  the tracker WIS-neutral-or-better at every horizon and removes most of the
-  spring loss, but it gives back most of the coverage gain (calibration error
-  doubles): a correction that must be continually refreshed cannot hold
-  coverage through a 5-round reveal lag.
-- **The slow term alone does nothing visible** at mult 0.01 over one burn-in
-  season plus one live season: it has not had time to move. At mult 0.03 it
-  is no longer slow and behaves like a second fast term (spring loss is back).
-- **Slow + leaky fast is the balance point**: WIS-positive at h ≤ 1,
-  −1 to −2 at h2/h3, calibration error about half-way between the single-term
-  tracker and uncalibrated. Letting the slow term train through burn-in
-  helps a little with one season; the whole point of the ILI+ backfill is to
-  give it thirteen.
+- **The leak is what fixes the spring and h2/h3.** Re-measured: decay 0.1
+  alone takes h3 from −1.4% to +0.5% and cuts the h3 March/October losses from
+  about −47% to −17% and −48% to −14%, but gives back most of the coverage
+  gain (calibration error 0.022–0.043 single-term vs 0.073–0.089 leaky): a
+  correction that must be continually refreshed cannot hold coverage through
+  a 5-round reveal lag.
+- **A slow gradient term on its own** (no warm start) was measured only
+  before the fixes: at mult 0.01 it barely moved over one burn-in plus one
+  live season, and at mult 0.03 it acted like a second fast term. Not re-run;
+  the warm start below replaced it as the way to hold the persistent level.
 
 ### Is a learned seasonal offset viable?
 
@@ -310,30 +309,21 @@ weeks if so.
 conformal offset implied by the burn-in rounds pooled over locations: the
 `level`-quantile of `Y − Yhat[level]` in working units. The tracker then runs
 on top of it. Same setup as the two-term table (sqrt, mult 0.03, window 20,
-carry, hub 2023-24 burn-in); uncalibrated calibration error is 0.095–0.118.
-
-| variant | h−1 | h0 | h1 | h2 | h3 | cal err | 2024-25 h1/h2/h3 | 2025-26 h1/h2/h3 |
-|---|---|---|---|---|---|---|---|---|
-| sqrt, single term | +8.0 | +4.1 | −0.4 | −3.1 | −3.4 | 0.029–0.043 | +0.5/−1.8/−3.6 | −2.3/−5.4/−3.1 |
-| warm start only, no tracking | +0.5 | +1.2 | +0.9 | +1.1 | +2.0 | 0.062–0.104 | +1.2/+1.7/+3.0 | +0.3/+0.1/+0.1 |
-| warm start + fast, no decay | +8.1 | +4.7 | +0.1 | −2.2 | −1.9 | 0.016–0.038 | +1.4/−0.3/−0.9 | −2.5/−5.6/−3.6 |
-| warm start + fast, decay 0.1 | +8.4 | +5.0 | +1.9 | +0.9 | +0.8 | 0.048–0.079 | +2.1/+1.0/+1.0 | +1.6/+0.9/+0.5 |
-| warm start + slow 0.003 + fast decay 0.1 | +9.0 | +5.3 | +1.9 | +0.8 | +0.5 | 0.044–0.072 | +2.0/+0.7/+0.6 | +1.5/+0.8/+0.3 |
-| warm start + slow 0.01 + fast decay 0.1 | +10.1 | +5.7 | +1.3 | −0.1 | −0.6 | 0.036–0.058 | +1.9/+0.1/−0.4 | +0.1/−0.5/−0.8 |
-| warm start + slow 0.01 + fast decay 0.2 | +9.1 | +5.4 | +1.5 | +0.5 | +0.4 | 0.040–0.064 | +2.2/+0.8/+0.7 | 0.0/+0.1/0.0 |
+carry, hub 2023-24 burn-in). The 2026-09-16 table was pre-fix and was removed;
+re-measured numbers are in "Current numbers" below.
 
 - **One season of batch conformal offsets is already WIS-positive at every
-  horizon** (+0.5 to +2.0) while removing a third of the coverage error: the
-  persistent low bias is real and cheap to correct.
-- **Warm start + leaky fast tracker is the first configuration that is
-  WIS-positive at every horizon in *both* seasons** and it halves the
-  coverage error. The leak is still what keeps the spring in check
-  (h3 spring: −19% with decay 0.1 vs −45% without); the warm start is what
-  lets the leak be affordable, since coverage no longer depends on the fast
-  term holding a level.
-- Adding a slow gradient term on top of the warm start is a small dial
-  between WIS (mult 0.003) and coverage (mult 0.01); the chosen point is
-  0.003 with decay 0.1.
+  horizon** (+0.4 to +1.9, re-measured) while removing a third of the
+  coverage error: the persistent low bias is real and cheap to correct.
+- **Warm start + leaky fast tracker is WIS-positive at every horizon** and
+  halves the coverage error (+8.3/+5.1/+2.6/+2.0/+2.1, calibration error
+  0.046–0.080 vs 0.098–0.118 base). Its h3 gain comes from December–January
+  (+4% each, the months holding ~75% of the h3 base WIS); its spring losses
+  are only partly contained by the leak (h3 March −28%), because the warm
+  start lives in the slow term, which does not decay.
+- Adding a slow gradient term on top of the warm start was, before the fixes,
+  a small dial between WIS (mult 0.003) and coverage (mult 0.01); the chosen
+  point is 0.003 with decay 0.1. Post-fix only 0.003 was re-run.
 - The h3 warm-start offsets at the outer levels are large (0.95 level: +2.9
   scaled-sqrt units for CA) because the 2023-24 ensemble was badly
   under-dispersed at long horizons; it is the correct conformal answer for
@@ -341,46 +331,22 @@ carry, hub 2023-24 burn-in); uncalibrated calibration error is 0.095–0.118.
   season's base forecaster. In prod the warm start would come from the
   previous live season(s) of the *current* forecaster.
 
-### ILI+ burn-in (2026-09-16): negative result
+### ILI+ burn-in (2026-09-16): invalid, the replay is broken
 
-The prod flu forecasters already train on ILI+ (percent positive × percent
-ILI, state level, 2010–2024) as faux-versioned augmentation rows folded into
-`nhsn_prod_archive`. For calibration the analogous move is to *forecast* the
-ILI+ seasons with the same `windowed_seasonal` forecaster and use those
-residuals as burn-in: 13 usable seasons (2020/21 and 2021/22 dropped as
-non-seasons; 2023/24 dropped as overlapping the hub's own burn-in) instead
-of one. The pseudo-hub tables are on the ILI+ percent scale, so the tracker
-must run in scaled units: `scales` divides each location's rounds by an
-era-specific divisor (90th percentile of in-season truth: ILI+ seasons for the
-ILI+ era, the hub 2023-24 season for the NHSN era) before the sqrt transform,
-so offsets and eta learned on ILI+ carry over as fractions of a typical
-season-peak level. Caveats: (1) the pseudo-hub base is one component
-(`windowed_seasonal`), the hub base is the submitted ensemble; (2) ILI+ has
-no revisions, so the pseudo-hub residuals lack the as-of under-reporting
-that drives part of the live bias; (3) the h−1 pseudo-forecast is a model
-forecast of an already-observed week, as in prod.
+The idea: the prod flu forecasters already train on ILI+ (percent positive ×
+percent ILI, state level, 2010–2024) as faux-versioned augmentation rows, so
+*forecast* the ILI+ seasons with the same `windowed_seasonal` forecaster and
+use those residuals as a multi-season burn-in (13 usable seasons instead of
+one). The pseudo-hub tables are on the ILI+ percent scale, so the tracker runs
+in scaled units: `scales` divides each location's rounds by an era-specific
+divisor (90th percentile of in-season truth) before the sqrt transform, so
+offsets and eta learned on ILI+ carry over as fractions of a typical
+season-peak level.
 
-Result: caveat (1) is fatal for this use. In-season, in scaled sqrt units:
-
-| era | base | truth > median | median scaled residual (h0 … h3) |
-|---|---|---|---|
-| ILI+ 2010–20 | windowed_seasonal on ILI+ | 0.52–0.54 | 0.014 … 0.031 |
-| hub 2023-24 | submitted ensemble | 0.61–0.67 | 0.030 … 0.112 |
-| hub 2024-26 | submitted ensemble | 0.68–0.75 | 0.058 … 0.209 |
-
-The pseudo-base is essentially unbiased in the median, and its by-season bias
-swings from −213% (2015-16) to +66% with no stable component, whereas the
-submitted ensemble runs low in every hub season. So ILI+ residuals carry no
-information about the live base's bias. Worse, thirteen seasons of near-zero
-drift (slightly more under- than over-coverage, and a residual scale 2–3×
-NHSN's inflating eta) still summed to a slow term of ~+0.1 scaled-sqrt units
-at the first live round, which is +25% at peak and ~3× at trough: WIS −130 to
-−500%. Eta warm-up from ILI+ alone (no slow term) changed only h−1, where the
-hub burn-in has almost no rounds, and made it worse. Kept:
-`scripts/calibration_ili_backfill.R` and the `scales` machinery, which would
-be the right tools if the live base were the `windowed_seasonal` component
-itself (calibrating per forecaster rather than post-ensemble, roadmap item 3),
-since then the pseudo-base and the live base are the same model.
+The result recorded here on 2026-09-16 (ILI+ residuals carry no information
+about the live bias; an ILI+-trained slow term costs 130–500% WIS) was
+measured on a broken replay (see "The ILI+ replay is broken" below) and has
+been removed. The `scales` machinery is fine and stays.
 
 The useful implication is the opposite one: the hub's own 2023-24 burn-in
 *does* share the live bias, so the slow term should be warm-started from it
@@ -425,18 +391,90 @@ own `mult` before); `off_after` and `fast_decay` abort when combined (the leak
 would run through the off window, so "frozen offset" would be false); the
 hub reader aborts on duplicate (round, level) rows; the accidentally committed
 `covid_hosp_prod/workspaces/` binaries were dropped from history and the
-pattern is now ignored. The notebooks have not been re-rendered since.
+pattern is now ignored. The older notebooks have not been re-rendered since;
+`calibration_findings_flu.Rmd` has the post-fix numbers.
+
+### The ILI+ replay is broken (2026-09-23)
+
+`windowed_seasonal`'s ILI+ pseudo-hub forecasts
+(`cache/calibration/ili_pseudo_hub_forecasts.parquet`) do not follow the data
+the model was given. The h−1 forecast is a forecast of the last observed week,
+yet the log-log slope of median on truth is 0.49 at h−1 (0.34 at h3), against
+1.04 for the same forecaster on NHSN. The median is several times too high at
+the trough and about half of truth at the peak, even at h−1. Indiana on
+2018-01-03: the snapshot's last value (2017-12-27 label) is 2.28 and matches
+truth, but the h−1 median for that week is 0.05. Re-running
+`ili_forecast_one()` with current code reproduces the cached values exactly,
+and every run warns *"There is less latency at bake time than there was at
+prep time … will discard the most recent data"*. The suspect is epipredict's
+latency adjustment (`adjust_latency = "extend_lags"`, the default in
+`default_args_list()`) interacting with the one-week snapshot truncation in
+`ili_forecast_one()`; not yet confirmed. The NHSN replay
+(`calibration_ws_backfill.R`) is unaffected.
+
+Invalidated: the ILI+ burn-in result above; setup C and every ILI+ number in
+"One forecaster across eras" below; the "bias flips sign with the data
+source" reading. The ILI+ question (does the warm start transfer to a
+different data source?) is open again until the replay is fixed and rebuilt.
+
+### Current numbers (2026-09-23)
+
+From `reports/writeups/calibration/calibration_findings_flu.Rmd`: post-fix,
+truth from `nhsn_read_truth()`, all 53 hub locations, the submitted ensemble,
+sqrt unless stated, mult 0.03, floor 1e-3, window 20, carry, 2023-24 burn-in,
+both live seasons pooled. WIS change % vs base, then calibration error
+(base 0.118/0.105/0.095/0.098/0.102):
+
+| variant | h−1 | h0 | h1 | h2 | h3 | cal err h−1…h3 |
+|---|---|---|---|---|---|---|
+| count space, single term (the paper) | +4.2 | +2.4 | −0.8 | −3.4 | −5.6 | 0.033/0.020/0.025/0.027/0.029 |
+| count space, leak 0.1 | +6.0 | +2.9 | +0.6 | +0.3 | −0.8 | 0.079/0.062/0.061/0.066/0.065 |
+| sqrt, single term | +7.9 | +4.4 | +0.7 | −0.5 | −1.4 | 0.043/0.027/0.022/0.023/0.022 |
+| sqrt, leak 0.1 | +8.1 | +4.4 | +2.0 | +1.1 | +0.5 | 0.089/0.078/0.073/0.078/0.080 |
+| warm start only, no tracking | +0.4 | +1.1 | +0.8 | +1.1 | +1.9 | 0.105/0.076/0.063/0.066/0.062 |
+| warm start + leak 0.1 | +8.3 | +5.1 | +2.6 | +2.0 | +2.1 | 0.080/0.057/0.049/0.050/0.046 |
+| operating point (warm start + slow 0.003 + leak 0.1) | +8.9 | +5.4 | +2.6 | +1.9 | +1.9 | 0.073/0.051/0.042/0.044/0.040 |
+
+h3 WIS change % by month of the reference date, and each month's share of the
+h3 base WIS:
+
+| variant | Oct | Nov | Dec | Jan | Feb | Mar | Apr | May |
+|---|---|---|---|---|---|---|---|---|
+| sqrt, single term | −48.4 | +6.5 | +1.9 | +0.6 | −1.9 | −47.3 | −36.2 | +20.1 |
+| sqrt, leak 0.1 | −13.5 | +5.2 | +0.6 | +1.2 | +1.3 | −17.2 | +8.5 | +6.8 |
+| warm start + leak 0.1 | −26.9 | +5.7 | +4.1 | +4.1 | +0.6 | −27.5 | −4.7 | +3.3 |
+| operating point | −28.9 | +6.4 | +4.3 | +4.2 | 0.0 | −33.2 | −6.6 | +5.4 |
+| share of base WIS % | 0.2 | 6.1 | 41.5 | 33.5 | 11.8 | 4.7 | 1.1 | 1.1 |
+
+Staleness, measured directly: correlate the played median shift at round `t`
+with the needed shift (`sqrt(truth) − sqrt(base median)`) at round `t − k`,
+per series, averaged over locations (single-term sqrt tracker). At `k = 0` the
+correlation is negative from h0 up (−0.22/−0.25/−0.31/−0.35 at h0…h3): the
+offset currently played pushes the wrong way on average. It peaks at
+`k = 4/6/7/9` for h0…h3, i.e. the reveal lag `h + 2` plus two to four rounds of
+build-up. By direction alone (share of >1% moves with the right sign), no
+tracker beats the static warm start at h0–h3 (67–69%); the single-term count
+tracker is worst (56–62%).
+
+Base bias on NHSN (share of forecasts with truth above the median, h−1…h3):
+ensemble 69/65/63/63/63, `windowed_seasonal` 58/63/64/67/70; summed median vs
+summed truth −11…−38% and −8…−46%. At h3 the bias concentrates at the peak
+(median 68–69% low when truth is above the location's 90th-percentile level);
+at h0 it is a fairly even 5–20% low.
+
+Count vs sqrt: the ratio of the relative median shift at the trough bin to
+that at the peak bin is 32–38 in count space and 5–10 in sqrt.
 
 ### One forecaster across eras (2026-09-17)
 
 Question: are the hub-season gains an artifact of three seasons of one
 ensemble, and does the tracker behave the same on a decade of the *same*
-forecaster? `scripts/calibration_ws_backfill.R` replays flu prod's
+forecaster? `scripts/calibration/calibration_ws_backfill.R` replays flu prod's
 `windowed_seasonal` (prod archive, seed, substitutions) over the NHSN seasons
 in hub schema: 2024-25 and 2025-26 as honest as-of replays, 2023-24 with the
 `"cheating"` policy (NHSN vintages start 2024-11-19). With the ILI+ pseudo-hub
-(`scripts/calibration_ili_backfill.R`) this is one forecaster from 2011 to
-2026. `scripts/calibration_ws_experiments.R` runs three setups, all sqrt,
+(`scripts/calibration/calibration_ili_backfill.R`) this is one forecaster from 2011 to
+2026. `scripts/calibration/calibration_ws_experiments.R` runs three setups, all sqrt,
 mult 0.03, window 20, carry, on the 50 locations common to all sources and
 on the hub's submission rounds only:
 
@@ -445,10 +483,13 @@ on the hub's submission rounds only:
 - **C** `windowed_seasonal` on the ILI+ decade (2011-12 burn-in, 2012-2020 and
   2022-23 tracked live) then NHSN 2023-26, whitened per location and era by
   the 90th percentile of in-season truth (`scales`), offsets carried across
-  the source switch.
+  the source switch. **C is invalid**: its ILI+ half comes from the broken
+  replay (above). Its rows and the ILI+ numbers were removed.
 
 Variants: `single` (paper's tracker), `leaky` (`fast_decay = 0.1`),
-`operating` (warm start + slow 0.003 + leaky fast). WIS change % vs base:
+`operating` (warm start + slow 0.003 + leaky fast). WIS change % vs base
+(post-fix, hub target-data truth, 50 locations; the findings notebook re-runs
+A and B on NHSN truth, with the same pattern):
 
 | setup / variant | 2024-25 h−1…h3 | 2025-26 h−1…h3 |
 |---|---|---|
@@ -457,13 +498,8 @@ Variants: `single` (paper's tracker), `leaky` (`fast_decay = 0.1`),
 | B single | +0.7 / +2.0 / +0.3 / −0.7 / −1.5 | −1.4 / +2.3 / −0.5 / −0.7 / −0.3 |
 | B leaky | +1.4 / +2.1 / +0.8 / +0.3 / −0.3 | −0.3 / +1.7 / +0.4 / +0.8 / +1.3 |
 | B operating | +2.1 / +2.7 / +1.1 / +0.7 / +0.8 | −0.1 / +2.3 / +0.4 / +0.5 / +0.6 |
-| C single | −6.0 / −0.3 / −0.3 / +0.4 / +1.3 | −11.4 / −3.8 / −4.0 / −3.4 / −2.9 |
-| C leaky | +1.5 / +1.9 / +0.4 / −0.5 / −1.2 | −0.3 / +1.7 / +0.4 / +0.8 / +1.3 |
-| C operating | −0.7 / +5.1 / +2.9 / +3.3 / +4.1 | −10.1 / −1.1 / −2.0 / −1.3 / −0.6 |
 
-C on the first NHSN season (2023-24, live there): single −42 / −41 / −27 /
-−22 / −19, operating −24 / −23 / −15 / −10 / −6, leaky +1.4 / +0.5 / +0.4 /
-+0.7 / +0.6. Calibration error (mean over levels; base first) for B:
+Calibration error (mean over levels; base first) for B:
 2024-25 base 0.074–0.168, single 0.053–0.088, operating 0.048–0.093;
 2025-26 base 0.044–0.088, single 0.007–0.016, operating 0.016–0.042.
 
@@ -473,13 +509,6 @@ Fraction of truth above the base median (the sign of the bias):
 |---|---|---|---|
 | ensemble | 0.56 / 0.55 / 0.55 / 0.53 / 0.52 | 0.83 / 0.74 / 0.73 / 0.74 / 0.76 | 0.58 / 0.63 / 0.59 / 0.60 / 0.60 |
 | windowed_seasonal on NHSN | 0.55 / 0.54 / 0.58 / 0.62 / 0.68 | 0.59 / 0.68 / 0.68 / 0.72 / 0.76 | 0.58 / 0.66 / 0.65 / 0.65 / 0.65 |
-| windowed_seasonal on ILI+ (2014-2019 seasons) | 0.25–0.45 | | |
-
-`windowed_seasonal` calibrated on ILI+ alone (2011-12 burn-in, ten seasons):
-`single` improves WIS in 8 of 10 seasons (+5 to +26%, losses in 2012-13 and
-2022-23) and cuts calibration error at h ≥ 0 from 0.019–0.036 to 0.013–0.017;
-`operating` is negative in 6 of 10 seasons and triples calibration error
-(0.046–0.053). Same numbers appear as the ILI+ rows of setup C.
 
 Reading:
 
@@ -490,27 +519,17 @@ Reading:
   is less miscalibrated to begin with (base cal err 0.07–0.17 vs the
   ensemble's 0.13–0.19 in 2024-25) and because the ensemble's h−1 is a
   different, worse model (climate_linear).
-- **The same forecaster's bias flips sign with the data source.** On ILI+
-  it over-predicts (truth above median 25–45%); on NHSN it under-predicts.
-  Carrying ILI-era offsets into the NHSN era (C) therefore costs 20–40% WIS
-  in the first NHSN season, and the warm start learned on the ILI decade
-  keeps hurting through 2025-26. The ILI+ history is not a proxy for the
-  NHSN regime even with the same model, so the earlier negative result on
-  ILI+ burn-in was not a plumbing bug (date and geo alignment were checked
-  and hold) but a regime difference.
-- **What transfers across seasons is the plain tracker, not the warm start.**
-  Across ten ILI+ seasons the single-term tracker is reliably positive; the
-  warm start + slow term, chosen on two hub seasons, is reliably negative
-  there. On NHSN with one forecaster (B) the two are close, with `operating`
-  slightly ahead on WIS and `single` far ahead on coverage. The leaky
-  variant is the only one indifferent to history (identical in B and C):
-  small, consistent WIS gains, weakest coverage gains.
-- **Overfitting verdict.** The tracker itself is not overfit to the three
-  hub seasons; the operating point's extra machinery is fit to the ensemble's
-  persistent low bias and should not be assumed to carry over to a new base
-  or a new data source. A prod design should warm-start from the *current*
-  forecaster's most recent NHSN season only, or use the leaky tracker with no
-  warm start when that season is unavailable.
+- **On NHSN with one forecaster (B)** the single-term and operating variants
+  are close, with `operating` slightly ahead on WIS and `single` far ahead on
+  coverage in 2025-26; the leaky variant gives small, consistent WIS gains
+  with the weakest coverage gains.
+- **Overfitting verdict (NHSN only).** The tracker is not an artifact of the
+  ensemble: it helps `windowed_seasonal` the same way, with smaller gains.
+  Whether the warm start transfers to a different data source is open (the
+  ILI+ evidence for "it does not" came from the broken replay). A prod design
+  should warm-start from the *current* forecaster's most recent NHSN season,
+  or use the leaky tracker with no warm start when that season is
+  unavailable.
 
 ### Directions this points to, ranked
 
@@ -526,12 +545,15 @@ Reading:
    (all horizons under-predict in the ramp). Feeding the fresh h−1/h0
    gradient into h2/h3's update (a cross-horizon proxy signal) is the only
    idea on the list that changes *when* the offset turns rather than how fast.
+   The lagged-correlation measurement in "Current numbers" is the baseline to
+   beat: a fix should move the best-matching lag toward `k = 0`.
 3. **Phase-gate updates on data, not the calendar.** The Feb-15 cutoff works
    because both live seasons peaked around the turn of the year; a
    late-peaking season would break it. Gating on the base median's trailing
    trend (post-peak ⇒ stop updating, or shrink) expresses the same rule
    without a hard-coded date.
-4. **Scale-aware offsets via a smooth proxy**, given the log-space failure.
+4. **Scale-aware offsets via a smooth proxy**, if sqrt is not enough (the
+   log-space result is pre-fix and was not re-run).
 5. **Eta variants** (seasonal, per-level, pooled): parked. None can fix a
    wrong-signed step.
 
@@ -563,13 +585,20 @@ Fix: `group_by(geo_value, time_value) %>% slice_max(version, n = 1L, with_ties =
 
 Possible next steps, roughly ordered:
 
+0. **Fix and rebuild the ILI+ replay** (`calibration_ili_backfill.R`, ~30 min):
+   confirm the latency-adjustment diagnosis, fix, check the h−1 log-log slope
+   is near 1, then re-run the ILI+ question (bias sign on ILI+; setup C;
+   whether the warm start transfers across data sources) and restore section
+   1.2 of the findings notebook. Also switch the six older calibration
+   notebooks from the removed `hub_read_truth()` / `hub_read_covid_truth()` to
+   `nhsn_read_truth()`.
 1. **Review the ranked gallery** — does the WIS cost concentrate at turning
    points (the `h + 2` staleness prediction)? Are the biggest offsets fixing
    real miscalibration or chasing data-revision artifacts?
 2. **Send the collaborator email** (sweep findings; h −1 free win; carry vs
    reset a wash).
 3. **`windowed_seasonal_extra_sources` retrospective** via
-   `scripts/calibration_harness.R` (covid, evaluation store) — does
+   `scripts/calibration/calibration_harness.R` (covid, evaluation store) — does
    calibration help our best component forecaster, not just the submitted
    ensemble?
 4. **Integration design** for prod: where the tracker lives (per-forecaster

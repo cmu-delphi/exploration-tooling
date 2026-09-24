@@ -1,0 +1,696 @@
+---
+title: Online calibration of flu forecasts — what we are seeing
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  hub_dir: "../FluSight-forecast-hub"
+  rep_min_pop: 5000000
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+# cache = TRUE chunks are keyed on chunk code, NOT on functions in R/ -- after
+# changing calibration code, clear cache/calibration/knitr_cache_findings_flu/.
+knitr::opts_chunk$set(
+  fig.align = "center", fig.width = 10, fig.height = 6,
+  message = FALSE, warning = FALSE, cache = FALSE,
+  cache.path = here::here("cache/calibration/knitr_cache_findings_flu/")
+)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+This notebook collects the main findings of the MultiQT calibration work
+(`notes/CALIBRATION.md` has the full record and the method). In short: per
+(location, horizon) series, an additive offset over the 23 hub quantile levels
+is learned online from past coverage misses and added to the base forecast.
+The questions:
+
+1. **Which way is the base biased?** On NHSN, low, in every season, for both
+   `windowed_seasonal` and the submitted ensemble. The ILI+ comparison is on
+   hold: the ILI+ replay of `windowed_seasonal` turns out to be broken
+   (section 1.2).
+2. **Why do short and long horizons behave so differently?** An outcome is
+   only learned from once it has settled, `h + 2` rounds after the forecast,
+   so the h3 offset is always at least five rounds stale.
+3. **What does a leak on the fast term buy?** It stops a stale offset from
+   persisting into the part of the season where it has the wrong sign.
+4. **What does the sqrt transform buy?** Offsets that stay closer to
+   proportionate between trough and peak.
+
+All tracker runs use `lr_mult = 0.03`, `lr_window = 20`, `season_policy =
+"carry"`, and 2023-24 as the burn-in season. Scores are on counts against the
+latest NHSN vintage, over all hub locations (US included) unless stated. "WIS
+change %" is positive when calibration improves on the base forecast. Burn-in
+rounds are excluded from every score.
+
+```{r libs}
+# Not cached: attaches packages and defines functions every render.
+suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+source(here::here("scripts/calibration/calibration_ili_backfill.R"))
+source(here::here("scripts/calibration/calibration_ws_backfill.R"))
+```
+
+```{r load, cache=TRUE}
+nhsn_arch <- get_nhsn_data_archive("flu")
+nhsn_truth <- nhsn_read_truth("flu", nhsn_arch)
+hub_fc <- hub_read_forecasts(hub_dir = here::here(params$hub_dir))
+ili <- ili_read_pseudo_hub()
+ws <- ws_read_pseudo_hub()
+
+geo_map <- get_population_data() %>%
+  distinct(state_id, .keep_all = TRUE) %>%
+  transmute(geo_value = state_id, abbrev = toupper(state_id), location = state_code, population)
+```
+
+```{r prep, cache=TRUE, dependson="load"}
+LIVE_SEASONS <- c("2024-2025", "2025-2026")
+
+# windowed_seasonal replay on the hub's submission rounds only, so seasons,
+# gaps and round counts match the ensemble's.
+ws_fc <- ws %>%
+  filter(reference_date %in% unique(hub_fc$reference_date)) %>%
+  select(-as_of_policy)
+# Locations both bases cover, for the like-for-like comparison in section 5.
+common_loc <- intersect(unique(ws_fc$location), unique(hub_fc$location))
+
+ili_rounds <- hub_label_seasons(unique(ili$forecasts$reference_date))
+ili_fc <- ili$forecasts %>%
+  filter(reference_date %in% ili_rounds$round_date[!ili_rounds$season %in% c("2010-2011", "2020-2021", "2021-2022", "2023-2024")])
+
+in_season <- function(d) as.integer(format(d, "%m")) %in% c(10:12, 1:5)
+pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
+```
+
+```{r runs, cache=TRUE, dependson="prep"}
+run <- function(fc, truth, ...) {
+  args <- modifyList(
+    list(
+      burn_in_seasons = "2023-2024", transform = "sqrt", lr_window = 20, season_policy = "carry",
+      lr_args = list(mult = 0.03, floor = 1e-3), progress = FALSE
+    ),
+    list(...)
+  )
+  suppressMessages(do.call(calibrate_hub_forecasts, c(list(fc, truth), args)))
+}
+operating <- list(slow_init = "burn_in_quantile", lr_slow = list(mult = 0.003), fast_decay = 0.1)
+
+# The submitted ensemble, all hub locations: the method variants.
+ens <- list(
+  count = run(hub_fc, nhsn_truth, transform = "identity"),
+  count_leaky = run(hub_fc, nhsn_truth, transform = "identity", fast_decay = 0.1),
+  sqrt = run(hub_fc, nhsn_truth),
+  sqrt_leaky = run(hub_fc, nhsn_truth, fast_decay = 0.1),
+  warm_static = run(hub_fc, nhsn_truth, slow_init = "burn_in_quantile", lr_args = list(mult = 1e-6, floor = 0)),
+  warm_leaky = run(hub_fc, nhsn_truth, slow_init = "burn_in_quantile", fast_decay = 0.1),
+  operating = do.call(run, c(list(hub_fc, nhsn_truth), operating))
+)
+# Ensemble (A) and windowed_seasonal (B) on their common locations.
+ens_common <- hub_fc %>% filter(location %in% common_loc)
+ws_common <- ws_fc %>% filter(location %in% common_loc)
+ab <- list(
+  A_single = run(ens_common, nhsn_truth),
+  A_leaky = run(ens_common, nhsn_truth, fast_decay = 0.1),
+  A_operating = do.call(run, c(list(ens_common, nhsn_truth), operating)),
+  B_single = run(ws_common, nhsn_truth),
+  B_leaky = run(ws_common, nhsn_truth, fast_decay = 0.1),
+  B_operating = do.call(run, c(list(ws_common, nhsn_truth), operating))
+)
+
+variant_labels <- c(
+  count = "count space, single term (the paper)",
+  count_leaky = "count space, leaky fast (decay 0.1)",
+  sqrt = "sqrt, single term",
+  sqrt_leaky = "sqrt, leaky fast (decay 0.1)",
+  warm_static = "sqrt, warm start only (no tracking)",
+  warm_leaky = "sqrt, warm start + leaky fast",
+  operating = "sqrt, warm start + slow 0.003 + leaky fast (operating point)"
+)
+```
+
+```{r score-helpers}
+wis_table <- function(cals, labels = names(cals), by = character(0), seasons = NULL) {
+  purrr::imap(cals, function(cal, nm) {
+    left_join(
+      hub_quantile_loss(cal, by = by),
+      hub_coverage_summary(cal, by = by) %>% select(all_of(c(by, "horizon")), "cal_error_base", "cal_error_cal"),
+      by = c(by, "horizon")
+    ) %>% mutate(variant = nm)
+  }) %>%
+    bind_rows() %>%
+    { if (!is.null(seasons)) filter(., season %in% seasons) else . } %>%
+    mutate(variant = factor(variant, levels = names(cals), labels = labels))
+}
+wide <- function(tbl, col, digits = 1, id = "variant") {
+  tbl %>%
+    select(all_of(id), horizon, value = all_of(col)) %>%
+    mutate(value = round(value, digits)) %>%
+    tidyr::pivot_wider(names_from = horizon, values_from = value, names_prefix = "h")
+}
+median_rows <- function(fc, truth, base) {
+  rounds <- hub_label_seasons(unique(fc$reference_date)) %>% select(reference_date = round_date, season)
+  fc %>%
+    filter(level == 0.5) %>%
+    inner_join(truth, by = c("location", "target_end_date")) %>%
+    inner_join(rounds, by = "reference_date") %>%
+    mutate(base = base)
+}
+season_of <- function(d) {
+  y <- as.integer(format(d, "%Y")) - (as.integer(format(d, "%m")) < 8)
+  paste0(y, "-", y + 1)
+}
+fan_rows <- function(fc, loc, seasons, every = 3L) {
+  rounds <- hub_label_seasons(unique(fc$reference_date)) %>%
+    filter(season %in% seasons) %>%
+    group_by(season) %>%
+    filter((season_round - 1L) %% every == 0L) %>%
+    ungroup() %>%
+    select(reference_date = round_date, season)
+  fc %>%
+    filter(location == loc, level %in% c(0.1, 0.5, 0.9)) %>%
+    inner_join(rounds, by = "reference_date") %>%
+    mutate(level = paste0("q", level * 100)) %>%
+    select(season, reference_date, target_end_date, level, value) %>%
+    tidyr::pivot_wider(names_from = level, values_from = value)
+}
+fan_plot <- function(fans, truth_rows, vintages = NULL, ylab) {
+  p <- ggplot(fans, aes(target_end_date, group = reference_date))
+  if (!is.null(vintages)) {
+    p <- p + geom_line(aes(time_value, value, group = reference_date), data = vintages, color = "orange3", linewidth = 0.4, alpha = 0.8)
+  }
+  p +
+    geom_line(aes(target_end_date, truth), data = truth_rows, inherit.aes = FALSE, color = "black") +
+    geom_ribbon(aes(ymin = q10, ymax = q90), fill = "steelblue", alpha = 0.25) +
+    geom_line(aes(y = q50), color = "steelblue4") +
+    facet_wrap(~season, scales = "free", ncol = 3) +
+    labs(x = NULL, y = ylab)
+}
+```
+
+# 1. The base bias
+
+## 1.1 On NHSN, both bases forecast too low
+
+The tracker's largest gains come from correcting a persistent bias, so the
+first question is whether the base has one. Two bases on NHSN:
+
+- **the submitted ensemble** (`CMU-TimeSeries`), read from the hub checkout;
+- **`windowed_seasonal`**, flu prod's seasonal component, replayed by
+  `scripts/calibration/calibration_ws_backfill.R` with prod's archive, seed
+  and substitutions. 2024-25 and 2025-26 are honest as-of replays; 2023-24
+  uses finalized data, since no NHSN vintages exist before 2024-11-19.
+
+```{r bias-data}
+med <- bind_rows(
+  median_rows(ws_fc, nhsn_truth, "windowed_seasonal"),
+  median_rows(hub_fc, nhsn_truth, "submitted ensemble")
+)
+bias_by_season <- med %>%
+  group_by(base, season, horizon) %>%
+  summarize(above = 100 * mean(truth > value), .groups = "drop")
+```
+
+```{r bias-plot, fig.height=4}
+ggplot(bias_by_season, aes(season, above, color = factor(horizon), group = horizon)) +
+  geom_hline(yintercept = 50, linetype = "dashed") +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~base) +
+  scale_color_viridis_d(name = "horizon", end = 0.9) +
+  labs(x = NULL, y = "% of forecasts with truth above the median", title = "Above the dashed line: forecast too low")
+```
+
+Pooled over all three seasons: the share of forecasts with truth above the
+median, and the summed median as a percentage error on summed truth (negative
+means too low; this weights the peak weeks).
+
+```{r bias-table}
+bias_pooled <- med %>%
+  group_by(base, horizon) %>%
+  summarize(above = 100 * mean(truth > value), level_err = 100 * (sum(value) / sum(truth) - 1), .groups = "drop")
+knitr::kable(
+  left_join(
+    wide(bias_pooled, "above", 0, id = "base") %>% rename_with(~ paste(.x, "above %"), starts_with("h")),
+    wide(bias_pooled, "level_err", 0, id = "base") %>% rename_with(~ paste(.x, "level %"), starts_with("h")),
+    by = "base"
+  )
+)
+```
+
+Where in the season the bias sits: the same two numbers at h0 and h3, split
+by how high truth is relative to the location's 90th-percentile in-season
+level (trough on the left, peak on the right).
+
+```{r bias-bins}
+loc_scale <- nhsn_truth %>%
+  filter(target_end_date >= as.Date("2023-10-01"), in_season(target_end_date)) %>%
+  group_by(location) %>%
+  summarize(scale = stats::quantile(truth, 0.9, names = FALSE), .groups = "drop")
+bins <- med %>%
+  filter(horizon %in% c(0, 3)) %>%
+  inner_join(loc_scale, by = "location") %>%
+  mutate(level_bin = cut(truth / scale, c(0, 0.1, 0.25, 0.5, 0.75, 1, Inf), right = FALSE)) %>%
+  filter(!is.na(level_bin)) %>%
+  group_by(base, horizon, level_bin) %>%
+  summarize(above = round(100 * mean(truth > value)), level = round(100 * (sum(value) / sum(truth) - 1)), .groups = "drop") %>%
+  mutate(cell = sprintf("%d%% / %+d%%", above, level)) %>%
+  select(base, horizon, level_bin, cell) %>%
+  tidyr::pivot_wider(names_from = level_bin, values_from = cell)
+knitr::kable(bins, caption = "truth above median % / level error %, by truth ÷ location's in-season 90th percentile")
+```
+
+- Both bases are low in all three NHSN seasons, and the bias grows with
+  horizon. At h0 it is a fairly even level shift (roughly 5–20% low across the
+  range). At h3 it concentrates at the peak: near the top of the season the
+  median is 60–70% low and truth is above it almost every time. That is the
+  base failing to anticipate how high the peak goes, not a constant offset.
+- `windowed_seasonal` is the less biased of the two at h−1 and the more biased
+  of the two by h3. The ensemble's h−1 is a different model
+  (`climate_linear`) and is further off there.
+
+### A representative state
+
+The state whose `windowed_seasonal` above-median share (pooled over h0–h3
+and both live seasons) is closest to the pooled value, among states with
+population over `r format(params$rep_min_pop, big.mark = ",", scientific = FALSE)`.
+Every third round is drawn: the median path from h−1 to h3 with an 80% band,
+over finalized truth (black). The orange lines are the NHSN vintage each drawn
+round saw (its last eight weeks); where the end of an orange line sits below
+the black line, the forecaster was working from data that was later revised
+up.
+
+```{r rep-state}
+pooled <- med %>%
+  filter(base == "windowed_seasonal", horizon >= 0, season %in% LIVE_SEASONS) %>%
+  summarize(p = mean(truth > value)) %>%
+  pull(p)
+rep_scores <- med %>%
+  filter(base == "windowed_seasonal", horizon >= 0, season %in% LIVE_SEASONS) %>%
+  group_by(location) %>%
+  summarize(score = abs(mean(truth > value) - pooled), .groups = "drop") %>%
+  inner_join(geo_map, by = "location") %>%
+  filter(population > params$rep_min_pop) %>%
+  arrange(score)
+rep_loc <- rep_scores$location[1]
+rep_abbrev <- rep_scores$abbrev[1]
+rep_geo <- rep_scores$geo_value[1]
+```
+
+```{r nhsn-fans, fig.height=4.5}
+fans <- fan_rows(ws_fc, rep_loc, LIVE_SEASONS)
+truth_rows <- nhsn_truth %>%
+  filter(location == rep_loc) %>%
+  mutate(season = season_of(target_end_date)) %>%
+  filter(season %in% LIVE_SEASONS, in_season(target_end_date))
+vintages <- purrr::map(unique(fans$reference_date), function(rd) {
+  as_of <- rd - 3L
+  if (as_of < min(nhsn_arch$DT$version)) return(NULL)
+  epix_as_of(nhsn_arch, as_of) %>%
+    as_tibble() %>%
+    filter(geo_value == rep_geo, time_value > rd - 7L * 9L) %>%
+    transmute(reference_date = rd, season = season_of(rd), time_value, value)
+}) %>% bind_rows()
+fan_plot(fans, truth_rows, vintages, ylab = "weekly flu admissions") +
+  ggtitle(sprintf("windowed_seasonal on NHSN, %s", rep_abbrev))
+```
+
+## 1.2 The ILI+ replay is broken, so the ILI+ comparison is on hold
+
+The plan was to show the same forecaster on the ILI+ decade
+(`scripts/calibration/calibration_ili_backfill.R`: finalized state ILI+,
+snapshot cut one week before the forecast date), where earlier analysis read
+it as biased high. That replay does not do what it is meant to. Its h−1
+forecast is a forecast of the last week the model observed, so its median
+should track truth almost one-for-one. Regressing log median on log truth:
+
+```{r ili-slope}
+slopes <- bind_rows(
+  median_rows(ili_fc, ili$truth, "windowed_seasonal, ILI+ replay"),
+  med %>% filter(base == "windowed_seasonal") %>% mutate(base = "windowed_seasonal, NHSN replay")
+) %>%
+  filter(truth > 0, value > 0) %>%
+  group_by(base, horizon) %>%
+  summarize(slope = coef(stats::lm(log(value) ~ log(truth)))[[2]], .groups = "drop")
+knitr::kable(wide(slopes, "slope", 2, id = "base"), caption = "slope of log(median) on log(truth); 1 means proportional")
+```
+
+A slope of about 0.5 at h−1 means the median is far too high at the trough
+and far too low at the peak, even for a week the model has already seen. The plot below
+shows the same thing per round: the first point of each fan (h−1) is already
+well off the black line. The snapshots themselves are correct (checked
+for Indiana on 2018-01-03: the last observed value is in the snapshot and
+matches truth), and the run emits epipredict's *"less latency at bake time
+than there was at prep time … will discard the most recent data"* warning, so
+the suspect is the latency adjustment (`adjust_latency = "extend_lags"` by
+default) interacting with the one-week snapshot truncation. The forecasts for
+the representative state:
+
+```{r ili-fans, fig.height=4.5}
+ili_seasons <- c("2016-2017", "2017-2018", "2018-2019")
+fans <- fan_rows(ili_fc, rep_loc, ili_seasons)
+truth_rows <- ili$truth %>%
+  filter(location == rep_loc) %>%
+  mutate(season = season_of(target_end_date)) %>%
+  filter(season %in% ili_seasons, in_season(target_end_date))
+fan_plot(fans, truth_rows, ylab = "ILI+ (%)") +
+  ggtitle(sprintf("windowed_seasonal ILI+ replay, %s: flat medians, huge bands, and h−1 misses an observed week", rep_abbrev))
+```
+
+Everything built on this replay is suspect until it is rebuilt: the "bias has
+the opposite sign on ILI+" reading, the ILI+ burn-in negative result, and the
+ILI-decade-then-NHSN experiment. Those results are not repeated here.
+
+# 2. Staleness: why h−1/h0 and h2/h3 respond differently
+
+The tracker learns from an outcome only once it has settled (14 days after
+the target week), so the outcome of an h-step forecast is revealed `h + 2`
+rounds after it was issued, and the step at round `t` is driven by forecasts
+issued at `t − h − 2` or earlier. The long horizons have the largest reveal
+lag *and* are the hardest to forecast, so they also carry most of the base
+error:
+
+```{r lag-table}
+base_wis <- hub_quantile_loss(ens$sqrt) %>%
+  mutate(
+    `reveal lag (rounds)` = horizon + 2L,
+    `base WIS (ensemble)` = round(2 * loss_base, 1),
+    `relative to h0` = round(loss_base / loss_base[horizon == 0], 2)
+  ) %>%
+  select(horizon, `reveal lag (rounds)`, `base WIS (ensemble)`, `relative to h0`)
+knitr::kable(base_wis)
+```
+
+## The offset echoes the past
+
+For the median of each series, define the *needed* shift as
+`sqrt(truth) − sqrt(base median)` (what an oracle would have added, in the
+tracker's working units) and the *played* shift as
+`sqrt(calibrated median) − sqrt(base median)`. Below: the correlation between
+the played shift at round `t` and the needed shift at round `t − k`, averaged
+over locations, for the single-term sqrt tracker.
+
+```{r lag-corr, fig.height=4}
+shift_rows <- function(cal) {
+  cal$forecasts %>%
+    filter(!is_burn_in, level == 0.5, !is.na(truth), !is.na(value_base)) %>%
+    mutate(needed = sqrt(truth) - sqrt(value_base), played = sqrt(value_cal) - sqrt(value_base)) %>%
+    select(location, horizon, round_index, reference_date, season, value_base, value_cal, needed, played)
+}
+ks <- 0:12
+lag_corr <- shift_rows(ens$sqrt) %>%
+  group_by(location, horizon) %>%
+  arrange(round_index, .by_group = TRUE) %>%
+  reframe(k = ks, r = purrr::map_dbl(ks, function(k) {
+    n <- length(played)
+    if (n - k < 10) return(NA_real_)
+    x <- played[(k + 1):n]
+    y <- needed[1:(n - k)]
+    if (sd(x) == 0 || sd(y) == 0) return(NA_real_)
+    stats::cor(x, y)
+  })) %>%
+  group_by(horizon, k) %>%
+  summarize(r = mean(r, na.rm = TRUE), .groups = "drop")
+peaks <- lag_corr %>% group_by(horizon) %>% slice_max(r, n = 1) %>% ungroup()
+ggplot(lag_corr, aes(k, r, color = factor(horizon))) +
+  geom_hline(yintercept = 0, color = "grey50") +
+  geom_line() +
+  geom_point(data = peaks, size = 3) +
+  geom_vline(aes(xintercept = horizon + 2, color = factor(horizon)), data = distinct(lag_corr, horizon), linetype = "dotted") +
+  scale_color_viridis_d(name = "horizon", end = 0.9) +
+  scale_x_continuous(breaks = ks) +
+  labs(
+    x = "k (rounds): played shift at t vs needed shift at t − k",
+    y = "mean correlation over locations",
+    title = "Dotted: reveal lag h + 2. Large dots: best-matching lag."
+  )
+knitr::kable(
+  lag_corr %>%
+    filter(k == 0) %>%
+    select(horizon, `r at k = 0` = r) %>%
+    left_join(peaks %>% select(horizon, `best k` = k, `r at best k` = r), by = "horizon") %>%
+    mutate(`reveal lag` = horizon + 2L, across(starts_with("r "), ~ round(.x, 2)))
+)
+```
+
+- **The current needed shift and the played shift are negatively
+  correlated** at every horizon from h0 up, and more so at longer horizons:
+  on average the tracker is pushing the wrong way *right now*.
+- **The played shift best matches the needed shift of `h + 4` to `h + 6`
+  rounds earlier** (h0–h3): the reveal lag plus two to four rounds for the
+  tracker to build up an offset. At h3 that is nine rounds, about two months.
+  h−1 has almost no structure: its lag is one round.
+
+Share of rounds where the calibrated median moved in the right direction
+(same sign as the needed shift), among rounds where it moved the median by
+more than 1%:
+
+```{r sign-table}
+sign_right <- purrr::imap(ens[c("count", "sqrt", "sqrt_leaky", "warm_static", "operating")], function(cal, nm) {
+  shift_rows(cal) %>%
+    filter(abs(value_cal - value_base) > 0.01 * value_base) %>%
+    group_by(horizon) %>%
+    summarize(right = 100 * mean(sign(played) == sign(needed)), .groups = "drop") %>%
+    mutate(variant = variant_labels[[nm]])
+}) %>% bind_rows()
+knitr::kable(wide(sign_right, "right", 0), caption = "% of moves in the right direction")
+```
+
+Because the base is low most of the time, "shift up" is right more often than
+not, so every variant is above 50%. The static warm start (a constant
+upward shift, no tracking) is right as often as any tracker at h0–h3: what
+the trackers add is size and coverage, not timing.
+
+## One series through a season
+
+`r rep_abbrev` at h0 and h3 over both live seasons: the needed shift (black)
+and the played shift for three variants, in sqrt units.
+
+```{r series-plot, fig.height=6}
+series <- purrr::imap(ens[c("sqrt", "sqrt_leaky", "operating")], function(cal, nm) {
+  shift_rows(cal) %>% filter(location == rep_loc, horizon %in% c(0, 3)) %>% mutate(variant = variant_labels[[nm]])
+}) %>% bind_rows()
+needed <- series %>% distinct(horizon, season, reference_date, needed)
+ggplot(series, aes(reference_date)) +
+  geom_hline(yintercept = 0, color = "grey50") +
+  geom_line(aes(y = needed), data = needed, color = "black", linewidth = 0.8) +
+  geom_line(aes(y = played, color = variant)) +
+  facet_grid(paste0("h", horizon) ~ season, scales = "free") +
+  scale_color_brewer(palette = "Set1", name = NULL) +
+  labs(x = NULL, y = "shift of the median (sqrt units)") +
+  theme(legend.position = "bottom", legend.direction = "vertical")
+```
+
+The needed shift is dominated by the base missing the peak: large, fast and
+changing sign within a few weeks, more so at h3. None of the trackers
+follows it; at this learning rate they only build a small, smooth level. That
+is by design (a faster tracker overshoots; see the sweep in
+`calibration_qt_flu.Rmd`), and it is why the gain is mostly a level
+correction plus coverage rather than a fix for the peak miss.
+
+## Score by horizon
+
+WIS change % over both live seasons, and calibration error (mean absolute
+coverage miss over the 23 levels; base in the first row).
+
+```{r horizon-table}
+tbl <- wis_table(ens, variant_labels[names(ens)])
+knitr::kable(wide(tbl, "pct_improvement"), caption = "WIS change % (positive is better)")
+cal_err <- bind_rows(
+  tbl %>% filter(variant == variant_labels[["sqrt"]]) %>% mutate(variant = "base", cal_error_cal = cal_error_base),
+  tbl %>% mutate(variant = as.character(variant))
+)
+knitr::kable(wide(cal_err, "cal_error_cal", 3), caption = "Calibration error")
+```
+
+- **h−1 and h0 gain under every tracker.** The lag is one to two rounds,
+  short enough that recent misses are still informative. At h−1 the
+  ensemble's base is `climate_linear`, a weaker model, so there is more to
+  correct.
+- **h2 and h3 are where the method choices matter.** A tracker alone is
+  negative (single term) or roughly neutral (leaky) there; the warm start (a constant correction
+  learned from the burn-in season, which needs no timely feedback) is what
+  makes them positive.
+
+# 3. The leak: letting stale offsets decay
+
+With `fast_decay = 0.1`, the fast term is multiplied by 0.9 before each
+step, so a correction that new outcomes do not refresh fades (half-life about
+6.6 rounds). The effect by calendar month of the reference date:
+
+```{r by-month}
+by_month <- function(cal) {
+  cal$forecasts %>%
+    filter(!is_burn_in, !is.na(truth), !is.na(value_base)) %>%
+    mutate(month = format(reference_date, "%b")) %>%
+    group_by(horizon, month) %>%
+    summarize(
+      base = sum(pinball(truth, value_base, level)),
+      cal = sum(pinball(truth, value_cal, level)),
+      .groups = "drop"
+    ) %>%
+    group_by(horizon) %>%
+    mutate(pct = 100 * (base - cal) / base, share = 100 * base / sum(base)) %>%
+    ungroup()
+}
+month_levels <- month.abb[c(10:12, 1:5)]
+month_tbl <- purrr::imap(ens[c("sqrt", "sqrt_leaky", "warm_leaky", "operating")], function(cal, nm) {
+  by_month(cal) %>% mutate(variant = variant_labels[[nm]])
+}) %>%
+  bind_rows() %>%
+  filter(month %in% month_levels) %>%
+  mutate(month = factor(month, levels = month_levels))
+
+ggplot(month_tbl %>% filter(horizon %in% c(0, 3)), aes(month, pct, color = variant, group = variant)) +
+  geom_hline(yintercept = 0, color = "grey50") +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ paste0("h", horizon)) +
+  scale_color_brewer(palette = "Set1", name = NULL) +
+  coord_cartesian(ylim = c(-60, 30)) +
+  labs(x = "month of reference date", y = "WIS change % (clipped at −60)") +
+  theme(legend.position = "bottom", legend.direction = "vertical")
+knitr::kable(
+  month_tbl %>%
+    filter(horizon == 3) %>%
+    mutate(pct = round(pct, 1)) %>%
+    select(variant, month, pct) %>%
+    arrange(month) %>%
+    tidyr::pivot_wider(names_from = month, values_from = pct) %>%
+    bind_rows(
+      month_tbl %>%
+        filter(horizon == 3, variant == variant_labels[["sqrt"]]) %>%
+        transmute(variant = "share of base WIS %", month, pct = round(share, 1)) %>%
+        arrange(month) %>%
+        tidyr::pivot_wider(names_from = month, values_from = pct)
+    ),
+  caption = "h3: WIS change % by month, and each month's share of the base WIS"
+)
+```
+
+- **The losses are in March–April and October, which carry little WIS.** In
+  March–April the offset built while chasing the winter peak is still in
+  place when the base has already come down; in October the offset carried
+  over from the previous spring has not been unwound yet (the reveal lag
+  means the first live outcomes arrive weeks into the season).
+- **The leak alone cuts those losses by two thirds or more** (h3: March −17%
+  against −47% for the single-term tracker, October −14% against −48%, April
+  +9% against −36%), at the cost of coverage:
+  a correction that must be refreshed every round cannot hold a level through
+  a five-round reveal lag (calibration error in the table above: the leaky
+  variant sits between single-term and uncalibrated).
+- **The warm start wins in December–January**, the months that carry most of
+  the base WIS (+4% at h3 against +1–2% without it), and so wins overall at
+  h1–h3 even though part of the spring loss comes back (March −28 to −33%). The warm start is a constant,
+  so it is too large once the season comes down; the leak cannot take it
+  away because it only decays the fast term.
+
+# 4. The sqrt transform
+
+In sqrt space the tracker sees `sqrt(truth)` and `sqrt(base quantiles)`,
+learns and projects offsets there, and the played quantiles are squared back
+(clamped at zero) and scored on counts. The coverage gradient is unchanged,
+since a monotone map preserves which side of a quantile the truth falls on;
+what changes is the size of a step. A fixed sqrt-space offset `d` on a base
+median `b` moves it by `2 d sqrt(b) + d²` counts, so it grows with the square
+root of the level instead of staying a fixed count.
+
+The plot shows the played median shift relative to the base median, split by
+where the base median sits within the location's season (base median divided
+by that location's 90th-percentile in-season truth).
+
+```{r relative-shift, fig.height=4}
+rel <- purrr::imap(ens[c("count", "sqrt", "count_leaky", "sqrt_leaky")], function(cal, nm) {
+  cal$forecasts %>%
+    filter(!is_burn_in, level == 0.5, !is.na(value_base), value_base > 0) %>%
+    inner_join(loc_scale, by = "location") %>%
+    mutate(
+      level_bin = cut(value_base / scale, c(0, 0.05, 0.1, 0.2, 0.4, 0.7, Inf), right = FALSE),
+      rel_shift = abs(value_cal - value_base) / value_base,
+      variant = variant_labels[[nm]]
+    )
+}) %>% bind_rows()
+rel_summary <- rel %>%
+  filter(horizon %in% c(0, 3)) %>%
+  group_by(variant, horizon, level_bin) %>%
+  summarize(med = 100 * median(rel_shift), .groups = "drop")
+ggplot(rel_summary, aes(level_bin, med, color = variant, group = variant)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ paste0("h", horizon)) +
+  scale_y_log10() +
+  scale_color_brewer(palette = "Paired", name = NULL, direction = -1) +
+  labs(
+    x = "base median / location's in-season 90th percentile (trough → peak)",
+    y = "median |shift| / base median (%, log)"
+  ) +
+  theme(legend.position = "bottom", legend.direction = "vertical")
+knitr::kable(
+  rel_summary %>%
+    group_by(variant, horizon) %>%
+    summarize(`trough ÷ peak` = round(first(med) / last(med), 1), .groups = "drop") %>%
+    tidyr::pivot_wider(names_from = horizon, values_from = `trough ÷ peak`, names_prefix = "h"),
+  caption = "Relative shift at the trough bin divided by the relative shift at the peak bin"
+)
+```
+
+```{r transform-table}
+tt <- wis_table(ens[c("count", "sqrt", "count_leaky", "sqrt_leaky")], variant_labels[c("count", "sqrt", "count_leaky", "sqrt_leaky")])
+knitr::kable(wide(tt, "pct_improvement"), caption = "WIS change %, both live seasons")
+knitr::kable(wide(tt, "cal_error_cal", 3), caption = "Calibration error")
+```
+
+- **In count space the relative shift spans a much wider range** between
+  trough and peak than in sqrt space: an offset sized on peak residuals is
+  far too large for the trough. Sqrt narrows that range but does not remove
+  it, and it makes the relative shift at the peak somewhat larger.
+- **Sqrt is better on WIS at every horizon**, with or without the leak. Its
+  calibration error is similar (slightly better at h1–h3 for the single-term
+  tracker, slightly worse with the leak).
+- **The transform does not address staleness.** A stale sqrt-space offset is
+  still wrong-signed, just more modestly sized. The leak and the transform
+  are complementary: count space with a leak is comparable to sqrt without
+  one at h1–h3.
+
+# 5. The same tracker on two bases
+
+The ensemble (A) and `windowed_seasonal` (B) calibrated the same way, on the
+locations both cover. `windowed_seasonal` is less miscalibrated to start with,
+so there is less to gain.
+
+```{r ab-table}
+ab_tbl <- wis_table(ab, names(ab), by = "season", seasons = LIVE_SEASONS) %>%
+  mutate(variant = as.character(variant))
+knitr::kable(wide(ab_tbl, "pct_improvement", id = c("variant", "season")) %>% arrange(season, variant), caption = "WIS change %")
+ab_err <- bind_rows(
+  ab_tbl %>% filter(variant %in% c("A_single", "B_single")) %>% mutate(variant = paste0(substr(variant, 1, 1), "_base"), cal_error_cal = cal_error_base),
+  ab_tbl
+)
+knitr::kable(wide(ab_err, "cal_error_cal", 3, id = c("variant", "season")) %>% arrange(season, variant), caption = "Calibration error")
+```
+
+- The operating point helps both bases in both seasons at h0–h3, with small
+  gains on `windowed_seasonal` (under 4%).
+- On `windowed_seasonal` in 2025-26 the single-term tracker has far better
+  calibration error than the operating point (0.009–0.014 against
+  0.019–0.045) for slightly less WIS gain: the leak is the price of the
+  spring fix, paid in coverage.
+- Whether the warm start transfers to a *different data source* was the
+  question the ILI+ replay was meant to answer; that has to wait for the
+  rebuild (section 1.2). Within NHSN, the warm start comes from the same
+  base's burn-in season, and it helps both.
+
+# Summary
+
+| question | answer |
+|---|---|
+| Is there a stable bias to correct? | On NHSN yes: both bases forecast too low in every season, worse at longer horizons and, at h3, concentrated at the peak. The ILI+ comparison waits on a rebuilt replay. |
+| Why do h2/h3 behave differently from h−1/h0? | The offset is at least `h + 2` rounds stale. Right now it is negatively correlated with the needed shift, and it best matches the needed shift of `h + 4` to `h + 6` rounds earlier. The long horizons are also the hardest and carry most of the base WIS. |
+| What does the leak do? | Cuts the spring and October losses from stale offsets by two thirds or more, at the cost of coverage. |
+| What does the warm start do? | Holds the persistent low bias as a constant: gains where the WIS mass is (December–January), which the trackers alone cannot at h2/h3. Its spring losses come back, since the leak does not touch it. |
+| What does sqrt do? | Narrows the range of relative offset size between trough and peak, and is better on WIS than count space at every horizon. It does not fix staleness. |
