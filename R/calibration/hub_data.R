@@ -67,8 +67,8 @@ hub_level_index <- function(x, levels = HUB_QUANTILE_LEVELS, tol = 1e-8) {
 #' Read one model's quantile forecasts for one target out of a hub checkout.
 #'
 #' @param hub_dir local hub checkout. For flu, use `HUB_FLU_DIR`
-#'   (cdcepi/FluSight-forecast-hub); for covid, use `HUB_COVID_DIR`
-#'   (cdcepi/covid19-forecast-hub). Only the model-output directory is needed.
+#'   (cdcepi/FluSight-forecast-hub); for covid, pass a checkout of
+#'   cdcepi/covid19-forecast-hub. Only the model-output directory is needed.
 #' @param model model-output subdirectory.
 #' @param target hub target string. 2023-24 files also carry
 #'   `wk flu hosp rate change` pmf rows, so both `target` and
@@ -133,6 +133,28 @@ hub_read_forecasts <- function(
     )
   }
   out %>% arrange(.data$reference_date, .data$horizon, .data$location, .data$level_index)
+}
+
+
+#' Latest-vintage NHSN admissions as calibration truth, on hub coordinates.
+#'
+#' NHSN `time_value` is the Saturday week end, the same grid as the hub's
+#' `target_end_date`.
+#' @param archive an NHSN `epi_archive`, by default [get_nhsn_data_archive()].
+#' @return tibble with `target_end_date`, `location` (FIPS), `truth`.
+#' @export
+nhsn_read_truth <- function(disease = "flu", archive = get_nhsn_data_archive(disease)) {
+  archive %>%
+    epix_as_of(archive$versions_end) %>%
+    as_tibble() %>%
+    mutate(geo_value = ifelse(.data$geo_value == "usa", "us", .data$geo_value)) %>%
+    inner_join(
+      get_population_data() %>% distinct(.data$state_id, .keep_all = TRUE) %>% select("state_id", location = "state_code"),
+      by = c("geo_value" = "state_id")
+    ) %>%
+    select(target_end_date = "time_value", "location", truth = "value") %>%
+    filter(!is.na(.data$truth)) %>%
+    arrange(.data$location, .data$target_end_date)
 }
 
 

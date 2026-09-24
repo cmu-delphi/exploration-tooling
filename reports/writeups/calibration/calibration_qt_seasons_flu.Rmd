@@ -9,6 +9,7 @@ output:
     toc_float: true
     toc_depth: 2
 params:
+  hub_dir: "../FluSight-forecast-hub"
   burn_in_seasons: "2023-2024"
   season_policy: "carry"
   lr_window: 20
@@ -45,11 +46,14 @@ season with no tracking, the warm start plus a leaky fast tracker, the warm
 start plus slow and leaky fast terms (the current operating point), and
 switching off after February 15 as the earlier reference.
 
-```{r load, cache=TRUE}
+```{r libs}
+# Not cached: attaches packages every render.
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+```
 
-forecasts <- hub_read_forecasts()
-truth <- hub_read_truth()
+```{r load, cache=TRUE}
+forecasts <- hub_read_forecasts(hub_dir = here::here(params$hub_dir))
+truth <- nhsn_read_truth("flu")
 rounds <- hub_label_seasons(unique(forecasts$reference_date))
 burn_in <- strsplit(params$burn_in_seasons, ",")[[1]]
 
