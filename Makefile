@@ -284,3 +284,15 @@ update-only-nssp-submission:
 	cat temp1.csv temp2.csv temp3.csv > model-output/CMU-TimeSeries/$$date-CMU-TimeSeries.csv; \
 	rm temp1.csv temp2.csv temp3.csv; \
 	cd -
+
+# ---- TimesFM: foundation-model backtest against the flu prod store ----
+# R recipes assume Rscript on PATH; if R lives in a container, run make inside
+# it (e.g. `distrobox enter rocker -- make tsfm-dump`). See scripts/tsfm/README.md.
+tsfm-dump:
+	Rscript scripts/tsfm/dump_data_pool.R flu_hosp_prod cache/tsfm
+
+tsfm-forecast:
+	uv run scripts/tsfm/timesfm_forecast.py $(args)
+
+tsfm-report:
+	Rscript -e "rmarkdown::render('scripts/reports/timesfm_comparison.Rmd', output_file = here::here('reports', 'timesfm_comparison_$(or $(target),nhsn).html'), params = list(target = '$(or $(target),nhsn)'))"
