@@ -596,6 +596,13 @@ Flu gets the 2023-24 burn-in for free: the hub checkout already contains all pas
 **Notebooks:** `CMU-TimeSeries-Calibrated` is added to `ongoing_score_report.Rmd` (`our_forecasters`, score table styling, line width).
 The per-date `forecast_report.Rmd` notebook receives calibrated forecasts for the current round's reference date, converted back to internal schema (state abbr, Wednesday `forecast_date`, count-space quantile values) via the `notebook` target in `prod_shared.R`.
 
+**What the covid submission actually is:** the submitted covid forecast is `ensemble_mix`, whose components are `windowed_seasonal`, `windowed_seasonal_extra_sources` and `revision_aware` (`pipelines/covid_hosp_prod.R`). Its raw weights come from `pipelines/covid_geo_exclusions.csv`, and `ensemble_weighted()` renormalizes them per (geo, ahead). The 2026-09-23 block sets `windowed_seasonal = 0.5`, `windowed_seasonal_extra_sources = 3` and `revision_aware = 1` at aheads −1 and 0 only. The effective mix is therefore:
+- aheads 1–3: ~86% `windowed_seasonal_extra_sources`, ~14% `windowed_seasonal`;
+- ahead 0: ~67% / ~11% / ~22% `revision_aware`;
+- ahead −1: 100% `revision_aware`, because `drop_negative_aheads` strips the two AR components there.
+
+`windowed_seasonal_extra_sources` excludes mo and wy, so those states fall back to `windowed_seasonal`. Blocks before 2026-09-16 used `windowed_seasonal = 0.05`, which made the split ~98% / ~2%. The `climate_linear` rows in the CSV are not `ensemble_mix` components. So covid forecast-quality work, calibration included, is mostly about `windowed_seasonal_extra_sources`. The CSV is edited by hand each week, so re-derive the weights before relying on these numbers.
+
 **Model metadata:** `CMU-TimeSeries-Calibrated.yml` created in both `../FluSight-forecast-hub/model-metadata/` and `../covid19-forecast-hub/model-metadata/` (`designated_model: false`).
 
 **Bug fixed en route:** `nssp_archive` in both `flu_data_targets.R` and `covid_data_targets.R` had a duplicate-key error (pre-existing since August 2026): `compactify = TRUE` can retain multiple rows per `(geo_value, time_value)` when the value changed across issues, and the subsequent `mutate(version = time_value + 7)` flattened all to the same version, producing duplicate keys in `as_epi_archive()`.
