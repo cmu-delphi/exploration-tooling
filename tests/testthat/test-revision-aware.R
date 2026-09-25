@@ -233,3 +233,121 @@ test_that("revision_predictor_design cache round-trips", {
     expect_true(file.exists(list.files("cache/revision_cache", full.names = TRUE)[[1]]))
   })
 })
+
+#' Synthetic multi-geo archive at per-100k scale (values ~3-18, like flu's
+#' `hhs`), covering "us" plus several real state abbreviations of very
+#' different population. No revisions (version == time_value): this fixture
+#' is for output-scale sanity checks, not revision handling, which is covered
+#' elsewhere in this file.
+mk_per100k_sanity_archive <- function() {
+  geos <- tibble(
+    geo_value = c("us", "ca", "tx", "ny", "wy", "vt", "ak", "hi", "ri", "nd"),
+    base = c(8, 6, 5, 5.5, 4, 4.5, 3, 3.5, 4.2, 3.8)
+  )
+  weeks <- seq(as.Date("2023-01-07"), as.Date("2023-07-01"), by = 7)
+  geos %>%
+    tidyr::expand_grid(time_value = weeks) %>%
+    mutate(
+      week_idx = as.numeric(time_value - min(time_value)) / 7,
+      value = pmax(0.1, base + week_idx * 0.4 + rnorm(dplyr::n(), sd = 1)),
+      source = "nhsn",
+      version = time_value
+    ) %>%
+    select(geo_value, time_value, source, version, value) %>%
+    as_epi_archive(other_keys = "source")
+}
+
+#' Every predicted quantile should stay within `mult`x of that geo's own most
+#' recent observed value -- a loose bound that catches a geo-specific scale
+#' blowup without requiring the forecast to be numerically tight.
+expect_forecast_within_scale <- function(res, archive, mult, label) {
+  last_observed <- archive$DT %>%
+    as_tibble() %>%
+    filter(time_value == max(time_value)) %>%
+    select(geo_value, value)
+  joined <- res %>% left_join(last_observed, by = "geo_value", suffix = c("", "_last"))
+  expect_true(all(joined$value < mult * joined$value_last), info = label)
+}
+
+test_that("scaled_pop_seasonal_revision gives sane forecasts, whitened and unwhitened", {
+  set.seed(1)
+  archive <- mk_per100k_sanity_archive()
+  quantreg_fn <- epipredict::quantile_reg(method = "fn")
+  run <- function(scale_method, center_method, nonlin_method) {
+    scaled_pop_seasonal_revision(
+      archive,
+      outcome = "value",
+      primary_source = "nhsn",
+      ahead = 28,
+      lags = c(0, 7),
+      pop_scaling = FALSE,
+      scale_method = scale_method,
+      center_method = center_method,
+      nonlin_method = nonlin_method,
+      use_seasonal_window = FALSE,
+      trainer = quantreg_fn,
+      finalization_coverage = 0.8
+    )
+  }
+
+  unwhitened <- run("none", "none", "none")
+  whitened <- run("quantile", "median", "quart_root")
+
+  check_sane <- function(res, label) {
+    expect_true(nrow(res) > 0, info = label)
+    expect_setequal(unique(res$geo_value), unique(archive$DT$geo_value))
+    expect_true(all(is.finite(res$value)), info = label)
+    expect_true(all(res$value >= 0), info = label)
+    # 10x is generous -- both variants actually stay under ~1.3x here -- but
+    # tight enough that the pop_scaling=TRUE regression below (~80x for "us")
+    # trips it easily.
+    expect_forecast_within_scale(res, archive, mult = 10, label)
+  }
+
+  check_sane(unwhitened, "unwhitened")
+  check_sane(whitened, "whitened")
+})
+
+test_that("pop_scaling=TRUE double-normalizes an already-per-100k outcome and blows up high-population geos", {
+  # Characterization test for the bug fixed by setting pop_scaling=FALSE on
+  # flu's revision_aware* families (R/targets/flu_forecaster_config.R): `hhs`
+  # is already per-100k at archive build, so pop_scaling=TRUE re-divides an
+  # already-small (~3-18) value by each geo's population before pooling all
+  # geos into one quantile_reg fit. That round-trip is an identity per row,
+  # but pooling geos of wildly different real population (us vs a state) on
+  # the resulting near-zero values destabilizes the shared fit and blows up
+  # the high-population geo's upper quantiles by 1-2 orders of magnitude once
+  # rescaled back to counts -- while small states stay comparatively sane.
+  # If this test starts failing because pop_scaling=TRUE stopped blowing up,
+  # that's good news: revisit whether flu's config should go back to TRUE.
+  set.seed(1)
+  archive <- mk_per100k_sanity_archive()
+  quantreg_fn <- epipredict::quantile_reg(method = "fn")
+  res <- scaled_pop_seasonal_revision(
+    archive,
+    outcome = "value",
+    primary_source = "nhsn",
+    ahead = 28,
+    lags = c(0, 7),
+    pop_scaling = TRUE,
+    scale_method = "none",
+    center_method = "none",
+    nonlin_method = "none",
+    use_seasonal_window = FALSE,
+    trainer = quantreg_fn,
+    finalization_coverage = 0.8
+  )
+
+  last_observed <- archive$DT %>%
+    as_tibble() %>%
+    filter(time_value == max(time_value)) %>%
+    select(geo_value, value)
+  ratios <- res %>%
+    summarize(max_value = max(value), .by = geo_value) %>%
+    left_join(last_observed, by = "geo_value") %>%
+    mutate(ratio = max_value / value)
+
+  # "us" (by far the largest population here) blows way past small states.
+  expect_gt(ratios$ratio[ratios$geo_value == "us"], 20)
+  expect_lt(max(ratios$ratio[ratios$geo_value != "us"]), 20)
+})

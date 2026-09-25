@@ -230,7 +230,11 @@ get_flu_forecaster_params <- function() {
       forecaster = "scaled_pop_seasonal_revision",
       trainer = "quantreg_fn",
       lags = list2(c(0, 7), c(0, 7, 14, 21)),
-      pop_scaling = TRUE,
+      # hhs is already per-100k at archive build; pop_scaling would re-divide by
+      # population, and pooling geos of wildly different population (us vs a
+      # state) in that double-scaled space causes catastrophic upper-tail
+      # extrapolation for us specifically.
+      pop_scaling = FALSE,
       filter_agg_level = "state",
       scale_method = "none",
       center_method = "none",
@@ -252,35 +256,37 @@ get_flu_forecaster_params <- function() {
       trainer = "quantreg_fn",
       lags = list2(c(0, 7), c(0, 7, 14, 21)),
       extra_sources = list("nssp"),
-      pop_scaling = TRUE,
+      pop_scaling = FALSE,
       filter_agg_level = "none",
-      scale_method = "none",
-      center_method = "none",
-      nonlin_method = "none",
+      scale_method = c("none", "quantile"),
+      center_method = c("none", "median"),
+      nonlin_method = c("none", "quart_root"),
       seasonal_backward_window = 5 * 7,
       seasonal_forward_window = 3 * 7,
       train_sources = list2(c("nhsn")),
       finalization_coverage = 0.8,
       needs_archive = TRUE,
       outlier_n_weeks = c(NA_integer_, 4L)
-    ),
+    ) %>%
+      filter((scale_method == "none") == (center_method == "none"), (scale_method == "none") == (nonlin_method == "none")),
     # Non-seasonal baseline: same as revision_aware but no season-week window,
     # training on all historical rows. Gives a clean comparison for the beds variant.
     revision_aware_no_season = tidyr::expand_grid(
       forecaster = "scaled_pop_seasonal_revision",
       trainer = "quantreg_fn",
       lags = list2(c(0, 7), c(0, 7, 14, 21)),
-      pop_scaling = TRUE,
+      pop_scaling = FALSE,
       filter_agg_level = "none",
-      scale_method = "none",
-      center_method = "none",
-      nonlin_method = "none",
+      scale_method = c("none", "quantile"),
+      center_method = c("none", "median"),
+      nonlin_method = c("none", "quart_root"),
       use_seasonal_window = FALSE,
       train_sources = list2(c("nhsn")),
       finalization_coverage = 0.8,
       needs_archive = TRUE,
       outlier_n_weeks = c(NA_integer_, 4L)
-    ),
+    ) %>%
+      filter((scale_method == "none") == (center_method == "none"), (scale_method == "none") == (nonlin_method == "none")),
     # Beds as revision proxy: only version history from Dec 2024+, so training
     # rows before that drop out (NA beds lags). Non-seasonal window keeps
     # everything the beds data does cover in play.
@@ -293,17 +299,18 @@ get_flu_forecaster_params <- function() {
           "inpatient_beds_ew",
           c("inpatient_beds_ew", "inpatient_beds_occupied_pct_ew")
         ),
-        pop_scaling = TRUE,
+        pop_scaling = FALSE,
         filter_agg_level = "none",
-        scale_method = "none",
-        center_method = "none",
-        nonlin_method = "none",
+        scale_method = c("none", "quantile"),
+        center_method = c("none", "median"),
+        nonlin_method = c("none", "quart_root"),
         use_seasonal_window = FALSE,
         train_sources = list2(c("nhsn")),
         finalization_coverage = 0.8,
         needs_archive = TRUE,
         outlier_n_weeks = c(NA_integer_, 4L)
-      ),
+      ) %>%
+        filter((scale_method == "none") == (center_method == "none"), (scale_method == "none") == (nonlin_method == "none")),
       tidyr::expand_grid(
         forecaster = "scaled_pop_seasonal_revision",
         trainer = "quantreg_fn",
@@ -312,17 +319,18 @@ get_flu_forecaster_params <- function() {
           c("inpatient_beds_ew", "nssp"),
           c("inpatient_beds_ew", "inpatient_beds_occupied_pct_ew", "nssp")
         ),
-        pop_scaling = TRUE,
+        pop_scaling = FALSE,
         filter_agg_level = "none",
-        scale_method = "none",
-        center_method = "none",
-        nonlin_method = "none",
+        scale_method = c("none", "quantile"),
+        center_method = c("none", "median"),
+        nonlin_method = c("none", "quart_root"),
         use_seasonal_window = FALSE,
         train_sources = list2(c("nhsn")),
         finalization_coverage = 0.8,
         needs_archive = TRUE,
         outlier_n_weeks = c(NA_integer_, 4L)
-      )
+      ) %>%
+        filter((scale_method == "none") == (center_method == "none"), (scale_method == "none") == (nonlin_method == "none"))
     ),
     revision_aware_beds_seasonal = bind_rows(
       tidyr::expand_grid(
@@ -333,11 +341,11 @@ get_flu_forecaster_params <- function() {
           "inpatient_beds_ew",
           c("inpatient_beds_ew", "inpatient_beds_occupied_pct_ew")
         ),
-        pop_scaling = TRUE,
+        pop_scaling = FALSE,
         filter_agg_level = "none",
-        scale_method = "none",
-        center_method = "none",
-        nonlin_method = "none",
+        scale_method = c("none", "quantile"),
+        center_method = c("none", "median"),
+        nonlin_method = c("none", "quart_root"),
         use_seasonal_window = TRUE,
         seasonal_backward_window = 5 * 7,
         seasonal_forward_window = 3 * 7,
@@ -345,7 +353,8 @@ get_flu_forecaster_params <- function() {
         finalization_coverage = 0.8,
         needs_archive = TRUE,
         outlier_n_weeks = c(NA_integer_, 4L)
-      ),
+      ) %>%
+        filter((scale_method == "none") == (center_method == "none"), (scale_method == "none") == (nonlin_method == "none")),
       tidyr::expand_grid(
         forecaster = "scaled_pop_seasonal_revision",
         trainer = "quantreg_fn",
@@ -354,11 +363,11 @@ get_flu_forecaster_params <- function() {
           c("inpatient_beds_ew", "nssp"),
           c("inpatient_beds_ew", "inpatient_beds_occupied_pct_ew", "nssp")
         ),
-        pop_scaling = TRUE,
+        pop_scaling = FALSE,
         filter_agg_level = "none",
-        scale_method = "none",
-        center_method = "none",
-        nonlin_method = "none",
+        scale_method = c("none", "quantile"),
+        center_method = c("none", "median"),
+        nonlin_method = c("none", "quart_root"),
         use_seasonal_window = TRUE,
         seasonal_backward_window = 5 * 7,
         seasonal_forward_window = 3 * 7,
@@ -366,7 +375,8 @@ get_flu_forecaster_params <- function() {
         finalization_coverage = 0.8,
         needs_archive = TRUE,
         outlier_n_weeks = c(NA_integer_, 4L)
-      )
+      ) %>%
+        filter((scale_method == "none") == (center_method == "none"), (scale_method == "none") == (nonlin_method == "none"))
     ),
     climate_linear = bind_rows(
       expand_grid(
