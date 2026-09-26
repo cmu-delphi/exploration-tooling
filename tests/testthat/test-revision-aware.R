@@ -158,6 +158,56 @@ test_that("archive_to_revision_predictors anchors correctly across a backfill bl
   expect_equal(design$value_lag_7, c(20, 30))
 })
 
+#' A stable geo's late-arriving report on a multi-source archive: `nhsn`
+#' reports the same value at every version (never a genuine outlier), and so
+#' does an unrelated, wildly different-magnitude `flusurv` row at the same
+#' `geo_value` + `time_value`s. If the join drops `source`, `nhsn`'s late
+#' report gets compared against `flusurv`'s value instead of its own -- a huge
+#' spurious deviation -- and gets falsely flagged. `nhsn_late_version` is
+#' earlier than `flusurv_late_version` so the contamination is directional and
+#' unambiguous: with source correctly included, nothing here should ever be
+#' flagged.
+mk_cross_source_archive_dt <- function(include_source) {
+  weeks <- seq(as.Date("2023-01-07"), as.Date("2023-02-11"), by = 7)
+  nhsn_late_version <- as.Date("2023-02-20")
+  flusurv_late_version <- as.Date("2023-03-01")
+  mk_source <- function(source_name, stable_value, late_version) {
+    rows <- bind_rows(
+      tibble(geo_value = "ca", time_value = weeks, version = weeks, value = stable_value),
+      tibble(geo_value = "ca", time_value = weeks, version = late_version, value = stable_value)
+    )
+    if (include_source) rows$source <- source_name
+    rows
+  }
+  bind_rows(
+    mk_source("nhsn", stable_value = 10, late_version = nhsn_late_version),
+    if (include_source) mk_source("flusurv", stable_value = 1000, late_version = flusurv_late_version)
+  )
+}
+
+test_that("flag_revision_outlier_versions doesn't flag a genuinely stable series (single-source archive)", {
+  archive_dt <- mk_cross_source_archive_dt(include_source = FALSE)
+  flagged <- flag_revision_outlier_versions(archive_dt, "value", n_weeks = 1, threshold = 0.2, min_value = 1, min_obs = 3)
+  expect_equal(names(flagged), c("geo_value", "version"))
+  expect_equal(nrow(flagged), 0)
+})
+
+test_that("flag_revision_outlier_versions does not cross-contaminate sources sharing a (geo, time_value)", {
+  # Regression guard for a real bug found via a remote `make explore-flu`
+  # crash (see devlog): the join used to drop `source` before joining, so a
+  # multi-source archive (flu's joined_archive_data has nhsn/flusurv/nssp/...
+  # sharing geo_value + time_value) compared one source's values against
+  # another's -- e.g. flusurv's stable ~1000 against nhsn's stable ~10 -- and
+  # over-flagged nhsn's perfectly normal late report as an outlier purely from
+  # the contamination, collapsing training data to near-nothing for the whole
+  # revision_aware family. Confirmed against the pre-fix implementation: it
+  # flags `(ca, 2023-02-20)` here; the fix flags nothing.
+  archive_dt <- mk_cross_source_archive_dt(include_source = TRUE)
+  flagged <- flag_revision_outlier_versions(archive_dt, "value", n_weeks = 1, threshold = 0.2, min_value = 1, min_obs = 3)
+  expect_equal(names(flagged), c("geo_value", "version", "source"))
+  expect_equal(nrow(flagged), 0)
+})
+
 test_that("rolling-join design matches a naive epix_as_of reference (golden)", {
   # Independent, obviously-correct reference: loop epix_as_of per version, anchor
   # on the outcome's latest reported week, read lags off that vintage. Locks the
@@ -350,4 +400,226 @@ test_that("pop_scaling=TRUE double-normalizes an already-per-100k outcome and bl
   # "us" (by far the largest population here) blows way past small states.
   expect_gt(ratios$ratio[ratios$geo_value == "us"], 20)
   expect_lt(max(ratios$ratio[ratios$geo_value != "us"]), 20)
+})
+
+#' Synthetic archive with a genuine, consistent revision pattern: each week's
+#' value is first reported at `prelim_frac` of its eventual finalized value,
+#' then corrected to the full finalized value `revision_lag_days` later.
+#' Revised rows for weeks too recent to have been corrected yet (relative to
+#' the last `time_value`) are dropped, so `versions_end` lands on the most
+#' recent prelim-only report, like a real as-of snapshot.
+#' Optionally adds an `aux` exogenous column, fully known at report time (no
+#' revision), correlated with the finalized value.
+#' Returns the archive plus `truth`, the noise-free finalized-value trend, so
+#' tests can compare forecasts against the true future value directly instead
+#' of just checking they're in some plausible range.
+mk_revision_archive <- function(
+  geo_bases = c(ca = 20, tx = 15),
+  weeks = seq(as.Date("2023-01-07"), as.Date("2023-06-24"), by = 7),
+  prelim_frac = 0.4,
+  revision_lag_days = 14,
+  include_aux = FALSE
+) {
+  geos <- tibble(geo_value = names(geo_bases), base = unname(geo_bases))
+  # `truth` extends a few weeks past the archive's own `weeks` so a positive
+  # `ahead` forecast target still has a known finalized value to compare
+  # against, even though the archive itself has no data out there yet.
+  truth_weeks <- c(weeks, max(weeks) + 7 * seq_len(4))
+  grid <- geos %>%
+    tidyr::expand_grid(time_value = truth_weeks) %>%
+    mutate(
+      week_idx = as.numeric(time_value - min(weeks)) / 7,
+      final_value = pmax(1, base + week_idx * 0.6 + rnorm(dplyr::n(), sd = 0.5))
+    )
+  prelim <- grid %>% filter(time_value %in% weeks) %>% mutate(version = time_value, value = final_value * prelim_frac)
+  revised <- grid %>%
+    filter(time_value + revision_lag_days <= max(weeks)) %>%
+    mutate(version = time_value + revision_lag_days, value = final_value)
+  archive_rows <- bind_rows(prelim, revised) %>%
+    mutate(source = "nhsn") %>%
+    select(geo_value, time_value, source, version, value)
+  if (include_aux) {
+    # Correlated with, but not an exact multiple of, final_value -- an exact
+    # linear multiple makes the design matrix collinear with the outcome's own
+    # lags and quantreg_fn warns about a singular fit.
+    archive_rows <- archive_rows %>%
+      left_join(grid %>% select(geo_value, time_value, final_value), by = c("geo_value", "time_value")) %>%
+      mutate(aux = final_value * 1.2 + rnorm(dplyr::n(), sd = 1)) %>%
+      select(-final_value)
+  }
+  list(
+    archive = archive_rows %>% as_epi_archive(other_keys = "source"),
+    truth = grid %>% select(geo_value, time_value, final_value)
+  )
+}
+
+test_that("scaled_pop_seasonal_revision corrects a systematically under-reported recent week", {
+  # The whole point of revision-awareness: every training row's lag_0 shares
+  # the same "just published, before correction" bias as the forecast row's
+  # lag_0, so the model should learn to scale it up toward the finalized
+  # target rather than parroting the raw under-reported value.
+  set.seed(2)
+  fixture <- mk_revision_archive()
+  quantreg_fn <- epipredict::quantile_reg(method = "fn")
+  res <- scaled_pop_seasonal_revision(
+    fixture$archive,
+    outcome = "value",
+    primary_source = "nhsn",
+    ahead = 7,
+    lags = c(0, 7),
+    pop_scaling = FALSE,
+    scale_method = "none",
+    center_method = "none",
+    nonlin_method = "none",
+    use_seasonal_window = FALSE,
+    trainer = quantreg_fn,
+    finalization_coverage = 0.8
+  )
+
+  last_raw <- fixture$archive$DT %>%
+    as_tibble() %>%
+    filter(time_value == max(time_value)) %>%
+    select(geo_value, raw_value = value)
+  target_end_date <- unique(res$target_end_date)
+  expect_length(target_end_date, 1)
+  true_target <- fixture$truth %>%
+    filter(time_value == target_end_date) %>%
+    select(geo_value, final_value)
+
+  medians <- res %>%
+    filter(quantile == 0.5) %>%
+    left_join(last_raw, by = "geo_value") %>%
+    left_join(true_target, by = "geo_value")
+
+  expect_true(all(is.finite(medians$value)))
+  # Corrects upward, past the raw under-reported reading.
+  expect_true(all(medians$value > 1.15 * medians$raw_value))
+  # Lands in the right ballpark of the true finalized future value (loose --
+  # this is a noisy short synthetic series, not a precision check).
+  expect_true(all(medians$value > 0.4 * medians$final_value))
+  expect_true(all(medians$value < 2.5 * medians$final_value))
+})
+
+test_that("scaled_pop_seasonal_revision handles an exogenous extra_sources column", {
+  # Regression guard for the anchor-on-exogenous-lead bug (fixed during covid
+  # wiring, see devlog/memory): joining an always-fresh exogenous column
+  # shouldn't break the outcome's own revision-aware lags or NA out the
+  # design.
+  set.seed(3)
+  fixture <- mk_revision_archive(include_aux = TRUE)
+  quantreg_fn <- epipredict::quantile_reg(method = "fn")
+  res <- scaled_pop_seasonal_revision(
+    fixture$archive,
+    outcome = "value",
+    extra_sources = "aux",
+    primary_source = "nhsn",
+    ahead = 7,
+    lags = c(0, 7),
+    pop_scaling = FALSE,
+    scale_method = "none",
+    center_method = "none",
+    nonlin_method = "none",
+    use_seasonal_window = FALSE,
+    trainer = quantreg_fn,
+    finalization_coverage = 0.8
+  )
+
+  expect_true(nrow(res) > 0)
+  expect_setequal(unique(res$geo_value), unique(fixture$truth$geo_value))
+  expect_true(all(is.finite(res$value)))
+  expect_true(all(res$value >= 0))
+})
+
+test_that("scaled_pop_seasonal_revision supports a negative ahead (nowcast of the still-revising anchor week)", {
+  # Prod's flu/covid ensembles run this forecaster at ahead=-1 week to nowcast
+  # the most recent, not-yet-finalized week (git: "add revision aware -1
+  # ahead"). Confirms the negative-ahead path targets the anchor week itself
+  # and still corrects its under-reported raw value upward.
+  set.seed(4)
+  fixture <- mk_revision_archive()
+  quantreg_fn <- epipredict::quantile_reg(method = "fn")
+  res <- scaled_pop_seasonal_revision(
+    fixture$archive,
+    outcome = "value",
+    primary_source = "nhsn",
+    ahead = -7,
+    lags = c(0, 7),
+    pop_scaling = FALSE,
+    scale_method = "none",
+    center_method = "none",
+    nonlin_method = "none",
+    use_seasonal_window = FALSE,
+    trainer = quantreg_fn,
+    finalization_coverage = 0.8
+  )
+
+  versions_end <- fixture$archive$versions_end
+  expect_true(nrow(res) > 0)
+  # Nowcasting the anchor week itself, one week before the nominal forecast
+  # date, not further back and not forward. (forecast_date itself is a
+  # separate Wed-labeling convention, not checked here.)
+  expect_true(all(res$target_end_date == versions_end - 7))
+
+  last_raw <- fixture$archive$DT %>%
+    as_tibble() %>%
+    filter(time_value == max(time_value)) %>%
+    select(geo_value, raw_value = value)
+  medians <- res %>% filter(quantile == 0.5) %>% left_join(last_raw, by = "geo_value")
+  expect_true(all(is.finite(medians$value)))
+  expect_true(all(medians$value > 1.15 * medians$raw_value))
+})
+
+test_that("scaled_pop_seasonal_revision handles a seasonal window across multiple winters", {
+  # The seasonal-window path (used by the base revision_aware and
+  # *_beds_seasonal families) restricts training to a backward/forward window
+  # around the forecast anchor's season week, across all prior seasons. Needs
+  # >1 winter of data to exercise the "across seasons" part at all.
+  set.seed(5)
+  geos <- tibble(geo_value = c("ca", "tx"), base = c(20, 15))
+  # Two winters: a trough in summer, a peak in Jan, each year.
+  weeks <- seq(as.Date("2022-07-03"), as.Date("2024-01-01"), by = 7)
+  archive <- geos %>%
+    tidyr::expand_grid(time_value = weeks) %>%
+    mutate(
+      season_frac = (as.numeric(format(time_value, "%j")) %% 365) / 365,
+      seasonal_shape = cos(2 * pi * (season_frac - 0.02)),
+      value = pmax(1, base * (1 + seasonal_shape) + rnorm(dplyr::n(), sd = 1)),
+      source = "nhsn",
+      version = time_value
+    ) %>%
+    select(geo_value, time_value, source, version, value) %>%
+    as_epi_archive(other_keys = "source")
+
+  quantreg_fn <- epipredict::quantile_reg(method = "fn")
+  res <- scaled_pop_seasonal_revision(
+    archive,
+    outcome = "value",
+    primary_source = "nhsn",
+    ahead = 7,
+    lags = c(0, 7),
+    pop_scaling = FALSE,
+    scale_method = "none",
+    center_method = "none",
+    nonlin_method = "none",
+    use_seasonal_window = TRUE,
+    seasonal_backward_window = 5 * 7,
+    seasonal_forward_window = 3 * 7,
+    trainer = quantreg_fn,
+    finalization_coverage = 0.8
+  )
+
+  last_observed <- archive$DT %>%
+    as_tibble() %>%
+    filter(time_value == max(time_value)) %>%
+    select(geo_value, last_value = value)
+
+  expect_true(nrow(res) > 0)
+  expect_setequal(unique(res$geo_value), geos$geo_value)
+  expect_true(all(is.finite(res$value)))
+  expect_true(all(res$value >= 0))
+  # Forecast anchor (late Dec/Jan) sits near the seasonal peak in both
+  # synthetic winters, so the training window should have plenty of similarly
+  # high-value rows -- output shouldn't collapse toward the summer trough.
+  joined <- res %>% filter(quantile == 0.5) %>% left_join(last_observed, by = "geo_value")
+  expect_true(all(joined$value > 0.4 * joined$last_value | joined$value > 10))
 })

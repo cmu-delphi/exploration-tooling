@@ -14,7 +14,8 @@
 #'   skipped.
 #' @param min_obs minimum number of late-window rows required before a pair can
 #'   be flagged (guards against sparse early snapshots).
-#' @return a data.table with columns `geo_value` and `version`.
+#' @return a data.table with columns `geo_value`, `version`, and `source` (the
+#'   last only when `archive_dt` has a `source` column).
 #' @keywords internal
 flag_revision_outlier_versions <- function(
   archive_dt,
@@ -24,23 +25,34 @@ flag_revision_outlier_versions <- function(
   min_value = 30,
   min_obs = 5L
 ) {
-  # All non-NA (geo, time_value, version) triples for the outcome column.
+  # Multi-source archives (e.g. flu's joined_archive_data) share geo_value +
+  # time_value across sources, so the join below must include `source` or
+  # every row fans out against every *other* source's row at the same
+  # coordinate (comparing e.g. nhsn's value against flusurv's) -- a real bug
+  # that silently over-flagged nearly everything as an outlier. Single-source
+  # archives (e.g. the clean prod nhsn archive) have no `source` column at
+  # all; join_cols degrades to the original geo_value + time_value there.
+  has_source <- "source" %in% names(archive_dt)
+  join_cols <- if (has_source) c("geo_value", "time_value", "source") else c("geo_value", "time_value")
+  group_cols <- if (has_source) c("geo_value", "version", "source") else c("geo_value", "version")
+
+  # All non-NA (geo, [source,] time_value, version) triples for the outcome column.
   vintage_obs <- as_tibble(archive_dt) %>%
     filter(!is.na(.data[[outcome]])) %>%
-    select(geo_value, time_value, version, val = all_of(outcome))
+    select(all_of(c(join_cols, "version")), val = all_of(outcome))
 
-  # Most-recent-version value per (geo, time_value)
+  # Most-recent-version value per (geo, [source,] time_value)
   recent_values <- vintage_obs %>%
-    group_by(geo_value, time_value) %>%
+    group_by(across(all_of(join_cols))) %>%
     slice_max(version, n = 1) %>%
     ungroup() %>%
-    select(geo_value, time_value, value_latest = val)
+    select(all_of(join_cols), value_latest = val)
 
   vintage_obs %>%
-    left_join(recent_values, by = c("geo_value", "time_value")) %>%
+    left_join(recent_values, by = join_cols) %>%
     mutate(lag_weeks = as.numeric(version - time_value) / 7) %>%
     filter(lag_weeks > n_weeks) %>%
-    group_by(geo_value, version) %>%
+    group_by(across(all_of(group_cols))) %>%
     summarise(
       is_outlier = any(
         abs(val - value_latest) / (abs(value_latest) + 1e-6) > threshold &
@@ -50,7 +62,7 @@ flag_revision_outlier_versions <- function(
       .groups = "drop"
     ) %>%
     filter(is_outlier, n_late_obs >= min_obs) %>%
-    select(geo_value, version)
+    select(all_of(group_cols))
 }
 
 #' Empirical finalization lag at a given coverage level.
@@ -346,7 +358,8 @@ scaled_pop_seasonal_revision <- function(
       min_value  = outlier_min_value,
       min_obs    = outlier_min_obs
     )
-    train <- anti_join(train, flagged_versions, by = c("geo_value", "version"))
+    anti_join_cols <- intersect(c("geo_value", "version", "source"), names(flagged_versions))
+    train <- anti_join(train, flagged_versions, by = anti_join_cols)
   }
 
   n_geos <- n_distinct(train$geo_value)
