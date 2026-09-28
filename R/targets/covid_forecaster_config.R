@@ -193,6 +193,25 @@ get_covid_forecaster_params <- function() {
         outlier_n_weeks = c(NA_integer_, 4L)
       )
     ),
+    # Revision-aware with va_respiratory (VA syndromic ED visits) as an
+    # exogenous predictor. No train_sources knob since the covid explore
+    # archive has no source key. History only goes back a few months (as of
+    # Sep 2026), so only the non-seasonal window is used.
+    revision_aware_va_no_season = tidyr::expand_grid(
+      forecaster = "scaled_pop_seasonal_revision",
+      trainer = "quantreg_fn",
+      lags = list2(c(0, 7)),
+      extra_sources = list("va_covid_per_100k"),
+      pop_scaling = TRUE,
+      scale_method = "none",
+      center_method = "none",
+      nonlin_method = "none",
+      use_seasonal_window = FALSE,
+      finalization_coverage = 0.8,
+      needs_archive = TRUE,
+      sort_quantiles = TRUE,
+      outlier_n_weeks = c(NA_integer_, 4L)
+    ),
     climate_linear = bind_rows(
       expand_grid(
         forecaster = "climate_linear_ensembled",
