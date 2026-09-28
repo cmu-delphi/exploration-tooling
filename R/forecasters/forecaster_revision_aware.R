@@ -304,6 +304,15 @@ scaled_pop_seasonal_revision <- function(
     filter(source == primary_source, version == latest_primary_version) %>%
     drop_na(all_of(lag_cols))
 
+  # Bail out before the expensive full-archive scans below (seasonal-window
+  # season lookup, compute_finalization_lag_weeks, flag_revision_outlier_versions)
+  # if there's nothing to forecast anyway -- e.g. an exogenous extra_source's
+  # lags aren't all available yet for the anchor date. Otherwise every such
+  # date pays for those scans just to discover the same thing at the end.
+  if (nrow(forecast_rows) == 0) {
+    return(make_null_forecast())
+  }
+
   if (use_seasonal_window) {
     # Seasonal training window: keep training rows whose time_value sits within the
     # backward/forward window of any year's copy of the forecast anchor's season
@@ -363,7 +372,7 @@ scaled_pop_seasonal_revision <- function(
   }
 
   n_geos <- n_distinct(train$geo_value)
-  if (nrow(train) < max(n_geos * 3L, 20L, length(lag_cols) + 1L) || nrow(forecast_rows) == 0) {
+  if (nrow(train) < max(n_geos * 3L, 20L, length(lag_cols) + 1L)) {
     return(make_null_forecast())
   }
 
