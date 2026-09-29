@@ -19,9 +19,19 @@ g_disease <- "flu"
 g_aheads <- 0:4 * 7
 # g_hhs_signal = "confirmed_admissions_influenza_1d"
 # The date when the forecast was generated (this is effectively the AS OF date).
-g_forecast_generation_dates <- seq.Date(as.Date("2024-11-20"), as.Date("2026-04-29"), by = 7L)
+# Exploration only cares about the flu season itself (roughly epiweek 40 through
+# 20, i.e. early October through mid-May) -- flu activity is ~0 the rest of the
+# year, so testing forecasters against summer weeks wastes compute and, for some
+# forecasters, hits degenerate near-zero-variance training windows that don't
+# occur during a real season.
+g_in_flu_season <- function(dates) {
+  ew <- lubridate::epiweek(dates)
+  ew >= 40 | ew <= 20
+}
+g_all_weeks <- seq.Date(as.Date("2024-11-20"), as.Date("2026-04-29"), by = 7L)
+g_forecast_generation_dates <- g_all_weeks[g_in_flu_season(g_all_weeks)]
 # The reference date for the forecast.
-g_forecast_dates <- seq.Date(as.Date("2024-11-20"), as.Date("2026-04-29"), by = 7L)
+g_forecast_dates <- g_all_weeks[g_in_flu_season(g_all_weeks)]
 # This moves the week marker from Saturday to Wednesday.
 g_time_value_adjust <- 3
 # Directory for reports.

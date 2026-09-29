@@ -141,7 +141,41 @@ run_workflow_and_format <- function(
   }
   # predict, and filter out those forecasts for less recent days (predict
   # predicts for every day that has enough data)
-  pred <- predict(workflow, test_data)
+  #
+  # A degenerate fit (e.g. quantile_reg on a near-zero-variance training
+  # window, such as flu's off-season) can make predict() return zero rows
+  # instead of NA-filled ones. layer_naomit's is.na() check on that empty
+  # `quantile_pred` column then hits an unrelated-looking internal vctrs
+  # error ("Column `.row` ... must match the data frame") instead of the
+  # empty result propagating normally. Treat that specific failure as "no
+  # usable forecast" and let any other error surface as-is.
+  pred <- tryCatch(
+    predict(workflow, test_data),
+    error = function(e) {
+      if (grepl("must match the data frame", conditionMessage(e), fixed = TRUE)) {
+        return(NULL)
+      }
+      stop(e)
+    }
+  )
+  if (is.null(pred)) {
+    # Match run_workflow_and_format's normal output schema (key columns from
+    # train_data, e.g. geo_value + source) rather than make_null_forecast()'s
+    # generic shape -- callers that join on those key columns (e.g.
+    # data_coloring() in scaled_pop_seasonal) need them present even when empty.
+    return(
+      train_data %>%
+        as_tibble() %>%
+        select(all_of(key_colnames(train_data, exclude = "time_value"))) %>%
+        slice(0) %>%
+        mutate(
+          forecast_date = as.Date(character()),
+          target_end_date = as.Date(character()),
+          quantile = numeric(),
+          value = numeric()
+        )
+    )
+  }
   # keeping only the last time_value for any given location/key
   pred %<>%
     group_by(across(all_of(key_colnames(train_data, exclude = "time_value")))) %>%
