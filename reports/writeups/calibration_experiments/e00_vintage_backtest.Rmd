@@ -1,0 +1,162 @@
+---
+title: "E00: learning from vintages instead of finalized truth"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+params:
+  hub_dir: "../FluSight-forecast-hub"
+  workers: 12
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+# cache = TRUE chunks are keyed on chunk code, not on functions in R/. After
+# changing calibration code, clear cache/calibration/experiments/knitr_e00/.
+knitr::opts_chunk$set(
+  fig.align = "center", fig.width = 10, fig.height = 5,
+  message = FALSE, warning = FALSE,
+  cache.path = here::here("cache/calibration/experiments/knitr_e00/")
+)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+Ledger entry **E00** (`notes/calibration-ledger.md`). Every result before this
+notebook trained the tracker on finalized NHSN values. Only the *timing* of
+each reveal was realistic (`settle_days`). This notebook varies one axis, the
+truth the tracker learns from, at both reference configs:
+
+- **final**: the latest vintage, as in all earlier results.
+- **exact**: what prod does. Prod re-runs the tracker from scratch each week
+  on that week's data, so at round `t` every revealed outcome has its value
+  as of `t`. We replay that by re-running the tracker once per round.
+- **vintage**: one run in which each outcome keeps the value it had at the
+  round that revealed it. This was meant as a cheap stand-in for exact, but
+  it is also a deployment design in its own right: a stateful tracker that
+  steps once per outcome and never revisits it.
+
+A round with reference date `d` sees data published by `d - 3` (the Wednesday
+submission). Vintages start 2024-11-19; earlier as-of dates use that first
+vintage. Scores are always against finalized truth, over both live seasons,
+all hub locations, with burn-in rounds excluded. "WIS change %" is positive
+when calibration improves on the base.
+
+Questions: (1) how much did learning from finalized values flatter the
+earlier results, and (2) is the cheap mode close enough to exact to use in
+sweeps?
+
+# Findings
+
+Numbers below are from the render of 30 September 2026.
+
+- **Finalized truth flattered the earlier results only a little.** At REF-op
+  with `settle_days = 14`, exact vs final WIS change is +6.8 vs +8.9 at h−1,
+  within 0.3 points at h0–h3, and the h−1 coverage bias is 0.080 vs 0.073. At
+  REF-paper, exact is within 0.6 points of final at every horizon, slightly
+  better at h1–h3. Earlier conclusions stand; the h−1 gain was overstated.
+- **The cheap mode is not a usable stand-in.** It drifts from exact as the
+  season goes on (figure below). At `settle_days = 7` it learns once from the
+  first report, which under-reports and is never corrected: REF-op h−1 falls
+  to +1.2 (exact +7.4) and coverage bias rises to 0.127 (exact 0.082). Every
+  later experiment uses exact.
+- **Under prod's re-run design, a shorter settle is better.** Exact with
+  `settle_days = 7` beats 14 at every horizon, at both references (REF-op
+  +7.4/+5.3/+2.9/+2.0/+2.2 vs +6.8/+5.1/+2.5/+1.8/+1.9), with the same
+  coverage bias. Learning early from a first report costs little when next
+  week's run replaces it with the revised value. A stateful tracker (the
+  vintage mode) shows the opposite. So the value of an extra revision delay
+  depends on the deployment design, and E09 should report both.
+
+```{r libs, cache=FALSE}
+suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+```
+
+```{r load, cache=TRUE}
+archive <- get_nhsn_data_archive("flu")
+truth <- nhsn_read_truth("flu", archive)
+vintages <- nhsn_read_vintages("flu", archive)
+hub_fc <- hub_read_forecasts(hub_dir = here::here(params$hub_dir))
+```
+
+```{r runs, cache=TRUE, dependson="load"}
+grid <- tidyr::expand_grid(ref = c("paper", "op"), settle_days = c(7L, 14L), learn = c("final", "vintage", "exact"))
+cals <- purrr::pmap(grid, function(ref, settle_days, learn) {
+  cal_run(hub_fc, truth, ref, settle_days = settle_days, learn = learn, vintages = vintages, workers = params$workers)
+})
+names(cals) <- with(grid, paste(ref, settle_days, learn, sep = "/"))
+```
+
+```{r headline}
+LIVE <- c("2024-2025", "2025-2026")
+head_tbl <- cal_headline(cals) %>%
+  tidyr::separate(variant, c("ref", "settle_days", "learn"), sep = "/", remove = FALSE) %>%
+  mutate(learn = factor(learn, levels = c("final", "vintage", "exact")))
+first_version <- min(vintages$version)
+n_clamped <- sum(unique(hub_fc$reference_date) - 3L < first_version &
+  hub_label_seasons(unique(hub_fc$reference_date))$season %in% LIVE)
+```
+
+`r n_clamped` live rounds are issued before the first vintage (2024-11-19); only
+burn-in rounds use that vintage in place of their own.
+
+# Headline
+
+WIS change % by horizon:
+
+```{r wis-table}
+knitr::kable(cal_wide(head_tbl, "pct_improvement", id = c("ref", "settle_days", "learn")) %>% arrange(ref, settle_days, learn))
+```
+
+L1 coverage bias (mean over levels of |coverage − level|); the `base` row is
+the uncalibrated forecast:
+
+```{r cal-table}
+knitr::kable(
+  bind_rows(
+    cal_wide(head_tbl, "cal_error_cal", 3, id = c("ref", "settle_days", "learn")),
+    cal_wide(head_tbl %>% filter(learn == "final", ref == "paper", settle_days == "14") %>% mutate(ref = "base", settle_days = "", learn = ""), "cal_error_base", 3, id = c("ref", "settle_days", "learn"))
+  ) %>% arrange(ref, settle_days, learn)
+)
+```
+
+The same by season:
+
+```{r season-table}
+knitr::kable(
+  cal_wide(
+    cal_headline(cals, by = "season") %>% filter(season %in% LIVE) %>%
+      tidyr::separate(variant, c("ref", "settle_days", "learn"), sep = "/"),
+    "pct_improvement", id = c("ref", "settle_days", "learn", "season")
+  ) %>% arrange(ref, settle_days, season, learn)
+)
+```
+
+# How far the cheap mode drifts from exact
+
+Median over locations of |cheap − exact| in the played median, relative to
+the base median, by month:
+
+```{r drift, fig.height=6}
+drift <- purrr::map(unique(paste(grid$ref, grid$settle_days, sep = "/")), function(cfg) {
+  pick <- function(mode) {
+    cals[[paste(cfg, mode, sep = "/")]]$forecasts %>%
+      filter(level == 0.5, !is_burn_in, !is.na(value_base)) %>%
+      select(location, horizon, reference_date, value_base, value_cal)
+  }
+  inner_join(pick("vintage"), pick("exact"), by = c("location", "horizon", "reference_date", "value_base"), suffix = c("_cheap", "_exact")) %>%
+    mutate(config = cfg)
+}) %>%
+  bind_rows() %>%
+  mutate(month = lubridate::floor_date(reference_date, "month")) %>%
+  group_by(config, horizon, month) %>%
+  summarize(rel = median(abs(value_cal_cheap - value_cal_exact) / pmax(value_base, 1)), .groups = "drop")
+ggplot(drift, aes(month, 100 * rel, colour = factor(horizon), group = horizon)) +
+  geom_line() +
+  geom_point(size = 0.8) +
+  facet_wrap(~config) +
+  labs(x = NULL, y = "median |cheap − exact| / base median (%)", colour = "horizon")
+```

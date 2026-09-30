@@ -15,7 +15,7 @@ that step from the reference one axis at a time.
 | disease | flu, covid | flu |
 | base forecaster | submitted ensemble, `windowed_seasonal` | submitted ensemble |
 | working scale | count, rate (per 100k), sqrt, log1p, quartic root | sqrt |
-| learning truth | finalized (latest vintage), vintage-aware | finalized (**all runs so far**) |
+| learning truth | final (latest vintage), vintage (value at reveal; a stateful tracker), exact (prod's weekly re-run) | exact (E00 on; E01–E08 used final) |
 | learning rate type | adaptive+ (`mult`, `floor`, `lr_window`), constant | adaptive+ |
 | `lr_mult` | 0.3, 0.1, 0.03, 0.01 | 0.03 |
 | `lr_window` | 8, 20, 50, Inf | 20 |
@@ -28,10 +28,16 @@ that step from the reference one axis at a time.
 
 Reference configs:
 
-- **REF-paper**: flu, ensemble, count, finalized truth, adaptive+ mult 0.03,
-  window 20, carry, 2023-24 burn-in, settle 14, single term.
+- **REF-paper**: flu, ensemble, count, adaptive+ mult 0.03, window 20,
+  carry, 2023-24 burn-in, settle 14, single term.
 - **REF-op** (current operating point, in prod): REF-paper with sqrt, floor
   1e-3, warm start `burn_in_quantile`, slow mult 0.003, `fast_decay` 0.1.
+
+Both are `cal_ref_args()` in `R/calibration/views.R`; notebooks run them
+through `cal_run()`, which also picks the learning truth. Experiment notebooks
+live in `reports/writeups/calibration_experiments/` and render to
+`reports/calibration_experiments/` (with this ledger as `index.html`) via
+`just calibration-experiments [notebook ...]`.
 
 ## Views
 
@@ -61,6 +67,7 @@ base WIS, and pick within strata (season phase × location size).
 
 | id | question | varies | reference | disease | code | truth | views | where | status |
 |---|---|---|---|---|---|---|---|---|---|
+| E00 | how much did final truth flatter results; can vintage stand in for exact? | learning truth {final, vintage, exact} × settle {7, 14} | REF-paper, REF-op | flu | post-fix | all three | V-head | `e00_vintage_backtest.Rmd` | done: exact is the default; vintage is not a stand-in |
 | E01 | which eta settings? | season policy × window × mult | REF-paper | flu | pre-fix | final | V-head, V-curve (mult) | `calibration_qt_flu.Rmd` | stale |
 | E02 | cutoff and eta variants | `off_after`, per-level, geo-pool, seasonal window (one at a time) | REF-paper | flu | pre-fix | final | V-head, V-month, V-state | `calibration_qt_seasons_flu.Rmd` | stale |
 | E03 | which working scale? | count vs sqrt (log1p, quartic pre-fix only) | REF-paper | flu | post-fix | final | V-head, V-month | `calibration_findings_flu.Rmd` | current, needs vintage rerun |
@@ -69,7 +76,7 @@ base WIS, and pick within strata (season phase × location size).
 | E06 | ILI+ as burn-in | burn-in source | REF-op | flu | post-fix | final | V-head | notes only | invalid (broken replay) |
 | E07 | one forecaster across eras | base forecaster (A ensemble / B `windowed_seasonal`; C invalid) | REF-paper at sqrt | flu | post-fix | final | V-head | `calibration_ws_experiments.R`, findings notebook | current, needs vintage rerun |
 | E08 | covid | disease | old REF-paper (count, window 50) | covid | pre-fix | final | V-head, V-state, V-gallery | `calibration_qt_*_covid.Rmd` | stale |
-| E09 | constant lr × revision delay | constant lr grid × `settle_days` {7, 14, 21, 28}; bridge rows below | REF-paper | flu | post-fix | vintage | V-curve, V-head | planned: `calibration_lr_delay_flu.Rmd` | planned |
+| E09 | constant lr × revision delay | constant lr grid × `settle_days` {7, 14, 21, 28}; bridge rows below | REF-paper | flu | post-fix | exact (+ vintage, for a stateful tracker) | V-curve, V-head | planned: `e09_lr_delay.Rmd` | planned |
 
 E09 bridge rows, each one axis from the previous: REF-paper → rate scale →
 constant lr (sweep) → `settle_days` (sweep).
@@ -80,9 +87,9 @@ bias on NHSN and ILI+. See `notes/CALIBRATION.md`.
 
 ## Gaps
 
-- **Learning truth.** Every run learns from finalized NHSN, so no current
-  number is a realistic backtest. See "Learning truth" in
-  `notes/CALIBRATION.md`.
+- **Learning truth.** E01–E08 learned from finalized NHSN. E00 shows the
+  error is small outside h−1, but those experiments still need an exact
+  re-run (E03–E05 first).
 - **Covid** has not been run since the fixes or at REF-op.
 - **V-ae** exists only as the state-picking criterion in the seasons notebook;
   no experiment reports it as a table.
