@@ -45,6 +45,27 @@ projection. Full repro commands live in `notes/calibration-runbook.md`.
   `windowed_seasonal_extra_sources`, aheads 0:4, `covid_hosp_evaluation`
   store). WIP.
 
+The index of experiments (what was varied against what, and which results
+are stale) is `notes/calibration-ledger.md`.
+
+## Learning truth: every run so far uses finalized values
+
+`calibrate_hub_forecasts()` looks up `Y` in one table from `nhsn_read_truth()`,
+the latest NHSN vintage. The gradients, the adaptive eta pool and the
+`burn_in_quantile` warm start therefore all learn from finalized values. Only
+the timing of each reveal is realistic (`settle_days`). This favours short
+revision delays, so no number in this file is a realistic backtest yet, and
+all of them need to be re-run once the backtest uses vintages.
+
+A realistic backtest matches prod. Prod re-runs the tracker from scratch each
+week on that week's latest vintage, so at round `t` every revealed round's
+truth is its value as of `t`. The exact backtest re-runs the tracker once per
+round (83 runs per config). A cheaper version uses each round's value as of
+the round it is revealed at, which is one run per config and differs from
+prod only through revisions that land after the reveal. Vintages exist from
+2024-11-19, so October to mid-November 2024 would still fall back to
+finalized values.
+
 ## Data
 
 FluSight CMU-TimeSeries submissions: 83 rounds (2023-10-14 … 2026-05-30), 53
@@ -612,6 +633,8 @@ Fix: `group_by(geo_value, time_value) %>% slice_max(version, n = 1L, with_ties =
 
 Possible next steps, roughly ordered:
 
+0. **Vintage-aware learning truth** (see "Learning truth" above), then
+   re-run the current experiments on it (E03–E05, E07 in the ledger).
 0. **Re-run the ILI+ experiments on the fixed replay**: the ILI+ burn-in and
    setup C (does a warm start learned on ILI+ transfer to NHSN?).
 1. **Review the ranked gallery** — does the WIS cost concentrate at turning
