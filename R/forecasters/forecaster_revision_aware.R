@@ -315,18 +315,16 @@ scaled_pop_seasonal_revision <- function(
 
   if (use_seasonal_window) {
     # Seasonal training window: keep training rows whose time_value sits within the
-    # backward/forward window of any year's copy of the forecast anchor's season
-    # week. Centering on the anchor (the last week actually observed), not the
+    # backward/forward window of the forecast anchor or of its copy in each prior
+    # year. Centering on the anchor (the last week actually observed), not the
     # calendar as-of, mirrors bake.step_epi_training_window()'s "last_data_season_week"
     # and guarantees the window has data even when the outcome lags the as-of date.
-    forecast_season_week <- forecast_rows %>%
-      filter(time_value == max(time_value)) %>%
-      pull(season_week) %>%
-      max()
-    window_dates <- design %>%
-      filter(season_week == forecast_season_week) %>%
-      pull(time_value) %>%
-      unique() %>%
+    # The prior-year copies are calendar dates 52 weeks apart, not design rows, so
+    # a reporting gap on a prior year's anchor week (e.g. the Oct 2025 NHSN
+    # shutdown) removes only the missing rows instead of that year's whole window.
+    forecast_anchor <- max(forecast_rows$time_value)
+    anchor_dates <- seq(forecast_anchor, min(design$time_value) - seasonal_forward_window - ahead, by = -364L)
+    window_dates <- anchor_dates %>%
       map(~ c(.x - seq_len(seasonal_backward_window), .x + 0:(seasonal_forward_window + ahead))) %>%
       unlist() %>%
       as.Date() %>%

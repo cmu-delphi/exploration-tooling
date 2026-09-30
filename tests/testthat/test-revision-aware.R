@@ -623,3 +623,43 @@ test_that("scaled_pop_seasonal_revision handles a seasonal window across multipl
   joined <- res %>% filter(quantile == 0.5) %>% left_join(last_observed, by = "geo_value")
   expect_true(all(joined$value > 0.4 * joined$last_value | joined$value > 10))
 })
+
+test_that("scaled_pop_seasonal_revision keeps a prior year's seasonal window across a reporting gap on its anchor week", {
+  # Mirrors the Oct 2025 NHSN shutdown: the prior year's copy of the forecast
+  # anchor week (and its neighbours) was never reported. The current year's
+  # window alone is too small to train on, so the forecast needs the rest of
+  # the prior year's window to survive the gap.
+  set.seed(6)
+  geos <- tibble(geo_value = c("ca", "tx", "ny"), base = c(20, 15, 18))
+  weeks <- seq(as.Date("2024-07-03"), as.Date("2025-09-24"), by = 7)
+  prior_anchor <- max(weeks) - 364
+  archive <- geos %>%
+    tidyr::expand_grid(time_value = weeks[abs(weeks - prior_anchor) > 7]) %>%
+    mutate(
+      value = pmax(1, base + rnorm(dplyr::n(), sd = 1)),
+      source = "nhsn",
+      version = time_value
+    ) %>%
+    select(geo_value, time_value, source, version, value) %>%
+    as_epi_archive(other_keys = "source")
+
+  res <- scaled_pop_seasonal_revision(
+    archive,
+    outcome = "value",
+    primary_source = "nhsn",
+    ahead = 7,
+    lags = c(0, 7),
+    pop_scaling = FALSE,
+    scale_method = "none",
+    center_method = "none",
+    nonlin_method = "none",
+    use_seasonal_window = TRUE,
+    seasonal_backward_window = 5 * 7,
+    seasonal_forward_window = 3 * 7,
+    trainer = epipredict::quantile_reg(method = "fn"),
+    finalization_coverage = 0.8
+  )
+
+  expect_true(nrow(res) > 0)
+  expect_setequal(unique(res$geo_value), geos$geo_value)
+})
