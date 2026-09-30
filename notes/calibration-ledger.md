@@ -16,12 +16,12 @@ that step from the reference one axis at a time.
 | base forecaster | submitted ensemble, `windowed_seasonal` | submitted ensemble |
 | working scale | count, rate (per 100k), sqrt, log1p, quartic root | sqrt |
 | learning truth | final (latest vintage), vintage (value at reveal; a stateful tracker), exact (prod's weekly re-run) | exact (E00 on; E01–E08 used final) |
-| learning rate type | adaptive+ (`mult`, `floor`, `lr_window`), constant | adaptive+ |
+| learning rate type | adaptive+ (`mult`, `floor`, `lr_window`), constant (0.001–3.2 per 100k, E09) | adaptive+ |
 | `lr_mult` | 0.3, 0.1, 0.03, 0.01 | 0.03 |
 | `lr_window` | 8, 20, 50, Inf | 20 |
 | season policy | carry, reset | carry |
 | burn-in | 2023-24 hub, ILI+, none | 2023-24 hub |
-| `settle_days` (extra revision delay) | 14 (= 1 week extra) | 14 |
+| `settle_days` (extra revision delay) | 7, 14, 21, 28 (= 0–3 weeks extra) | 14 |
 | offset structure | single term, leak (`fast_decay`), warm start, slow term | see REF-op |
 | update gating | always, `off_after` date | always |
 | eta variants | pooled, per-level, geo-pooled, seasonal window | pooled |
@@ -70,13 +70,15 @@ base WIS, and pick within strata (season phase × location size).
 | E00 | how much did final truth flatter results; can vintage stand in for exact? | learning truth {final, vintage, exact} × settle {7, 14} | REF-paper, REF-op | flu | post-fix | all three | V-head | `e00_vintage_backtest.Rmd` | done: exact is the default; vintage is not a stand-in |
 | E01 | which eta settings? | season policy × window × mult | REF-paper | flu | pre-fix | final | V-head, V-curve (mult) | `calibration_qt_flu.Rmd` | stale |
 | E02 | cutoff and eta variants | `off_after`, per-level, geo-pool, seasonal window (one at a time) | REF-paper | flu | pre-fix | final | V-head, V-month, V-state | `calibration_qt_seasons_flu.Rmd` | stale |
-| E03 | which working scale? | count vs sqrt (log1p, quartic pre-fix only) | REF-paper | flu | post-fix | final | V-head, V-month | `calibration_findings_flu.Rmd` | current, needs vintage rerun |
-| E04 | leak / two-term offset | single, leak 0.1, slow term | REF-paper at sqrt | flu | post-fix | final | V-head, V-month | `calibration_findings_flu.Rmd` | current, needs vintage rerun |
-| E05 | warm start from burn-in | warm start alone, + leak, + slow | REF-paper at sqrt | flu | post-fix | final | V-head, V-month | `calibration_findings_flu.Rmd` | current, needs vintage rerun |
+| E03 | which working scale? | count vs sqrt vs rate (log1p, quartic pre-fix only) | REF-paper | flu | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e03_scale.Rmd` | done |
+| E04 | leak / two-term offset | single, leak 0.1, slow term, slow + leak | REF-paper at sqrt | flu | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e04_offset_structure.Rmd` | done |
+| E05 | warm start from burn-in | warm vs cold, paired, for single / leak / slow + leak; warm alone | REF-paper at sqrt | flu | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e05_warm_start.Rmd` | done |
 | E06 | ILI+ as burn-in | burn-in source | REF-op | flu | post-fix | final | V-head | notes only | invalid (broken replay) |
 | E07 | one forecaster across eras | base forecaster (A ensemble / B `windowed_seasonal`; C invalid) | REF-paper at sqrt | flu | post-fix | final | V-head | `calibration_ws_experiments.R`, findings notebook | current, needs vintage rerun |
-| E08 | covid | disease | old REF-paper (count, window 50) | covid | pre-fix | final | V-head, V-state, V-gallery | `calibration_qt_*_covid.Rmd` | stale |
-| E09 | constant lr × revision delay | constant lr grid × `settle_days` {7, 14, 21, 28}; bridge rows below | REF-paper | flu | post-fix | exact (+ vintage, for a stateful tracker) | V-curve, V-head | planned: `e09_lr_delay.Rmd` | planned |
+| E08 | covid | disease | old REF-paper (count, window 50) | covid | pre-fix | final | V-head, V-state, V-gallery | `calibration_qt_*_covid.Rmd` | stale, replaced by E10 |
+| E09 | constant lr × revision delay | constant lr grid × `settle_days` {7, 14, 21, 28}; bridge rows below | REF-paper | flu | post-fix | exact (+ vintage, for a stateful tracker) | V-curve, V-head | `e09_lr_delay.Rmd` | done |
+
+| E10 | covid at the references | disease (REF-paper, REF-op without warm start as in covid prod) | REF-paper, REF-op | covid | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e10_covid.Rmd` | planned |
 
 E09 bridge rows, each one axis from the previous: REF-paper → rate scale →
 constant lr (sweep) → `settle_days` (sweep).
@@ -87,10 +89,7 @@ bias on NHSN and ILI+. See `notes/CALIBRATION.md`.
 
 ## Gaps
 
-- **Learning truth.** E01–E08 learned from finalized NHSN. E00 shows the
-  error is small outside h−1, but those experiments still need an exact
-  re-run (E03–E05 first).
-- **Covid** has not been run since the fixes or at REF-op.
-- **V-ae** exists only as the state-picking criterion in the seasons notebook;
-  no experiment reports it as a table.
-- **V-state and V-gallery** have not been produced for any post-fix config.
+- **Learning truth.** E01, E02 and E06–E08 learned from finalized NHSN (E00
+  shows the error is small outside h−1). E03–E05 have been re-run exactly.
+- **Covid** has not been run since the fixes (E10 planned).
+- **E07** (ensemble vs `windowed_seasonal`) has not been re-run exactly.

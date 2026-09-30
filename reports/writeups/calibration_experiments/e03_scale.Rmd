@@ -38,6 +38,25 @@ The adaptive learning rate has a floor (0.1 by default) in the tracker's
 working units, so the sqrt and rate variants use a floor of 0.001; that floor
 change goes with the scale.
 
+# Findings
+
+Numbers are from the render of 30 September 2026, pooled over both live seasons and all locations; WIS and absolute-error changes are % vs base, positive is better.
+
+- **sqrt beats count at every horizon.** WIS +6.4/+4.1/+0.8/−0.6/−1.3 vs
+  +4.2/+2.4/−0.5/−2.9/−5.2 at h−1…h3, with similar coverage bias
+  (0.054–0.026 vs 0.047–0.032). The median improves too: absolute error
+  +12.0/+8.6/+2.6/+2.4/+1.7 vs +6.3/+5.7/+1.9/−2.1/−4.8.
+- **The gain is in the spring.** At h3, count loses 164% of April's and 92% of
+  May's base WIS; sqrt loses 33% and gains 20%. An offset learned at the peak
+  is sized in admissions, so in count space it is far too large for the tail.
+  Both lose 43–44% in October (0.2% of the base WIS).
+- **rate equals count with the adaptive learning rate.** The adaptive rate is
+  a quantile of the location's own residuals, so dividing a location by its
+  population rescales steps and offsets together. The rate scale matters only
+  with a constant learning rate (E09).
+- **2025-26 is harder for both.** sqrt loses 2.5–3.3% at h1–h3 there (count
+  5.6–6.9%), against gains in 2024-25.
+
 ```{r runs}
 cals <- list(
   count = run("paper"),

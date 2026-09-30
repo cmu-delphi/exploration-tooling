@@ -80,6 +80,25 @@ Findings (E00, `e00_vintage_backtest.Rmd`, flu, both live seasons):
   run corrects what an early reveal got wrong. A stateful tracker would
   prefer the longer delay. The right revision delay depends on the design.
 
+## Constant learning rate × revision delay (E09, 2026-09-30)
+
+`e09_lr_delay.Rmd`: the plain tracker (REF-paper) on the rate scale (per
+100k) with a constant learning rate, swept over 0.001–3.2 × extra delay 0–3
+weeks, exact and stateful learning truth. Pooled over locations:
+
+- The coverage/WIS trade-off is L-shaped, with a knee at a learning rate of
+  about 0.05–0.1 per 100k (up to 0.3 at h−1). At 0.056 and +1 week (re-run):
+  WIS −3.9/−2.3/−1.0/−0.6/−0.1% (negative is better), coverage bias
+  0.043/0.031/0.026/0.026/0.026. That beats REF-paper on both at h1–h3.
+- With the adaptive rate, rate scale and count scale give identical results
+  (the adaptive rate rescales with the location), so the rate scale matters
+  only with a constant rate.
+- REF-op gains more WIS than any constant rate at h0–h3, at about twice the
+  coverage bias.
+- Re-run design (prod): shorter delay is better, mostly at h−1/h0. Stateful
+  design: zero extra delay makes h−1 coverage worse than base (learning from
+  the under-reported first report); one extra week fixes it.
+
 ## Data
 
 FluSight CMU-TimeSeries submissions: 83 rounds (2023-10-14 … 2026-05-30), 53
@@ -472,7 +491,28 @@ shortfall at h3 as NHSN. So the "bias flips sign with the data source"
 reading does not hold. On ILI+ the base is about level on average, not
 biased high.
 
-### Current numbers (2026-09-23)
+### Current numbers (2026-09-23; superseded by the exact re-runs below)
+
+Re-run 2026-09-30 with exact learning truth (the prod re-run design) in
+`e03_scale.Rmd`, `e04_offset_structure.Rmd`, `e05_warm_start.Rmd`. WIS change
+% (positive is better) and coverage bias, same setup:
+
+| variant | h−1 | h0 | h1 | h2 | h3 | cal err h−1…h3 |
+|---|---|---|---|---|---|---|
+| count space, single term | +4.2 | +2.4 | −0.5 | −2.9 | −5.2 | 0.047/0.030/0.032/0.034/0.032 |
+| sqrt, single term | +6.4 | +4.1 | +0.8 | −0.6 | −1.3 | 0.054/0.032/0.026/0.028/0.026 |
+| sqrt, leak 0.1 | +6.2 | +3.9 | +1.8 | +1.0 | +0.4 | 0.096/0.082/0.075/0.080/0.082 |
+| warm start only | +0.4 | +1.1 | +0.9 | +1.1 | +2.0 | 0.105/0.075/0.062/0.065/0.062 |
+| warm start + single term | +6.4 | +4.7 | +1.3 | +0.3 | +0.4 | 0.050/0.021/0.013/0.016/0.014 |
+| warm start + leak 0.1 | +6.3 | +4.7 | +2.5 | +1.9 | +2.1 | 0.087/0.060/0.051/0.052/0.047 |
+| operating point | +6.8 | +5.1 | +2.5 | +1.8 | +1.9 | 0.080/0.054/0.045/0.046/0.041 |
+
+The ordering of the variants is unchanged from the finalized-truth table.
+h−1 WIS of the tracking sqrt variants drops by 1.5–2 points; count space and
+the warm start alone are unchanged, and h0–h3 move by at most 0.5. New: warm start + single
+term (not run before) is the best-calibrated variant, and with REF-op it
+brackets the WIS/coverage trade-off. The finalized-truth numbers follow for
+the record.
 
 From `reports/writeups/calibration/calibration_findings_flu.Rmd`: post-fix,
 truth from `nhsn_read_truth()`, all 53 hub locations, the submitted ensemble,
