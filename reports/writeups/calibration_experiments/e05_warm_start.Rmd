@@ -1,0 +1,56 @@
+---
+title: "E05: warm start from the burn-in season"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  hub_dir: "../FluSight-forecast-hub"
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 10, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_load.Rmd")}
+```
+
+Ledger entry **E05** (`notes/calibration-ledger.md`). One axis: whether the
+persistent offset starts from the burn-in season's conformal offset
+(`slow_init = "burn_in_quantile"`: per horizon and level, the level-quantile
+of the burn-in residuals pooled over locations, on the sqrt scale) or from
+zero. Everything else is REF-paper on the sqrt scale, learning from vintages
+the way prod does (E00). Each warm-started run is paired with its cold twin
+from E04:
+
+- **warm only**: the warm start, then no tracking (learning rate ≈ 0).
+- **single** / **warm + single**: the paper's tracker.
+- **leak 0.1** / **warm + leak 0.1**.
+- **slow + leak** / **warm + slow + leak**: the second is REF-op, the
+  operating point in prod.
+
+```{r runs}
+sqrt_args <- list("paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3))
+warm <- list(slow_init = "burn_in_quantile")
+cals <- list(
+  `warm only` = do.call(run, c(sqrt_args[1:2], warm, list(lr_args = list(mult = 1e-6, floor = 0)))),
+  single = do.call(run, sqrt_args),
+  `warm + single` = do.call(run, c(sqrt_args, warm)),
+  `leak 0.1` = do.call(run, c(sqrt_args, fast_decay = 0.1)),
+  `warm + leak 0.1` = do.call(run, c(sqrt_args, warm, fast_decay = 0.1)),
+  `slow + leak` = do.call(run, c(sqrt_args, list(lr_slow = list(mult = 0.003)), fast_decay = 0.1)),
+  `warm + slow + leak (REF-op)` = run("op")
+)
+focus <- "warm + slow + leak (REF-op)"
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_standard_views.Rmd")}
+```
