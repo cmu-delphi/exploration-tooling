@@ -48,23 +48,37 @@ projection. Full repro commands live in `notes/calibration-runbook.md`.
 The index of experiments (what was varied against what, and which results
 are stale) is `notes/calibration-ledger.md`.
 
-## Learning truth: every run so far uses finalized values
+## Learning truth (2026-09-30)
 
-`calibrate_hub_forecasts()` looks up `Y` in one table from `nhsn_read_truth()`,
-the latest NHSN vintage. The gradients, the adaptive eta pool and the
-`burn_in_quantile` warm start therefore all learn from finalized values. Only
-the timing of each reveal is realistic (`settle_days`). This favours short
-revision delays, so no number in this file is a realistic backtest yet, and
-all of them need to be re-run once the backtest uses vintages.
+Until 2026-09-30, `calibrate_hub_forecasts()` learned only from `truth`, the
+latest NHSN vintage: the gradients, the adaptive eta pool and the
+`burn_in_quantile` warm start all saw finalized values, and only the timing of
+each reveal (`settle_days`) was realistic. Every number in this file below
+that date was measured that way.
 
-A realistic backtest matches prod. Prod re-runs the tracker from scratch each
-week on that week's latest vintage, so at round `t` every revealed round's
-truth is its value as of `t`. The exact backtest re-runs the tracker once per
-round (83 runs per config). A cheaper version uses each round's value as of
-the round it is revealed at, which is one run per config and differs from
-prod only through revisions that land after the reveal. Vintages exist from
-2024-11-19, so October to mid-November 2024 would still fall back to
-finalized values.
+`learn_truth` now selects what the tracker learns from (scores stay on
+finalized truth). A round with reference date `d` sees data published by
+`d - 3`. Modes, as `cal_run(learn = )`:
+
+- `"final"`: the old behavior.
+- `"exact"`: what prod does. Prod re-runs the tracker from scratch each week on
+  that week's data, so at round `t` every revealed outcome has its value as
+  of `t`. `calibrate_hub_forecasts_exact()` replays this with one run per
+  round (about 1.2 min per config with 12 forked workers).
+- `"vintage"`: one run in which each outcome keeps its value at the round
+  that revealed it: a stateful tracker that never revisits a step.
+
+Findings (E00, `e00_vintage_backtest.Rmd`, flu, both live seasons):
+
+- Final vs exact is small except at h−1: REF-op at settle 14 is
+  +8.9/+5.4/+2.6/+1.9/+1.9 final vs +6.8/+5.1/+2.5/+1.8/+1.9 exact, coverage
+  bias 0.073–0.040 vs 0.080–0.041. REF-paper is within 0.6 points.
+- Vintage mode is not a stand-in for exact: at settle 7 it learns once from
+  the under-reported first report (REF-op h−1 +1.2, coverage bias 0.127).
+- Under the exact (prod) design, settle 7 beats settle 14 at every horizon
+  at both references (REF-op +7.4/+5.3/+2.9/+2.0/+2.2), because next week's
+  run corrects what an early reveal got wrong. A stateful tracker would
+  prefer the longer delay. The right revision delay depends on the design.
 
 ## Data
 
@@ -633,8 +647,8 @@ Fix: `group_by(geo_value, time_value) %>% slice_max(version, n = 1L, with_ties =
 
 Possible next steps, roughly ordered:
 
-0. **Vintage-aware learning truth** (see "Learning truth" above), then
-   re-run the current experiments on it (E03–E05, E07 in the ledger).
+0. **Re-run the current experiments with exact learning truth** (E03–E05,
+   E07 in the ledger), after E09.
 0. **Re-run the ILI+ experiments on the fixed replay**: the ILI+ burn-in and
    setup C (does a warm start learned on ILI+ transfer to NHSN?).
 1. **Review the ranked gallery** — does the WIS cost concentrate at turning
