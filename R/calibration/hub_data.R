@@ -147,14 +147,40 @@ nhsn_read_truth <- function(disease = "flu", archive = get_nhsn_data_archive(dis
   archive %>%
     epix_as_of(archive$versions_end) %>%
     as_tibble() %>%
+    nhsn_to_hub_locations() %>%
+    select(target_end_date = "time_value", "location", truth = "value") %>%
+    filter(!is.na(.data$truth)) %>%
+    arrange(.data$location, .data$target_end_date)
+}
+
+
+#' Every NHSN vintage, on hub coordinates, for vintage-aware calibration.
+#'
+#' One row per (location, week, version) at which the value changed (the
+#' archive is compactified), so the value as of a date is the row with the
+#' latest `version` at or before it. `NA` rows mean the value was absent in
+#' that version.
+#' @inheritParams nhsn_read_truth
+#' @return tibble with `target_end_date`, `location` (FIPS), `version`, `truth`.
+#' @export
+nhsn_read_vintages <- function(disease = "flu", archive = get_nhsn_data_archive(disease)) {
+  archive$DT %>%
+    as_tibble() %>%
+    nhsn_to_hub_locations() %>%
+    select(target_end_date = "time_value", "location", "version", truth = "value") %>%
+    arrange(.data$location, .data$target_end_date, .data$version)
+}
+
+
+#' Map NHSN `geo_value` (state abbreviations, `usa`) to hub FIPS `location`.
+#' @keywords internal
+nhsn_to_hub_locations <- function(df) {
+  df %>%
     mutate(geo_value = ifelse(.data$geo_value == "usa", "us", .data$geo_value)) %>%
     inner_join(
       get_population_data() %>% distinct(.data$state_id, .keep_all = TRUE) %>% select("state_id", location = "state_code"),
       by = c("geo_value" = "state_id")
-    ) %>%
-    select(target_end_date = "time_value", "location", truth = "value") %>%
-    filter(!is.na(.data$truth)) %>%
-    arrange(.data$location, .data$target_end_date)
+    )
 }
 
 
