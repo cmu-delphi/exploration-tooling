@@ -1,0 +1,29 @@
+---
+title: "Calibration experiments"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = here::here())
+```
+
+# Notebooks
+
+```{r notebooks, results="asis", echo=FALSE}
+src <- list.files(here::here("reports/writeups/calibration_experiments"), pattern = "^e[0-9]+_.*[.]Rmd$", full.names = TRUE)
+out_dir <- here::here("reports/calibration_experiments")
+for (f in src) {
+  html <- sub("[.]Rmd$", ".html", basename(f))
+  title <- rmarkdown::yaml_front_matter(f)$title
+  rendered <- file.exists(file.path(out_dir, html))
+  stamp <- if (rendered) format(file.mtime(file.path(out_dir, html)), "%Y-%m-%d %H:%M") else "not rendered"
+  cat(sprintf("- %s (%s)\n", if (rendered) sprintf("[%s](%s)", title, html) else title, stamp))
+}
+```
+
+```{r ledger, child=here::here("notes/calibration-ledger.md")}
+```
