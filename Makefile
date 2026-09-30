@@ -7,7 +7,9 @@
 	pull-covid-evaluation push-covid-evaluation get-covid-evaluation-errors \
 	pull-flu-evaluation push-flu-evaluation get-flu-evaluation-errors \
 	oracle-capture oracle-compare \
-	prod-compare-covid prod-compare-flu
+	prod-compare-covid prod-compare-flu \
+	explore-rsv prune-rsv-explore pull-rsv-explore push-rsv-explore \
+	push-weights-covid push-weights-flu push-weights-rsv
 
 # Long-running recipes tee to cache/logs/ and set pipefail inline so a failing
 # Rscript isn't masked by tee's exit status. bash is needed for pipefail; keep
@@ -35,9 +37,9 @@ prod-covid: | cache/logs
 prod-flu: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_flu
 
-# STUB: the rsv recipes (prod-rsv, prod-rsv-backtest, prune-rsv-prod,
-# commit/submit-rsv) point at scripts/rsv_hosp_prod.R, which is not written
-# yet (not a priority) — they fail if run.
+# BROKEN: the rsv prod recipes (prod-rsv, prod-rsv-backtest, prune-rsv-prod,
+# commit/submit-rsv) run pipelines/rsv_hosp_prod.R, which predates the refactor
+# and calls forecasters that no longer exist — they fail if run.
 prod-rsv: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_rsv
 
@@ -63,13 +65,16 @@ explore-covid:
 explore-flu:
 	export TAR_RUN_PROJECT=flu_hosp_explore; Rscript scripts/run.R
 
+explore-rsv:
+	export TAR_RUN_PROJECT=rsv_hosp_explore; Rscript scripts/run.R
+
 prod-compare-covid:
 	Rscript scripts/render_prod_explore_comparison.R covid
 
 prod-compare-flu:
 	Rscript scripts/render_prod_explore_comparison.R flu
 
-explore: explore-covid explore-flu update-site netlify
+explore: explore-covid explore-flu explore-rsv update-site netlify
 
 # ---- Oracle: behavior-preserving golden capture + compare ----
 # Pinned reference date so captures are reproducible week-to-week instead of
@@ -95,7 +100,7 @@ oracle-compare:
 		echo "Usage: make oracle-compare project=flu_hosp_prod a=baseline b=refactored"; exit 1; fi
 	Rscript scripts/oracle/compare.R $(project):$(a) $(project):$(b)
 
-prune: prune-covid-prod prune-covid-evaluation prune-flu-prod prune-flu-evaluation prune-rsv-prod prune-covid-explore prune-flu-explore
+prune: prune-covid-prod prune-covid-evaluation prune-flu-prod prune-flu-evaluation prune-rsv-prod prune-covid-explore prune-flu-explore prune-rsv-explore
 
 # scripts/prune.R selects the project via TAR_RUN_PROJECT (like run.R): an
 # .Renviron that sets TAR_PROJECT overrides shell exports on every R start,
@@ -124,6 +129,9 @@ prune-covid-explore:
 prune-flu-explore:
 	export TAR_RUN_PROJECT=flu_hosp_explore; Rscript scripts/prune.R
 
+prune-rsv-explore:
+	export TAR_RUN_PROJECT=rsv_hosp_explore; Rscript scripts/prune.R
+
 commit-covid:
 	./scripts/commit-script.sh '../covid19-forecast-hub'
 
@@ -133,17 +141,29 @@ commit-flu:
 commit-rsv:
 	./scripts/commit-script.sh '../rsv-forecast-hub'
 
+# Commit only the disease's weights files (other staged or dirty files stay
+# out of the commit) and push to main. Refuse to run off main, so that a push
+# cannot carry unrelated branch commits.
+push-weights-%:
+	@[ "$$(git branch --show-current)" = main ] || { echo "push-weights-$*: not on main"; exit 1; }
+	git diff --quiet HEAD -- pipelines/$*_geo_exclusions.csv pipelines/$*_nssp_geo_exclusions.csv || \
+		git commit -m "$* weights $(current_date)" -- pipelines/$*_geo_exclusions.csv pipelines/$*_nssp_geo_exclusions.csv
+	git push origin main
+
 submit-covid: commit-covid
 	cd ../covid19-forecast-hub; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo CDCgov/covid19-forecast-hub
+	$(MAKE) push-weights-covid
 
 submit-flu: commit-flu
 	cd ../FluSight-forecast-hub; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcepi/FluSight-forecast-hub
+	$(MAKE) push-weights-flu
 
 submit-rsv: commit-rsv
 	cd ../rsv-forecast-hub; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo CDCgov/rsv-forecast-hub
+	$(MAKE) push-weights-rsv
 
 submit-covid-dry: commit-covid
 	cd ../covid19-forecast-hub; \
@@ -191,7 +211,10 @@ pull-covid-explore:
 pull-flu-explore:
 	aws s3 sync s3://forecasting-team-data/2024/flu_hosp_explore/ flu_hosp_explore/ --delete
 
-pull: pull-aux-data pull-covid-prod pull-flu-prod pull-flu-evaluation pull-covid-evaluation pull-rsv-prod pull-covid-explore pull-flu-explore
+pull-rsv-explore:
+	aws s3 sync s3://forecasting-team-data/2024/rsv_hosp_explore/ rsv_hosp_explore/ --delete
+
+pull: pull-aux-data pull-covid-prod pull-flu-prod pull-flu-evaluation pull-covid-evaluation pull-rsv-prod pull-covid-explore pull-flu-explore pull-rsv-explore
 
 download: pull
 
@@ -216,7 +239,10 @@ push-covid-explore:
 push-flu-explore:
 	aws s3 sync flu_hosp_explore/ s3://forecasting-team-data/2024/flu_hosp_explore/ --delete
 
-push: push-covid-prod push-flu-prod push-flu-evaluation push-covid-evaluation push-rsv-prod push-covid-explore push-flu-explore
+push-rsv-explore:
+	aws s3 sync rsv_hosp_explore/ s3://forecasting-team-data/2024/rsv_hosp_explore/ --delete
+
+push: push-covid-prod push-flu-prod push-flu-evaluation push-covid-evaluation push-rsv-prod push-covid-explore push-flu-explore push-rsv-explore
 
 upload: push
 
