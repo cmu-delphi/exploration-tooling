@@ -1,0 +1,105 @@
+# Standard views
+
+Expects `cals` (a named list of runs) and `focus` (the name of the run the
+state panels and gallery show). Every score is over both live seasons, all
+hub locations, against finalized truth; burn-in rounds are excluded.
+
+## V-head: WIS and coverage
+
+WIS change % (positive is better than the base):
+
+```{r v-head}
+head_all <- cal_headline(cals)
+knitr::kable(cal_wide(head_all, "pct_improvement"))
+```
+
+L1 coverage bias (mean over levels of |coverage − level|), with the base first:
+
+```{r v-head-cov}
+knitr::kable(bind_rows(
+  cal_wide(head_all %>% filter(variant == names(cals)[1]) %>% mutate(variant = "base"), "cal_error_base", 3),
+  cal_wide(head_all %>% mutate(variant = as.character(variant)), "cal_error_cal", 3)
+))
+```
+
+WIS change % by season:
+
+```{r v-head-season}
+knitr::kable(
+  cal_wide(cal_headline(cals, by = "season") %>% filter(season %in% LIVE), "pct_improvement", id = c("variant", "season")) %>%
+    arrange(season, variant)
+)
+```
+
+## V-ae: absolute error of the median
+
+Summed |truth − median|, change % vs base (positive is better):
+
+```{r v-ae}
+knitr::kable(cal_wide(cal_ae(cals), "ae_pct"))
+```
+
+## V-month: where in the season
+
+WIS change % by month of the reference date (clipped at −60), h0 and h3,
+and each month's share of the base WIS at h3:
+
+```{r v-month, fig.height=4.5}
+month_tbl <- purrr::imap(cals, function(cal, nm) cal_by_month(cal) %>% mutate(variant = nm)) %>%
+  bind_rows() %>%
+  filter(month %in% month.abb[c(10:12, 1:5)]) %>%
+  mutate(variant = factor(variant, levels = names(cals)), month = droplevels(month))
+ggplot(month_tbl %>% filter(horizon %in% c(0, 3)), aes(month, pct, colour = variant, group = variant)) +
+  geom_hline(yintercept = 0, colour = "grey50") +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ paste0("h", horizon)) +
+  scale_colour_brewer(palette = "Dark2", name = NULL) +
+  coord_cartesian(ylim = c(-60, 30)) +
+  labs(x = "month of reference date", y = "WIS change %") +
+  theme(legend.position = "bottom", legend.direction = "vertical")
+knitr::kable(
+  month_tbl %>%
+    filter(horizon == 3) %>%
+    transmute(variant, month, pct = round(pct, 1)) %>%
+    tidyr::pivot_wider(names_from = month, values_from = pct) %>%
+    bind_rows(month_tbl %>% filter(horizon == 3, variant == names(cals)[1]) %>%
+      transmute(variant = "share of base WIS %", month, pct = round(share, 1)) %>%
+      tidyr::pivot_wider(names_from = month, values_from = pct))
+)
+```
+
+## V-state: fixed states, `r focus` {.tabset}
+
+The same states in every experiment notebook (`CAL_STATES`). Every other
+round's fan at h0–h3: blue ribbon and line are the base 80% band and median,
+orange lines the calibrated 10/50/90% quantiles, grey the finalized truth,
+black the NHSN snapshot each plotted round saw.
+
+```{r v-state, results="asis", fig.height=4}
+for (nm in names(CAL_STATES)) {
+  cat("\n\n### ", nm, "\n\n", sep = "")
+  for (s in LIVE) print(cal_state_panel(cals[[focus]], CAL_STATES[[nm]], s, truth, vintages, title = paste(nm, s)))
+}
+```
+
+## V-gallery: `r focus` {.tabset}
+
+For each season phase and location size (population above or below the
+median), the forecast with the largest WIS gain and the one with the largest
+loss, each from a different location. Forecasts are ranked by their
+WIS change as a share of their own location-season's base WIS (see
+`cal_gallery_pick()`), so small states late in the season, where the base is
+tiny, do not crowd the gallery. Ribbons are the 50%
+and 90% bands, the dashed line is the forecast date.
+
+```{r v-gallery, results="asis", fig.height=3.5}
+picks <- cal_gallery_pick(cals[[focus]], population)
+abbrev <- setNames(toupper(get_population_data()$state_id), get_population_data()$state_code)
+for (i in seq_len(nrow(picks))) {
+  p <- picks[i, ]
+  if (i == 1L || p$phase != picks$phase[i - 1L]) cat("\n\n### ", as.character(p$phase), "\n\n", sep = "")
+  sub <- sprintf("%s (%s), %s, %s: WIS %+.1f%% (%+.1f%% of its season's base WIS)", abbrev[[p$location]], p$size, p$reference_date, p$kind, p$wis_pct, p$share)
+  print(cal_gallery_panel(cals[[focus]], p$location, p$reference_date, truth, vintages, subtitle = sub))
+}
+```

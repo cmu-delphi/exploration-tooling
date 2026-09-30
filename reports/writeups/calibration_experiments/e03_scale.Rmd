@@ -1,0 +1,51 @@
+---
+title: "E03: working scale (count, sqrt, rate)"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  hub_dir: "../FluSight-forecast-hub"
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 10, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_load.Rmd")}
+```
+
+Ledger entry **E03** (`notes/calibration-ledger.md`). One axis: the scale
+the tracker works on. Everything else is REF-paper (single term, adaptive
+learning rate with `mult` 0.03 and window 20, carry, 2023-24 burn-in,
+`settle_days` 14), learning from vintages the way prod does (re-run each
+week; E00).
+
+- **count**: REF-paper itself; additive offsets in admissions.
+- **sqrt**: offsets on the square root of admissions, mapped back.
+- **rate**: offsets in admissions per 100k, so one location's step size is
+  comparable to another's.
+
+The adaptive learning rate has a floor (0.1 by default) in the tracker's
+working units, so the sqrt and rate variants use a floor of 0.001; that floor
+change goes with the scale.
+
+```{r runs}
+cals <- list(
+  count = run("paper"),
+  sqrt = run("paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3)),
+  rate = run("paper", scales = rate_scales, lr_args = list(mult = 0.03, floor = 1e-3))
+)
+focus <- "sqrt"
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_standard_views.Rmd")}
+```

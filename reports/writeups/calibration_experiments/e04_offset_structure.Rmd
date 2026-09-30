@@ -1,0 +1,51 @@
+---
+title: "E04: offset structure (leak and slow term)"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  hub_dir: "../FluSight-forecast-hub"
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 10, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_load.Rmd")}
+```
+
+Ledger entry **E04** (`notes/calibration-ledger.md`). One axis: the
+structure of the offset. Everything else is REF-paper on the sqrt scale (the
+E03 sqrt variant), learning from vintages the way prod does (E00).
+
+- **single**: the paper's tracker, one offset per level.
+- **leak 0.1**: the offset shrinks by 10% each round (`fast_decay = 0.1`), so
+  a correction that new outcomes do not refresh fades (half-life about 6.6
+  rounds).
+- **slow 0.003**: a second, persistent offset term with a small learning rate
+  (`lr_slow = list(mult = 0.003)`) added to the paper's one.
+- **slow 0.003 + leak 0.1**: both. This is REF-op without its warm start
+  (E05).
+
+```{r runs}
+sqrt_args <- list("paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3))
+cals <- list(
+  single = do.call(run, sqrt_args),
+  `leak 0.1` = do.call(run, c(sqrt_args, fast_decay = 0.1)),
+  `slow 0.003` = do.call(run, c(sqrt_args, list(lr_slow = list(mult = 0.003)))),
+  `slow 0.003 + leak 0.1` = do.call(run, c(sqrt_args, list(lr_slow = list(mult = 0.003)), fast_decay = 0.1))
+)
+focus <- "leak 0.1"
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_standard_views.Rmd")}
+```

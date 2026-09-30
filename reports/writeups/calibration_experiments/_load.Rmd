@@ -1,0 +1,16 @@
+```{r load-data, cache=FALSE}
+# Shared by the experiment notebooks: flu hub submissions, finalized truth for
+# scoring, NHSN vintages for learning, and population for rates.
+suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+archive <- get_nhsn_data_archive("flu")
+truth <- nhsn_read_truth("flu", archive)
+vintages <- nhsn_read_vintages("flu", archive)
+hub_fc <- suppressMessages(hub_read_forecasts(hub_dir = here::here(params$hub_dir)))
+population <- get_population_data() %>%
+  distinct(state_code, .keep_all = TRUE) %>%
+  filter(state_code %in% unique(hub_fc$location)) %>%
+  select(location = state_code, population)
+rate_scales <- population %>% transmute(location, from = as.Date("2000-01-01"), scale = population / 1e5)
+LIVE <- c("2024-2025", "2025-2026")
+run <- function(...) cal_run_cached(hub_fc, truth, ..., vintages = vintages, workers = params$workers)
+```
