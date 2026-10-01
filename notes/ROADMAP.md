@@ -146,6 +146,41 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
      component is `windowed_seasonal_latest` (mean WIS 0.11),
      `CMU-TimeSeries` 0.14, the CovidHub ensemble 0.06.
 
+2b. **US is handled several different ways; make it one declared policy**
+   (audited 2026-10-01).
+   - `score_forecasts()` drops location `US` on purpose
+     (`R/targets/score_targets.R:84`), so every local, external and
+     calibrated NHSN score omits US. Behind that, its location → geo join
+     goes through `get_population_data()`, which has both `us` and an
+     `usa` alias for code `US`, so dropping only the filter double-counts
+     US. The calibrated-forecast joins in `prod_shared.R` and both prod
+     pipelines have the same latent duplicate. A patch (one-row-per-location
+     `hub_location_crosswalk()`, used in all those joins) is in
+     `_local/patches/us_scoring.patch`, checked on 2 dates per disease. It
+     roughly doubles cross-geo mean WIS (US WIS ≈ sum of states), so ship it
+     with a `geo_level` column and state-only means in the reports.
+   - Submissions are not affected: US is present in all covid files and
+     all flu files since 2024 (US ÷ sum of states median ratio 1.00 flu,
+     1.03 covid). But flu 2025-11-22 to 12-06 had US at 0.58–0.71 of the
+     state sum at h2–h3, and nothing checks that.
+   - `climate_geo_agged` pools US into the state climatology unscaled, so
+     CMU-climate_baseline's US is about state-sized relative to the pool
+     (submitted US 0.5–0.9 of the state sum).
+   - Flu explore: 4 `scaled_pop_data_augmented` forecasters
+     (`filter_agg_level = ""`) forecast and score US; the other 129 drop it.
+     The comparison notebook ranks them by mean WIS, so these 4 look worst.
+     Covid explore drops US everywhere.
+   - Proposed design: one canonical `"us"` from archive build on, with one
+     crosswalk for every geo ↔ location join (then delete the `usa` alias
+     and the redundant downstream renames). A spec column `us_method`
+     (`direct` default, `sum_of_states`, `none`) in
+     `FORECASTER_SPEC_DEFAULTS` and the ensemble specs, applied once in
+     `run_forecaster()`, replacing the data-dependent `filter_agg_level`
+     drop. Contracts: `validate_forecast_output()` requires `us` unless
+     `us_method = "none"`; prod health warns when the US median is outside
+     about 0.8–1.25 × the sum of state medians; `score_forecasts()` never
+     drops a location silently and has unique keys.
+
 ## Revision-aware forecasting and h−1
 
 3. **Revision-method backtests.** `revision_aware` against the
