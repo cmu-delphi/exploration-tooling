@@ -5,15 +5,22 @@
 # Forecasts come straight from the evaluation stores through the harness
 # (ch_use() + ch_read_store()); truth and vintages from the same store's NHSN
 # archive. Rounds are the hub's CMU-TimeSeries submission rounds, so the round
-# axis matches the hub-based experiments in notes/CALIBRATION.md. No config
-# here uses a burn-in season (none exists before 2024-11-20 in the replay).
+# axis matches the hub-based experiments in notes/CALIBRATION.md. The E12
+# configs use no burn-in season.
 #
-# Usage: distrobox enter rocker -- Rscript scripts/calibration/calibration_ws_replay.R [workers]
+# With `burn_in`, warm-started configs also run with 2023-24 as a burn-in
+# season: those rounds are backfilled weekly from 2023-10-11 to 2024-04-24 on
+# the HHS-stitched archive (ch_inputs_with_burn_in(), ROADMAP 1b). Scores are
+# reported over all locations, states only and US only.
+#
+# Usage: distrobox enter rocker -- Rscript scripts/calibration/calibration_ws_replay.R [workers] [burn_in]
 
 source(here::here("scripts/calibration/calibration_harness.R"))
 
 args <- commandArgs(trailingOnly = TRUE)
 WORKERS <- if (length(args) >= 1) as.integer(args[[1]]) else 12L
+BURN_IN <- length(args) >= 2 && args[[2]] == "burn_in"
+BURN_IN_DATES <- c(from = "2023-10-11", through = "2024-04-24")
 HUB_DIRS <- c(flu = "../FluSight-forecast-hub", covid = "../covid19-forecast-hub")
 LIVE <- c("2024-2025", "2025-2026")
 
@@ -24,13 +31,32 @@ season_of <- function(d) {
 }
 
 # E11's constant rate (0.1 admissions per 100k per step, rate scale) and the
-# covid prod config (REF-op without its warm start), both with no burn-in.
-ws_configs <- function(rate_scales) {
+# covid prod config (REF-op without its warm start), both with no burn-in. With
+# `burn_in`, also E05's sqrt single term cold and warm, REF-op with its warm
+# start, and E11's constant rate warm-started (CALIBRATION open thread 1).
+ws_configs <- function(rate_scales, burn_in = BURN_IN) {
   no_burn_in <- list(burn_in_seasons = character(0), slow_init = NULL)
-  list(
+  warm <- list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile")
+  sqrt_single <- list(ref = "paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3))
+  cold <- list(
     `E11 constant 0.1` = c(list(ref = "paper", scales = rate_scales, lr = 0.1), no_burn_in),
     `REF-op cold` = c(list(ref = "op"), no_burn_in)
   )
+  if (!burn_in) {
+    return(cold)
+  }
+  c(cold, list(
+    `E05 single cold` = c(sqrt_single, no_burn_in),
+    `E05 warm + single` = c(sqrt_single, warm),
+    `REF-op warm` = c(list(ref = "op"), warm),
+    `E11 constant 0.1 warm` = c(list(ref = "paper", scales = rate_scales, lr = 0.1), warm)
+  ))
+}
+
+# 2023-24 burn-in rounds, backfilled on the HHS-stitched archive (cached).
+ws_burn_in_forecasts <- function(disease) {
+  sched <- ch_schedule(through = BURN_IN_DATES[["through"]], from = as.Date(BURN_IN_DATES[["from"]]))
+  ch_to_hub(ch_backfill(ch_inputs_with_burn_in(), schedule = sched), disease)
 }
 
 ws_run_disease <- function(disease) {
@@ -42,6 +68,8 @@ ws_run_disease <- function(disease) {
     target = c(flu = HUB_FLU_TARGET, covid = HUB_COVID_TARGET)[[disease]]
   )) %>% distinct(reference_date) %>% pull()
   fc <- ch_to_hub(ch_read_store(), disease) %>% filter(reference_date %in% hub_rounds)
+  # Every backfilled 2023-24 round is kept, not only hub rounds (covid has none).
+  fc_burn_in <- if (BURN_IN) bind_rows(ws_burn_in_forecasts(disease), fc)
   cli::cli_alert_info("{disease}: {n_distinct(fc$reference_date)} rounds, {n_distinct(fc$location)} locations")
   rate_scales <- get_population_data() %>%
     distinct(state_code, .keep_all = TRUE) %>%
@@ -49,7 +77,8 @@ ws_run_disease <- function(disease) {
     transmute(location = state_code, from = as.Date("2000-01-01"), scale = population / 1e5)
   cals <- purrr::map(ws_configs(rate_scales), function(cfg) {
     t0 <- Sys.time()
-    cal <- do.call(cal_run_cached, c(list(fc, tv$truth), cfg, list(learn = "exact", vintages = tv$vintages, workers = WORKERS)))
+    fc_cfg <- if (length(cfg$burn_in_seasons) > 0) fc_burn_in else fc
+    cal <- do.call(cal_run_cached, c(list(fc_cfg, tv$truth), cfg, list(learn = "exact", vintages = tv$vintages, workers = WORKERS)))
     cli::cli_alert_success("run took {format(round(Sys.time() - t0, 1))}")
     cal$forecasts %>% mutate(season = season_of(reference_date))
   })
@@ -93,33 +122,48 @@ ws_scores <- function(fc) {
     left_join(above, by = c("season", "horizon"))
 }
 
+# Location subsets scored separately: raw-count pooling makes US about half of
+# the all-locations WIS.
+WS_GEOS <- list(all = \(loc) rep(TRUE, length(loc)), states = \(loc) loc != "US", us = \(loc) loc == "US")
+
 ws_report <- function(disease, res) {
-  scores <- purrr::imap(res$cals, function(fc, nm) ws_scores(fc) %>% mutate(config = nm)) %>% bind_rows()
+  scores <- purrr::imap(WS_GEOS, function(keep, geos) {
+    purrr::imap(res$cals, function(fc, nm) ws_scores(fc %>% filter(keep(location))) %>% mutate(config = nm)) %>%
+      bind_rows() %>%
+      mutate(geos = geos)
+  }) %>% bind_rows()
   base <- scores %>% filter(which == "base", config == names(res$cals)[1]) %>% mutate(config = "base")
   tbl <- bind_rows(base, scores %>% filter(which == "cal")) %>%
-    group_by(season, horizon) %>%
+    group_by(geos, season, horizon) %>%
     mutate(wis_pct = 100 * (wis[config == "base"] - wis) / wis[config == "base"]) %>%
     ungroup() %>%
-    mutate(config = factor(config, levels = c("base", names(res$cals))), season = factor(season, levels = c(LIVE, "both")))
-  readr::write_csv(tbl, file.path(CH_CACHE_DIR, glue::glue("ws_replay_scores_{disease}.csv")))
-  wide <- function(col, digits) {
+    mutate(
+      config = factor(config, levels = c("base", names(res$cals))), season = factor(season, levels = c(LIVE, "both")),
+      geos = factor(geos, levels = names(WS_GEOS))
+    )
+  suffix <- if (BURN_IN) "_burn_in" else ""
+  readr::write_csv(tbl, file.path(CH_CACHE_DIR, glue::glue("ws_replay_scores{suffix}_{disease}.csv")))
+  wide <- function(col, digits, g) {
     tbl %>%
+      filter(geos == g) %>%
       transmute(season, config, horizon, v = round(.data[[col]], digits)) %>%
       tidyr::pivot_wider(names_from = horizon, values_from = v, names_prefix = "h") %>%
       arrange(season, config)
   }
-  cat("\n\n## ", disease, "\n", sep = "")
-  for (spec in list(
-    c("wis", "WIS (2 x mean pinball)", 1), c("wis_pct", "WIS change % vs base (positive is better)", 1),
-    c("cov50", "50% interval coverage", 3), c("cov90", "90% interval coverage", 3),
-    c("cal_err", "L1 coverage bias", 3)
-  )) {
-    cat("\n### ", spec[2], "\n\n", sep = "")
-    print(knitr::kable(wide(spec[1], as.integer(spec[3]))))
+  for (g in names(WS_GEOS)) {
+    cat("\n\n## ", disease, ", ", g, " locations\n", sep = "")
+    for (spec in list(
+      c("wis", "WIS (2 x mean pinball)", 1), c("wis_pct", "WIS change % vs base (positive is better)", 1),
+      c("cov50", "50% interval coverage", 3), c("cov90", "90% interval coverage", 3),
+      c("cal_err", "L1 coverage bias", 3)
+    )) {
+      cat("\n### ", spec[2], "\n\n", sep = "")
+      print(knitr::kable(wide(spec[1], as.integer(spec[3]), g)))
+    }
+    cat("\n### Fraction of truth above the base median\n\n")
+    print(knitr::kable(tbl %>% filter(config == "base", geos == g) %>% transmute(season, horizon, p = round(above_median, 2)) %>%
+      tidyr::pivot_wider(names_from = horizon, values_from = p, names_prefix = "h")))
   }
-  cat("\n### Fraction of truth above the base median\n\n")
-  print(knitr::kable(tbl %>% filter(config == "base") %>% transmute(season, horizon, p = round(above_median, 2)) %>%
-    tidyr::pivot_wider(names_from = horizon, values_from = p, names_prefix = "h")))
   invisible(tbl)
 }
 
