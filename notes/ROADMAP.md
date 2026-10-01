@@ -35,9 +35,25 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
       (`confirmed_admissions_{influenza,covid}_1d`) has real issue history
       for 2023-24 (CA 2023-12-01: issues 12-06, 12-08, 12-20, 12-22), until
       HHS reporting ended 2024-04-30. Steps, each checked before the next:
-      - standalone script: fetch, daily to weekly, check the finalized
-        values against NHSN's finalized 2023-24 values; decide the week
-        ending and how daily issues map to weekly versions;
+      - HHS weekly archive (done 2026-10-01,
+        `scripts/one_offs/hhs_2023_24_archive.R`). Decisions: NHSN's week
+        ending Saturday S is the sum of hhs daily `time_value` S−7..S−1
+        (exact match in 71% of flu geo-weeks; other alignments 17–24%),
+        labelled `time_value = S − 3` (Wednesday). Every daily issue is a
+        version; a week's value as of v sums its 7 days at their latest
+        issue ≤ v, and a week appears only once all 7 days exist (first
+        report lag is a median of 4 days, as with NHSN). US is hhs
+        `nation`, which equals the sum of states plus territories, as NHSN
+        `us` does. The `hhs` source matches the cached healthdata.gov
+        snapshots exactly, so the gap below is between sources, not a
+        fetch problem. **Open: level.** Finalized HHS runs below finalized
+        NHSN (in-season sum ratio flu 0.968, covid 0.941, falling to ~0.91
+        by April; tx/in/ks/ar/pr 15–20% low). The gap is already there in
+        NHSN's first 2023-24 version, so it isn't an NHSN revision. Choose:
+        use as-is with a caveat, rescale per geo by the finalized ratio
+        (uses finalized data), or drop the worst geos. Also decide how to
+        stitch: NHSN's archive holds 2023-24 from version 2024-11-19, so
+        dates after that see NHSN history, a level jump from HHS;
       - ILI+/flusurv training extras (checked 2026-10-01). They are folded
         into `nhsn_prod_archive` (`pipelines/flu_hosp_prod.R`) with
         `version = time_value`, and ILI+ runs to 2024-07-24. A 2023-12-06
