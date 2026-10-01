@@ -7,8 +7,10 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
 
 ## Forecast evaluation
 
-1. **Use the evaluation project as the calibration testbed** (current plan,
-   2026-10-01). Calibrating needs full quantile forecasts over many rounds,
+1. **Use the evaluation project as the calibration testbed** (parked
+   2026-10-01 as validation for after the operating point is chosen; the
+   operating-point work runs on the hub harness, `notes/CALIBRATION.md`).
+   Done so far: a1–a4, b1–b4 (E12, E13). Calibrating needs full quantile forecasts over many rounds,
    not just scores. The evaluation project (`flu_hosp_evaluation` /
    `covid_hosp_evaluation`) replays the current prod components and
    ensemble weekly since 2024-11-20, which is what calibration would see in
@@ -104,8 +106,10 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
         or abort for every component that reads NSSP. NHSN versions start
         2024-11-19, so the HHS archive must supply every 2023-24 target
         row;
-      - `windowed_seasonal` on 3 dates in 2023-24, fan plots against the
-        2023-24 hub submissions; then all 2023-24 dates.
+      - Done 2026-10-01 in the harness, not the pipeline: HHS back to
+        2020-08 (issues before 2023-07 collapse to one version), stitched
+        before NHSN's first version; a 2024-12-04 control matches the
+        store exactly. Results: E13 in `notes/CALIBRATION.md`.
    c. *The ensemble with fixed weights.* The geo-exclusions CSVs carry the
       ensemble weights as well as exclusions, so "no hand edits" for
       `ensemble_mix` means one fixed weight block for every date. Decide
@@ -220,7 +224,7 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
    Fixing `drop_non_seasons` and `nonlin_method` alone cuts the family to
    about a quarter (flu ~19, covid ~13).
 
-## Parked (2026-10-01, not on the calibration path; don't pick up until item 1 is settled)
+## Parked (2026-10-01, not on the calibration path)
 
 - Covid `windowed_seasonal_extra_sources` calibration (CALIBRATION open
   thread 7). It is ~86% of covid `ensemble_mix` but has no 2023-24 NSSP, so

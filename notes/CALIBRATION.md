@@ -142,6 +142,30 @@ so it is not a one-axis comparison. Pooled WIS change %, h0..h3:
   Rerun with `burn_in_seasons = "2023-2024"` once the HHS burn-in exists
   (ROADMAP 1b).
 
+## Clean replay with a 2023-24 HHS burn-in (E13, 2026-10-01)
+
+E12's setup plus 2023-24 as a burn-in (HHS data at real versions, back to
+2020, stitched before NHSN in `ch_inputs_with_burn_in()`; run
+`calibration_ws_replay.R 12 burn_in`). WIS change %, h0/h1/h2/h3, both
+seasons pooled, states only (US excluded):
+
+| disease | config | cold | warm |
+|---|---|---|---|
+| flu | REF-op | 2.0/0.6/0.1/−0.2 | 2.8/1.1/0.9/1.1 |
+| flu | E05 single | 1.9/−0.2/−1.1/−1.7 | 2.7/0.4/−0.1/−0.1 |
+| flu | E11 constant 0.1 | 0.7/−0.2/−0.7/−1.0 | 1.0/0.0/−0.7/−1.1 |
+| covid | REF-op | 1.3/−1.1/−1.7/−1.6 | −0.1/−1.8/−0.4/2.8 |
+| covid | E11 constant 0.1 | −0.9/−4.3/−4.8/−3.4 | −2.9/−9.2/−13.2/−17.9 |
+
+- Flu: the warm start adds 0.5–1.6 points for REF-op and E05, but the
+  warm configs under-cover the 50% interval (0.40–0.44).
+- Covid: 2023-24 over-predicted while the live seasons under-predict at
+  h0, so the warm start is wrong-signed there. E11 warm is badly harmful.
+- Open thread 1 answered: a warm start doesn't help E11's constant rate
+  (flu) and hurts it (covid).
+- US is ~45% of all-locations WIS, but states-only and US-only changes
+  point the same way. Tables: `cache/calibration/ws_replay_scores_burn_in_*.csv`.
+
 ## Data
 
 FluSight CMU-TimeSeries submissions: 83 rounds (2023-10-14 … 2026-05-30), 53
