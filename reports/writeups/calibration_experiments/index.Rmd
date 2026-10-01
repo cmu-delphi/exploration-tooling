@@ -43,6 +43,8 @@ for (f in src) {
 | E11 | How does E09's best constant learning rate compare with the adaptive trackers? | Better coverage than the cold adaptive trackers at less WIS gain near the present, and the most stable across seasons. The warm-started adaptive tracker still wins at h0–h1. |
 | E14 | On the clean `windowed_seasonal` replay, is there a constant learning rate that is good in both seasons? | Yes, 0.018–0.032 per 100k: better WIS at every horizon in both seasons and lower coverage bias. 2024-25 needs a larger rate for good coverage, which costs WIS. |
 | E15 | Why does WIS improve when the calibrated intervals barely move? | The offsets are small (2–5% of the 90% interval width) and point up. The gain comes from shifting the forecast up, mostly at the central levels below the median; width changes cost WIS. |
+| E16 | Does a constant learning rate work better on the square-root scale, and do the offsets go stale late in the season? | sqrt 0.018 improves WIS at every horizon in both seasons, more than the rate scale at h0 and in 2025-26, with similar coverage. Every tracker loses WIS in March, after the peak, when the base already over-predicts and the offsets still push up. |
+| E17 | Does shrinking the offset from 1 March fix the March losses? | It fixes March but wipes the offset the next season starts from, so it is worse overall. Switching calibration off from 1 March (`off_after`) gains WIS at h1–h3 but gives back most of the coverage gain. |
 
 # How to read the results
 
