@@ -43,11 +43,11 @@ Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in 
 
 Each project in `_targets.yaml` maps a pipeline script to a store directory of the same name: `covid_hosp_explore`, `flu_hosp_explore`, `covid_hosp_prod`, `flu_hosp_prod`, `rsv_hosp_prod` (a stub — see below), plus `flu_hosp_evaluation` / `covid_hosp_evaluation` (same scripts as the prod projects, separate stores, for historical replays). Explore projects sweep many forecaster/parameter combinations to find good settings; prod projects generate the weekly submission and reports. Store directories (targets caches) are synced to/from S3 rather than recomputed.
 
-- `scripts/<project>.R` — pipeline definitions. Globals are prefixed `g_` and must be top-level (targets freezes commands as expressions, so function arguments can't carry them). `g_forecast_dates` are the nominal (Wednesday) forecast dates; `g_forecast_generation_dates` are when forecasts actually ran (differ on holiday/outage delays) and serve as the data `as_of`.
+- `pipelines/<project>.R` — pipeline definitions. Globals are prefixed `g_` and must be top-level (targets freezes commands as expressions, so function arguments can't carry them). `g_forecast_dates` are the nominal (Wednesday) forecast dates; `g_forecast_generation_dates` are when forecasts actually ran (differ on holiday/outage delays) and serve as the data `as_of`.
 - `g_forecaster_parameter_combinations` — human-readable tibble of forecasters × parameter settings; `g_forecaster_params_grid` is the same data reshaped for targets' dynamic branching. Each heading in the combinations tibble gets its own report notebook in `reports/`.
 - `R/` — all shared code, sourced wholesale by `R/load_all.R` (imports in `R/imports.R`). Subdirs: `R/forecasters/` (forecaster functions), `R/targets/` (target factory/config code per disease), `R/new_epipredict_steps/`. Built on the Delphi stack: epiprocess/epipredict/epidatr, with `epi_df`/`epi_archive` data structures.
 - `scripts/build_nhsn_archive.R`, `build_nssp_archive.R` — fast polling scripts that build versioned data archives; pipelines depend on these archives rather than fetching data themselves. Run every 5 min via systemd timers (see `deploy/systemd/README.md`; `scripts/run_prod_if_fresh.R` gates the Wednesday prod run on data freshness via `check_data_freshness()`).
-- `scripts/*_geo_exclusions.csv` — per-date/geo forecaster ensemble weights, edited by hand to tune weekly submissions; `*_data_substitutions.csv` — manual data corrections.
+- `pipelines/*_geo_exclusions.csv` — per-date/geo forecaster ensemble weights, edited by hand to tune weekly submissions; `*_data_substitutions.csv` — manual data corrections.
 - `scripts/reports/` — Rmd/qmd report sources rendered into `reports/` (the Netlify site).
 - `aux_data/` — non-public input data, synced from S3.
 
@@ -81,12 +81,12 @@ prod, covid prod, and flu/covid explore are all on this stack. Three layers:
 
 The prod ensemble layer mirrors this: `build_prod_ensemble_targets()`
 (`R/targets/prod_shared.R`) builds both diseases' ensemble targets from a
-declarative per-disease `g_ensemble_specs` (in `scripts/*_hosp_prod.R`;
+declarative per-disease `g_ensemble_specs` (in `pipelines/*_hosp_prod.R`;
 per-disease asymmetries are spec fields or factory arguments, never forked
 code), executed by `run_ensemble()` (`R/targets/ensemble_runner.R`): component
 presence asserted loudly, method dispatch (`climate_linear`/`mean`/`weighted`),
 geo-exclusion filtering, id stamping, output validation. The hand-edited
-`scripts/*_geo_exclusions.csv` weights files are schema-validated inside
+`pipelines/*_geo_exclusions.csv` weights files are schema-validated inside
 `parse_prod_weights()` (`R/utils.R`; retired-but-inert forecaster ids are
 whitelisted via `LEGACY_PROD_WEIGHT_FORECASTER_IDS`).
 
