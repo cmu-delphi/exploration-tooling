@@ -32,9 +32,19 @@ Variants of the adaptive tracker, each changed alone from the reference.
   start of a ramp is sized by last year's ramp. Run with carry and with
   reset at the summer.
 
-This rebuilds the original E02 (`calibration_qt_seasons_flu.Rmd` and the
-"Method variants" table in `notes/CALIBRATION.md`: count scale, submitted
-ensemble, finalized truth, before the 2026-09-17 fixes). The original also
+This asks the original E02's question (`calibration_qt_seasons_flu.Rmd`
+and the "Method variants" table in `notes/CALIBRATION.md`) on the current
+setup. It is a new experiment, not a reproduction: four things changed at
+once, so it can't say which change matters.
+
+| | original E02 | this notebook |
+|---|---|---|
+| forecaster | submitted ensemble | clean `windowed_seasonal` replay |
+| scale | count | sqrt |
+| learning truth | finalized | as published each week |
+| tracker code | before the 2026-09-17 fixes | after |
+
+The original also
 had a geo-pooled eta (one eta shared across locations, population-weighted).
 That option never beat the baseline and was removed from the code on
 2026-09-17, so it is not run here.
