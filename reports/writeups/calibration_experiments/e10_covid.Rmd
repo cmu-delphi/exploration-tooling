@@ -39,6 +39,32 @@ Covid is submitted year-round, so the hub round axis has no off-season gap
 and `hub_label_seasons()` puts every round in one season. For the per-season
 views below, seasons are relabelled as August–July years.
 
+# Findings
+
+Numbers are from the render of 30 September 2026, pooled over all rounds
+(2024-11-23 to 2026-09-19) and locations; WIS changes are % vs base, positive
+is better.
+
+- **The covid base is already calibrated at h1–h3,** so there is little to
+  fix there. Its coverage bias is 0.094/0.063/0.043/0.034/0.027 at h−1…h3,
+  against about 0.1 at every horizon for flu.
+- **h−1 is a clear win.** WIS +9.5% (REF-op) and +9.2% (REF-paper), absolute
+  error of the median +18% and +16%. At h−1 the submission is 100%
+  `revision_aware` (`notes/CALIBRATION.md`), and h−1 is where the base is
+  least calibrated.
+- **At h1–h3, REF-op is neutral and REF-paper is harmful.** REF-op: WIS
+  −0.1/−0.2/−0.8%, coverage bias slightly worse than base at h2/h3
+  (0.037/0.035 vs 0.034/0.027). REF-paper: WIS −5.6/−6.8/−9.4%, coverage bias
+  worse than base from h2 on (0.043/0.048). An offset learned where the base
+  is calibrated is noise.
+- **The losses are in 2025-26 and around September.** REF-op gains
+  +1.8/+3.0/+2.4% at h1–h3 in 2024-25 and loses 3.0–4.1% in 2025-26. By month
+  at h3, REF-op loses 16% in September and 12% in October (19% of the base
+  WIS between them), around the late-summer wave.
+- **Implication for prod:** for covid, calibrating h−1 (and perhaps h0) and
+  passing h1–h3 through would keep the gain and drop the losses. The covid prod
+  pipeline calibrates every horizon today.
+
 ```{r runs}
 no_burn_in <- list(burn_in_seasons = character(0), slow_init = NULL)
 cals <- list(
