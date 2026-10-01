@@ -38,12 +38,26 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
       - standalone script: fetch, daily to weekly, check the finalized
         values against NHSN's finalized 2023-24 values; decide the week
         ending and how daily issues map to weekly versions;
-      - cut the ILI+/flusurv training extras at each forecast date. They run
-        into mid-2024, so as-is they leak finalized 2023-24 data (the
-        archive's `stopifnot` would fail, correctly);
-      - check how far back NSSP vintages go. `windowed_seasonal_extra_sources`
-        needs NSSP as of each 2023-24 date; if there are none, decide whether
-        it sits out 2023-24 or runs on finalized NSSP with a caveat;
+      - ILI+/flusurv training extras (checked 2026-10-01). They are folded
+        into `nhsn_prod_archive` (`pipelines/flu_hosp_prod.R`) with
+        `version = time_value`, and ILI+ runs to 2024-07-24. A 2023-12-06
+        snapshot would train on finalized ILI+ up to the forecast week
+        itself. The snapshot's version-faithfulness abort can't see this
+        (no row is newer than its version); only the archive-build
+        `stopifnot` catches it. Decision: version each extras row at its
+        season's end (`group_by(source, season)`,
+        `version = max(time_value)`) and replace that `stopifnot` with a
+        check on versions. Dates from 2024-11-21 on see every extras row
+        either way, so the golden diff should be empty. Covid has no
+        extras;
+      - NSSP vintages (checked 2026-10-01): none before 2024-04-18 from any
+        source (v5 API, epidatr `nssp`, the S3 Socrata snapshots, the hub
+        mirror). Decision: `windowed_seasonal_extra_sources` sits out
+        2023-24. Gotcha: an NSSP snapshot before the first vintage
+        silently returns 0 rows, so a 2023-24 replay needs an explicit skip
+        or abort for every component that reads NSSP. NHSN versions start
+        2024-11-19, so the HHS archive must supply every 2023-24 target
+        row;
       - `windowed_seasonal` on 3 dates in 2023-24, fan plots against the
         2023-24 hub submissions; then all 2023-24 dates.
    c. *The ensemble with fixed weights.* The geo-exclusions CSVs carry the
