@@ -29,6 +29,16 @@ HUB_QUANTILE_LEVELS <- c(
 HUB_FLU_TARGET <- "wk inc flu hosp"
 HUB_COVID_TARGET <- "wk inc covid hosp"
 
+# Submitted forecasts broken by a pipeline bug rather than by the model; see
+# notes/spoiled-submissions.md. `NA` location or horizon matches all of them.
+HUB_SPOILED_SUBMISSIONS <- tibble::tribble(
+  ~model, ~target, ~reference_date, ~location, ~horizon,
+  "CMU-TimeSeries", HUB_FLU_TARGET, "2025-11-22", NA, -1L,
+  "CMU-TimeSeries", HUB_FLU_TARGET, "2024-12-14", "US", NA,
+  "CMU-TimeSeries", HUB_FLU_TARGET, "2024-12-21", "US", NA,
+  "CMU-TimeSeries", HUB_FLU_TARGET, "2025-01-04", "US", NA
+) %>% dplyr::mutate(reference_date = as.Date(.data$reference_date))
+
 
 # Parent directory containing the flu hub checkout. Override with DELPHI_HUB_PARENT_DIR
 # or HUB_FLU_DIR to point at a different layout.
@@ -74,6 +84,7 @@ hub_level_index <- function(x, levels = HUB_QUANTILE_LEVELS, tol = 1e-8) {
 #'   `wk flu hosp rate change` pmf rows, so both `target` and
 #'   `output_type == "quantile"` are filtered.
 #' @param locations optionally restrict to these hub location codes.
+#' @param drop_spoiled drop the rows listed in `HUB_SPOILED_SUBMISSIONS`.
 #' @return long tibble: `reference_date`, `horizon`, `target_end_date`,
 #'   `location`, `level_index`, `level`, `value`.
 #' @export
@@ -81,7 +92,8 @@ hub_read_forecasts <- function(
   hub_dir = HUB_FLU_DIR,
   model = "CMU-TimeSeries",
   target = HUB_FLU_TARGET,
-  locations = NULL
+  locations = NULL,
+  drop_spoiled = TRUE
 ) {
   model_dir <- file.path(path.expand(hub_dir), "model-output", model)
   files <- list.files(model_dir, pattern = "\\.csv$", full.names = TRUE)
@@ -121,6 +133,17 @@ hub_read_forecasts <- function(
     )
   if (!is.null(locations)) {
     out <- out %>% filter(.data$location %in% locations)
+  }
+  if (drop_spoiled) {
+    spoiled <- HUB_SPOILED_SUBMISSIONS %>% filter(.data$model == !!model, .data$target == !!target)
+    for (i in seq_len(nrow(spoiled))) {
+      sp <- spoiled[i, ]
+      out <- out %>% filter(!(
+        .data$reference_date == sp$reference_date &
+          (is.na(sp$location) | .data$location == sp$location) &
+          (is.na(sp$horizon) | .data$horizon == sp$horizon)
+      ))
+    }
   }
 
   # The hub's own invariant: target_end_date is determined by the other two.
