@@ -22,7 +22,7 @@ that step from the reference one axis at a time.
 | season policy | carry, reset | carry |
 | burn-in | 2023-24 hub, ILI+, none | 2023-24 hub |
 | `settle_days` (extra revision delay) | 7, 14, 21, 28 (= 0–3 weeks extra) | 14 |
-| offset structure | single term, leak (`fast_decay`), warm start, slow term | see REF-op |
+| offset structure | single term, leak (`fast_decay`), late-season decay (`late_decay`), warm start, slow term | see REF-op |
 | update gating | always, `off_after` date | always |
 | eta variants | pooled, per-level, geo-pooled, seasonal window | pooled |
 
@@ -73,11 +73,18 @@ base WIS, and pick within strata (season phase × location size).
 | E03 | which working scale? | count vs sqrt vs rate (log1p, quartic pre-fix only) | REF-paper | flu | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e03_scale.Rmd` | done |
 | E04 | leak / two-term offset | single, leak 0.1, slow term, slow + leak | REF-paper at sqrt | flu | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e04_offset_structure.Rmd` | done |
 | E05 | warm start from burn-in | warm vs cold, paired, for single / leak / slow + leak; warm alone | REF-paper at sqrt | flu | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e05_warm_start.Rmd` | done |
-| E06 | ILI+ as burn-in | burn-in source | REF-op | flu | post-fix | final | V-head | notes only | invalid (broken replay) |
+| E06 | ILI+ as burn-in | burn-in source | REF-op | flu | post-fix | final | V-head | notes only | invalid (broken replay); superseded by E13 (HHS burn-in with real vintages); not rebuilt |
 | E07 | one forecaster across eras | base forecaster (A ensemble / B `windowed_seasonal`; C invalid) | REF-paper at sqrt | flu | post-fix | final | V-head | `calibration_ws_experiments.R`, findings notebook | current, needs vintage rerun |
-| E08 | covid | disease | old REF-paper (count, window 50) | covid | pre-fix | final | V-head, V-state, V-gallery | `calibration_qt_*_covid.Rmd` | stale, replaced by E10 |
+| E08 | covid | disease | old REF-paper (count, window 50) | covid | pre-fix | final | V-head, V-state, V-gallery | `calibration_qt_*_covid.Rmd` | superseded by E10; not rebuilt |
 | E09 | constant lr × revision delay | constant lr grid × `settle_days` {7, 14, 21, 28}; bridge rows below | REF-paper | flu | post-fix | exact (+ vintage, for a stateful tracker) | V-curve, V-head | `e09_lr_delay.Rmd` | done |
 | E10 | covid at the references | disease (REF-paper, REF-op without warm start as in covid prod) | REF-paper, REF-op | covid | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e10_covid.Rmd` | done |
+| E11 | constant vs adaptive lr | rate constant 0.1 vs sqrt adaptive, warm + sqrt adaptive | REF-paper | flu | post-fix | exact | V-head, V-month | `e11_constant_lr.Rmd` | done |
+| E12 | calibration on the clean `windowed_seasonal` replay, no burn-in | E11 constant 0.1, REF-op cold | E11, REF-op | flu, covid | post-fix | exact | V-head | `calibration_ws_replay.R` | done |
+| E13 | 2023-24 HHS burn-in on the clean replay | burn-in none vs 2023-24 HHS | E12 configs, E05 single | flu, covid | post-fix | exact | V-head (all / states / US) | `calibration_ws_replay.R burn_in` | done |
+| E14 | constant lr by season (clean replay) | constant lr grid (rate scale) × season | E11 | flu | post-fix | exact | V-curve, V-head × season | `e14_lr_by_season.Rmd` | done |
+| E15 | where the WIS gains come from | diagnostic: per-level pinball, offset/spread, median-only vs width-only | REF-op cold, E11 cold | flu | post-fix | exact | per level | `e15_wis_sources.Rmd` | done |
+| E16 | constant lr on the sqrt scale | scale (sqrt vs rate) × constant lr grid | E14 | flu | post-fix | exact | V-curve, V-head, V-month | `e16_sqrt_constant_lr.Rmd` | done |
+| E17 | late-season offset handling | none, `late_decay` 0.85/0.7/0.5 from 03-01, `off_after` 03-01 | rate 0.018, rate 0.032, sqrt 0.018 | flu | post-fix | exact | V-head, V-month | `e17_late_decay.Rmd` | done |
 
 E09 bridge rows, each one axis from the previous: REF-paper → rate scale →
 constant lr (sweep) → `settle_days` (sweep).
