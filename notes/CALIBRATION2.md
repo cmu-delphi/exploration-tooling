@@ -19,6 +19,4 @@ Low priority
 
 Housekeeping
 10. Delete the moved-aside caches (`cache/calibration/experiments/*.pre-spoiled`) once the new renders check out.
-11. `just calibration-experiments` needs `RSCRIPT="distrobox enter rocker -- Rscript"` on the host; make it the Justfile default?
-12. renv warns on every run (library renv 1.1.6, lockfile 1.2.3; some lockfile packages not installed). Harmless so far.
-13. `ds/calibrate2` mixes calibration, h−1, explore and prod-health work; consider splitting it into separate PRs.
+11. renv warns on every run (library renv 1.1.6, lockfile 1.2.3; some lockfile packages not installed). Harmless so far.
