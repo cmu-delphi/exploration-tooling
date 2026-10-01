@@ -215,12 +215,9 @@ scaled_pop_seasonal_revision <- function(
   train_sources <- union(primary_source, unlist(train_sources) %||% primary_source)
 
 
-  # For negative aheads, the most recent anchor week is still being actively
-  # revised. Drop it so the model anchors on the previous (more finalized) week,
-  # effectively adding one week of latency per negative-ahead step.
-  # For negative aheads, the most recent anchor week is still being actively
-  # revised and its lag-0 value directly covers the target week. Drop one week
-  # per negative-ahead step so the model predicts from genuinely prior data.
+  # The anchor is the latest reported week, kept even though it is still being
+  # revised. At ahead = -1 week the target is the anchor week itself, so the
+  # model predicts its finalized value from its first report (lag 0).
   archive_for_design <- epi_data
   max_tv <- max(archive_for_design$DT$time_value, na.rm = TRUE)
   # Reporting latency: gap between forecast date and most recent data. Both
