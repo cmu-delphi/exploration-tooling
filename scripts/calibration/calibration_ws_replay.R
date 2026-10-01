@@ -17,7 +17,8 @@
 
 source(here::here("scripts/calibration/calibration_harness.R"))
 
-args <- commandArgs(trailingOnly = TRUE)
+# Command-line arguments apply only when run as a script, not when sourced by a notebook.
+args <- if (sys.nframe() == 0L) commandArgs(trailingOnly = TRUE) else character(0)
 WORKERS <- if (length(args) >= 1) as.integer(args[[1]]) else 12L
 BURN_IN <- length(args) >= 2 && args[[2]] == "burn_in"
 BURN_IN_DATES <- c(from = "2023-10-11", through = "2024-04-24")
@@ -59,7 +60,9 @@ ws_burn_in_forecasts <- function(disease) {
   ch_to_hub(ch_backfill(ch_inputs_with_burn_in(), schedule = sched), disease)
 }
 
-ws_run_disease <- function(disease) {
+#' The replay's hub-round forecasts, truth and vintages, and per-100k rate
+#' scales for one disease. Also used by the E14/E15 notebooks.
+ws_inputs <- function(disease) {
   ch_use(paste0(disease, "_windowed_seasonal"))
   inp <- ch_inputs()
   tv <- ch_hub_truth(inp)
@@ -68,14 +71,21 @@ ws_run_disease <- function(disease) {
     target = c(flu = HUB_FLU_TARGET, covid = HUB_COVID_TARGET)[[disease]]
   )) %>% distinct(reference_date) %>% pull()
   fc <- ch_to_hub(ch_read_store(), disease) %>% filter(reference_date %in% hub_rounds)
-  # Every backfilled 2023-24 round is kept, not only hub rounds (covid has none).
-  fc_burn_in <- if (BURN_IN) bind_rows(ws_burn_in_forecasts(disease), fc)
   cli::cli_alert_info("{disease}: {n_distinct(fc$reference_date)} rounds, {n_distinct(fc$location)} locations")
   rate_scales <- get_population_data() %>%
     distinct(state_code, .keep_all = TRUE) %>%
     filter(state_code %in% unique(fc$location)) %>%
     transmute(location = state_code, from = as.Date("2000-01-01"), scale = population / 1e5)
-  cals <- purrr::map(ws_configs(rate_scales), function(cfg) {
+  list(fc = fc, truth = tv$truth, vintages = tv$vintages, rate_scales = rate_scales)
+}
+
+ws_run_disease <- function(disease) {
+  wi <- ws_inputs(disease)
+  fc <- wi$fc
+  tv <- wi[c("truth", "vintages")]
+  # Every backfilled 2023-24 round is kept, not only hub rounds (covid has none).
+  fc_burn_in <- if (BURN_IN) bind_rows(ws_burn_in_forecasts(disease), fc)
+  cals <- purrr::map(ws_configs(wi$rate_scales), function(cfg) {
     t0 <- Sys.time()
     fc_cfg <- if (length(cfg$burn_in_seasons) > 0) fc_burn_in else fc
     cal <- do.call(cal_run_cached, c(list(fc_cfg, tv$truth), cfg, list(learn = "exact", vintages = tv$vintages, workers = WORKERS)))
