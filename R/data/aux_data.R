@@ -3,7 +3,7 @@ EPIDATA_V5_URL <- "https://delphi.cmu.edu/epidata/v5"
 build_cast_api_query <- function(
   source = c("nssp", "nhsn"),
   signal = NULL,
-  geo_type = c("state", "nation"),
+  geo_type = c("state", "nation", "hhs"),
   columns = NULL,
   fill_method = NULL,
   limit = NULL,
@@ -52,16 +52,17 @@ get_cast_api_data <- function(...) {
     dplyr::rename(any_of(c(time_value = "reference_time", version = "report_time")))
 }
 
-# Fetch a signal for both state and nation geo_types, bind, and normalize:
-# lowercase geo_value, Date version, deduplicated on (geo_value, time_value, version).
-get_cast_api_all_geos <- function(source, signal, columns = c("geo_value", "time_value", "value", "version"), ...) {
-  bind_rows(
-    get_cast_api_data(source = source, signal = signal, geo_type = "state", columns = columns, ...),
-    get_cast_api_data(source = source, signal = signal, geo_type = "nation", columns = columns, ...)
-  ) %>%
+# Fetch a signal for each of `geo_types`, bind, and normalize: lowercase
+# character geo_value, Date version, deduplicated on (geo_value, time_value,
+# version), plus fill_method when it is requested.
+get_cast_api_all_geos <- function(source, signal, columns = c("geo_value", "time_value", "value", "version"),
+                                  geo_types = c("state", "nation"), ...) {
+  purrr::map(geo_types, \(gt) get_cast_api_data(source = source, signal = signal, geo_type = gt, columns = columns, ...)) %>%
+    purrr::map(\(d) mutate(d, geo_value = as.character(geo_value))) %>%
+    bind_rows() %>%
     mutate(geo_value = tolower(geo_value), version = as.Date(version)) %>%
     arrange(geo_value, time_value, version) %>%
-    distinct(geo_value, time_value, version, .keep_all = TRUE)
+    distinct(across(any_of(c("geo_value", "time_value", "version", "fill_method"))), .keep_all = TRUE)
 }
 
 get_nwss_coarse_data <- function(disease = c("covid", "flu")) {
@@ -457,12 +458,24 @@ get_nhsn_beds_archive <- function() {
 }
 
 
-up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv")) {
+#' NSSP ED-visit percentage archive from the cast API, Wednesday-labeled.
+#'
+#' @param geo_types any of "state", "nation", "hhs". HHS regions are served both
+#'   zero-filled and average-filled; the average-filled values are kept.
+up_to_date_nssp_state_archive <- function(disease = c("covid", "influenza", "rsv"), geo_types = c("state", "nation")) {
   disease <- arg_match(disease)
-  get_cast_api_all_geos(
-    source = "nssp",
-    signal = glue::glue("pct_ed_visits_{disease}")
-  ) %>%
+  signal <- glue::glue("pct_ed_visits_{disease}")
+  nssp <- get_cast_api_all_geos(source = "nssp", signal = signal, geo_types = setdiff(geo_types, "hhs"))
+  if ("hhs" %in% geo_types) {
+    hhs <- get_cast_api_all_geos(
+      source = "nssp", signal = signal, geo_types = "hhs",
+      columns = c("geo_value", "time_value", "value", "version", "fill_method")
+    ) %>%
+      filter(fill_method == "ave") %>%
+      select(-fill_method)
+    nssp <- bind_rows(nssp, hhs)
+  }
+  nssp %>%
     rename(nssp = value) %>%
     # End-of-week Saturday → midweek Wednesday shift, then snap to Wednesday.
     mutate(time_value = time_value - 3) %>%

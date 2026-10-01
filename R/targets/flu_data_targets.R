@@ -24,7 +24,7 @@ create_flu_data_targets <- function() {
       name = nhsn_archive,
       change = get_s3_object_last_modified("nhsn_data_archive.parquet", "forecasting-team-data"),
       command = {
-        get_nhsn_data_archive("flu")$DT %>%
+        retry_fn(max_attempts = 10, wait_seconds = 1, fn = get_nhsn_data_archive, disease = "flu")$DT %>%
           as.data.frame() %>%
           mutate(
             geo_value = ifelse(geo_value == "usa", "us", geo_value),
@@ -105,40 +105,18 @@ create_flu_data_targets <- function() {
         flusion_data_archive
       }
     ),
-    # TODO: Share code with covid?
     tar_target(
       name = nssp_archive,
       command = {
-        fetch_nssp <- function(geo_type, geo_values = "*") {
-          retry_fn(
-            max_attempts = 10,
-            wait_seconds = 1,
-            fn = epidatr::epidata_archive,
-            source = "nssp",
-            signals = "pct_ed_visits_influenza",
-            geo_type = geo_type,
-            geo_values = geo_values,
-            fetch_args = g_fetch_args
-          ) %>%
-            # HHS geo_type returns two rows per key: fill_method "zero" and "ave".
-            # Filter to "ave" before dropping the column. State/nation only ever
-            # report fill_method "source", so this filter must not apply to them.
-            filter(geo_type != "hhs" | is.na(fill_method) | fill_method == "ave") %>%
-            select(geo_value, time_value = reference_time, version = report_time, nssp = value) %>%
-            mutate(across(c(time_value, version), as.Date))
-        }
-        nssp <- bind_rows(
-          fetch_nssp("state"),
-          # National fetched directly so us geo has the correct percentage, not a
-          # sum of all state percentages.
-          fetch_nssp("nation", "us"),
-          fetch_nssp("hhs")
-        ) %>%
-          as_epi_archive(compactify = TRUE) %>%
-          extract2("DT") %>%
-          # reference_time is the last day of the epi week (Saturday); shift to
-          # Wednesday label matching NHSN (Saturday - 3).
-          mutate(time_value = as.Date(time_value) - g_time_value_adjust) %>%
+        nssp <- retry_fn(
+          max_attempts = 10,
+          wait_seconds = 1,
+          fn = up_to_date_nssp_state_archive,
+          disease = "influenza",
+          geo_types = c("state", "nation", "hhs")
+        )
+        # One copy per training source, so nssp merges onto ILI+ and flusurv rows too.
+        nssp <- nssp$DT %>%
           mutate(source = list(c("ILI+", "nhsn", "flusurv"))) %>%
           unnest(cols = "source") %>%
           # Always convert to data.frame after dplyr operations on data.table.
