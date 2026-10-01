@@ -663,3 +663,44 @@ test_that("scaled_pop_seasonal_revision keeps a prior year's seasonal window acr
   expect_true(nrow(res) > 0)
   expect_setequal(unique(res$geo_value), geos$geo_value)
 })
+
+run_nowcast <- function(archive) {
+  scaled_pop_seasonal_revision(
+    archive,
+    outcome = "value", primary_source = "nhsn", ahead = -7, lags = c(0, 7),
+    pop_scaling = FALSE, scale_method = "none", center_method = "none", nonlin_method = "none",
+    use_seasonal_window = FALSE, trainer = epipredict::quantile_reg(method = "fn"),
+    finalization_coverage = 0.8
+  )
+}
+
+test_that("scaled_pop_seasonal_revision gives no h−1 forecast when that week isn't reported", {
+  set.seed(5)
+  archive <- mk_revision_archive()$archive
+  # Two weeks after the last report: the h−1 week is still missing (a reporting gap).
+  attr(archive, "forecast_date") <- archive$versions_end + 14
+  expect_warning(res <- run_nowcast(archive), "isn't reported yet")
+  expect_equal(nrow(res), 0)
+})
+
+test_that("scaled_pop_seasonal_revision gives no forecast when the target is off the weekly grid", {
+  set.seed(5)
+  archive <- mk_revision_archive()$archive
+  attr(archive, "forecast_date") <- archive$versions_end + 8
+  expect_warning(res <- run_nowcast(archive), "whole number of weeks")
+  expect_equal(nrow(res), 0)
+})
+
+test_that("scaled_pop_seasonal_revision drops a geo whose latest week is behind the others", {
+  set.seed(6)
+  fixture <- mk_revision_archive()
+  last_week <- max(fixture$archive$DT$time_value)
+  archive <- fixture$archive$DT %>%
+    as_tibble() %>%
+    filter(!(geo_value == "tx" & time_value == last_week)) %>%
+    as_epi_archive(other_keys = "source", versions_end = fixture$archive$versions_end)
+  attr(archive, "forecast_date") <- last_week + 7
+  expect_warning(res <- run_nowcast(archive), "no forecast for tx")
+  expect_equal(unique(res$geo_value), "ca")
+  expect_true(all(res$target_end_date == last_week))
+})

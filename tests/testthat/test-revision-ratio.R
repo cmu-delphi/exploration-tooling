@@ -28,3 +28,14 @@ test_that("revision_ratio_nowcast returns a null forecast for unreported targets
   arch <- make_revising_archive("ca", 100, first_frac = list(ca = 0.8))
   expect_equal(nrow(revision_ratio_nowcast(arch, "value", ahead = 0)), 0)
 })
+
+test_that("revision_ratio_nowcast dates the target from the snapshot's forecast date on a late run", {
+  arch <- make_revising_archive(c("ca", "tx"), c(100, 50), first_frac = list(ca = 0.8, tx = 0.5))
+  last_week <- max(arch$DT$time_value)
+  # Generated a day late (Thursday): the forecast date is still the Wednesday.
+  snap <- make_forecast_archive_snapshot(arch, last_week + 7, last_week + 8)
+  out <- revision_ratio_nowcast(snap, "value", ahead = -7, window_weeks = 8, settled_days = 21, quantile_levels = 0.5)
+  expect_equal(unique(out$target_end_date), last_week)
+  expect_equal(unique(out$forecast_date), last_week + 7)
+  expect_equal(out$value[out$geo_value == "ca"], 100)
+})

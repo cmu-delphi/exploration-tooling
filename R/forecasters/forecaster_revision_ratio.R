@@ -13,8 +13,8 @@
 #' @param epi_data an `epi_archive` (the runner passes the truncated archive when
 #'   the grid row sets `needs_archive = TRUE`).
 #' @param outcome the outcome column.
-#' @param ahead days from the archive's `versions_end` to the target week; must
-#'   be negative.
+#' @param ahead days from the forecast date (see [archive_forecast_date]) to the
+#'   target week; must be negative.
 #' @param primary_source if the archive has a `source` key, only this source is
 #'   used.
 #' @param window_weeks number of most recent settled weeks to learn ratios from.
@@ -43,8 +43,10 @@ revision_ratio_nowcast <- function(
     return(make_null_forecast())
   }
   versions_end <- epi_data$versions_end
-  report_lag <- -as.integer(ahead)
-  target_tv <- versions_end + ahead
+  forecast_date <- archive_forecast_date(epi_data)
+  target_tv <- forecast_date + ahead
+  # How long the target week has been reported; past weeks are compared at this lag.
+  report_lag <- as.integer(versions_end - target_tv)
 
   dt <- data.table::as.data.table(epi_data$DT)
   grp_keys <- setdiff(key_colnames(epi_data), c("time_value", "version"))
@@ -98,6 +100,10 @@ revision_ratio_nowcast <- function(
     filter(!is.na(value)) %>%
     left_join(centers, by = "geo_value") %>%
     mutate(center = coalesce(center, pooled_center))
+  missing_geos <- setdiff(geo_rows$geo_value, current$geo_value)
+  if (length(missing_geos) > 0) {
+    cli::cli_warn("revision_ratio_nowcast: {target_tv} isn't reported yet for {missing_geos}; no forecast for them.")
+  }
   if (nrow(current) == 0) {
     return(make_null_forecast())
   }
@@ -107,7 +113,7 @@ revision_ratio_nowcast <- function(
     tidyr::expand_grid(tibble(quantile = quantile_levels, resid = resid_q)) %>%
     transmute(
       geo_value,
-      forecast_date = lubridate::floor_date(versions_end, "week", week_start = 7L) + 3L,
+      forecast_date = forecast_date,
       target_end_date = target_tv,
       quantile,
       value = pmax(0, reported * exp(center + resid))
