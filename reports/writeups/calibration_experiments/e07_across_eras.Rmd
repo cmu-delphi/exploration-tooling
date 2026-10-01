@@ -55,6 +55,9 @@ the adaptive learning rate (mult 0.03, floor 0.001, window 20, carry):
 - **operating**: REF-op, prod's tracker: leaky plus a slow term and a warm
   start from the burn-in season's errors.
 
+Section 3 also runs the operating-point candidates (E14, E16, E17) on both
+forecasters.
+
 "WIS change %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so **positive
 is better**. "L1 coverage bias" is the mean over the 23 levels of
 |empirical coverage − level|. Results lead with states only.
@@ -65,10 +68,49 @@ Numbers are from the render of 1 October 2026, states only, WIS change %
 (positive is better) / L1 coverage bias, h0/h1/h2/h3. All-locations numbers
 point the same way.
 
+- **Base WIS: equal in 2024-25, B worse in 2025-26.** B/A base WIS is
+  0.93/0.99/1.01/1.01 in 2024-25 and 1.33/1.22/1.11/1.05 in 2025-26
+  (1.06/1.07/1.05/1.02 pooled). Per state, pooled over h0–h3, the median
+  ratio is 0.99 in 2024-25 (B better in 29 of 52 states) and 1.12 in
+  2025-26 (B better in 7 of 52). So in 2025-26 the ensemble beats B almost
+  everywhere, by about 10%, most at h0–h1.
 - **The two bases are equally miscalibrated in 2024-25** (coverage bias
   0.13–0.17, 68–77% of outcomes above the median for both). In 2025-26 the
-  ensemble is better calibrated (0.046–0.078 vs 0.081–0.090). Base WIS is
-  similar.
+  ensemble is better calibrated (0.046–0.078 vs 0.081–0.090).
+- **By month, both bases have the same shape.** Both under-predict on the
+  ramp (December: 96–97% of outcomes above the median in 2024-25, 86–94% in
+  2025-26, coverage bias 0.24–0.34) and over-predict after the peak (March
+  2025-26: 32% above for A, 38% for B). B's ramp bias is larger in 2025-26
+  (November–December coverage bias 0.19/0.31 vs 0.14/0.24). The one place
+  they differ is spring 2024-25: A still under-predicts in March–April (59%
+  and 75% above the median), while B is close to calibrated (45% and 56%).
+- **The operating-point candidates rank mostly the same on both, with one
+  exception.** Pooled over both seasons, h0/h1/h2/h3 WIS change %:
+
+  | candidate | A ensemble | B `windowed_seasonal` |
+  |---|---|---|
+  | REF-op warm | +3.9/+1.9/+1.5/+2.3 | +2.8/+1.1/+0.8/+1.2 |
+  | REF-op cold | +2.8/+0.7/−0.3/−0.7 | +2.0/+0.6/+0.1/−0.2 |
+  | sqrt 0.018 | +2.4/+0.6/+0.1/0.0 | +2.2/+0.8/+0.6/+0.6 |
+  | rate 0.032 | +1.5/+0.7/+0.5/+0.2 | +1.3/+0.7/+0.5/+0.4 |
+  | sqrt 0.018, off 1 Mar | +1.7/+0.6/+0.4/+0.6 | +2.3/+1.2/+1.2/+1.3 |
+
+  Ordered by the mean over h0–h3, sqrt 0.018 > rate 0.032 > REF-op cold on
+  both. REF-op warm is first on A (+2.4 mean) and tied first with
+  off-1-March on B (both +1.5). Coverage bias ranks identically on both,
+  pooled: REF-op warm best (A 0.035–0.047, B 0.037–0.061), then rate 0.032,
+  sqrt 0.018, REF-op cold, and off-1-March worst (A 0.084–0.092, B
+  0.094–0.116).
+- **The exception is the March switch-off, and it follows the base's spring
+  bias.** In 2024-25, off-1-March is last of the five on A (+0.6/+0.2/0.0/+0.1)
+  but second on B (+1.6/+0.8/+0.7/+0.5): A was still under-predicting that
+  spring, so the offsets it switches off were still helping. In 2025-26,
+  when both over-predict in March, it is first on both. So whether to
+  switch off in spring depends on the forecaster, and B's result for it
+  should not be carried over to the ensemble without checking.
+- **sqrt 0.018 is WIS-positive at every horizon in both seasons only on B.**
+  On A it is −0.3/−0.1 at h2/h3 in 2025-26, where the ensemble was already
+  close to calibrated.
 - **Calibration does the same thing to both.** The trackers rank the same
   way on each: operating gains the most WIS, single gives the best coverage
   and loses at h2–h3. Pooled over both seasons:
@@ -85,6 +127,10 @@ point the same way.
   where the ensemble was already close to calibrated.
 - **Answer: the gains are not an artifact of the ensemble.** On the same
   rows and data, one fixed forecaster gains the same way, a little less.
+  B's base is about 5% worse on WIS pooled and its bias has the same
+  monthly shape, so experiments on B transfer to the ensemble for the
+  choice of tracker. They do not transfer for date-based switches, which
+  depend on where each base is biased in spring.
 - **Against the old E07** (finalized truth, the replay with prod's data
   substitutions, 50 locations, h−1 included): the verdict holds. The old
   explanation for B's smaller gains does not: at h0–h3 the gap is about a
@@ -114,6 +160,22 @@ TRACKERS <- list(
 grid <- tidyr::expand_grid(forecaster = names(FCS), tracker = names(TRACKERS))
 cals <- purrr::pmap(grid, function(forecaster, tracker) {
   do.call(cal_run_cached, c(list(FCS[[forecaster]], wi$truth), TRACKERS[[tracker]], list(learn = "exact", vintages = wi$vintages, workers = params$workers)))
+})
+# Operating-point candidates (E14, E16, E17). Cold ones see only the live seasons, so they start from zero offsets.
+const_cfg <- ws_configs(wi$rate_scales, burn_in = FALSE)[["E11 constant 0.1"]]
+sqrt_018 <- utils::modifyList(const_cfg, list(lr = 0.018, transform = "sqrt"))
+CANDS <- list(
+  `REF-op warm` = list(cfg = list(ref = "op"), warm = TRUE),
+  `REF-op cold` = list(cfg = list(ref = "op", burn_in_seasons = character(0), slow_init = NULL), warm = FALSE),
+  `sqrt 0.018` = list(cfg = sqrt_018, warm = FALSE),
+  `rate 0.032` = list(cfg = utils::modifyList(const_cfg, list(lr = 0.032)), warm = FALSE),
+  `sqrt 0.018, off 1 Mar` = list(cfg = c(sqrt_018, list(off_after = "03-01")), warm = FALSE)
+)
+FCS_LIVE <- purrr::map(FCS, \(fc) filter(fc, season_of(reference_date) %in% LIVE))
+cgrid <- tidyr::expand_grid(forecaster = names(FCS), cand = names(CANDS))
+ccals <- purrr::pmap(cgrid, function(forecaster, cand) {
+  fc <- if (CANDS[[cand]]$warm) FCS[[forecaster]] else FCS_LIVE[[forecaster]]
+  do.call(cal_run_cached, c(list(fc, wi$truth), CANDS[[cand]]$cfg, list(learn = "exact", vintages = wi$vintages, workers = params$workers)))
 })
 ```
 
@@ -150,6 +212,57 @@ FC_COLS <- c(`A ensemble` = "#0072B2", `B windowed_seasonal` = "#D55E00")
 
 # 1. The two bases
 
+## Base WIS
+
+Uncalibrated WIS (2 × mean pinball, in admissions) on identical rows, and
+the ratio B/A (below 1: `windowed_seasonal` is better).
+
+```{r base-wis}
+m %>%
+  filter(tracker == "single") %>%
+  select(geos, season, h, forecaster, wis_base) %>%
+  tidyr::pivot_wider(names_from = forecaster, values_from = wis_base) %>%
+  transmute(geos, season, h, A = .data[[names(FCS)[1]]], B = .data[[names(FCS)[2]]], `B/A` = B / A) %>%
+  arrange(geos, season, h) %>%
+  knitr::kable(digits = c(0, 0, 0, 1, 1, 3), caption = "Base WIS, A ensemble vs B windowed_seasonal")
+```
+
+Per state: base WIS pooled over h0–h3, A against B (log scales; below the
+line, B is better).
+
+```{r base-wis-state, fig.height=5}
+base_fc <- purrr::map(which(grid$tracker == "single"), \(i) cals[[i]]$forecasts %>% mutate(forecaster = grid$forecaster[i])) %>%
+  bind_rows() %>%
+  mutate(season = season_of(reference_date)) %>%
+  filter(season %in% LIVE, !is.na(truth), !is.na(value_base))
+pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
+loc_wis <- base_fc %>%
+  filter(location != "US") %>%
+  group_by(forecaster, season, location) %>%
+  summarize(wis = 2 * mean(pinball(truth, value_base, level)), .groups = "drop") %>%
+  tidyr::pivot_wider(names_from = forecaster, values_from = wis) %>%
+  transmute(season, location, A = .data[[names(FCS)[1]]], B = .data[[names(FCS)[2]]], ratio = B / A)
+ggplot(loc_wis, aes(A, B)) +
+  geom_abline(slope = 1, intercept = 0, colour = "grey50") +
+  geom_point(alpha = 0.8) +
+  facet_wrap(~season) +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(x = "A ensemble base WIS", y = "B windowed_seasonal base WIS")
+```
+
+```{r base-wis-ratio}
+loc_wis %>%
+  group_by(season) %>%
+  summarize(
+    states = n(), `B better` = sum(ratio < 1), q10 = quantile(ratio, 0.1), q25 = quantile(ratio, 0.25),
+    median = median(ratio), q75 = quantile(ratio, 0.75), q90 = quantile(ratio, 0.9)
+  ) %>%
+  knitr::kable(digits = 2, caption = "Per-state B/A base WIS ratio, h0–h3 pooled")
+```
+
+## Base miscalibration
+
 How miscalibrated each forecaster is before calibration, states only: WIS,
 L1 coverage bias, and the share of outcomes above the median (0.5 is
 calibrated; above 0.5 means the forecaster under-predicts).
@@ -161,6 +274,47 @@ m %>%
   tidyr::pivot_wider(names_from = h, values_from = cell) %>%
   arrange(season, forecaster) %>%
   knitr::kable(caption = "Base WIS / L1 coverage bias / share above the median, states only")
+```
+
+## Base bias by month
+
+Share of outcomes above the base median and L1 coverage bias, by calendar
+month of the reference date, states only.
+
+```{r base-month, fig.height=7}
+month_base <- function(d) {
+  d %>%
+    group_by(across(c(any_of(c("forecaster", "season", "horizon", "month")), level))) %>%
+    summarize(gap = mean(truth <= value_base) - first(level), above = mean(truth > value_base), n = n(), .groups = "drop") %>%
+    group_by(across(any_of(c("forecaster", "season", "horizon", "month")))) %>%
+    summarize(above = above[level == 0.5], cal_err = mean(abs(gap)), n = first(n), .groups = "drop")
+}
+base_fc_states <- base_fc %>%
+  filter(location != "US") %>%
+  mutate(month = factor(format(reference_date, "%b"), levels = month.abb[c(8:12, 1:7)]))
+mb <- month_base(base_fc_states) %>% mutate(h = factor(paste0("h", horizon), levels = paste0("h", 0:3)))
+mb %>%
+  tidyr::pivot_longer(c(above, cal_err), names_to = "metric") %>%
+  mutate(metric = factor(metric, levels = c("above", "cal_err"), labels = c("share above median", "L1 coverage bias"))) %>%
+  ggplot(aes(month, value, colour = forecaster, group = forecaster)) +
+  geom_hline(data = data.frame(metric = factor("share above median", levels = c("share above median", "L1 coverage bias")), y = 0.5), aes(yintercept = y), colour = "grey50") +
+  geom_line() +
+  geom_point(size = 1.1) +
+  facet_grid(metric + season ~ h, scales = "free", space = "free_x") +
+  scale_colour_manual(values = FC_COLS, name = NULL) +
+  labs(x = "month of reference date", y = NULL) +
+  theme(legend.position = "bottom")
+```
+
+Pooled over h0–h3: share above the base median / L1 coverage bias, A vs B.
+
+```{r base-month-table}
+month_base(base_fc_states %>% select(-horizon)) %>%
+  transmute(season, month, forecaster, cell = sprintf("%.2f / %.3f", above, cal_err)) %>%
+  tidyr::pivot_wider(names_from = forecaster, values_from = cell) %>%
+  left_join(base_fc_states %>% filter(level == 0.5) %>% count(season, month, forecaster) %>% filter(forecaster == names(FCS)[1]) %>% select(season, month, forecasts = n), by = c("season", "month")) %>%
+  arrange(season, month) %>%
+  knitr::kable(caption = "Share above base median / L1 coverage bias, states only, h0–h3 pooled")
 ```
 
 # 2. What calibration does to each
@@ -217,4 +371,113 @@ knitr::kable(season_table(GEOS[["states"]]))
 
 ```{r table-all}
 knitr::kable(season_table(GEOS[["all"]]))
+```
+
+# 3. Operating-point candidates on both
+
+The candidates from E14, E16 and E17, each run on both forecasters on the
+same rows: REF-op warm (as in section 2) and cold, sqrt-scale constant
+0.018 (E16), rate-scale constant 0.032 per 100k (E14), and sqrt 0.018
+switched off from 1 March (`off_after = "03-01"`, E17). The cold ones learn
+from the live seasons only.
+
+```{r cand-metrics}
+cm <- purrr::map2(ccals, seq_len(nrow(cgrid)), \(cal, i) score(cal) %>% mutate(cgrid[i, ])) %>%
+  bind_rows() %>%
+  mutate(
+    forecaster = factor(forecaster, levels = names(FCS)), cand = factor(cand, levels = names(CANDS)),
+    geos = factor(geos, levels = names(GEOS), labels = GEOS),
+    season = factor(season, levels = SEASONS, labels = c(LIVE, "both seasons")),
+    h = factor(paste0("h", horizon), levels = paste0("h", 0:3))
+  )
+```
+
+WIS change % per candidate, states only.
+
+```{r cand-plot, fig.height=6.5}
+ggplot(cm %>% filter(geos == GEOS[["states"]]), aes(cand, wis_pct, fill = forecaster)) +
+  geom_hline(yintercept = 0, colour = "grey50") +
+  geom_col(position = position_dodge(width = 0.85), width = 0.8) +
+  facet_grid(season ~ h) +
+  scale_fill_manual(values = FC_COLS, name = NULL) +
+  labs(x = NULL, y = "WIS change % (positive is better)") +
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+L1 coverage bias, calibrated (filled) against the base (open), states only.
+
+```{r cand-cov, fig.height=6.5}
+ggplot(cm %>% filter(geos == GEOS[["states"]]), aes(cand, cal_err_cal, colour = forecaster)) +
+  geom_point(aes(y = cal_err_base), shape = 1, size = 2.4, position = position_dodge(width = 0.6)) +
+  geom_point(size = 2.4, position = position_dodge(width = 0.6)) +
+  facet_grid(season ~ h) +
+  scale_colour_manual(values = FC_COLS, name = NULL) +
+  expand_limits(y = 0) +
+  labs(x = NULL, y = "L1 coverage bias (open: base)") +
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+## Rankings on A and B
+
+Candidates ordered by mean WIS change % over h0–h3, separately on each
+forecaster, states only. `rank A` / `rank B` are the positions (1 is the
+largest gain); Spearman ρ compares the two orders per season, over all
+(candidate, horizon) cells.
+
+```{r cand-rank}
+rk <- cm %>%
+  filter(geos == GEOS[["states"]]) %>%
+  group_by(forecaster, season, cand) %>%
+  summarize(wis = mean(wis_pct), cov = mean(cal_err_cal), .groups = "drop") %>%
+  group_by(forecaster, season) %>%
+  mutate(rank = rank(-wis), cov_rank = rank(cov)) %>%
+  ungroup() %>%
+  mutate(fc = ifelse(forecaster == names(FCS)[1], "A", "B")) %>%
+  select(season, cand, fc, wis, rank, cov, cov_rank) %>%
+  tidyr::pivot_wider(names_from = fc, values_from = c(wis, rank, cov, cov_rank)) %>%
+  arrange(season, rank_A)
+rk %>%
+  transmute(season, cand, `WIS % A` = wis_A, `rank A` = rank_A, `WIS % B` = wis_B, `rank B` = rank_B,
+            `cov bias A` = cov_A, `cov rank A` = cov_rank_A, `cov bias B` = cov_B, `cov rank B` = cov_rank_B) %>%
+  knitr::kable(digits = c(0, 0, 2, 0, 2, 0, 3, 0, 3, 0), caption = "Mean over h0–h3, states only")
+cm %>%
+  filter(geos == GEOS[["states"]]) %>%
+  select(season, cand, h, forecaster, wis_pct, cal_err_cal) %>%
+  tidyr::pivot_wider(names_from = forecaster, values_from = c(wis_pct, cal_err_cal)) %>%
+  group_by(season) %>%
+  summarize(
+    `ρ WIS cells` = cor(.data[[paste0("wis_pct_", names(FCS)[1])]], .data[[paste0("wis_pct_", names(FCS)[2])]], method = "spearman"),
+    `ρ coverage cells` = cor(.data[[paste0("cal_err_cal_", names(FCS)[1])]], .data[[paste0("cal_err_cal_", names(FCS)[2])]], method = "spearman")
+  ) %>%
+  knitr::kable(digits = 2, caption = "Spearman correlation of A vs B over (candidate, horizon) cells")
+```
+
+## Tables
+
+WIS change % / L1 coverage bias.
+
+```{r cand-tables}
+cand_table <- function(g) {
+  bind_rows(
+    cm %>% filter(cand == names(CANDS)[1]) %>% mutate(cand = "base", wis_pct = 0, cal_err_cal = cal_err_base),
+    cm
+  ) %>%
+    filter(geos == g) %>%
+    mutate(config = factor(paste(forecaster, cand, sep = ", "), levels = paste(rep(names(FCS), each = length(CANDS) + 1), c("base", names(CANDS)), sep = ", "))) %>%
+    transmute(config, col = paste(season, h), cell = sprintf("%+.1f / %.3f", wis_pct, cal_err_cal)) %>%
+    tidyr::pivot_wider(names_from = col, values_from = cell) %>%
+    arrange(config)
+}
+```
+
+### States only
+
+```{r cand-table-states}
+knitr::kable(cand_table(GEOS[["states"]]))
+```
+
+### All locations
+
+```{r cand-table-all}
+knitr::kable(cand_table(GEOS[["all"]]))
 ```
