@@ -38,8 +38,8 @@ for (f in src) {
 | E03 | Which scale should the offsets live on: counts, square root, or rate per 100k? | Square root, at every horizon, mostly by avoiding spring losses. Rate equals counts with the adaptive learning rate. |
 | E04 | Should the offset shrink between updates, or have a second slow component? | Shrinking buys WIS at h1–h3 but nearly triples coverage error. A slow component alone does nothing. |
 | E05 | Should the offset start from the burn-in season's errors instead of zero? | Yes; it never hurts. With the plain tracker it gives the best-calibrated config so far. |
-| E09 | With a constant learning rate on the rate scale, how do coverage and WIS trade off, and how much revision delay is best? | An L-shaped trade-off whose knee beats the paper's adaptive rate at h1–h3. Under prod's weekly re-run, less delay is better. |
-| E10 | Do the flu results carry over to covid? | Only at h−1 (+9.5% WIS). The covid base is already calibrated at h1–h3, where calibrating is neutral or harmful. |
+| E09 | With a constant learning rate on the rate scale, how do coverage and WIS trade off, and how much revision delay is best? | An L-shaped trade-off whose knee matches or beats the paper's adaptive rate at every horizon. Under prod's weekly re-run, less delay is better. |
+| E10 | Do the flu results carry over to covid? | Only at h−1 (+10% WIS). The covid base is already calibrated at h1–h3, where calibrating is neutral or harmful. |
 
 # How to read the results
 

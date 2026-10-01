@@ -100,33 +100,35 @@ step.
 
 - **The trade-off is L-shaped.** Raising the constant learning rate cuts the
   coverage bias from about 0.10 to 0.03 at almost no WIS cost, up to a knee
-  near 0.05–0.1 (h1–h3; up to 0.3 at h−1). Past the knee WIS climbs steeply
-  and coverage stops improving. The per-location lines spread widely: past
-  0.3 many locations inflate WIS by 20% or more.
-- **On the rate scale, the knee beats the paper's adaptive tracker.** At the
-  reference delay (+1 week, re-run design), the knee gives WIS inflation
-  −3.9/−2.3/−1.0/−0.6/−0.1% and coverage bias 0.043/0.031/0.026/0.026/0.026
-  at h−1…h3. REF-paper gives −4.2/−2.4/+0.5/+2.9/+5.2% and
-  0.047/0.030/0.032/0.034/0.032, so the knee is better on both at h1–h3 and
-  within 0.3 points at h−1/h0.
+  near 0.05–0.1. Past the knee WIS climbs steeply and coverage barely
+  improves. At the reference delay, h−1 has its best WIS at 0.1 (at 0.32
+  with no extra delay). The per-location lines spread widely: past 0.3 many
+  locations inflate WIS by 20% or more.
+- **On the rate scale, the knee matches or beats the paper's adaptive
+  tracker at every horizon.** At the reference delay (+1 week, re-run
+  design), the knee gives WIS inflation −3.2/−2.5/−1.1/−0.5/−0.2% and coverage
+  bias 0.040/0.031/0.026/0.027/0.027 at h−1…h3. REF-paper gives
+  −3.2/−1.9/+2.0/+2.7/+5.3% and 0.044/0.030/0.032/0.034/0.032: the same WIS
+  at h−1, worse WIS from h0 on, and worse coverage at h−1 and h1–h3.
 - **The rate scale only matters with a constant learning rate.** "rate,
   adaptive" matches REF-paper exactly. The adaptive rate is a quantile of the
   location's own residuals, so dividing a location by its population rescales
   the steps and the offsets together.
-- **REF-op makes a different trade.** Its WIS gain (−6.8/−5.1/−2.5/−1.8/−1.9%)
+- **REF-op makes a different trade.** Its WIS gain (−5.4/−4.9/−2.4/−1.7/−2.2%)
   is larger than any constant rate reaches at h0–h3, but at about twice the
-  coverage bias (0.080/0.054/0.045/0.046/0.041). The leak and the warm start
+  coverage bias (0.074/0.054/0.045/0.046/0.041). The leak and the warm start
   buy WIS; the plain tracker buys coverage.
 - **Extra delay, re-run design (prod): shorter is better, but it matters only
-  at h−1/h0.** At a learning rate of 0.1, h−1 WIS inflation is −6.2/−4.6/−2.8%
+  at h−1/h0.** At a learning rate of 0.1, h−1 WIS inflation is −5.3/−3.6/−1.0%
   at +0/+1/+2 weeks. At h1–h3 the curves nearly coincide, and coverage bias
   barely moves with delay. A value learned early is replaced by its revision
   in the next week's run, so waiting only delays the signal.
 - **Extra delay, stateful design: one week is needed.** At +0 weeks the
   tracker learns once from the first report, which under-reports, so the
-  offsets are pushed down: at the knee, h−1 coverage bias is 0.143, worse than
-  the uncalibrated 0.118. +1 week recovers most of it (0.067); +2 and +3
-  weeks change little at h1–h3 and lose WIS at h−1.
+  offsets are pushed down: at the knee, h−1 coverage bias is 0.142, worse than
+  the uncalibrated 0.111, and h−1 WIS is 0.9% worse than the base. +1 week
+  recovers most of it (0.066); +2 and +3 weeks change little at h1–h3 and
+  lose WIS at h−1.
 
 ```{r libs, cache=FALSE}
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))
