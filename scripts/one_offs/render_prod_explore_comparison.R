@@ -72,6 +72,7 @@ truth_data <- read_prod("nhsn_latest_data") %>%
 
 # ---- Select best-in-class explore forecasters, relabeled by family -------
 g_aheads <- 0:4 * 7
+g_nowcast_aheads <- -7
 g_dummy_mode <- FALSE
 g_very_latent_locations <- list(list(c("source"), c("flusurv", "ILI+")))
 forecaster_params <- if (disease == "covid") {

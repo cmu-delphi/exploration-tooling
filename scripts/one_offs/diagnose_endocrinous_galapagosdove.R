@@ -17,6 +17,7 @@ Sys.setenv(TAR_PROJECT = "flu_hosp_explore")
 
 g_dummy_mode <- FALSE
 g_aheads <- 0:4 * 7
+g_nowcast_aheads <- -7
 g_very_latent_locations <- list(list(c("source"), c("flusurv", "ILI+")))
 g_forecaster_parameter_combinations <- get_flu_forecaster_params()
 g_forecaster_params_grid <- g_forecaster_parameter_combinations %>%
