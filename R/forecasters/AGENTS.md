@@ -9,6 +9,7 @@ All forecasters follow the signature `function(epi_data, outcome, ahead = 1, ...
 - **forecaster_scaled_pop_seasonal.R** — `scaled_pop_seasonal`: adds seasonal whitening, climate baseline, PCA, window methods.
 - **forecaster_smoothed_scaled.R** — `smoothed_scaled`: smoothed + scaled variant.
 - **forecaster_revision_aware.R** — `scaled_pop_seasonal_revision`: revision-aware forecaster (takes `epi_archive`); `flag_revision_outlier_versions`, `compute_finalization_lag_weeks`.
+- **forecaster_revision_ratio.R** — `revision_ratio_nowcast`: baseline for already-reported weeks (negative aheads); reported value times recent revision ratios (takes `epi_archive`).
 - **revision_predictors.R** — Revision design matrix: `archive_to_revision_predictors`, `revision_predictor_design`, `roll_asof_value` (data.table rolling joins), `replicate_whitening_params`.
 - **forecaster_baseline_linear.R** — `cdc_baseline_linear`: CDC-style linear baseline.
 - **forecaster_climatological.R** — `climatological`: seasonal median baseline.
