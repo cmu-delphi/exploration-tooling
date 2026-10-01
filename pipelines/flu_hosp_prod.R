@@ -283,13 +283,9 @@ parameters_and_date_targets <- rlang::list2(
           source = "nhsn"
         ) %>%
         filter(geo_value %nin% g_insufficient_data_geos)
-      # ILI+/flusurv historical augmentation rows (static, finalized data for the
-      # seasonal forecasters). Previously bound at joined_archive_data's
-      # versions_end into every full_data snapshot. Folded in here as faux-
-      # versioned rows with version = time_value: these are historical seasons
-      # (time_values predate the forecast window), so every as-of slice includes
-      # all of them exactly as the old unconditional bind did, while keeping the
-      # archive honestly versioned like the explore pipeline.
+      # ILI+/flusurv historical augmentation rows (finalized data, no real
+      # vintages). Each row is versioned at its season's last time_value, so an
+      # as-of slice sees a season's extras only once that season is over.
       extra_dt <- joined_archive_data %>%
         epix_as_of(joined_archive_data$versions_end) %>%
         mutate(epiweek = epiweek(time_value), epiyear = epiyear(time_value)) %>%
@@ -297,12 +293,16 @@ parameters_and_date_targets <- rlang::list2(
         select(geo_value, source, time_value, hhs, season, season_week, epiweek, epiyear) %>%
         rename(value = hhs) %>%
         filter(source != "nhsn") %>%
-        mutate(version = time_value)
-      # The faux-versioning above is only equivalent to the old unconditional
-      # bind if no augmentation row lands inside the forecast window (flusurv is
-      # a live fetch, currently bounded at 2020 by the burden-estimate join;
-      # ILI+ ends mid-2024). Fail loudly if that ever drifts.
-      stopifnot(max(extra_dt$time_value) < min(as.Date(g_forecast_generation_dates)))
+        group_by(source, season) %>%
+        mutate(version = max(time_value)) %>%
+        ungroup()
+      # No forecast date may see an extras row from its own (ongoing) season.
+      gen_dates <- as.Date(g_forecast_generation_dates)
+      gen_seasons <- convert_epiweek_to_season(epiyear(gen_dates), epiweek(gen_dates))
+      stopifnot(
+        all(extra_dt$version >= extra_dt$time_value),
+        !any(purrr::map2_lgl(gen_dates, gen_seasons, \(d, s) any(extra_dt$season == s & extra_dt$version <= d)))
+      )
       bind_rows(nhsn_dt, extra_dt) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
     }
