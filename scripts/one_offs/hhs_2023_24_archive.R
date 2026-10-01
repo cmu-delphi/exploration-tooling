@@ -2,7 +2,11 @@
 # daily `hhs` source, for use as a burn-in season ahead of the NHSN-era replay,
 # and validate its finalized values against NHSN's finalized 2023-24 values.
 #
-# Usage: Rscript scripts/one_offs/hhs_2023_24_archive.R [out_dir]
+# Usage: Rscript scripts/one_offs/hhs_2023_24_archive.R [out_dir] [start] [versions_from]
+# `start` (default 20230701) is the first admission day fetched; the 2023-24
+# burn-in uses 20200801 so a 2023-24 snapshot sees earlier seasons' history.
+# Issues before `versions_from` (default 2023-07-01) collapse into one version
+# at that date, which keeps the per-version loop small.
 # Writes hhs_2023_24_weekly_archive.rds (epi_archive DT, both diseases),
 # hhs_2023_24_weekly_archive.parquet and validation CSVs into out_dir.
 #
@@ -23,7 +27,9 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 raw_cache <- file.path(out_dir, "hhs_daily_raw.rds")
 
 signals <- c(flu = "confirmed_admissions_influenza_1d", covid = "confirmed_admissions_covid_1d")
-time_range <- epidatr::epirange(20230701, 20240531)
+start <- if (length(args) >= 2) args[[2]] else "20230701"
+versions_from <- as.Date(if (length(args) >= 3) args[[3]] else "2023-07-01")
+time_range <- epidatr::epirange(as.integer(start), 20240531)
 
 # ---- Fetch daily data with all issues ----
 if (file.exists(raw_cache)) {
@@ -40,7 +46,9 @@ if (file.exists(raw_cache)) {
     bind_rows()
   saveRDS(daily, raw_cache)
 }
-stopifnot(!anyNA(daily$value))
+# Flu has missing days before mid-2021 (reporting was optional); a week with one
+# becomes NA, as in NHSN. From 2023-07 on there must be none.
+stopifnot(!anyNA(daily$value[daily$time_value >= as.Date("2023-07-01")]))
 
 # Saturday week-ending for an hhs admission day: the Saturday after it.
 week_ending_saturday <- function(admission_day) {
@@ -53,7 +61,7 @@ stopifnot(week_ending_saturday(as.Date("2023-12-01")) == as.Date("2023-12-02")) 
 daily <- daily %>% mutate(week_end = week_ending_saturday(time_value))
 
 # ---- Daily issues -> weekly versions ----
-versions <- sort(unique(daily$version))
+versions <- sort(unique(pmax(daily$version, versions_from)))
 weekly_long <- purrr::map(versions, \(v) {
   daily %>%
     filter(version <= v) %>%
