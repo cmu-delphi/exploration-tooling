@@ -18,7 +18,10 @@ for), **not reviewed**.
    gains are similar on the submitted ensemble and on `windowed_seasonal`,
    and the trackers rank the same way. So experiments can focus on the
    clean `windowed_seasonal` replay, which is free of hand edits and
-   spoiled submissions.
+   spoiled submissions. Caveat: the tracker ranking transfers, but a
+   date-based switch-off (`off_after`) does not; it depends on each
+   forecaster's spring bias (last on the ensemble in 2024-25, second on
+   `windowed_seasonal`).
 3. Experiments before E07's re-run (E03–E05, E09–E11) used the submitted
    ensemble; E01, E02 (new versions) and E12–E17 use the clean replay.
 
@@ -32,7 +35,7 @@ for), **not reviewed**.
 | E03 scale | ensemble | not reviewed | | |
 | E04 offset structure | ensemble | not reviewed | | |
 | E05 warm start | ensemble | not reviewed | | |
-| E07 across eras | both | commented | Needs concrete base WIS numbers, not "similar". Expand into the ensemble vs `windowed_seasonal` comparison: base WIS side by side, base bias by month, every operating-point candidate on both. | intro reworded; expansion in progress |
+| E07 across eras | both | commented | Needs concrete base WIS numbers, not "similar". Expand into the ensemble vs `windowed_seasonal` comparison: base WIS side by side, base bias by month, every operating-point candidate on both. | intro reworded; expanded with base WIS side by side (B/A 0.93–1.01 in 2024-25, 1.05–1.33 in 2025-26), base bias by month, and five candidates on both forecasters |
 | E09 lr × delay | ensemble | commented | WIS axis inverted relative to the other notebooks. | flipped to "WIS change %, positive is better" |
 | E10 covid | ensemble | not reviewed | | |
 | E11 constant lr | ensemble | not reviewed | | |

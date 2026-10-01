@@ -230,6 +230,12 @@ Flu, clean replay, exact, post-fix, states only.
   ensemble gains about a point more with REF-op (pooled A
   +3.9/+1.9/+1.5/+2.3, B +2.8/+1.1/+0.8/+1.2). B is not less
   miscalibrated than A (equal in 2024-25, worse in 2025-26).
+  Expanded: base WIS B/A (states) 0.93–1.01 in 2024-25, 1.05–1.33 in
+  2025-26. Same monthly bias shape on both; the one difference is spring
+  2024-25, where A still under-predicts. Candidates (states, pooled WIS
+  mean over h0–h3) rank sqrt 0.018 > rate 0.032 > REF-op cold on both, and
+  coverage ranks identically; `off_after` 03-01 is last on A in 2024-25 but
+  second on B, so date-based switches don't transfer between forecasters.
 
 ## Data
 

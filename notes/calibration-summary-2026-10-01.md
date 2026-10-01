@@ -80,7 +80,9 @@ E17, E02).**
   overall (E17).** The offsets carry into the next season, so the decay
   also hands that season a near-zero start.
 - **Switching calibration off from 1 March (or 15 February) is the one
-  variant with a large WIS gain (E02, E17).** It is positive at every
+  variant with a large WIS gain on `windowed_seasonal` (E02, E17).** It
+  doesn't transfer to the ensemble: in 2024-25 the ensemble was still
+  under-predicting in spring, and the switch-off ranks last there (E07). It is positive at every
   horizon in both seasons, but it gives up most of the coverage gain:
   - **sqrt 0.018, pooled WIS:** +2.3/+1.2/+1.2/+1.3 switched off from
     March, against +2.2/+0.8/+0.6/+0.6 left on;
@@ -109,7 +111,11 @@ matters (E01, E02).**
 **5. The gains are not specific to the ensemble (E07).**
 
 On identical rows, the trackers rank the same way on the submitted ensemble
-and on `windowed_seasonal`. The ensemble gains about a point more with
+and on `windowed_seasonal`. Base WIS (states, B/A) is 0.93–1.01 in 2024-25
+and 1.05–1.33 in 2025-26 (worst at h0); per state, `windowed_seasonal` is
+better in 29 of 52 states in 2024-25 and 7 of 52 in 2025-26. Both have the
+same monthly bias shape: under-prediction on the ramp, over-prediction
+after the peak. The ensemble gains about a point more with
 REF-op (pooled +3.9/+1.9/+1.5/+2.3 vs +2.8/+1.1/+0.8/+1.2). The two are
 equally miscalibrated in 2024-25. In 2025-26 the ensemble is better
 calibrated. The original E07's explanation for the gap, that
@@ -132,7 +138,7 @@ doesn't help a constant rate (E13).**
 
 | candidate | for | against |
 |---|---|---|
-| sqrt, constant 0.018 | WIS-positive at every horizon in both seasons; small offsets; no learning-rate adaptation to tune | small gains at h2–h3 in 2024-25; loses in March |
+| sqrt, constant 0.018 | WIS-positive at every horizon in both seasons on `windowed_seasonal` (on the ensemble, −0.3/−0.1 at h2/h3 in 2025-26); small offsets; no learning-rate adaptation to tune | small gains at h2–h3 in 2024-25; loses in March |
 | REF-op (current) | largest h0 gain in 2024-25; best with a flu burn-in | loses at h3 in 2024-25; barely improves 2024-25 coverage when cold |
 | either, switched off from March | more WIS at h1–h3 | gives up most of the coverage gain |
 
