@@ -38,6 +38,53 @@ g_baseline_forecaster <- function(epi_data, ahead, extra_data, ...) {
   fcst
 }
 
+# Evaluation-mode scope controls, read from env vars by the prod scripts only
+# when g_evaluation_mode is TRUE (see AGENTS.md "Key env vars").
+#
+# EVALUATION_DATES: comma-separated forecast dates (Wednesdays) to keep.
+filter_evaluation_dates <- function(forecast_schedule) {
+  raw <- Sys.getenv("EVALUATION_DATES", "")
+  if (!nzchar(raw)) {
+    return(forecast_schedule)
+  }
+  wanted <- as.Date(trimws(strsplit(raw, ",")[[1]]))
+  missing <- wanted[!wanted %in% forecast_schedule$forecast_date_int]
+  if (anyNA(wanted) || length(missing) > 0) {
+    cli::cli_abort("EVALUATION_DATES={raw}: not all are forecast dates in the evaluation schedule.")
+  }
+  forecast_schedule %>% filter(forecast_date_int %in% wanted)
+}
+
+# EVALUATION_FORECASTERS: comma-separated forecaster ids to keep in the grid.
+filter_evaluation_forecasters <- function(forecaster_grid) {
+  raw <- Sys.getenv("EVALUATION_FORECASTERS", "")
+  if (!nzchar(raw)) {
+    return(forecaster_grid)
+  }
+  wanted <- trimws(strsplit(raw, ",")[[1]])
+  unknown <- setdiff(wanted, forecaster_grid$id)
+  if (length(unknown) > 0) {
+    cli::cli_abort("EVALUATION_FORECASTERS: unknown id{?s} {unknown}; known: {forecaster_grid$id}.")
+  }
+  forecaster_grid %>% filter(id %in% wanted)
+}
+
+# EVALUATION_SUBSTITUTIONS: "false" replays without the hand-edited data
+# substitutions csv. Returns the expression spliced into the full_data command.
+evaluation_substitutions_arg <- function(substitutions_target) {
+  raw <- tolower(Sys.getenv("EVALUATION_SUBSTITUTIONS", "true"))
+  if (!raw %in% c("true", "false")) {
+    cli::cli_abort("EVALUATION_SUBSTITUTIONS must be true or false, not {raw}.")
+  }
+  if (raw == "true") rlang::sym(substitutions_target) else NULL
+}
+
+# TRUE when every component named in the ensemble specs is in the grid.
+ensemble_components_present <- function(ensemble_spec, forecaster_ids) {
+  components <- unique(unlist(purrr::map(ensemble_spec, "components")))
+  all(components %in% forecaster_ids)
+}
+
 # Returns a tar_map covering all forecast dates, fetching and scoring external
 # forecasts from S3. Depends on g_s3_prefix, g_disease, nhsn_latest_data,
 # nssp_latest_data targets.
@@ -97,13 +144,16 @@ build_external_forecast_targets <- function() {
 #   literal in every branch's frozen command rather than a run-time global.
 # - climate_submission_excluded_geos: geos dropped from the standalone
 #   CMU-climate_baseline submission (flu only; historically g_excluded_geos).
+# - run_ensembles: FALSE (an evaluation run filtered to some components) keeps
+#   only forecast_filtered and passes it through as forecasts_and_ensembles.
 build_prod_ensemble_targets <- function(
   forecast_schedule,
   disease,
   geo_exclusions_file,
   nssp_geo_exclusions_file,
   ensemble_spec,
-  climate_submission_excluded_geos = character(0)
+  climate_submission_excluded_geos = character(0),
+  run_ensembles = TRUE
 ) {
   values <- forecast_schedule %>%
     mutate(
@@ -113,20 +163,30 @@ build_prod_ensemble_targets <- function(
       ensemble_spec = list(.env$ensemble_spec),
       climate_excluded_geos = list(.env$climate_submission_excluded_geos)
     )
+  forecast_filtered_target <- tar_target(
+    name = forecast_filtered,
+    command = list(
+      nhsn = forecast_nhsn_full %>%
+        filter(forecast_date == as.Date(forecast_date_int)) %>%
+        filter(forecaster %nin% c("linear_no_population_scale")),
+      nssp = forecast_nssp_full %>%
+        filter(forecast_date == as.Date(forecast_date_int)) %>%
+        filter(forecaster %nin% c("linear"))
+    )
+  )
+  if (!run_ensembles) {
+    cli::cli_inform("Ensemble components missing from the grid; skipping ensemble, submission and report targets.")
+    return(tar_map(
+      values = values,
+      names = "forecast_date_chr",
+      forecast_filtered_target,
+      tar_target(name = forecasts_and_ensembles, command = forecast_filtered)
+    ))
+  }
   tar_map(
     values = values,
     names = "forecast_date_chr",
-    tar_target(
-      name = forecast_filtered,
-      command = list(
-        nhsn = forecast_nhsn_full %>%
-          filter(forecast_date == as.Date(forecast_date_int)) %>%
-          filter(forecaster %nin% c("linear_no_population_scale")),
-        nssp = forecast_nssp_full %>%
-          filter(forecast_date == as.Date(forecast_date_int)) %>%
-          filter(forecaster %nin% c("linear"))
-      )
-    ),
+    forecast_filtered_target,
     tar_target(
       name = geo_weights,
       command = {

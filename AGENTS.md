@@ -16,7 +16,7 @@ make prod-covid           # covid production pipeline
 make prod-rsv             # STUB: scripts/rsv_hosp_prod.R does not exist yet; recipe fails if run
 make explore-flu          # flu exploration sweep (~3h)
 make explore-covid        # covid exploration sweep (~3h)
-make eval-flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n forecast dates. Also: eval-covid. BACKTEST_MODE survives only for the rsv stub (prod-rsv-backtest)
+make eval-flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n forecast dates; see Key env vars for the other EVALUATION_* scopes. Also: eval-covid. BACKTEST_MODE survives only for the rsv stub (prod-rsv-backtest)
 make pull / make push     # sync aux_data, targets stores, and forecasts with S3 (forecasting-team-data bucket)
 make update-site && make netlify   # rebuild report index and deploy
 make submit-flu           # commit forecast to ../FluSight-forecast-hub, open PR, then commit + push flu weights CSVs to main (also: submit-covid, submit-rsv; *-dry skips the weights push)
@@ -37,7 +37,7 @@ get_targets_errors("covid_hosp_prod", top_n = 10)
 forecaster_lookup("surprised.tarantula")  # map code name -> parameter settings
 ```
 
-Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in a REPL — never in `.Renviron`, which overrides the shell env on every Rscript start), `TAR_RUN_PROJECT` (how make recipes/`scripts/run.R` select the project, immune to `.Renviron`), `BACKTEST_MODE` (rsv stub only; flu/covid evaluation mode dispatches on the project name), `FORECAST_REFERENCE_DATE` (pins the pipeline's "today" for reproducible replays/captures), `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
+Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in a REPL — never in `.Renviron`, which overrides the shell env on every Rscript start), `TAR_RUN_PROJECT` (how make recipes/`scripts/run.R` select the project, immune to `.Renviron`), `BACKTEST_MODE` (rsv stub only; flu/covid evaluation mode dispatches on the project name), `FORECAST_REFERENCE_DATE` (pins the pipeline's "today" for reproducible replays/captures), `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EVALUATION_N_DATES` / `EVALUATION_DATES` (comma-separated forecast dates) / `EVALUATION_FORECASTERS` (comma-separated grid ids; if any ensemble component is left out, the ensemble, submission, report and calibration targets are skipped) / `EVALUATION_SUBSTITUTIONS=false` (replay without `*_data_substitutions.csv`) — all inert outside flu/covid evaluation mode, `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
 
 ## Architecture
 
