@@ -35,9 +35,12 @@ for (f in src) {
 | | question | short answer |
 |---|---|---|
 | E00 | Should the tracker learn from finalized data or from data as published at the time? | As published, re-run each week as prod does. Finalized data overstated the earlier gains only a little (about 2 points at h−1). |
+| E01 | Which adaptive learning-rate settings (multiplier, window, carry or reset over the summer)? | The multiplier is what matters; the window barely does, and carrying offsets beats resetting. On the square-root scale 0.03 gains at h0 and loses a little at h1–h3; 0.01 never loses but corrects coverage slowly from a cold start. |
+| E02 | Do a spring switch-off date, a per-level learning rate or a seasonal window improve on the adaptive tracker? | Switching off from 1 March or 15 February gains 2–5 points of WIS over the reference at h1–h3, at the cost of most of the coverage gain. A per-level rate gains a little; a seasonal window does not help. |
 | E03 | Which scale should the offsets live on: counts, square root, or rate per 100k? | Square root, at every horizon, mostly by avoiding spring losses. Rate equals counts with the adaptive learning rate. |
 | E04 | Should the offset shrink between updates, or have a second slow component? | Shrinking buys WIS at h1–h3 but nearly triples coverage error. A slow component alone does nothing. |
 | E05 | Should the offset start from the burn-in season's errors instead of zero? | Yes; it never hurts. With the plain tracker it gives the best-calibrated config so far. |
+| E07 | Are the gains an artifact of calibrating the submitted ensemble? | No. On the same rows and data, the single `windowed_seasonal` forecaster gains the same way, about a point less with prod's tracker. |
 | E09 | With a constant learning rate on the rate scale, how do coverage and WIS trade off, and how much revision delay is best? | An L-shaped trade-off whose knee matches or beats the paper's adaptive rate at every horizon. Under prod's weekly re-run, less delay is better. |
 | E10 | Do the flu results carry over to covid? | Only at h−1 (+10% WIS). The covid base is already calibrated at h1–h3, where calibrating is neutral or harmful. |
 | E11 | How does E09's best constant learning rate compare with the adaptive trackers? | Better coverage than the cold adaptive trackers at less WIS gain near the present, and the most stable across seasons. The warm-started adaptive tracker still wins at h0–h1. |
