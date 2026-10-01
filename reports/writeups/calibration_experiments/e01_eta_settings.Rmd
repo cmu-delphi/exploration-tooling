@@ -26,9 +26,16 @@ window (`lr_window`), and what happens to the offsets over the summer
 (`season_policy`: carry them into the next season, or reset them to zero).
 **Which settings should we use, and which of the three matters?**
 
-This rebuilds the original E01 sweep (`calibration_qt_flu.Rmd`, count scale,
-submitted ensemble, finalized truth, before the 2026-09-17 fixes) on the
-current setup.
+This asks the original E01's question (`calibration_qt_flu.Rmd`) on the
+current setup. It is a new experiment, not a reproduction: four things
+changed at once, so it can't say which change matters.
+
+| | original E01 | this notebook |
+|---|---|---|
+| forecaster | submitted ensemble | clean `windowed_seasonal` replay |
+| scale | count | sqrt |
+| learning truth | finalized | as published each week |
+| tracker code | before the 2026-09-17 fixes | after |
 
 **Setup.** As E14–E17: flu, the clean `windowed_seasonal` replay (all 53
 locations, the 55 hub rounds, h0–h3), learning from data as published each
@@ -146,8 +153,9 @@ curve_plot <- function(g) {
     geom_point(size = 1) +
     geom_text(data = d %>% filter(window == 20, policy == "carry"), aes(label = mult),
       size = 2.4, vjust = -0.8, show.legend = FALSE) +
-    geom_point(data = base, aes(cal_err_base, 0), colour = "black", shape = 21, fill = "white", size = 2.2) +
-    geom_point(data = count_m %>% filter(geos == g), aes(cal_err_cal, wis_pct), colour = "black", shape = 4, size = 2.4) +
+    geom_point(data = base, aes(cal_err_base, 0, shape = "base (uncalibrated)"), colour = "black", fill = "white", size = 2.2) +
+    geom_point(data = count_m %>% filter(geos == g), aes(cal_err_cal, wis_pct, shape = "count scale, mult 0.03"), colour = "black", size = 2.4) +
+    scale_shape_manual(values = c(`base (uncalibrated)` = 21, `count scale, mult 0.03` = 4), name = NULL) +
     scale_colour_manual(values = WINDOW_COLS, name = "lr_window") +
     scale_linetype_manual(values = c(carry = "solid", reset = "22"), name = "season policy") +
     facet_grid(season ~ h) +

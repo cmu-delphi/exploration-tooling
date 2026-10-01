@@ -88,10 +88,10 @@ submissions excluded):
 weeks, exact and stateful learning truth. Pooled over locations:
 
 - The coverage/WIS trade-off is L-shaped, with a knee at a learning rate of
-  about 0.05–0.1 per 100k. At 0.056 and +1 week (re-run): WIS
-  −3.2/−2.5/−1.1/−0.5/−0.2% (negative is better), coverage bias
+  about 0.05–0.1 per 100k. At 0.056 and +1 week (re-run): WIS change
+  +3.2/+2.5/+1.1/+0.5/+0.2% (positive is better), coverage bias
   0.040/0.031/0.026/0.027/0.027. That matches or beats REF-paper
-  (−3.2/−1.9/+2.0/+2.7/+5.3%, 0.044/0.030/0.032/0.034/0.032) at every
+  (+3.2/+1.9/−2.0/−2.7/−5.3%, 0.044/0.030/0.032/0.034/0.032) at every
   horizon.
 - With the adaptive rate, rate scale and count scale give identical results
   (the adaptive rate rescales with the location), so the rate scale matters

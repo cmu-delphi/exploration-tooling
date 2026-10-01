@@ -26,10 +26,13 @@ gains an artifact of that ensemble, or does the tracker help a single,
 fixed forecaster the same way?** The fixed forecaster is flu prod's
 `windowed_seasonal`.
 
-This rebuilds the NHSN half of the original E07
-(`scripts/calibration/calibration_ws_experiments.R`, finalized truth, the
-2026-09-17 replay with prod's data substitutions). Its third setup, C (the
-ILI+ decade), was invalid and is not rebuilt.
+This asks the NHSN half of the original E07's question
+(`scripts/calibration/calibration_ws_experiments.R`) on the current setup.
+It is a new experiment, not a reproduction: the original learned from
+finalized data and replayed `windowed_seasonal` with prod's data
+substitutions; here both learn from data as published each week, and B is
+the clean replay. The original's third setup, C (the ILI+ decade), was
+invalid and is not repeated.
 
 **Setup.** Two forecasters, everything else shared:
 
