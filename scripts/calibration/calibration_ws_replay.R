@@ -132,6 +132,37 @@ ws_scores <- function(fc) {
     left_join(above, by = c("season", "horizon"))
 }
 
+#' V-month per season: WIS change % (positive is better), L1 coverage bias and
+#' the share of truth below the median, base vs calibrated, by calendar month of
+#' the reference date. `share` is the month's share of the season's base WIS.
+#' Groups by `config` too when present. Used by the E16/E17 notebooks.
+ws_month_scores <- function(fc) {
+  pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
+  by <- intersect(c("config", "season", "horizon"), names(fc))
+  fc <- fc %>%
+    filter(!is.na(truth), !is.na(value_base), season %in% LIVE) %>%
+    mutate(month = factor(format(reference_date, "%b"), levels = month.abb[c(8:12, 1:7)]))
+  per_level <- fc %>%
+    group_by(across(all_of(c(by, "month", "level")))) %>%
+    summarize(
+      base = sum(pinball(truth, value_base, level)), cal = sum(pinball(truth, value_cal, level)),
+      gap_base = mean(truth <= value_base) - first(level), gap_cal = mean(truth <= value_cal) - first(level),
+      below_base = mean(truth < value_base), below_cal = mean(truth < value_cal),
+      n = n(), .groups = "drop"
+    )
+  per_level %>%
+    group_by(across(all_of(c(by, "month")))) %>%
+    summarize(
+      wis_base = sum(base), wis_cal = sum(cal),
+      cal_err_base = mean(abs(gap_base)), cal_err_cal = mean(abs(gap_cal)),
+      below_med_base = below_base[level == 0.5], below_med_cal = below_cal[level == 0.5],
+      n = first(n), .groups = "drop"
+    ) %>%
+    group_by(across(all_of(by))) %>%
+    mutate(pct = 100 * (wis_base - wis_cal) / wis_base, share = 100 * wis_base / sum(wis_base)) %>%
+    ungroup()
+}
+
 # Location subsets scored separately: raw-count pooling makes US about half of
 # the all-locations WIS.
 WS_GEOS <- list(all = \(loc) rep(TRUE, length(loc)), states = \(loc) loc != "US", us = \(loc) loc == "US")
