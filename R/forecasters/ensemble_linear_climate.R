@@ -174,6 +174,13 @@ ensemble_weighted <- function(forecasts, other_weights) {
       { if ("ahead" %in% names(.)) select(., -ahead) else . } %>%
       left_join(forecast_aheads, by = "forecaster", relationship = "many-to-many")
   }
+  # Keep only weights whose forecaster actually forecast that (geo, ahead), so a
+  # component missing at one ahead has its weight spread over the rest there.
+  full_weights <- full_weights %>%
+    inner_join(
+      forecasts %>% week_ahead() %>% distinct(forecaster, geo_value, ahead),
+      by = c("forecaster", "geo_value", "ahead")
+    )
   grouping_cols <- c("geo_value", "ahead")
   renorm <-
     full_weights %>%
