@@ -68,13 +68,13 @@ base WIS, and pick within strata (season phase × location size).
 | id | question | varies | reference | disease | code | truth | views | where | status |
 |---|---|---|---|---|---|---|---|---|---|
 | E00 | how much did final truth flatter results; can vintage stand in for exact? | learning truth {final, vintage, exact} × settle {7, 14} | REF-paper, REF-op | flu | post-fix | all three | V-head | `e00_vintage_backtest.Rmd` | done: exact is the default; vintage is not a stand-in |
-| E01 | which eta settings? | season policy × window × mult | REF-paper | flu | pre-fix | final | V-head, V-curve (mult) | `calibration_qt_flu.Rmd` | stale |
-| E02 | cutoff and eta variants | `off_after`, per-level, geo-pool, seasonal window (one at a time) | REF-paper | flu | pre-fix | final | V-head, V-month, V-state | `calibration_qt_seasons_flu.Rmd` | stale |
+| E01 | which eta settings? | season policy × window × mult | REF-paper | flu | pre-fix | final | V-head, V-curve (mult) | `calibration_qt_flu.Rmd` | superseded by `e01_eta_settings.Rmd` (2026-10-01) |
+| E02 | cutoff and eta variants | `off_after`, per-level, geo-pool, seasonal window (one at a time) | REF-paper | flu | pre-fix | final | V-head, V-month, V-state | `calibration_qt_seasons_flu.Rmd` | superseded by `e02_eta_variants.Rmd` (2026-10-01) |
 | E03 | which working scale? | count vs sqrt vs rate (log1p, quartic pre-fix only) | REF-paper | flu | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e03_scale.Rmd` | done |
 | E04 | leak / two-term offset | single, leak 0.1, slow term, slow + leak | REF-paper at sqrt | flu | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e04_offset_structure.Rmd` | done |
 | E05 | warm start from burn-in | warm vs cold, paired, for single / leak / slow + leak; warm alone | REF-paper at sqrt | flu | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e05_warm_start.Rmd` | done |
 | E06 | ILI+ as burn-in | burn-in source | REF-op | flu | post-fix | final | V-head | notes only | invalid (broken replay); superseded by E13 (HHS burn-in with real vintages); not rebuilt |
-| E07 | one forecaster across eras | base forecaster (A ensemble / B `windowed_seasonal`; C invalid) | REF-paper at sqrt | flu | post-fix | final | V-head | `calibration_ws_experiments.R`, findings notebook | current, needs vintage rerun |
+| E07 | one forecaster across eras | base forecaster (A ensemble / B `windowed_seasonal`; C invalid) | REF-paper at sqrt | flu | post-fix | final | V-head | `calibration_ws_experiments.R`, findings notebook | superseded by `e07_across_eras.Rmd` (2026-10-01) |
 | E08 | covid | disease | old REF-paper (count, window 50) | covid | pre-fix | final | V-head, V-state, V-gallery | `calibration_qt_*_covid.Rmd` | superseded by E10; not rebuilt |
 | E09 | constant lr × revision delay | constant lr grid × `settle_days` {7, 14, 21, 28}; bridge rows below | REF-paper | flu | post-fix | exact (+ vintage, for a stateful tracker) | V-curve, V-head | `e09_lr_delay.Rmd` | done |
 | E10 | covid at the references | disease (REF-paper, REF-op without warm start as in covid prod) | REF-paper, REF-op | covid | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e10_covid.Rmd` | done |
@@ -85,6 +85,9 @@ base WIS, and pick within strata (season phase × location size).
 | E15 | where the WIS gains come from | diagnostic: per-level pinball, offset/spread, median-only vs width-only | REF-op cold, E11 cold | flu | post-fix | exact | per level | `e15_wis_sources.Rmd` | done |
 | E16 | constant lr on the sqrt scale | scale (sqrt vs rate) × constant lr grid | E14 | flu | post-fix | exact | V-curve, V-head, V-month | `e16_sqrt_constant_lr.Rmd` | done |
 | E17 | late-season offset handling | none, `late_decay` 0.85/0.7/0.5 from 03-01, `off_after` 03-01 | rate 0.018, rate 0.032, sqrt 0.018 | flu | post-fix | exact | V-head, V-month | `e17_late_decay.Rmd` | done |
+| E01 (rebuilt) | which adaptive-eta settings? | mult {0.3, 0.1, 0.03, 0.01} × window {8, 20, Inf} × season policy; count bridge | REF-paper at sqrt, cold | flu (clean replay) | post-fix | exact | V-curve, V-head | `e01_eta_settings.Rmd` | done |
+| E02 (rebuilt) | cutoff and eta variants | `off_after` {04-01, 03-01, 02-15}, per-level eta, seasonal window carry/reset (HHS burn-in) + burn-in bridge; geo-pool removed | E01 center (sqrt, 0.03, 20, carry) | flu (clean replay) | post-fix | exact | V-head, V-month | `e02_eta_variants.Rmd` | done |
+| E07 (rebuilt) | one forecaster across eras | forecaster (A hub ensemble / B clean replay) on identical rows, each with its own 2023-24 burn-in | single, leaky, REF-op | flu | post-fix | exact | V-head, base bias | `e07_across_eras.Rmd` | done |
 
 E09 bridge rows, each one axis from the previous: REF-paper → rate scale →
 constant lr (sweep) → `settle_days` (sweep).
@@ -100,6 +103,6 @@ bias on NHSN and ILI+. See `notes/CALIBRATION.md`.
   US rounds; covid: the 2024-11-23 round, 2026-04-25 h−1). E00, E03–E05, E09
   and E10 are re-run without them; every older result, and the numbers in
   `notes/CALIBRATION.md` before that date, include them.
-- **Learning truth.** E01, E02 and E06–E08 learned from finalized NHSN (E00
-  shows the error is small outside h−1). E03–E05 have been re-run exactly.
-- **E07** (ensemble vs `windowed_seasonal`) has not been re-run exactly.
+- **Learning truth.** E06 and E08 learned from finalized NHSN (E00 shows
+  the error is small outside h−1); both are superseded, not re-run. Every
+  other experiment is exact.

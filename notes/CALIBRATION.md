@@ -210,6 +210,27 @@ Flu, clean replay, exact, cold, states only. `e16_sqrt_constant_lr.Rmd`,
   0.094–0.116 vs 0.059–0.078). Untested: decaying only the played offset
   and keeping the hidden state.
 
+## E01, E02, E07 rebuilt (2026-10-01)
+
+Flu, clean replay, exact, post-fix, states only.
+
+- E01 (`e01_eta_settings.Rmd`, sqrt REF-paper, cold): the multiplier is
+  the only setting that matters (16–81 points of pooled WIS; window 1–2,
+  season policy 0.3–1.7). 0.1 and 0.3 are too large; 0.03 gains at h0 and
+  loses a little at h1–h3; 0.01 never loses more than 0.2 but barely fixes
+  2024-25 coverage from a cold start. Carry beats reset. Same conclusion
+  as the old sweep, except carry vs reset now clearly favors carry.
+- E02 (`e02_eta_variants.Rmd`): `off_after` 03-01 or 02-15 is the only
+  large WIS gain (positive at every horizon in both seasons) but gives up
+  most of the coverage gain (bias 0.080–0.100 vs 0.032–0.045), matching
+  E17. Per-level eta: small gain at h1–h3. Seasonal window: no help.
+- E07 (`e07_across_eras.Rmd`, identical rows, each forecaster with its own
+  2023-24 burn-in): the trackers rank the same on the hub ensemble and on
+  `windowed_seasonal`, so the gains aren't an ensemble artifact. The
+  ensemble gains about a point more with REF-op (pooled A
+  +3.9/+1.9/+1.5/+2.3, B +2.8/+1.1/+0.8/+1.2). B is not less
+  miscalibrated than A (equal in 2024-25, worse in 2025-26).
+
 ## Data
 
 FluSight CMU-TimeSeries submissions: 83 rounds (2023-10-14 … 2026-05-30), 53
@@ -231,6 +252,8 @@ cast API, versions 2024-11-19 onward) serves both truth (`nhsn_read_truth()`)
 and vintages live; the findings notebook uses it.
 
 ## Findings (factorial sweep, `calibration_qt_flu.Rmd`; count space, pre-fix)
+
+Superseded by the rebuilt E01 (`e01_eta_settings.Rmd`, 2026-10-01).
 
 Sweep: `season_policy` {carry, reset} × `lr_window` {8, 20, 50, Inf} ×
 `lr_mult` {0.3, 0.1, 0.03, 0.01}; results in `cache/calibration/sweep.rds`.
@@ -315,6 +338,8 @@ against the latest NHSN vintage via `nhsn_read_truth()`.
   rejected for now in favor of static top-N HTML.
 
 ## Method variants (`calibrate_hub_forecasts()` options; 2026-08-27, pre-fix)
+
+Superseded by the rebuilt E02 (`e02_eta_variants.Rmd`, 2026-10-01).
 
 All count space at the original operating point; WIS change vs base, both
 live seasons, by horizon −1/0/1/2/3. Pre-fix numbers (see above); the
@@ -676,6 +701,9 @@ Count vs sqrt: the ratio of the relative median shift at the trough bin to
 that at the peak bin is 32–38 in count space and 5–10 in sqrt.
 
 ### One forecaster across eras (2026-09-17)
+
+Superseded by the rebuilt E07 (`e07_across_eras.Rmd`, 2026-10-01). Its
+"less miscalibrated" explanation below is wrong at h0–h3.
 
 Question: are the hub-season gains an artifact of three seasons of one
 ensemble, and does the tracker behave the same on a decade of the *same*
