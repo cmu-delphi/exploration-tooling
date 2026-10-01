@@ -4,6 +4,7 @@
 
 ## Overview
 
+- Check the weekly health checks first: they list missing locations, horizons, and ensemble components, and the pipeline's warnings and errors.
 - The weekly fanplots are used by the team to visually inspect the forecasts.
 - The season reports provide a general analysis of the 2024-2025 season's data and forecaster performance.
 - The backtesting reports were pre-season tests of a variety of forecasters on the 2023-2024 season's data.
@@ -14,6 +15,9 @@
 - A more detailed description of the forecaster families explored is provided at the bottom of the page.
 
 ## Most recent week
+
+
+## Weekly Health Checks
 
 
 ## Score notebooks

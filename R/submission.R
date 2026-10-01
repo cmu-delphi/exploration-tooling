@@ -174,7 +174,8 @@ update_site <- function() {
   # Handle season-stamped explore notebooks ({disease}-[overall-]notebook-{YYYY_YYYY}.html)
   explore_overall_files <- dir_ls(reports_dir, regexp = ".*-overall-notebook-\\d{4}_\\d{4}\\.html")
   explore_family_files <- dir_ls(reports_dir, regexp = ".*-notebook-[^0-9].*-\\d{4}_\\d{4}\\.html")
-  explore_files <- c(explore_overall_files, explore_family_files)
+  explore_nowcast_files <- dir_ls(reports_dir, regexp = ".*-nowcast-notebook-\\d{4}_\\d{4}\\.html")
+  explore_files <- c(explore_overall_files, explore_family_files, explore_nowcast_files)
   if (length(explore_files) > 0) {
     explore_table <- tibble(filename = explore_files) %>%
       mutate(
@@ -183,9 +184,10 @@ update_site <- function() {
         season_slug = str_extract(file_name, "\\d{4}_\\d{4}"),
         season_name = str_replace(season_slug, "_", "-"),
         is_overall = grepl("overall", file_name),
-        family = if_else(
-          is_overall, "Overall",
-          str_remove(str_remove(file_name, glue("^{disease}-notebook-")), "-\\d{4}_\\d{4}\\.html$")
+        family = case_when(
+          is_overall ~ "Overall",
+          grepl("-nowcast-notebook-", file_name) ~ "h−1 nowcasts",
+          TRUE ~ str_remove(str_remove(file_name, glue("^{disease}-notebook-")), "-\\d{4}_\\d{4}\\.html$")
         )
       ) %>%
       arrange(disease, season_name, desc(is_overall), family)
@@ -207,6 +209,34 @@ update_site <- function() {
     }
     if (length(all_explore_lines) > 0) {
       report_md_content <- insert_after_section(report_md_content, section_header, all_explore_lines)
+    }
+  }
+
+  # Health checks: newest render per (forecast date, disease). The latest
+  # week's are inserted last into "Most recent week" so they land at its top.
+  health_files <- dir_ls(reports_dir, regexp = ".*_health_on_.*\\.html")
+  if (length(health_files) > 0) {
+    health_parts <- str_match(path_file(health_files), "(\\d{4}-\\d{2}-\\d{2})_(.*)_health_on_(\\d{4}-\\d{2}-\\d{2})\\.html")
+    health_table <- tibble(
+      file_name = health_parts[, 1],
+      forecast_date = ymd(health_parts[, 2]),
+      disease = health_parts[, 3],
+      generation_date = ymd(health_parts[, 4])
+    ) %>%
+      filter(!is.na(file_name)) %>%
+      group_by(forecast_date, disease) %>%
+      slice_max(generation_date, with_ties = FALSE) %>%
+      ungroup() %>%
+      arrange(forecast_date, desc(disease))
+    health_link <- function(row) {
+      sprintf("- [%s health check, forecast %s (rendered %s)](%s)", str_to_title(row$disease), row$forecast_date, row$generation_date, row$file_name)
+    }
+    for (ii in seq_len(nrow(health_table))) {
+      report_md_content <- insert_after_section(report_md_content, "## Weekly Health Checks", health_link(health_table[ii, ]))
+    }
+    latest_health <- health_table %>% filter(forecast_date == max(forecast_date))
+    for (ii in seq_len(nrow(latest_health))) {
+      report_md_content <- insert_after_section(report_md_content, "## Most recent week", health_link(latest_health[ii, ]))
     }
   }
 

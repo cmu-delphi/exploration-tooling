@@ -211,6 +211,25 @@ build_prod_ensemble_targets <- function(
         )
       }
     ),
+    # Coverage tables for the weekly health notebook (R/prod_health.R).
+    tar_target(
+      name = health_coverage,
+      command = {
+        spec <- ensemble_spec$ensemble_mix
+        purrr::map(c(nhsn = "nhsn", nssp = "nssp"), function(signal) {
+          prod_ensemble_coverage(
+            forecasts = forecast_filtered[[signal]],
+            clim_lin = ensemble_clim_lin[[signal]],
+            submitted = ensemble_mixture[[signal]],
+            weights = geo_weights[[signal]],
+            spec = spec,
+            clim_id = ensemble_spec$climate_linear$id,
+            signal = signal,
+            aheads = aheads
+          )
+        })
+      }
+    ),
     tar_target(
       name = forecasts_and_ensembles,
       command = list(

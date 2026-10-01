@@ -30,6 +30,12 @@ the next firing. At the 14:00 cutoff, if data is still stale, it logs a
 `CRITICAL` line to `cache/logs/prod_forecast_freshness.log` and skips the
 forecast for the day. See the script for the exact steps and log paths.
 
+After the pipelines, the script renders a health notebook per disease and
+posts failures (pipeline errors, failed health checks, failed publish steps,
+stale data at the cutoff) to Slack. It needs a Slack incoming webhook URL in
+`SLACK_WEBHOOK_URL`, exported from the `forecaster` user's `~/.profile`. See
+`notes/prod-health-check.md`.
+
 ## Install (on the production box, as the `forecaster` user)
 
 ```sh
