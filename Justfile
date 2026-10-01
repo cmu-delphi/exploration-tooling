@@ -1,3 +1,4 @@
+# R isn't installed on the host; run recipes inside the distrobox: `distrobox enter rocker -- just <recipe>`.
 rscript := env_var_or_default("RSCRIPT", "Rscript")
 
 # Render calibration experiment notebooks (all, or the named ones, e.g. e00_vintage_backtest) and the index.
