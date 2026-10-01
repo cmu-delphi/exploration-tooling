@@ -1,0 +1,85 @@
+---
+title: "E11: constant learning rate vs adaptive"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  hub_dir: "../FluSight-forecast-hub"
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 10, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_load.Rmd")}
+```
+
+One axis: the learning rate. The constant rate is the corner of E09's
+trade-off curve, re-run design, one week of extra delay: 0.1 admissions per
+100k per step on the rate scale. Below that rate, coverage bias falls with
+little change in WIS. Above it, coverage stops improving and WIS gets worse
+at every horizon. It is compared with the adaptive learning rate (0.03 × the
+90th percentile of the last 20 rounds' absolute errors) in the configs from
+E03 and E05. Everything else is REF-paper, learning from vintages the way
+prod does (re-run each week; E00).
+
+- **REF-paper**: counts, adaptive.
+- **sqrt, adaptive**: the E03 winner.
+- **warm + sqrt, adaptive**: the E05 `warm + single`, the best-calibrated
+  adaptive config.
+- **rate, constant 0.1**: the E09 corner.
+- **REF-op**: prod, for orientation; it differs in several settings.
+
+# Findings
+
+Numbers are from the render of 1 October 2026, pooled over both live
+seasons and all locations; WIS and absolute-error changes are % vs base,
+positive is better. The constant run matches E09's table at 0.1, +1 week,
+re-run.
+
+- **Against the cold adaptive trackers, the constant rate trades WIS at
+  h−1/h0 for better coverage everywhere.** WIS +3.6/+2.4/+0.7/+0.3/−0.5 at
+  h−1…h3, against +5.1/+4.0/+0.7/−1.3/−1.4 for `sqrt, adaptive`; coverage
+  bias 0.032/0.022/0.018/0.017/0.018 against 0.049/0.032/0.026/0.028/0.026.
+  It beats REF-paper on both at every horizon.
+- **The warm-started adaptive tracker still beats it at h0–h1.**
+  `warm + sqrt, adaptive` has better WIS at h−1–h1 (+5.1/+4.7/+1.3) and
+  better coverage at h0–h3 (0.013–0.020). The constant rate keeps an edge only
+  in h−1 coverage (0.032 vs 0.046) and is within 0.8 points on WIS at h2/h3.
+- **It is the most stable tracker across seasons and months.** In 2025-26 it
+  loses 1.8–2.0% at h1–h3, against up to 4.6% for the adaptive sqrt trackers
+  (REF-op is the only config that gains there). By month at h3 it has the
+  smallest March loss of the plain trackers (16% vs 42–51% for sqrt), but is
+  nearly neutral in December–January (about +1%, 71% of the base WIS), where
+  the warm start and REF-op gain 4–6%. Its h−1 is the weakest in 2025-26
+  (−1.6%).
+- **The median gains less near the present.** Absolute error improves
+  +6.3/+4.9% at h−1/h0, against about +10/+8% for the sqrt trackers; it is
+  better than them at h2 (+1.8%).
+- **Untested:** a warm start on the constant-rate tracker. The warm start
+  is the largest single gain for the adaptive tracker (E05), and the constant
+  rate keeps coverage without a leak.
+
+```{r runs}
+sqrt_args <- list("paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3))
+cals <- list(
+  `REF-paper` = run("paper"),
+  `sqrt, adaptive` = do.call(run, sqrt_args),
+  `warm + sqrt, adaptive` = do.call(run, c(sqrt_args, slow_init = "burn_in_quantile")),
+  `rate, constant 0.1` = run("paper", scales = rate_scales, lr = 0.1),
+  `REF-op` = run("op")
+)
+focus <- "rate, constant 0.1"
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_standard_views.Rmd")}
+```
