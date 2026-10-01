@@ -166,6 +166,25 @@ seasons pooled, states only (US excluded):
 - US is ~45% of all-locations WIS, but states-only and US-only changes
   point the same way. Tables: `cache/calibration/ws_replay_scores_burn_in_*.csv`.
 
+## Constant rate by season (E14) and where the WIS gains come from (E15), 2026-10-01
+
+Flu, clean `windowed_seasonal` replay, exact, cold, states only.
+`e14_lr_by_season.Rmd`, `e15_wis_sources.Rmd`.
+
+- E14: a constant rate of 0.018–0.032 per 100k improves WIS at every
+  horizon in both seasons and cuts coverage bias in both (2025-26 reaches
+  ~0.01 by 0.032; 2024-25 keeps improving up to ~0.3, at a WIS cost past
+  0.056). From 0.1 (E11's rate) WIS worsens at h1–h3 in both seasons. The
+  knee here is lower than E09's 0.05–0.1 (ensemble, burn-in). Neither
+  REF-op cold nor sqrt adaptive is good in both seasons at every horizon.
+- E15: offsets are small (median 2–5% of the base 90% width; width ratio
+  1.00–1.04), which is why fan plots look unchanged, and nearly always
+  upward. Gains come from the center and shoulders, not the tails. For
+  REF-op, shifting every quantile by the median offset alone gives more WIS
+  than the full calibration; width/shape changes cost WIS and buy coverage.
+  E11 0.1 has a long tail of offsets large relative to narrow intervals
+  (top 10%: 0.26–0.55 of the 90% width vs 0.08–0.20 for REF-op).
+
 ## Data
 
 FluSight CMU-TimeSeries submissions: 83 rounds (2023-10-14 … 2026-05-30), 53
