@@ -167,9 +167,11 @@ cal_round_snapshots <- function(vintages, loc, ref_dates, weeks = 12L) {
 }
 
 
-#' V-state: one location over one season. Every other round's fan (h0–h3,
+#' V-state: one location over one season. Every other round's fan (h−1–h3,
 #' base 80% band and median, calibrated 10/50/90%), finalized truth in grey and,
-#' in black, the snapshot each plotted round saw, over the fortnight before it.
+#' in black, the last two reported weeks of the snapshot each plotted round saw,
+#' with a dot on the latest. That is normally the fan's h−1 week, so each black
+#' tail leads into its own fan; after a late release it ends a week earlier.
 #' @export
 cal_state_panel <- function(cal, loc, season, truth, vintages, title = NULL) {
   refs <- cal$forecasts %>%
@@ -179,14 +181,18 @@ cal_state_panel <- function(cal, loc, season, truth, vintages, title = NULL) {
     pull()
   refs <- refs[seq(1L, length(refs), by = 2L)]
   fan <- cal$forecasts %>%
-    filter(.data$location == loc, .data$reference_date %in% refs, .data$horizon %in% 0:3, .data$level %in% c(0.1, 0.5, 0.9)) %>%
+    filter(.data$location == loc, .data$reference_date %in% refs, .data$horizon %in% -1:3, .data$level %in% c(0.1, 0.5, 0.9)) %>%
     mutate(lvl = c(`0.1` = "lo", `0.5` = "med", `0.9` = "hi")[as.character(.data$level)]) %>%
     select("reference_date", "target_end_date", "lvl", base = "value_base", calibrated = "value_cal") %>%
     tidyr::pivot_longer(c("base", "calibrated"), names_to = "which") %>%
     tidyr::pivot_wider(names_from = "lvl", values_from = "value")
   fin <- truth %>%
     filter(.data$location == loc, .data$target_end_date >= min(refs) - 21L, .data$target_end_date <= max(refs) + 28L)
-  snap <- cal_round_snapshots(vintages, loc, refs, weeks = 2L)
+  snap <- cal_round_snapshots(vintages, loc, refs, weeks = 4L) %>%
+    group_by(.data$reference_date) %>%
+    slice_max(.data$target_end_date, n = 2L) %>%
+    ungroup()
+  snap_end <- snap %>% group_by(.data$reference_date) %>% slice_max(.data$target_end_date, n = 1L) %>% ungroup()
   ggplot2::ggplot() +
     ggplot2::geom_line(data = fin, ggplot2::aes(.data$target_end_date, .data$truth), colour = "grey65") +
     ggplot2::geom_ribbon(
@@ -204,6 +210,7 @@ cal_state_panel <- function(cal, loc, season, truth, vintages, title = NULL) {
       ggplot2::aes(.data$target_end_date, .data$med, colour = .data$which, group = interaction(.data$reference_date, .data$which))
     ) +
     ggplot2::geom_line(data = snap, ggplot2::aes(.data$target_end_date, .data$truth, group = .data$reference_date), colour = "black") +
+    ggplot2::geom_point(data = snap_end, ggplot2::aes(.data$target_end_date, .data$truth), colour = "black", size = 1) +
     ggplot2::scale_fill_manual(values = CAL_FAN_COLS, aesthetics = c("fill", "colour")) +
     ggplot2::labs(x = NULL, y = "admissions", colour = NULL, fill = NULL, subtitle = title %||% paste(names(CAL_STATES)[CAL_STATES == loc], season))
 }
