@@ -94,13 +94,14 @@ CH_SCHEDULE_DELAYS <- c(
 # grid row in pipelines/<disease>_hosp_prod.R, split as make_forecaster_grid()
 # splits it. The replays they point at were run with substitutions off, and
 # windowed_seasonal excludes no geos, so nothing is dropped.
+# windowed_seasonal is calibrated at h0 and up; h−1 is left to the revision-aware methods.
 CH_CONFIGS <- list(
   flu_windowed_seasonal = list(
     STORE = "flu_hosp_evaluation",
     DISEASE = "flu",
     TARGET = "wk inc flu hosp",
     FORECASTER_ID = "windowed_seasonal",
-    AHEADS = -1:3,
+    AHEADS = 0:3,
     DROP_GEOS = character(0),
     EXCLUDED_GEOS = NULL,
     STORE_SUBSTITUTIONS = NULL,
@@ -126,7 +127,7 @@ CH_CONFIGS <- list(
     DISEASE = "covid",
     TARGET = "wk inc covid hosp",
     FORECASTER_ID = "windowed_seasonal",
-    AHEADS = -1:3,
+    AHEADS = 0:3,
     DROP_GEOS = character(0),
     EXCLUDED_GEOS = NULL,
     STORE_SUBSTITUTIONS = NULL,
