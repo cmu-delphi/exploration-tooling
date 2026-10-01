@@ -29,6 +29,21 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
       diff against the edited run (changes should appear only at the
       substituted geo-dates), then all dates, timed. Feed it to the
       calibration harness.
+      - a1–a2 done 2026-10-01: `EVALUATION_FORECASTERS`, `EVALUATION_DATES`,
+        `EVALUATION_SUBSTITUTIONS=false` (AGENTS.md "Key env vars"); prod
+        manifests unchanged. Filtering out any ensemble component skips all
+        ensemble, submission, report and calibration targets. On vs off,
+        the snapshot differs exactly at the CSV cells (flu 2025-01-08,
+        2025-02-12, 2026-01-28; covid 2025-02-19; control date
+        bit-identical). The forecasts move a lot at the substituted geos
+        and slightly (median ~0.1%, max ~6%) at every other geo on the
+        same date, because `windowed_seasonal` fits one model pooled
+        across geos. So the expected diff is "only on substituted dates",
+        not "only at substituted geos". Single-forecaster cost: ~40
+        CPU-s per date plus ~4 min fixed overhead per run.
+      - Side finding: the h=−1 forecast never changes when a substitution
+        edits only the latest week. Worth checking that h=−1 is meant to
+        ignore that week.
    b. *2023-24 as a burn-in season.* The best configs so far (E05
       `warm + single`, REF-op) warm-start from a burn-in season, and the
       replay has none. Delphi's `hhs` source
