@@ -96,6 +96,11 @@ hub_series_matrix <- function(series, round_date, n_levels) {
 #'   still step when revealed inside the off window. The hidden offsets carry
 #'   unchanged into the next season. `"04-01"` switches calibration off for the
 #'   spring tail, where the peak-tuned offsets are out of regime.
+#' @param late_decay `NULL`, or `list(from = "MM-DD", factor = )`. At each round
+#'   whose reference date falls on or after `from` (and before July), the fast
+#'   offset is multiplied by `factor` in `[0, 1]` before it is played; learning
+#'   continues as usual. The slow term is not decayed. Mutually exclusive with
+#'   `off_after`.
 #' @param lr_seasonal `NULL`, or `list(half_width_weeks = 5)`. Pools into the
 #'   eta residual window the rounds of every earlier season that fall within
 #'   `half_width_weeks` of the same point in the season (same calendar date
@@ -160,6 +165,7 @@ calibrate_hub_forecasts <- function(
   projection = c("isotonic", "sort", "none"),
   nonneg = TRUE,
   off_after = NULL,
+  late_decay = NULL,
   lr_seasonal = NULL,
   transform = c("identity", "log1p", "sqrt", "quartic_root"),
   scales = NULL,
@@ -190,6 +196,15 @@ calibrate_hub_forecasts <- function(
   if (!is.null(off_after) && fast_decay > 0) {
     cli::cli_abort("{.arg off_after} and {.arg fast_decay} cannot be combined; choose one way of retiring stale offsets.")
   }
+  if (!is.null(late_decay)) {
+    if (!is.null(off_after)) {
+      cli::cli_abort("{.arg off_after} and {.arg late_decay} cannot be combined.")
+    }
+    f <- late_decay$factor
+    if (!is.character(late_decay$from) || !(is.numeric(f) && length(f) == 1L && f >= 0 && f <= 1)) {
+      cli::cli_abort("{.arg late_decay} must be {.code list(from = \"MM-DD\", factor = <0..1>)}.")
+    }
+  }
 
   rounds <- hub_label_seasons(unique(forecasts$reference_date))
   round_date <- rounds$round_date
@@ -208,6 +223,12 @@ calibrate_hub_forecasts <- function(
     reset = 0,
     shrink = shrink_factor
   )
+
+  if (!is.null(late_decay)) {
+    mmdd <- format(round_date, "%m-%d")
+    late <- mmdd >= late_decay$from & mmdd < "07-01"
+    hidden_scale[late] <- hidden_scale[late] * late_decay$factor
+  }
 
   # The slow term may train through burn-in; the fast term never does.
   slow_update_from <- if (burn_in_learns_slow) rep(TRUE, n) else update_from
