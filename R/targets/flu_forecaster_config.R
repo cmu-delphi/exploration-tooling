@@ -207,8 +207,9 @@ get_flu_forecaster_params <- function() {
       seasonal_forward_window = c(7, 3 * 7, 5 * 7),
       keys_to_ignore = g_very_latent_locations
     ),
-    # Revision-aware analog of the `window` seasonal method
-    revision_aware = tidyr::expand_grid(
+    # Revision-aware analog of the `window` seasonal method, whitened and trained
+    # with the ILI+/flusurv augmentation rows.
+    revision_aware_augmented = tidyr::expand_grid(
       forecaster = "scaled_pop_seasonal_revision",
       trainer = "quantreg_fn",
       lags = list2(c(0, 7), c(0, 7, 14, 21)),
@@ -439,8 +440,7 @@ get_flu_forecaster_params <- function() {
     })
 
   # Make sure all ids are unique.
-  stopifnot(
-    length(out$id %>% unique()) == length(out$id)
-  )
+  ids <- unlist(purrr::map(out, "id"))
+  stopifnot(!anyDuplicated(names(out)), !anyDuplicated(ids))
   out
 }

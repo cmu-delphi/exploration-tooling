@@ -271,8 +271,7 @@ get_covid_forecaster_params <- function() {
     })
 
   # Make sure all ids are unique.
-  stopifnot(
-    length(out$id %>% unique()) == length(out$id)
-  )
+  ids <- unlist(purrr::map(out, "id"))
+  stopifnot(!anyDuplicated(names(out)), !anyDuplicated(ids))
   out
 }
