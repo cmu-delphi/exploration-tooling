@@ -56,11 +56,9 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
         Results are E12 in `notes/CALIBRATION.md`. The two diseases'
         replays differ on 2024-11-20: flu generates on 11-21, covid on
         11-20 (NHSN's bad release; the hub-round filter drops that round).
-        Open: which aheads to calibrate for `windowed_seasonal` (h−1 is
-        its own here, which no submission uses).
-      - Side finding: the h=−1 forecast never changes when a substitution
-        edits only the latest week. Worth checking that h=−1 is meant to
-        ignore that week.
+        Decision (2026-10-01): calibrate h0 and up only. h−1 belongs to
+        the revision-aware methods (item 3) and gets integrated with them
+        later.
    b. *2023-24 as a burn-in season.* The best configs so far (E05
       `warm + single`, REF-op) warm-start from a burn-in season, and the
       replay has none. Delphi's `hhs` source
@@ -191,4 +189,9 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
 
 7. renv warns on every run (library renv 1.1.6, lockfile 1.2.3; some
    lockfile packages not installed). Harmless so far.
-8. Refactor and cleanup threads: `notes/refactor-ideas.md`.
+8. Low priority: `windowed_seasonal`'s h−1 forecast ignores the latest
+   reported week, so a data substitution to that week never reaches h−1.
+   Most substitutions are to that week (flu 20 of 25 rows, covid 10 of
+   10). Submitted h−1 comes from other components, so nothing shipped is
+   affected; revisit with the revision-aware h−1 work (item 3).
+9. Refactor and cleanup threads: `notes/refactor-ideas.md`.

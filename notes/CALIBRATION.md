@@ -117,17 +117,18 @@ September–October. Candidate change: calibrate covid at h−1 (maybe h0) only.
 
 `scripts/calibration/calibration_ws_replay.R` with `ch_use("{flu,covid}_windowed_seasonal")`,
 forecasts read from the evaluation store's clean replay (substitutions off, all
-53 geos, aheads −1..3; harness backfill matches it exactly), exact learning
+53 geos; harness backfill matches it exactly), h0–h3 (h−1 is left to the
+revision-aware methods), exact learning
 truth, hub rounds only (flu 55, covid 89). This changes several things at
 once compared with E07-B (no burn-in, clean replay, store truth, all geos),
-so it is not a one-axis comparison. Pooled WIS change, h−1..h3:
+so it is not a one-axis comparison. Pooled WIS change %, h0..h3:
 
-| disease | config | h−1 | h0 | h1 | h2 | h3 |
-|---|---|---|---|---|---|---|
-| flu | E11 constant rate | −0.3 | +1.1 | −0.4 | −0.9 | −1.2 |
-| flu | REF-op cold | +1.0 | +2.9 | +1.1 | +0.5 | 0.0 |
-| covid | E11 constant rate | +1.4 | +0.5 | −4.9 | −6.9 | −5.1 |
-| covid | REF-op cold | +2.5 | +2.8 | −1.3 | −2.6 | −2.3 |
+| disease | config | h0 | h1 | h2 | h3 |
+|---|---|---|---|---|---|
+| flu | E11 constant rate | +1.1 | −0.4 | −0.9 | −1.2 |
+| flu | REF-op cold | +2.9 | +1.1 | +0.5 | 0.0 |
+| covid | E11 constant rate | +0.5 | −4.9 | −6.9 | −5.1 |
+| covid | REF-op cold | +2.8 | −1.3 | −2.6 | −2.3 |
 
 - Flu base bias matches E07-B's `windowed_seasonal` (share of truth above
   the median to within 0.01), so the substitutions barely move the
@@ -135,8 +136,8 @@ so it is not a one-axis comparison. Pooled WIS change, h−1..h3:
 - Flu E11 cuts coverage bias 4–5× (L1 ~0.02) at a ~1% WIS cost, but
   under-covers the 50% interval (0.45–0.48 at h0–h3). Check that before
   adopting it cold.
-- Covid: gains at h−1/h0, losses at h1–h3, worst in 2025-26, the same
-  season pattern as E10. Supports calibrating covid at h−1/h0 only.
+- Covid: gains at h0, losses at h1–h3, worst in 2025-26, the same
+  season pattern as E10. Supports calibrating covid at h0 only.
 - Per-season tables: `cache/calibration/ws_replay_scores_{flu,covid}.csv`.
   Rerun with `burn_in_seasons = "2023-2024"` once the HHS burn-in exists
   (ROADMAP 1b).
