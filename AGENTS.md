@@ -111,8 +111,9 @@ directly on the shared stack whenever it is picked up.
 
 History lives in `notes/`: the annotated commit log
 (`notes/2026-07-22-ds-refactor2-annotated-commit-log.md`) is the source of
-truth for what was done and how it was verified; `notes/refactor-ideas.md`
-holds all open threads and future refactor designs; the remaining dated
+truth for what was done and how it was verified; `notes/ROADMAP.md` lists
+open tasks and tech debt, `notes/refactor-ideas.md` holds the refactor
+designs behind them; the remaining dated
 files are experiment records. CLAUDE.md describes only the current state.
 
 ## Refactoring practice
