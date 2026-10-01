@@ -27,7 +27,7 @@ projection. Full repro commands live in `notes/calibration-runbook.md`.
   Method options beyond the paper: `transform` (power/log space),
   `scales` (per-location, per-era divisors so rounds from different sources
   share one tracker), `lr_slow` + `fast_decay` + `burn_in_learns_slow` (the
-  two-term offset, below), `off_after`, `lr_seasonal`. (`lr_geo_pool`, the
+  two-term offset, below), `off_after`, `late_decay`, `lr_seasonal`. (`lr_geo_pool`, the
   geo-pooled eta in the sweep table below, was removed 2026-09-17: it never
   beat the baseline.)
 - `scripts/calibration/calibration_ws_backfill.R` — replays flu prod's `windowed_seasonal`
@@ -184,6 +184,31 @@ Flu, clean `windowed_seasonal` replay, exact, cold, states only.
   than the full calibration; width/shape changes cost WIS and buy coverage.
   E11 0.1 has a long tail of offsets large relative to narrow intervals
   (top 10%: 0.26–0.55 of the 90% width vs 0.08–0.20 for REF-op).
+
+## sqrt constant rate (E16) and late-season decay (E17), 2026-10-01
+
+Flu, clean replay, exact, cold, states only. `e16_sqrt_constant_lr.Rmd`,
+`e17_late_decay.Rmd`.
+
+- E16: on the sqrt scale a constant rate of 0.001–0.018 (sqrt per-100k
+  units) improves WIS at every horizon in both seasons; best is sqrt 0.018.
+  Against rate 0.032 it gains more at h0 in both seasons and at every
+  horizon in 2025-26 (+3.0/+1.0/+1.1/+1.5), with similar coverage bias; it
+  doesn't help h2–h3 in 2024-25. Its offset tail is smaller (90th pct
+  |offset|/90% width 0.09–0.11 vs 0.12–0.15), though larger at the 0.95
+  level.
+- Offsets go stale in March in both seasons: every tracker loses WIS at
+  h1–h3 (sqrt 0.018 at h2: −7 / −28%; REF-op −20 / −24%) because the base
+  already over-predicts after the peak and the offsets stay positive.
+  March is 4–8% of season WIS, so this costs about a point. Season-level
+  coverage partly reflects ramp under-prediction cancelling post-peak
+  over-prediction.
+- E17: `late_decay` (shrink the offset each round from 03-01) fixes March
+  but loses overall, because it wipes the offset carried into the next
+  season. `off_after = "03-01"` raises pooled WIS (sqrt 0.018:
+  +2.3/+1.2/+1.2/+1.3 vs +2.2/+0.8/+0.6/+0.6) at a coverage cost (bias
+  0.094–0.116 vs 0.059–0.078). Untested: decaying only the played offset
+  and keeping the hidden state.
 
 ## Data
 
