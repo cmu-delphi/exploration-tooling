@@ -45,7 +45,8 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 # Define aggregation functions
 Mean <- function(x) mean(x, na.rm = TRUE)
 GeoMean <- function(x, offset = 0) exp(Mean(log(x + offset)))
-scores <- params$scores
+# Cross-geo means are over states only; US (geo_level "nation") is not averaged in.
+scores <- params$scores %>% filter(geo_level == "state")
 ```
 
 # Forecaster Predictions for `r params$disease`:  {.tabset}

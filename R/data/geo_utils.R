@@ -12,6 +12,15 @@ get_population_data <- function() {
     bind_rows((.) %>% filter(state_id == "us") %>% mutate(state_id = "usa"))
 }
 
+#' One row per hub location: geo_value <-> FIPS `location` ("us" <-> "US").
+#' Use this, not get_population_data(), for location <-> geo_value joins; the
+#' population table also carries a "usa" alias that duplicates "US".
+hub_location_crosswalk <- function() {
+  get_population_data() %>%
+    filter(state_id != "usa") %>%
+    select(geo_value = "state_id", location = "state_code")
+}
+
 filter_forecast_geos <- function(forecasts, truth_data) {
   subset_geos <- unique(forecasts$geo_value)
   # Bad forecast filters

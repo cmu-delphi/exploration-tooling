@@ -423,12 +423,9 @@ build_prod_ensemble_targets <- function(
                 !.data$is_burn_in,
                 !is.na(.data$value_cal)
               ) %>%
-              left_join(
-                get_population_data() %>% select("state_code", "state_id"),
-                by = c("location" = "state_code")
-              ) %>%
+              left_join(hub_location_crosswalk(), by = "location") %>%
               transmute(
-                geo_value = .data$state_id,
+                geo_value = .data$geo_value,
                 forecast_date = as.Date(forecast_date_int),
                 target_end_date = .data$target_end_date,
                 quantile = .data$level,

@@ -676,12 +676,9 @@ calibration_targets <- list(
       if (is.null(calibrated_ensemble_nhsn)) return(tibble())
       calibrated_ensemble_nhsn$forecasts %>%
         filter(!.data$is_burn_in, !is.na(.data$value_cal)) %>%
-        left_join(
-          get_population_data() %>% select("state_code", "state_id"),
-          by = c("location" = "state_code")
-        ) %>%
+        left_join(hub_location_crosswalk(), by = "location") %>%
         transmute(
-          geo_value = .data$state_id,
+          geo_value = .data$geo_value,
           forecast_date = .data$reference_date,
           target_end_date = .data$target_end_date,
           quantile = .data$level,
