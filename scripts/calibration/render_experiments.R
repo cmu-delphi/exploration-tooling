@@ -1,5 +1,5 @@
 # Render calibration experiment notebooks into reports/calibration_experiments/
-# and rebuild its index.html (the ledger plus links to every rendered notebook).
+# and rebuild its index.html (an overview plus links to every rendered notebook).
 #
 # Usage: Rscript scripts/calibration/render_experiments.R [e00_vintage_backtest ...]
 # With no arguments, renders every notebook; `--index` renders only the index.

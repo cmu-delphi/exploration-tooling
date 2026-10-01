@@ -1,6 +1,6 @@
 ---
 title: "E04: offset structure (leak and slow term)"
-date: "`r format(Sys.time(), '%d %B %Y')`"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
 output:
   html_document:
     code_folding: hide
@@ -23,16 +23,15 @@ ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplo
 ```{r child=here::here("reports/writeups/calibration_experiments/_load.Rmd")}
 ```
 
-Ledger entry **E04** (`notes/calibration-ledger.md`). One axis: the
-structure of the offset. Everything else is REF-paper on the sqrt scale (the
+One axis: the structure of the offset. Everything else is REF-paper on the sqrt scale (the
 E03 sqrt variant), learning from vintages the way prod does (E00).
 
 - **single**: the paper's tracker, one offset per level.
-- **leak 0.1**: the offset shrinks by 10% each round (`fast_decay = 0.1`), so
+- **leak 0.1**: the offset shrinks by 10% each round, so
   a correction that new outcomes do not refresh fades (half-life about 6.6
   rounds).
 - **slow 0.003**: a second, persistent offset term with a small learning rate
-  (`lr_slow = list(mult = 0.003)`) added to the paper's one.
+  (0.003 × the error percentile, against 0.03 for the main term) added to the paper's one.
 - **slow 0.003 + leak 0.1**: both. This is REF-op without its warm start
   (E05).
 

@@ -1,6 +1,6 @@
 ---
 title: "E09: constant learning rate × revision delay (rate scale)"
-date: "`r format(Sys.time(), '%d %B %Y')`"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
 output:
   html_document:
     code_folding: hide
@@ -25,34 +25,72 @@ knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
 ```
 
-Ledger entry **E09** (`notes/calibration-ledger.md`). The question, from a
-collaborator: for the plain MultiQT tracker applied on the **rate scale**
+The question: for the plain quantile tracker applied on the **rate scale**
 (admissions per 100k) with a **constant** learning rate, how do coverage and
 WIS trade off across learning rates, and how does that change with the
-**extra delay** before an outcome is learned from?
+**extra delay** before the tracker learns from an outcome?
+
+**The tracker.** For each location, horizon and quantile level, the tracker
+keeps an additive offset that is added to the submitted quantile. When an
+outcome is learned, each offset moves by `lr × (1{y > q} − (1 − τ))`: up by
+`lr × τ` if the outcome landed above the played quantile `q`, down by
+`lr × (1 − τ)` if below. `lr` is the learning rate (the step size).
+
+- **Constant learning rate** (the sweep in this notebook): `lr` is a fixed
+  number, the same for every location and round, and does not depend on the
+  forecast errors. On the rate scale it is in admissions per 100k, so one
+  step moves an offset by at most `lr` per 100k. The curves below trace this
+  one number from 0.001 to about 3.2.
+- **Adaptive learning rate** (the paper's default, used by both reference
+  configs): `lr` is recomputed every round as 0.03 × the 90th percentile of
+  the base forecast's absolute errors over the location's last 20 observed
+  rounds. The paper uses 0.1 and 50 rounds; an earlier sweep found 0.03 gives
+  similar coverage at a much smaller WIS cost, and that the window length
+  (8, 20, 50 or all history) barely matters. The window has no role with a
+  constant learning rate, so it is not varied here; the reference marks use
+  20.
 
 **Extra delay.** The first NHSN report of the week ending on Saturday `X` is
 published on Wednesday `X + 4`, in time for the round with reference date
-`X + 7`. Learning from it then is `settle_days = 7` (`h + 1` rounds), zero
-extra delay. Each further week adds 7 days: our reference `settle_days = 14`
-is one extra week. The sweep is 0–3 extra weeks.
+`X + 7`. Learning from it at that round is zero extra delay. Each further
+week of waiting is one week of extra delay, giving later revisions time to
+come in. The reference configs wait one extra week; the sweep covers 0–3.
 
-**Learning truth.** The tracker learns from NHSN vintages, not finalized
-values (E00). Two deployment designs are shown, since E00 found they respond
-to the delay in opposite directions:
+**What the tracker learns from.** At each round the tracker learns from the
+NHSN data as published by then (a "vintage"), not from finalized values,
+because finalized values are not available in real time (see E00). There are
+two ways to deploy that, and E00 found they respond to the delay in opposite
+directions, so both are shown:
 
-- **re-run** (`exact`, what prod does): the tracker is re-run from scratch each
-  week on that week's data, so a value learned early is replaced by its
-  revision the next week.
-- **stateful**: the tracker steps once per outcome, on the value available at
-  the round it is revealed, and never revisits it.
+- **re-run** (what prod does): each week the tracker is run again from the
+  first round over the whole history, on that week's vintage. An outcome
+  first learned from its early report is learned from its revised value in
+  every later week's run.
+- **stateful**: the tracker runs once, stepping forward a round at a time,
+  and learns each outcome once, from the value published at the round it
+  becomes available. It never sees later revisions of that outcome.
 
-Everything else is REF-paper (`cal_ref_args("paper")`): single term, carry
-across seasons, 2023-24 burn-in (no steps; the constant rate needs no
-warm-up). Scores are on counts against finalized truth, over the two live
-seasons, all 53 hub locations. "WIS inflation %" is `100 × (WIS_cal / WIS_base − 1)`,
-so negative is better than the base. "L1 coverage bias" is the mean over the
-23 levels of |empirical coverage − level|.
+This is a separate choice from what happens to the offsets between seasons.
+In both designs the offsets carry over the summer off-season rather than
+resetting to zero.
+
+**Other settings.** Everything else follows the REF-paper reference config:
+one offset per level, carried across seasons, and a 2023-24 burn-in season
+whose outcomes take no steps (the adaptive rate uses it to warm up; the
+constant rate needs no warm-up). Scores are on counts against finalized
+truth, over the two live seasons (2024-25 and 2025-26), all 53 hub
+locations. "WIS inflation %" is `100 × (WIS_cal / WIS_base − 1)`, so negative
+is better than the base. "L1 coverage bias" is the mean over the 23 quantile
+levels of |empirical coverage − level|.
+
+**Reference configs** (marked on the plots):
+
+- **REF-paper**: the paper's tracker on counts, adaptive learning rate as
+  above.
+- **REF-op**: the configuration running in prod. REF-paper on the
+  square-root scale, plus a 10% per-round shrink of the offset toward zero, a
+  second slow-moving offset, and a starting offset taken from the burn-in
+  season's errors (E03–E05).
 
 # Findings
 
@@ -194,11 +232,11 @@ ref_m <- label_panels(ref_m)
 
 # Bridge from REF-paper
 
-One axis at a time at `settle_days = 14` (the reference), re-run design: first
-the rate scale with the adaptive learning rate (its `floor` moves from 0.1
-count to 0.001 rate units, since the floor is a scale-dependent constant),
+One change at a time at one week of extra delay, re-run design: first the
+rate scale with the adaptive learning rate (its minimum step drops from 0.1
+admissions to 0.001 per 100k, since that minimum is in the working units),
 then the constant learning rate with the lowest pooled WIS at each horizon.
-REF-op is for orientation only; it differs in several axes.
+REF-op is for orientation only; it differs in several settings.
 
 ```{r bridge}
 best_const <- sweep_m %>%
