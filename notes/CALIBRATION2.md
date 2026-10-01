@@ -2,13 +2,14 @@ Open threads and TODOs
 
 Decided but not done
 4. Sweep windowed_seasonal, the main ensemble component used as a proxy in the calibration harness. It needs a variant of the sweep script that reads the harness forecasts. Recorded in notes/spoiled-submissions.md.
-5. Fix how prod builds h−1 (flu, and covid before 2026-09-23). The AR models drop the already-reported week at h−1 (filter_minus_one_ahead). That's the 2026-04-04 overshoot and the 10–30% h−1 bias during 2025-26 declines. This is a prod change, not a calibration one.
+5. h−1 is its own track, separate from calibration. Since 2026-09-23 prod no longer uses the AR models at h−1: `ensemble_mix` drops them at negative aheads and h−1 is about 99.9% `revision_aware`, which predicts the finalized value from the week's first report (checked on the 2026-04-04 round). Next: score `revision_aware` against the `revision_ratio_nowcast` baseline at h−1 through explore (explore's `g_aheads` has no −7 yet). On 2026-04-04 the baseline gave OH 64 / CO 34 / MN 34 (finalized ≈60/34/36) vs `revision_aware` 84/41/43; its lag-7 term drags toward the previous week in sharp declines.
+   Calibration focuses on h0 and above. Harness h−1 history predates 2026-09-23 (AR with the reported week dropped for flu, `climate_linear` for covid), so h−1 offsets learned from it don't apply to the current h−1. Revisit h−1 calibration only after the h−1 component is settled.
 
 Open questions from earlier work
 6. Halved US cause (2024-12-14, 2024-12-21, 2025-01-04): unconfirmed. The us/usa mixup is my best guess.
 7. Covid 2026-04-25 cause (a stale fetch during the cast API v2→v5 change): likely but unconfirmed; there's no store to replay.
 8. Experiments not yet re-run on vintages: E07 (ensemble vs windowed_seasonal), and E01/E02, still marked stale.
-9. Covid per-horizon calibration (h−1, maybe h0, only): untested.
+9. Covid per-horizon calibration (h0 only; h−1 deferred, see 5): untested.
 10. Replay drift: the July 2026 flu replay doesn't reproduce the 2025-11-22 submission, and the May 2025 covid replay doesn't reproduce 2024-11-23. That's expected, since code and data changed, but don't read replays as "what was submitted".
 
 Housekeeping
