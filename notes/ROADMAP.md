@@ -49,6 +49,15 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
         scores `us` (52 of 53 geos, likely a geo-name mismatch with
         `nhsn_latest_data`); NSSP inputs drop `mo` on 81 dates, `wy` on 28
         and `nh` on 5, for both diseases.
+      - a4 done 2026-10-01: `ch_use("{flu,covid}_windowed_seasonal")` in
+        `scripts/calibration/calibration_harness.R` reads forecasts from
+        the clean store (decision: read the store, backfill only for spec
+        changes; the two paths match exactly on 5 dates per disease).
+        Results are E12 in `notes/CALIBRATION.md`. The two diseases'
+        replays differ on 2024-11-20: flu generates on 11-21, covid on
+        11-20 (NHSN's bad release; the hub-round filter drops that round).
+        Open: which aheads to calibrate for `windowed_seasonal` (h−1 is
+        its own here, which no submission uses).
       - Side finding: the h=−1 forecast never changes when a substitution
         edits only the latest week. Worth checking that h=−1 is meant to
         ignore that week.
