@@ -88,11 +88,11 @@ bias on NHSN and ILI+. See `notes/CALIBRATION.md`.
 
 ## Gaps
 
-- **Spoiled submissions.** From 2026-09-30, hub reads drop the flu
-  submissions listed in `notes/spoiled-submissions.md` (2025-11-22 h−1, three
-  halved US rounds). E00, E03–E05 and E09 were re-run without them; every
-  older result, and the numbers in `notes/CALIBRATION.md` before that date,
-  include them.
+- **Spoiled submissions.** From 2026-09-30, hub reads drop the submissions
+  listed in `notes/spoiled-submissions.md` (flu: 2025-11-22 h−1, three halved
+  US rounds; covid: the 2024-11-23 round, 2026-04-25 h−1). E00, E03–E05, E09
+  and E10 are re-run without them; every older result, and the numbers in
+  `notes/CALIBRATION.md` before that date, include them.
 - **Learning truth.** E01, E02 and E06–E08 learned from finalized NHSN (E00
   shows the error is small outside h−1). E03–E05 have been re-run exactly.
 - **E07** (ensemble vs `windowed_seasonal`) has not been re-run exactly.

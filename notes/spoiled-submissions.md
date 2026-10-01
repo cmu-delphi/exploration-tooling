@@ -7,8 +7,8 @@ submissions (the calibration experiments, scoring) should drop them.
 `R/calibration/hub_data.R`; add new cases there and here.
 
 Covid submissions were checked for the two flu patterns (all-zero quantiles,
-halved US) and are clean. The candidates found by the sweep below are
-recorded with their causes but are not yet excluded.
+halved US) and are clean. Of the cases the sweep found, the two covid ones
+are excluded; the flu 2026-04-04 one is kept on purpose (see its section).
 
 ## Flu, 2025-11-22 round: h−1 is zero everywhere
 
@@ -34,7 +34,7 @@ percent of the state sum at h−1 and h0. The cause is not confirmed. Commits
 from early 2025 fixed several `us` / `usa` / `US` mixups, and averaging the
 US forecast with a zero duplicate would halve it exactly.
 
-## Covid, 2024-11-23 round: about 2.4x too high everywhere (candidate)
+## Covid, 2024-11-23 round: about 2.4x too high everywhere (excluded, all horizons)
 
 At h−1 and h0 the median is about 2.2–2.6x both the value known at the time
 and the finalized value, in 41 of 49 locations; h1–h3 are off by a similar
@@ -53,7 +53,7 @@ shows the forecasts we would have sent (GA h−1 median 64 against the
 submitted 339). A May 2025 replay of the store also gives forecasts about
 half the submitted ones.
 
-## Covid, 2026-04-25 round: h−1 near zero in many states (candidate)
+## Covid, 2026-04-25 round: h−1 near zero in many states (excluded, h−1)
 
 The h−1 median is far below both the value known at the time and the
 finalized value in about half the locations (WI 2 vs 27 known, VA 3 vs 28,
@@ -73,7 +73,7 @@ the submission (covid hub `a6b94bb`, 16:02), so the submission probably ran
 on a stale archive fetch. There is no covid prod store for that date to
 check.
 
-## Flu, 2026-04-04 round: h−1 about 1.8x too high (candidate, design issue)
+## Flu, 2026-04-04 round: h−1 about 1.8x too high (kept)
 
 The h−1 median is about 1.6–1.8x both the value known then and the finalized
 value in 22 of 35 locations (OH 204 vs 60, CO 90 vs 34, MN 92 vs 36). h0 is
@@ -86,8 +86,9 @@ finalized data agree). At h−1 the AR models are run through
 extrapolate from 2026-03-21 and never see the drop, even though it was
 already reported. The same mechanism puts 2025-26 h−1 above the reported
 value by 10–30% in other weeks of the decline. This is a design choice in
-how h−1 is built, not a bug in one round, so excluding only this round would
-leave the milder cases in.
+how h−1 is built, not a bug in one round, so it is kept: it is a systematic
+h−1 bias, which is what the calibrator should learn to correct. The fix
+belongs in how prod builds h−1 (let the AR models see the reported week).
 
 ## How to find more
 
