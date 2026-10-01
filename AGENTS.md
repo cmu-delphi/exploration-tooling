@@ -132,6 +132,19 @@ whole grid a dependency of every branch); `tar_target`'s default
 `tidy_eval = FALSE` to defer); `rlang::syms` on the trainer column is
 load-bearing.
 
+## Working incrementally
+
+Most work here is a chain of small decisions about data, edge cases and
+forecasters, and full runs (explore sweeps, evaluation replays, exact
+calibration sweeps) take hours, so a wrong early choice is expensive to find.
+Build up from the cheapest check that can answer the current question: a
+standalone script on one geo and a few dates, then one forecaster on a few
+dates (`EVALUATION_N_DATES`, a filtered grid), then one forecaster on all
+dates, and only last the full run. Look at each stage's output (plots, a
+diff against a known value) before scaling up, and write each data or
+edge-case decision into the relevant note when it is made, so it can be
+revisited.
+
 ## Conventions
 
 - Testing focuses on utility functions; forecaster quality is assessed by inspecting results/reports, not unit tests.

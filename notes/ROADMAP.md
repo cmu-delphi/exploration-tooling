@@ -7,19 +7,70 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
 
 ## Forecast evaluation
 
-1. **Choose a testbed for comparing calibration with forecaster choice.**
-   Calibrating needs full quantile forecasts over many rounds, not just
-   scores. Candidates:
-   - the calibration harness on hub submissions (what we actually
-     submitted, already in use);
-   - the evaluation project (`flu_hosp_evaluation` / `covid_hosp_evaluation`),
-     which replays the current prod components and ensemble over past dates.
-     It also replays the hand-edited weights and geo exclusions of each past
-     week, which biases it toward reproducing what was done;
-   - the explore stores, which already hold per-forecaster quantile forecasts
-     for every family on S3 (NHSN target only);
-   - a new "explore-lite" project with a handful of families.
-   Undecided (2026-10-01).
+1. **Use the evaluation project as the calibration testbed** (current plan,
+   2026-10-01). Calibrating needs full quantile forecasts over many rounds,
+   not just scores. The evaluation project (`flu_hosp_evaluation` /
+   `covid_hosp_evaluation`) replays the current prod components and
+   ensemble weekly since 2024-11-20, which is what calibration would see in
+   prod from now on. The hub-submission harness stays the record of what was
+   actually submitted; the explore stores (per-forecaster quantile forecasts,
+   NHSN only, on S3) can answer "does calibrating a candidate beat picking a
+   different one" without a new project. Three gaps, below. Work them in
+   small steps (AGENTS.md, "Working incrementally"); the S3 evaluation
+   stores are empty, so even the baseline needs a run.
+
+   **Critical path for evaluating calibration:**
+
+   a. *Clean replay, one component.* Start with `windowed_seasonal` alone
+      (the harness proxy). A single component has no ensemble weights, so
+      the only hand edit to switch off is the data substitutions
+      (`make_forecast_snapshot(substitutions = NULL)`). Steps: a way to run
+      one forecaster (e.g. an env var that filters the grid), 2–3 dates,
+      diff against the edited run (changes should appear only at the
+      substituted geo-dates), then all dates, timed. Feed it to the
+      calibration harness.
+   b. *2023-24 as a burn-in season.* The best configs so far (E05
+      `warm + single`, REF-op) warm-start from a burn-in season, and the
+      replay has none. Delphi's `hhs` source
+      (`confirmed_admissions_{influenza,covid}_1d`) has real issue history
+      for 2023-24 (CA 2023-12-01: issues 12-06, 12-08, 12-20, 12-22), until
+      HHS reporting ended 2024-04-30. Steps, each checked before the next:
+      - standalone script: fetch, daily to weekly, check the finalized
+        values against NHSN's finalized 2023-24 values; decide the week
+        ending and how daily issues map to weekly versions;
+      - cut the ILI+/flusurv training extras at each forecast date. They run
+        into mid-2024, so as-is they leak finalized 2023-24 data (the
+        archive's `stopifnot` would fail, correctly);
+      - check how far back NSSP vintages go. `windowed_seasonal_extra_sources`
+        needs NSSP as of each 2023-24 date; if there are none, decide whether
+        it sits out 2023-24 or runs on finalized NSSP with a caveat;
+      - `windowed_seasonal` on 3 dates in 2023-24, fan plots against the
+        2023-24 hub submissions; then all 2023-24 dates.
+   c. *The ensemble with fixed weights.* The geo-exclusions CSVs carry the
+      ensemble weights as well as exclusions, so "no hand edits" for
+      `ensemble_mix` means one fixed weight block for every date. Decide
+      which block (the default one at the top of the file, or the current
+      one), check the resolved weights on one date, then replay. Only
+      needed once a single component's calibration results look worth
+      extending to what we submit.
+
+   **Later (not needed to evaluate calibration):**
+
+   d. *Hand edits on vs off as its own question.* A separate evaluation
+      project (like the `_regr` ones) replaying with the edits, to measure
+      whether the weekly substitutions and weight changes help. The only
+      past check found is the 2025 revision report
+      (`revision_summary_report_2025.Rmd`), which scored substitutions by
+      whether they moved values toward the final value. Calibration needs
+      only the clean replay.
+   e. *ILINet as a target*, to check our methods on a dataset we have not
+      tuned on. `fluview` has real issue history (CA wILI for week 2023-50
+      is revised weekly through May 2024) back to about 2010. Follows the
+      `nssp_target_archive` + `primary_source` pattern; the ILI+ training
+      rows must be dropped in this mode, and wILI is a percentage, so it
+      shares the scale question with NSSP-target scoring (item 2). Prototype
+      on one forecaster and a few seasons; `calibration_ili_backfill.R`
+      (ILI+, no vintages) is a reference, not the base to extend.
 2. **NSSP-target backtesting is second-class and needs dedicated
    attention.**
    - Explore forecasts NHSN only: every family sets `outcome = "hhs"`. NSSP
