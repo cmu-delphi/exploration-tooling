@@ -1,6 +1,6 @@
 ---
 title: "E00: learning from vintages instead of finalized truth"
-date: "`r format(Sys.time(), '%d %B %Y')`"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
 output:
   html_document:
     code_folding: hide
@@ -25,15 +25,16 @@ knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw())
 ```
 
-Ledger entry **E00** (`notes/calibration-ledger.md`). Every result before this
-notebook trained the tracker on finalized NHSN values. Only the *timing* of
-each reveal was realistic (`settle_days`). This notebook varies one axis, the
-truth the tracker learns from, at both reference configs:
+Every result before this notebook trained the tracker on finalized NHSN
+values. Only the *timing* of each reveal was realistic (when the tracker
+learns from an outcome). This notebook varies one thing, the data the tracker
+learns from, at both reference configs (REF-paper and REF-op; see the index):
 
 - **final**: the latest vintage, as in all earlier results.
-- **exact**: what prod does. Prod re-runs the tracker from scratch each week
-  on that week's data, so at round `t` every revealed outcome has its value
-  as of `t`. We replay that by re-running the tracker once per round.
+- **exact**: what prod does. Prod re-runs the tracker from the first round
+  each week on that week's data, so at round `t` every revealed outcome has
+  its value as published by `t`. We replay that by re-running the tracker
+  once per round.
 - **vintage**: one run in which each outcome keeps the value it had at the
   round that revealed it. This was meant as a cheap stand-in for exact, but
   it is also a deployment design in its own right: a stateful tracker that
@@ -54,17 +55,17 @@ sweeps?
 Numbers below are from the render of 30 September 2026.
 
 - **Finalized truth flattered the earlier results only a little.** At REF-op
-  with `settle_days = 14`, exact vs final WIS change is +6.8 vs +8.9 at h−1,
+  with one week of extra delay, exact vs final WIS change is +6.8 vs +8.9 at h−1,
   within 0.3 points at h0–h3, and the h−1 coverage bias is 0.080 vs 0.073. At
   REF-paper, exact is within 0.6 points of final at every horizon, slightly
   better at h1–h3. Earlier conclusions stand; the h−1 gain was overstated.
 - **The cheap mode is not a usable stand-in.** It drifts from exact as the
-  season goes on (figure below). At `settle_days = 7` it learns once from the
+  season goes on (figure below). With no extra delay it learns once from the
   first report, which under-reports and is never corrected: REF-op h−1 falls
   to +1.2 (exact +7.4) and coverage bias rises to 0.127 (exact 0.082). Every
   later experiment uses exact.
-- **Under prod's re-run design, a shorter settle is better.** Exact with
-  `settle_days = 7` beats 14 at every horizon, at both references (REF-op
+- **Under prod's re-run design, a shorter delay is better.** Exact with no
+  extra delay beats one week of extra delay at every horizon, at both references (REF-op
   +7.4/+5.3/+2.9/+2.0/+2.2 vs +6.8/+5.1/+2.5/+1.8/+1.9), with the same
   coverage bias. Learning early from a first report costs little when next
   week's run replaces it with the revised value. A stateful tracker (the

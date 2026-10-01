@@ -1,6 +1,6 @@
 ---
 title: "Calibration experiments"
-date: "`r format(Sys.time(), '%d %B %Y')`"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
 output:
   html_document:
     toc: true
@@ -11,6 +11,13 @@ output:
 knitr::opts_knit$set(root.dir = here::here())
 ```
 
+These notebooks test a post-hoc calibration step for our FluSight and covid
+hub submissions. The step adjusts each submitted quantile forecast by an
+additive offset that an online quantile tracker (MultiQT; Ding, Gibbs &
+Tibshirani, 2025) learns from past coverage misses. Each notebook changes one
+setting of that tracker and compares the result with the uncalibrated
+submission.
+
 # Notebooks
 
 ```{r notebooks, results="asis", echo=FALSE}
@@ -20,10 +27,53 @@ for (f in src) {
   html <- sub("[.]Rmd$", ".html", basename(f))
   title <- rmarkdown::yaml_front_matter(f)$title
   rendered <- file.exists(file.path(out_dir, html))
-  stamp <- if (rendered) format(file.mtime(file.path(out_dir, html)), "%Y-%m-%d %H:%M") else "not rendered"
+  stamp <- if (rendered) format(file.mtime(file.path(out_dir, html)), "%Y-%m-%d %H:%M %Z", tz = "America/Los_Angeles") else "not rendered"
   cat(sprintf("- %s (%s)\n", if (rendered) sprintf("[%s](%s)", title, html) else title, stamp))
 }
 ```
 
-```{r ledger, child=here::here("notes/calibration-ledger.md")}
-```
+| | question | short answer |
+|---|---|---|
+| E00 | Should the tracker learn from finalized data or from data as published at the time? | As published, re-run each week as prod does. Finalized data overstated the earlier gains only a little (about 2 points at h−1). |
+| E03 | Which scale should the offsets live on: counts, square root, or rate per 100k? | Square root, at every horizon, mostly by avoiding spring losses. Rate equals counts with the adaptive learning rate. |
+| E04 | Should the offset shrink between updates, or have a second slow component? | Shrinking buys WIS at h1–h3 but nearly triples coverage error. A slow component alone does nothing. |
+| E05 | Should the offset start from the burn-in season's errors instead of zero? | Yes; it never hurts. With the plain tracker it gives the best-calibrated config so far. |
+| E09 | With a constant learning rate on the rate scale, how do coverage and WIS trade off, and how much revision delay is best? | An L-shaped trade-off whose knee beats the paper's adaptive rate at h1–h3. Under prod's weekly re-run, less delay is better. |
+| E10 | Do the flu results carry over to covid? | Only at h−1 (+9.5% WIS). The covid base is already calibrated at h1–h3, where calibrating is neutral or harmful. |
+
+# How to read the results
+
+- **Horizons** h−1 to h3 are weeks relative to the forecast's reference date.
+  h−1 is the latest week NHSN has reported, still open to revision; h0 and
+  later have not been reported yet.
+- **WIS change %** compares the calibrated forecast's weighted interval score
+  with the uncalibrated submission's, pooled over locations. The sign
+  convention is stated in each notebook.
+- **L1 coverage bias** is the mean over the 23 quantile levels of
+  |empirical coverage − level|. 0 is perfect; the uncalibrated flu
+  submission sits near 0.1.
+- **Scoring.** Every score is against finalized NHSN data, over the live
+  seasons (2024-25 and 2025-26 for flu), all hub locations. A burn-in season
+  (2023-24 for flu) is used only to warm up the tracker and is not scored.
+- **Extra delay.** The tracker can learn from a week's outcome as soon as
+  NHSN first reports it (zero extra delay) or wait for revisions. The
+  reference configs wait one extra week.
+- **Re-run vs stateful.** Prod re-runs the tracker from the first round each
+  week on that week's data, so early reports are replaced by their revisions.
+  A stateful tracker instead learns each outcome once, from the first value
+  it sees. All notebooks use the re-run design; E09 also shows the stateful
+  one.
+
+## Reference configs
+
+Each experiment starts from one of two configurations and changes one
+setting.
+
+- **REF-paper**: the paper's tracker on counts. One offset per quantile level,
+  updated with an adaptive learning rate (0.03 × the 90th percentile of the
+  last 20 rounds' absolute errors), carried across seasons, with one week of
+  extra delay.
+- **REF-op**: the configuration running in prod. REF-paper on the
+  square-root scale, with the offset shrinking 10% per round, a second
+  slow-moving offset, and a starting offset taken from the burn-in season's
+  errors.

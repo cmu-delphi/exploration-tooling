@@ -1,6 +1,6 @@
 ---
 title: "E10: covid at the reference configs"
-date: "`r format(Sys.time(), '%d %B %Y')`"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
 output:
   html_document:
     code_folding: hide
@@ -24,20 +24,18 @@ ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplo
 ```{r child=here::here("reports/writeups/calibration_experiments/_load.Rmd")}
 ```
 
-Ledger entry **E10** (`notes/calibration-ledger.md`). One axis: the
-disease. Both reference configs run on the covid hub's `CMU-TimeSeries`
+One axis: the disease. Both reference configs run on the covid hub's `CMU-TimeSeries`
 submissions, learning from NHSN covid vintages the way prod does (E00), and
 scored against finalized covid NHSN.
 
 Covid submissions start 2024-11-23, so there is no burn-in season. As in the
-covid prod pipeline, both configs run with `burn_in_seasons = character(0)`,
-and REF-op runs without its warm start (`slow_init = NULL`), leaving sqrt +
-slow term 0.003 + leak 0.1. The tracker therefore starts from zero offsets at
+covid prod pipeline, both configs run with no burn-in season,
+and REF-op runs without its warm start, leaving sqrt + slow term 0.003 +
+leak 0.1. The tracker therefore starts from zero offsets at
 the first round.
 
-Covid is submitted year-round, so the hub round axis has no off-season gap
-and `hub_label_seasons()` puts every round in one season. For the per-season
-views below, seasons are relabelled as August–July years.
+Covid is submitted year-round, so there is no off-season gap between
+seasons. For the per-season views below, seasons are August–July years.
 
 # Findings
 
@@ -49,8 +47,8 @@ is better.
   fix there. Its coverage bias is 0.094/0.063/0.043/0.034/0.027 at h−1…h3,
   against about 0.1 at every horizon for flu.
 - **h−1 is a clear win.** WIS +9.5% (REF-op) and +9.2% (REF-paper), absolute
-  error of the median +18% and +16%. At h−1 the submission is 100%
-  `revision_aware` (`notes/CALIBRATION.md`), and h−1 is where the base is
+  error of the median +18% and +16%. At h−1 the submission comes entirely
+  from one revision-aware component model, and h−1 is where the base is
   least calibrated.
 - **At h1–h3, REF-op is neutral and REF-paper is harmful.** REF-op: WIS
   −0.1/−0.2/−0.8%, coverage bias slightly worse than base at h2/h3

@@ -36,7 +36,7 @@ Reference configs:
 Both are `cal_ref_args()` in `R/calibration/views.R`; notebooks run them
 through `cal_run()`, which also picks the learning truth. Experiment notebooks
 live in `reports/writeups/calibration_experiments/` and render to
-`reports/calibration_experiments/` (with this ledger as `index.html`) via
+`reports/calibration_experiments/` (with a reader-facing `index.html`) via
 `just calibration-experiments [notebook ...]`.
 
 ## Views
@@ -77,7 +77,6 @@ base WIS, and pick within strata (season phase × location size).
 | E07 | one forecaster across eras | base forecaster (A ensemble / B `windowed_seasonal`; C invalid) | REF-paper at sqrt | flu | post-fix | final | V-head | `calibration_ws_experiments.R`, findings notebook | current, needs vintage rerun |
 | E08 | covid | disease | old REF-paper (count, window 50) | covid | pre-fix | final | V-head, V-state, V-gallery | `calibration_qt_*_covid.Rmd` | stale, replaced by E10 |
 | E09 | constant lr × revision delay | constant lr grid × `settle_days` {7, 14, 21, 28}; bridge rows below | REF-paper | flu | post-fix | exact (+ vintage, for a stateful tracker) | V-curve, V-head | `e09_lr_delay.Rmd` | done |
-
 | E10 | covid at the references | disease (REF-paper, REF-op without warm start as in covid prod) | REF-paper, REF-op | covid | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e10_covid.Rmd` | done |
 
 E09 bridge rows, each one axis from the previous: REF-paper → rate scale →

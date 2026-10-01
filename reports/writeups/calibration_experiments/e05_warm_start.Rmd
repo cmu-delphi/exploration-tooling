@@ -1,6 +1,6 @@
 ---
 title: "E05: warm start from the burn-in season"
-date: "`r format(Sys.time(), '%d %B %Y')`"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
 output:
   html_document:
     code_folding: hide
@@ -23,11 +23,9 @@ ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplo
 ```{r child=here::here("reports/writeups/calibration_experiments/_load.Rmd")}
 ```
 
-Ledger entry **E05** (`notes/calibration-ledger.md`). One axis: whether the
-persistent offset starts from the burn-in season's conformal offset
-(`slow_init = "burn_in_quantile"`: per horizon and level, the level-quantile
-of the burn-in residuals pooled over locations, on the sqrt scale) or from
-zero. Everything else is REF-paper on the sqrt scale, learning from vintages
+One axis: whether the persistent offset starts from the burn-in season's
+conformal offset (per horizon and level, the level-quantile of the burn-in
+season's errors pooled over locations, on the sqrt scale) or from zero. Everything else is REF-paper on the sqrt scale, learning from vintages
 the way prod does (E00). Each warm-started run is paired with its cold twin
 from E04:
 

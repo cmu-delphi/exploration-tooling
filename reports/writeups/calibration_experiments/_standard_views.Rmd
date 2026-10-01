@@ -1,10 +1,11 @@
 # Standard views
 
-Expects `cals` (a named list of runs) and `focus` (the name of the run the
-state panels and gallery show). Every score is over both live seasons, all
+<!-- Expects `cals` (a named list of runs) and `focus` (the run shown in the state panels and gallery). -->
+
+Every score is over both live seasons, all
 hub locations, against finalized truth; burn-in rounds are excluded.
 
-## V-head: WIS and coverage
+## WIS and coverage
 
 WIS change % (positive is better than the base):
 
@@ -31,7 +32,7 @@ knitr::kable(
 )
 ```
 
-## V-ae: absolute error of the median
+## Absolute error of the median
 
 Summed |truth − median|, change % vs base (positive is better):
 
@@ -39,7 +40,7 @@ Summed |truth − median|, change % vs base (positive is better):
 knitr::kable(cal_wide(cal_ae(cals), "ae_pct"))
 ```
 
-## V-month: where in the season
+## Where in the season
 
 WIS change % by month of the reference date (clipped at −60), h0 and h3,
 and each month's share of the base WIS at h3. Months run July to June; only
@@ -69,9 +70,9 @@ knitr::kable(
 )
 ```
 
-## V-state: fixed states, `r focus` {.tabset}
+## Fixed states, `r focus` {.tabset}
 
-The same states in every experiment notebook (`CAL_STATES`). Every other
+The same states (US, CA, GA, MN, VT) in every experiment notebook. Every other
 round's fan at h0–h3: blue ribbon and line are the base 80% band and median,
 orange lines the calibrated 10/50/90% quantiles, grey the finalized truth,
 black the NHSN snapshot each plotted round saw.
@@ -83,13 +84,12 @@ for (nm in names(CAL_STATES)) {
 }
 ```
 
-## V-gallery: `r focus` {.tabset}
+## Gallery: `r focus` {.tabset}
 
 For each season phase and location size (population above or below the
 median), the forecast with the largest WIS gain and the one with the largest
 loss, each from a different location. Forecasts are ranked by their
-WIS change as a share of their own location-season's base WIS (see
-`cal_gallery_pick()`), so small states late in the season, where the base is
+WIS change as a share of their own location-season's base WIS, so small states late in the season, where the base is
 tiny, do not crowd the gallery. Ribbons are the 50%
 and 90% bands, the dashed line is the forecast date.
 
