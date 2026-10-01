@@ -1,0 +1,244 @@
+---
+title: "E14: constant learning rate, season by season"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 11, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+E09 traced how coverage and WIS trade off as the constant learning rate of
+the plain tracker changes, pooled over both live seasons. The question
+here, from the collaborators: split those curves by season. **Is there a
+range of learning rates that is good in both 2024-25 and 2025-26?**
+
+**Setup.** The clean `windowed_seasonal` replay for flu (E12: substitutions
+off, all 53 locations, the 55 hub rounds, h0–h3; 27 rounds in 2024-25 and
+28 in 2025-26), learning from data as published each week and re-run from
+scratch each week as prod does, one week of extra revision delay (E09's
+best re-run setting), no burn-in season. One axis: the constant learning
+rate of the plain tracker on the rate scale (admissions per 100k per step),
+12 values from 0.0032 to 1.8, a quarter decade apart. This is E11's
+config with its learning rate swept; 0.1 is E11 itself.
+
+Reference points, run on the same data:
+
+- **REF-op cold**: prod's tracker without its warm start.
+- **sqrt, adaptive**: the plain tracker on the square-root scale with the
+  adaptive learning rate (E03's winner; E13's "E05 single cold").
+
+"WIS change %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so **positive
+is better** (the opposite sign of E09's "inflation"). "L1 coverage bias" is
+the mean over the 23 levels of |empirical coverage − level|. Each season is
+scored on its own rounds; the tracker still runs over both seasons, so
+2025-26 starts from the offsets 2024-25 left behind. Results lead with states
+only (US excluded), since US alone is about 45% of the all-locations WIS.
+
+# Findings
+
+Numbers are from the render of 1 October 2026, states only, WIS change %
+(positive is better) / L1 coverage bias. All-locations numbers point the
+same way.
+
+- **Yes: 0.018–0.032 per 100k is good in both seasons.** At those rates WIS
+  improves at every horizon in both seasons (2024-25 +0.2 to +1.0, 2025-26
+  +0.8 to +1.9) and coverage bias falls in both. At 0.056 WIS is still
+  non-negative everywhere (2024-25 h3 −0.0). From 0.1 up WIS gets worse at
+  h1–h3 in both seasons, and past about 0.18 it falls fast.
+- **The seasons disagree about coverage, not WIS.** In 2025-26 coverage
+  bias reaches its floor (about 0.01–0.015) by 0.032. In 2024-25 it keeps
+  falling until about 0.3, and 0.032 leaves it at 0.10–0.12 (base
+  0.13–0.17). The extra coverage 2024-25 gets from a larger rate costs WIS
+  in both seasons. Part of the gap is the cold start: with no burn-in, the
+  tracker starts at zero in November 2024, so 2024-25 is also the season it
+  is still learning in.
+- **The knee is lower than E09's.** E09 (submitted ensemble, 2023-24
+  burn-in) put the knee at 0.05–0.1. Here the WIS-best rate is 0.018–0.056
+  at every horizon and season, and E11's 0.1 is already past it: −0.5/−0.9
+  at h2/h3 in 2024-25 and −1.0/−1.2 in 2025-26.
+- **The references.** REF-op cold has the most WIS gain at h0 (+2.2/+1.8)
+  but keeps 2024-25's coverage bias near the base (0.106–0.124). The adaptive
+  sqrt tracker reaches a 2025-26 coverage bias of 0.008–0.016 with +2.2 at
+  h0, but loses WIS at h2/h3 in 2024-25 (−1.4/−2.6). Neither is good in both
+  seasons at every horizon; a constant rate of 0.018–0.032 is, at a smaller
+  gain.
+- **The 50% interval.** At 0.018–0.032 the 50% interval covers 0.47–0.51
+  at h0/h2, close to nominal; 0.1 and above under-cover it in 2024-25
+  (0.39–0.45 at h2).
+
+```{r load}
+source(here::here("scripts/calibration/calibration_ws_replay.R"))
+wi <- ws_inputs("flu")
+LRS <- signif(10^seq(-2.5, 0.25, by = 0.25), 2)
+all_cfgs <- ws_configs(wi$rate_scales, burn_in = TRUE)
+sweep_cfgs <- purrr::map(LRS, function(lr) utils::modifyList(all_cfgs[["E11 constant 0.1"]], list(lr = lr)))
+ref_cfgs <- list(`REF-op cold` = all_cfgs[["REF-op cold"]], `sqrt, adaptive` = all_cfgs[["E05 single cold"]])
+# Cached under cache/calibration/experiments/runs; lr 0.1 and the references are E12/E13's runs.
+run <- function(cfg) {
+  do.call(cal_run_cached, c(list(wi$fc, wi$truth), cfg, list(learn = "exact", vintages = wi$vintages, workers = params$workers)))
+}
+sweep <- purrr::map(sweep_cfgs, run)
+refs <- purrr::map(ref_cfgs, run)
+```
+
+```{r metrics}
+GEOS <- c(states = "states only (US excluded)", all = "all locations")
+SEASONS <- c(LIVE, "both")
+# ws_scores() per location subset; wis_pct is the change vs base, positive is better.
+score <- function(cal) {
+  fc <- cal$forecasts %>% mutate(season = season_of(reference_date))
+  purrr::imap(WS_GEOS[names(GEOS)], function(keep, g) ws_scores(fc %>% filter(keep(location))) %>% mutate(geos = g)) %>%
+    bind_rows() %>%
+    select(geos, season, horizon, which, wis, cal_err, cov50, cov90) %>%
+    tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err, cov50, cov90)) %>%
+    mutate(wis_pct = 100 * (wis_base - wis_cal) / wis_base)
+}
+label <- function(df) {
+  df %>% mutate(
+    geos = factor(geos, levels = names(GEOS), labels = GEOS),
+    season = factor(season, levels = SEASONS, labels = c(LIVE, "both seasons")),
+    h = factor(paste0("h", horizon), levels = paste0("h", 0:3))
+  )
+}
+sweep_m <- purrr::map2(sweep, LRS, function(cal, lr) score(cal) %>% mutate(lr = lr)) %>% bind_rows() %>% label()
+ref_m <- purrr::imap(refs, function(cal, nm) score(cal) %>% mutate(ref = nm)) %>% bind_rows() %>% label()
+SEASON_COLS <- c(`2024-2025` = "#0072B2", `2025-2026` = "#D55E00", `both seasons` = "grey45")
+```
+
+# Coverage bias vs WIS, by season
+
+One line per season, tracing the learning rate from 0.0032 (near the
+base, the open circle) to 1.8. Labels mark every half decade. The grey
+dashed line pools both seasons, as E09 did. Triangles are REF-op cold,
+squares the adaptive sqrt tracker, in the season's colour. The y axis is
+clipped at −10%.
+
+```{r curve-fn}
+LABELLED <- c(0.01, 0.032, 0.1, 0.32, 1)
+curve_plot <- function(g) {
+  d <- sweep_m %>% filter(geos == g) %>% arrange(lr)
+  r <- ref_m %>% filter(geos == g)
+  base <- d %>% distinct(h, season, cal_err_base)
+  ggplot(d, aes(cal_err_cal, wis_pct, colour = season)) +
+    geom_hline(yintercept = 0, colour = "grey60", linewidth = 0.3) +
+    geom_path(aes(linetype = season == "both seasons"), linewidth = 0.8) +
+    geom_point(size = 1) +
+    geom_text(data = d %>% filter(lr %in% LABELLED, season != "both seasons"),
+      aes(label = format(lr, drop0trailing = TRUE)), size = 2.6, vjust = -0.8, show.legend = FALSE) +
+    geom_point(data = base, aes(cal_err_base, 0), shape = 21, fill = "white", size = 2.2) +
+    geom_point(data = r %>% filter(season != "both seasons"), aes(shape = ref), size = 2.4) +
+    scale_colour_manual(values = SEASON_COLS, name = NULL) +
+    scale_linetype_manual(values = c(`FALSE` = "solid", `TRUE` = "22"), guide = "none") +
+    scale_shape_manual(values = c(`REF-op cold` = 17, `sqrt, adaptive` = 15), name = NULL) +
+    facet_wrap(~h, nrow = 1) +
+    coord_cartesian(ylim = c(max(-10, min(d$wis_pct)), max(c(d$wis_pct, r$wis_pct)) + 0.5)) +
+    labs(x = "L1 coverage bias", y = "WIS change % (positive is better)", title = g) +
+    theme(legend.position = "bottom")
+}
+```
+
+## States only
+
+```{r curve-states}
+curve_plot(GEOS[["states"]])
+```
+
+## All locations
+
+```{r curve-all}
+curve_plot(GEOS[["all"]])
+```
+
+# Each metric against the learning rate
+
+The same runs with the learning rate on the x axis, so the seasons can be
+compared at the same rate. Top: WIS change % (positive is better). Bottom:
+L1 coverage bias, with each season's base as a dotted line. States only.
+
+```{r vs-lr, fig.height=6.5}
+long <- sweep_m %>%
+  filter(geos == GEOS[["states"]], season != "both seasons") %>%
+  transmute(h, season, lr, `WIS change %` = wis_pct, `L1 coverage bias` = cal_err_cal) %>%
+  tidyr::pivot_longer(c(`WIS change %`, `L1 coverage bias`), names_to = "metric") %>%
+  mutate(metric = factor(metric, levels = c("WIS change %", "L1 coverage bias")))
+base_lines <- sweep_m %>%
+  filter(geos == GEOS[["states"]], season != "both seasons") %>%
+  distinct(h, season, value = cal_err_base) %>%
+  mutate(metric = factor("L1 coverage bias", levels = levels(long$metric)))
+zero <- tibble(metric = factor("WIS change %", levels = levels(long$metric)), value = 0)
+ggplot(long, aes(lr, value, colour = season)) +
+  geom_hline(data = zero, aes(yintercept = value), colour = "grey60", linewidth = 0.3) +
+  geom_hline(data = base_lines, aes(yintercept = value, colour = season), linetype = "dotted") +
+  geom_line() +
+  geom_point(size = 1) +
+  scale_x_log10(breaks = c(0.003, 0.01, 0.03, 0.1, 0.3, 1), labels = c("0.003", "0.01", "0.03", "0.1", "0.3", "1")) +
+  scale_colour_manual(values = SEASON_COLS, name = NULL) +
+  facet_grid(metric ~ h, scales = "free_y") +
+  labs(x = "constant learning rate (per 100k per step)", y = NULL) +
+  theme(legend.position = "bottom")
+```
+
+# Tables
+
+WIS change % / L1 coverage bias, per learning rate (rows) and season ×
+horizon (columns). The base row shows the base's coverage bias. The
+references follow the sweep.
+
+```{r tables}
+season_table <- function(g) {
+  rows <- bind_rows(
+    sweep_m %>% filter(lr == LRS[1]) %>% mutate(config = "base", wis_pct = 0, cal_err_cal = cal_err_base),
+    sweep_m %>% mutate(config = format(lr, drop0trailing = TRUE)),
+    ref_m %>% mutate(config = ref)
+  ) %>%
+    filter(geos == g) %>%
+    mutate(config = factor(config, levels = unique(config)))
+  rows %>%
+    transmute(config, col = paste(season, h), cell = sprintf("%+.1f / %.3f", wis_pct, cal_err_cal)) %>%
+    tidyr::pivot_wider(names_from = col, values_from = cell) %>%
+    arrange(config)
+}
+```
+
+## States only
+
+```{r table-states}
+knitr::kable(season_table(GEOS[["states"]]))
+```
+
+## All locations
+
+```{r table-all}
+knitr::kable(season_table(GEOS[["all"]]))
+```
+
+## 50% and 90% interval coverage, states only
+
+E12 found the constant rate at 0.1 under-covers the 50% interval. Coverage
+of the 50% / 90% intervals, per season, at h0 and h2.
+
+```{r table-cov}
+bind_rows(
+  sweep_m %>% filter(lr == LRS[1]) %>% mutate(config = "base", cov50_cal = cov50_base, cov90_cal = cov90_base),
+  sweep_m %>% mutate(config = format(lr, drop0trailing = TRUE)),
+  ref_m %>% mutate(config = ref)
+) %>%
+  filter(geos == GEOS[["states"]], h %in% c("h0", "h2"), season != "both seasons") %>%
+  mutate(config = factor(config, levels = unique(config))) %>%
+  transmute(config, col = paste(season, h), cell = sprintf("%.2f / %.2f", cov50_cal, cov90_cal)) %>%
+  tidyr::pivot_wider(names_from = col, values_from = cell) %>%
+  arrange(config) %>%
+  knitr::kable()
+```
