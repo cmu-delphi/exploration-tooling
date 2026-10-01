@@ -220,6 +220,17 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
    Fixing `drop_non_seasons` and `nonlin_method` alone cuts the family to
    about a quarter (flu ~19, covid ~13).
 
+## Parked (2026-10-01, not on the calibration path; don't pick up until item 1 is settled)
+
+- Covid `windowed_seasonal_extra_sources` calibration (CALIBRATION open
+  thread 7). It is ~86% of covid `ensemble_mix` but has no 2023-24 NSSP, so
+  no burn-in.
+- CMU-climate_baseline US forecast is too low (item 2b).
+- `us_method` spec column and removing the `usa` alias (item 2b).
+- Calibration WIS summaries pool raw counts over all locations, so US is
+  about half of every "WIS change %" in CALIBRATION.md. b4 reports states
+  only as well; re-reading the older ledger waits.
+
 ## Tech debt
 
 7. renv warns on every run (library renv 1.1.6, lockfile 1.2.3; some
