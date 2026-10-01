@@ -108,6 +108,15 @@ problem; scattered single locations are usually model error or bad data. The
 halved-US check (US median vs the sum of state medians) is not in the script;
 it is a one-line duckdb query over the hub CSVs.
 
+## Open threads
+
+- Halved US (flu 2024-12-14, 2024-12-21, 2025-01-04): cause unconfirmed; a
+  `us`/`usa` mixup is the best guess.
+- Covid 2026-04-25: a stale fetch during the cast API v2→v5 change is likely
+  but unconfirmed; there is no store to replay.
+- Covid 2024-11-23: the May 2025 replay doesn't reproduce the submission, for
+  reasons not yet explained. Don't read replays as "what was submitted".
+
 ## To do
 
 - Run the same sweep on `windowed_seasonal` (the main ensemble component,
