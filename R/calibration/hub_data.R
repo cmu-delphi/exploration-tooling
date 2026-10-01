@@ -36,7 +36,9 @@ HUB_SPOILED_SUBMISSIONS <- tibble::tribble(
   "CMU-TimeSeries", HUB_FLU_TARGET, "2025-11-22", NA, -1L,
   "CMU-TimeSeries", HUB_FLU_TARGET, "2024-12-14", "US", NA,
   "CMU-TimeSeries", HUB_FLU_TARGET, "2024-12-21", "US", NA,
-  "CMU-TimeSeries", HUB_FLU_TARGET, "2025-01-04", "US", NA
+  "CMU-TimeSeries", HUB_FLU_TARGET, "2025-01-04", "US", NA,
+  "CMU-TimeSeries", HUB_COVID_TARGET, "2024-11-23", NA, NA,
+  "CMU-TimeSeries", HUB_COVID_TARGET, "2026-04-25", NA, -1L
 ) %>% dplyr::mutate(reference_date = as.Date(.data$reference_date))
 
 
