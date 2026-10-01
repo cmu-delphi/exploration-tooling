@@ -104,8 +104,9 @@ weeks, exact and stateful learning truth. Pooled over locations:
 `e10_covid.Rmd`, exact learning truth, REF-op without the warm start (as in
 covid prod). The covid base is already calibrated at h1–h3 (coverage bias
 0.043/0.034/0.027), so calibration there is neutral (REF-op −0.1/−0.2/−0.8%
-WIS) or harmful (REF-paper −5.6/−6.8/−9.4%). h−1, which is 100%
-`revision_aware`, gains +9.5% WIS. REF-op's losses come from 2025-26 and from
+WIS) or harmful (REF-paper −5.6/−6.8/−9.4%). h−1, which over
+E10's rounds is 100% the `climate_linear` ensemble (`revision_aware` took
+over h−1 only on 2026-09-23), gains +9.5% WIS. REF-op's losses come from 2025-26 and from
 September–October. Candidate change: calibrate covid at h−1 (maybe h0) only.
 
 ## Data
@@ -684,6 +685,8 @@ The per-date `forecast_report.Rmd` notebook receives calibrated forecasts for th
 - aheads 1–3: ~86% `windowed_seasonal_extra_sources`, ~14% `windowed_seasonal`;
 - ahead 0: ~67% / ~11% / ~22% `revision_aware`;
 - ahead −1: 100% `revision_aware`, because `drop_negative_aheads` strips the two AR components there.
+
+Before 2026-09-23 (all of E10's rounds), the mix had no `revision_aware`: ahead −1 was 100% the `climate_linear` ensemble, since the AR components were filtered out of negative aheads.
 
 `windowed_seasonal_extra_sources` excludes mo and wy, so those states fall back to `windowed_seasonal`. Blocks before 2026-09-16 used `windowed_seasonal = 0.05`, which made the split ~98% / ~2%. The `climate_linear` rows in the CSV are not `ensemble_mix` components. So covid forecast-quality work, calibration included, is mostly about `windowed_seasonal_extra_sources`. The CSV is edited by hand each week, so re-derive the weights before relying on these numbers.
 

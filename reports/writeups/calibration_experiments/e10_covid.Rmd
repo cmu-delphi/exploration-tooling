@@ -47,9 +47,10 @@ is better.
   fix there. Its coverage bias is 0.094/0.063/0.043/0.034/0.027 at h−1…h3,
   against about 0.1 at every horizon for flu.
 - **h−1 is a clear win.** WIS +9.5% (REF-op) and +9.2% (REF-paper), absolute
-  error of the median +18% and +16%. At h−1 the submission comes entirely
-  from one revision-aware component model, and h−1 is where the base is
-  least calibrated.
+  error of the median +18% and +16%. Over these rounds the submitted h−1
+  came entirely from a climatology-plus-linear-trend ensemble (the
+  autoregressive models were left out of negative horizons), and h−1 is
+  where the base is least calibrated.
 - **At h1–h3, REF-op is neutral and REF-paper is harmful.** REF-op: WIS
   −0.1/−0.2/−0.8%, coverage bias slightly worse than base at h2/h3
   (0.037/0.035 vs 0.034/0.027). REF-paper: WIS −5.6/−6.8/−9.4%, coverage bias
