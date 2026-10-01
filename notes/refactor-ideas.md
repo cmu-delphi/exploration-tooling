@@ -1,6 +1,7 @@
 # Open threads and future refactor ideas
 
-The single home for everything not yet implemented. Consolidated 2026-07-22
+Refactor designs and cleanup inventories. The task list itself is
+`notes/ROADMAP.md`. Consolidated 2026-07-22
 from CLAUDE.md's "Open threads" and the three 2026-07-19 design/cleanup
 scouts (`e2-explore-ensemble-design`, `validate-snapshot-design`,
 `clarity-simplification-scout` — originals in git history); items the

@@ -703,33 +703,58 @@ Before 2026-09-23 (all of E10's rounds), the mix had no `revision_aware`: ahead 
 **Bug fixed en route:** `nssp_archive` in both `flu_data_targets.R` and `covid_data_targets.R` had a duplicate-key error (pre-existing since August 2026): `compactify = TRUE` can retain multiple rows per `(geo_value, time_value)` when the value changed across issues, and the subsequent `mutate(version = time_value + 7)` flattened all to the same version, producing duplicate keys in `as_epi_archive()`.
 Fix: `group_by(geo_value, time_value) %>% slice_max(version, n = 1L, with_ties = FALSE) %>% ungroup()` before the version clobber.
 
-# Roadmap
+# Open threads
 
-Possible next steps, roughly ordered:
+Calibration-specific open items, roughly in priority order. Repo-wide items
+(evaluation testbed, NSSP-target backtesting, revision-aware backtests) are
+in `notes/ROADMAP.md`.
 
-0. **Re-run the current experiments with exact learning truth** (E03–E05,
-   E07 in the ledger), after E09.
-0. **Re-run the ILI+ experiments on the fixed replay**: the ILI+ burn-in and
+1. **Warm start on the constant-rate tracker.** E11 (constant 0.1 per 100k,
+   rate scale, +1 week, re-run) beats the cold adaptive trackers on coverage
+   and is the most stable across seasons, but `warm + sqrt, adaptive` still
+   wins at h0–h1. Try E11's constant rate with
+   `slow_init = "burn_in_quantile"`.
+2. **Calibrate h0 and above only.** Revisit h−1 calibration once prod's h−1
+   component is chosen (`notes/ROADMAP.md`, revision-method backtests); the
+   harness h−1 history predates the 2026-09-23 switch to `revision_aware`.
+3. **Covid per-horizon calibration** (calibrate h−1 and perhaps h0, pass
+   h1–h3 through; E10): untested.
+4. **Re-run E07, E01 and E02 on vintages** (still marked stale in the
+   ledger). E03–E05 already use the re-run design.
+5. **Re-run the ILI+ experiments on the fixed replay**: the ILI+ burn-in and
    setup C (does a warm start learned on ILI+ transfer to NHSN?).
-1. **Review the ranked gallery** — does the WIS cost concentrate at turning
-   points (the `h + 2` staleness prediction)? Are the biggest offsets fixing
-   real miscalibration or chasing data-revision artifacts?
-2. **Send the collaborator email** (sweep findings; h −1 free win; carry vs
-   reset a wash).
-3. **`windowed_seasonal_extra_sources` retrospective** via
-   `scripts/calibration/calibration_harness.R` (covid, evaluation store) — does
+6. **Sweep `windowed_seasonal`, the harness proxy, for spoiled
+   submissions.** Needs a variant of the sweep script that reads the harness
+   forecasts (`notes/spoiled-submissions.md`).
+7. **`windowed_seasonal_extra_sources` retrospective** via
+   `scripts/calibration/calibration_harness.R` (covid, evaluation store): does
    calibration help our best component forecaster, not just the submitted
    ensemble?
-4. **Integration design** for prod: where the tracker lives (per-forecaster
-   vs post-ensemble), how state persists week to week, and how to handle the
-   warm-up (burn-in on a past season? carry state across seasons? a
-   burn-in-free learning-rate schedule?).
-5. **Method extensions**, in the order argued under "Directions this points
+8. **Review the ranked gallery.** Does the WIS cost concentrate at turning
+   points (the `h + 2` staleness prediction)? Are the biggest offsets fixing
+   real miscalibration or chasing data-revision artifacts?
+9. **Method extensions**, in the order argued under "Directions this points
    to": slow relative level term + fast tracker; cross-horizon proxy
    gradients for staleness; data-driven phase gating; scale proxy. Pooling
    offsets across locations and per-level learning rates are lower priority.
-6. **Agentic triage** of gallery panels against a fixed rubric (data revision
-   visible? base missed the turn? calibration helped/hurt?) if manual
-   skimming of the ranked gallery proves insufficient.
-7. **Dynamic gallery app** (Shiny/Posit or a served page with dynamic data
-   fetch) if the static top-N format becomes limiting.
+10. **Speed up exact tracker runs**, if more exact sweeps are coming. An
+    exact config replays prod's weekly re-run, about 55 full tracker runs,
+    so cost grows with the square of the number of rounds (E09: about 72
+    configs, about 1.5 h on 14 cores).
+    - Quick wins, all exact, about 2–2.5x: sort-based "data as of round t"
+      lookup instead of a grouped slice_max (about 4–5 s per round);
+      validate `arg_match` once outside the loop (about 15%); skip isoreg
+      when quantiles are already ordered (about 8%); plain vectors instead
+      of tibble/glue in the per-series loop (about 15%). Check bit-for-bit
+      against cached runs.
+    - Checkpointing, another 5–10x: start round t's run from round t−1's
+      tracker state at the first round whose data differ. Needs
+      `qt_track()` to save and resume offsets, the learning-rate window and
+      the slow term; test for exact equality with the full re-run.
+11. **Send the collaborator email** (sweep findings; h−1 free win; carry vs
+    reset a wash).
+12. **Agentic triage** of gallery panels against a fixed rubric (data
+    revision visible? base missed the turn? calibration helped/hurt?) if
+    manual skimming of the ranked gallery proves insufficient.
+13. **Dynamic gallery app** (Shiny/Posit or a served page with dynamic data
+    fetch) if the static top-N format becomes limiting.
