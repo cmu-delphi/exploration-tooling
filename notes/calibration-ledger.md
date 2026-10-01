@@ -78,7 +78,7 @@ base WIS, and pick within strata (season phase × location size).
 | E08 | covid | disease | old REF-paper (count, window 50) | covid | pre-fix | final | V-head, V-state, V-gallery | `calibration_qt_*_covid.Rmd` | stale, replaced by E10 |
 | E09 | constant lr × revision delay | constant lr grid × `settle_days` {7, 14, 21, 28}; bridge rows below | REF-paper | flu | post-fix | exact (+ vintage, for a stateful tracker) | V-curve, V-head | `e09_lr_delay.Rmd` | done |
 
-| E10 | covid at the references | disease (REF-paper, REF-op without warm start as in covid prod) | REF-paper, REF-op | covid | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e10_covid.Rmd` | planned |
+| E10 | covid at the references | disease (REF-paper, REF-op without warm start as in covid prod) | REF-paper, REF-op | covid | post-fix | exact | V-head, V-ae, V-month, V-state, V-gallery | `e10_covid.Rmd` | done |
 
 E09 bridge rows, each one axis from the previous: REF-paper → rate scale →
 constant lr (sweep) → `settle_days` (sweep).
@@ -91,5 +91,4 @@ bias on NHSN and ILI+. See `notes/CALIBRATION.md`.
 
 - **Learning truth.** E01, E02 and E06–E08 learned from finalized NHSN (E00
   shows the error is small outside h−1). E03–E05 have been re-run exactly.
-- **Covid** has not been run since the fixes (E10 planned).
 - **E07** (ensemble vs `windowed_seasonal`) has not been re-run exactly.

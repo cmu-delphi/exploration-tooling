@@ -99,6 +99,15 @@ weeks, exact and stateful learning truth. Pooled over locations:
   design: zero extra delay makes h−1 coverage worse than base (learning from
   the under-reported first report); one extra week fixes it.
 
+## Covid at the references (E10, 2026-09-30)
+
+`e10_covid.Rmd`, exact learning truth, REF-op without the warm start (as in
+covid prod). The covid base is already calibrated at h1–h3 (coverage bias
+0.043/0.034/0.027), so calibration there is neutral (REF-op −0.1/−0.2/−0.8%
+WIS) or harmful (REF-paper −5.6/−6.8/−9.4%). h−1, which is 100%
+`revision_aware`, gains +9.5% WIS. REF-op's losses come from 2025-26 and from
+September–October. Candidate change: calibrate covid at h−1 (maybe h0) only.
+
 ## Data
 
 FluSight CMU-TimeSeries submissions: 83 rounds (2023-10-14 … 2026-05-30), 53
