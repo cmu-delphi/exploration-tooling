@@ -204,6 +204,32 @@ ch_inputs <- function(store = CH_STORE, drop_geos = CH_DROP_GEOS) {
   inputs
 }
 
+#' ch_inputs() with the HHS weekly archive stitched in before NHSN's first version.
+#'
+#' HHS rows (from scripts/one_offs/hhs_2023_24_archive.R, run from 2020-08) are
+#' relabelled `source = "nhsn"` and kept only at versions before NHSN's first,
+#' so a 2023-24 snapshot sees HHS alone and later snapshots see only NHSN.
+#' HHS levels are used as-is (ROADMAP 1b).
+ch_inputs_with_burn_in <- function(
+  hhs_path = file.path(CH_CACHE_DIR, "hhs_weekly_archive_2020_2024.rds"),
+  inputs = ch_inputs()
+) {
+  train <- as_tibble(inputs$nhsn_train$DT)
+  nhsn <- train %>% filter(source == "nhsn")
+  first_version <- min(nhsn$version)
+  hhs <- as_tibble(readRDS(hhs_path)[[CH_DISEASE]]) %>%
+    filter(version < first_version, geo_value %in% nhsn$geo_value) %>%
+    mutate(source = "nhsn") %>%
+    select(all_of(names(train)))
+  # Every HHS key must be overwritten at NHSN's first version, or HHS would leak past it.
+  stray <- anti_join(hhs, nhsn %>% filter(version == first_version), by = c("geo_value", "time_value"))
+  if (nrow(stray) > 0) cli::cli_abort("{nrow(stray)} HHS row{?s} have no NHSN row at {first_version}.")
+  inputs$nhsn_train <- bind_rows(train, hhs) %>%
+    as_epi_archive(other_keys = "source", compactify = TRUE)
+  cli::cli_alert_success("Stitched {nrow(hhs)} HHS rows before NHSN version {.val {format(first_version)}}")
+  inputs
+}
+
 #' Truth as it was published at `version`, on the forecasts' target_end_date key.
 #'
 #' This is the honest input for an online update at time `version`: it contains
