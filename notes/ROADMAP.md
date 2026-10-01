@@ -41,6 +41,14 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
         across geos. So the expected diff is "only on substituted dates",
         not "only at substituted geos". Single-forecaster cost: ~40
         CPU-s per date plus ~4 min fixed overhead per run.
+      - a3 done 2026-10-01: `EVALUATION_FORECASTERS=windowed_seasonal
+        EVALUATION_SUBSTITUTIONS=false make eval-{flu,covid}` into the
+        local stores (not pushed). Flu 11.5 min, covid 9 min, 0 errors, 98
+        dates (2024-11-20 to 2026-09-30), all 53 geos, no NAs. Forecasts
+        are in `forecast_nhsn_full`. Gaps: `local_scores_nhsn` never
+        scores `us` (52 of 53 geos, likely a geo-name mismatch with
+        `nhsn_latest_data`); NSSP inputs drop `mo` on 81 dates, `wy` on 28
+        and `nh` on 5, for both diseases.
       - Side finding: the h=−1 forecast never changes when a substitution
         edits only the latest week. Worth checking that h=−1 is meant to
         ignore that week.
