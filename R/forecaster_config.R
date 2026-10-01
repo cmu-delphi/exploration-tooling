@@ -81,6 +81,9 @@ get_single_id <- function(param_list) {
 #   needs_archive     TRUE hands the forecaster the truncated epi_archive instead
 #                     of an as-of epi_df snapshot, for revision-aware forecasters
 #                     (see make_forecast_archive_snapshot / run_forecaster).
+#   run_aheads        explore only: aheads (days) this forecaster runs. NULL
+#                     means `g_aheads` (the non-negative ones); nowcast families
+#                     opt into `g_nowcast_aheads`. Other aheads get an empty forecast.
 FORECASTER_SPEC_DEFAULTS <- list(
   as_of_policy = "asof",
   ahead_multiplier = 1L,
@@ -91,7 +94,8 @@ FORECASTER_SPEC_DEFAULTS <- list(
   sort_quantiles = FALSE,
   output_scale = "count",
   min_train_date = NULL,
-  needs_archive = FALSE
+  needs_archive = FALSE,
+  run_aheads = NULL
 )
 
 #' Make a forecaster grid.

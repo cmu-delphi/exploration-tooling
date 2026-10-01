@@ -18,6 +18,8 @@ randforest_grf <- rand_forest(engine = "grf_quantiles", mode = "regression")
 g_dummy_mode <- as.logical(Sys.getenv("DUMMY_MODE", FALSE))
 g_disease <- "covid"
 g_aheads <- 0:4 * 7
+# h−1 (already-reported week). Only families with run_aheads set forecast it.
+g_nowcast_aheads <- -7
 g_hhs_signal <- "confirmed_admissions_covid_1d"
 # The date when the forecast was generated (this is effectively the AS OF date).
 g_forecast_generation_dates <- seq.Date(as.Date("2024-11-20"), as.Date("2026-04-29"), by = 7L)

@@ -9,6 +9,11 @@
 #' @return A list of forecaster parameters
 #' @export
 get_flu_forecaster_params <- function() {
+  # Families that also forecast h−1, and the aheads each runs.
+  nowcast_run_aheads <- list(
+    revision_aware = c(g_nowcast_aheads, g_aheads),
+    revision_ratio = g_nowcast_aheads
+  )
   out <- rlang::list2(
     scaled_pop_main = tidyr::expand_grid(
       forecaster = "scaled_pop",
@@ -248,6 +253,11 @@ get_flu_forecaster_params <- function() {
       finalization_coverage = 0.8,
       needs_archive = TRUE
     ),
+    # Nowcast baseline for h−1: the reported value times recent revision ratios.
+    revision_ratio = tibble(
+      forecaster = "revision_ratio_nowcast",
+      needs_archive = TRUE
+    ),
     # Same as revision_aware but with nssp as an exogenous predictor. Restricts
     # to nhsn-only training (genuinely revision-aware rows) since nssp's
     # version == time_value means faux-revision rows can't provide real-time nssp
@@ -423,7 +433,7 @@ get_flu_forecaster_params <- function() {
       ),
     )
   ) %>%
-    map(function(x) {
+    imap(function(x, family) {
       if (g_dummy_mode) {
         x$forecaster <- "dummy_forecaster"
       }
@@ -436,6 +446,9 @@ get_flu_forecaster_params <- function() {
       # the quantile-whitening workaround.
       x$sort_quantiles <- TRUE
       x$output_scale <- "per100k"
+      if (family %in% names(nowcast_run_aheads)) {
+        x$run_aheads <- list(nowcast_run_aheads[[family]])
+      }
       x
     })
 

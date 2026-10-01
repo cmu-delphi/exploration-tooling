@@ -17,6 +17,8 @@ randforest_grf <- rand_forest(engine = "grf_quantiles", mode = "regression")
 g_dummy_mode <- as.logical(Sys.getenv("DUMMY_MODE", FALSE))
 g_disease <- "flu"
 g_aheads <- 0:4 * 7
+# h−1 (already-reported week). Only families with run_aheads set forecast it.
+g_nowcast_aheads <- -7
 # g_hhs_signal = "confirmed_admissions_influenza_1d"
 # The date when the forecast was generated (this is effectively the AS OF date).
 # Exploration only cares about the flu season itself (roughly epiweek 40 through
