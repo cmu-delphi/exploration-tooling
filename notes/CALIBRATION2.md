@@ -1,10 +1,5 @@
 Open threads and TODOs
 
-In progress
-1. Full re-render: E00, E03–E05, E09, E10 and the index, on the final exclusion list.
-2. Refresh the findings numbers afterwards. Every notebook's "Findings" section, notes/CALIBRATION.md and the ledger quote numbers from before the exclusions. Expect shifts mostly at h−1, in flu 2024-25 (the US is a large share of pooled count WIS) and in E10.
-3. Re-check E10's conclusions once that's done. Its h−1 gain was partly measured on rounds now excluded. Its h−1 base was also a climatology-plus-trend nowcast, not the revision-aware one now in prod, so "calibrate covid at h−1 only" needs re-reading in that light.
-
 Decided but not done
 4. Sweep windowed_seasonal, the main ensemble component used as a proxy in the calibration harness. It needs a variant of the sweep script that reads the harness forecasts. Recorded in notes/spoiled-submissions.md.
 5. Fix how prod builds h−1 (flu, and covid before 2026-09-23). The AR models drop the already-reported week at h−1 (filter_minus_one_ahead). That's the 2026-04-04 overshoot and the 10–30% h−1 bias during 2025-26 declines. This is a prod change, not a calibration one.

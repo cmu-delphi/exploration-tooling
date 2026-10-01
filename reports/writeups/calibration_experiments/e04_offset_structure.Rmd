@@ -37,24 +37,27 @@ E03 sqrt variant), learning from vintages the way prod does (E00).
 
 # Findings
 
-Numbers are from the render of 30 September 2026, pooled over both live seasons and all locations; WIS and absolute-error changes are % vs base, positive is better.
+Numbers are from the render of 30 September 2026, pooled over both live
+seasons and all locations; WIS and absolute-error changes are % vs base,
+positive is better.
 
 - **The leak buys WIS at h1–h3 with coverage.** `leak 0.1` moves WIS from
-  +0.8/−0.6/−1.3 to +1.8/+1.0/+0.4 at h1–h3, but coverage bias nearly
-  triples (0.026–0.028 → 0.075–0.082), close to the base's 0.095–0.103.
+  +0.7/−1.3/−1.4 to +1.6/+0.8/+0.6 at h1–h3, but coverage bias nearly
+  triples (0.026–0.028 → 0.075–0.081), close to the base's 0.095–0.102.
   A correction that fades between refreshes cannot hold coverage through a
   3–5 round reveal lag.
 - **The leak is what repairs the tail and the second season.** At h3 it cuts
-  the October loss from 44% to 11% and March from 46% to 16%, and turns April
-  from −33% to +9%. In 2025-26, h1–h3 go from −2.5/−3.3/−2.7 to
-  +1.7/+1.1/+0.8.
-- **A slow term alone does nothing.** `slow 0.003` is within 0.3 points of
+  the October loss from 35% to 12% and March from 42% to 14%, and turns April
+  from −20% to +10%. In 2025-26, h1–h3 go from −1.8/−4.6/−3.5 to
+  +1.5/+1.0/+0.9.
+- **A slow term alone does nothing.** `slow 0.003` is within 0.2 points of
   `single` everywhere, and `slow 0.003 + leak 0.1` is within 0.5 points of
-  `leak 0.1` (slightly better coverage, 0.068–0.089). At this learning rate
+  `leak 0.1` (slightly better coverage, 0.068–0.084). At this learning rate
   the slow term never accumulates enough to matter without a warm start
   (E05).
 - The median follows WIS: the leak improves absolute error at h1–h3
-  (+3.7/+3.1/+3.3 vs +2.6/+2.4/+1.7) and costs about a point at h−1/h0.
+  (+3.4/+2.8/+3.4 vs +2.4/−0.6/+1.2) and costs 1.1 points at h−1 and 0.3 at
+  h0.
 
 ```{r runs}
 sqrt_args <- list("paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3))

@@ -68,16 +68,17 @@ finalized truth). A round with reference date `d` sees data published by
 - `"vintage"`: one run in which each outcome keeps its value at the round
   that revealed it: a stateful tracker that never revisits a step.
 
-Findings (E00, `e00_vintage_backtest.Rmd`, flu, both live seasons):
+Findings (E00, `e00_vintage_backtest.Rmd`, flu, both live seasons, spoiled
+submissions excluded):
 
 - Final vs exact is small except at h−1: REF-op at settle 14 is
-  +8.9/+5.4/+2.6/+1.9/+1.9 final vs +6.8/+5.1/+2.5/+1.8/+1.9 exact, coverage
-  bias 0.073–0.040 vs 0.080–0.041. REF-paper is within 0.6 points.
+  +7.6/+5.4/+2.4/+1.8/+2.2 final vs +5.4/+4.9/+2.4/+1.7/+2.2 exact, coverage
+  bias 0.067–0.040 vs 0.074–0.041. REF-paper is within 0.6 points.
 - Vintage mode is not a stand-in for exact: at settle 7 it learns once from
-  the under-reported first report (REF-op h−1 +1.2, coverage bias 0.127).
-- Under the exact (prod) design, settle 7 beats settle 14 at every horizon
-  at both references (REF-op +7.4/+5.3/+2.9/+2.0/+2.2), because next week's
-  run corrects what an early reveal got wrong. A stateful tracker would
+  the under-reported first report (REF-op h−1 0.0, coverage bias 0.121).
+- Under the exact (prod) design, settle 7 beats or ties settle 14 at every
+  horizon at both references (REF-op +6.1/+5.1/+2.6/+1.8/+2.2), because next
+  week's run corrects what an early reveal got wrong. A stateful tracker would
   prefer the longer delay. The right revision delay depends on the design.
 
 ## Constant learning rate × revision delay (E09, 2026-09-30)
@@ -87,9 +88,11 @@ Findings (E00, `e00_vintage_backtest.Rmd`, flu, both live seasons):
 weeks, exact and stateful learning truth. Pooled over locations:
 
 - The coverage/WIS trade-off is L-shaped, with a knee at a learning rate of
-  about 0.05–0.1 per 100k (up to 0.3 at h−1). At 0.056 and +1 week (re-run):
-  WIS −3.9/−2.3/−1.0/−0.6/−0.1% (negative is better), coverage bias
-  0.043/0.031/0.026/0.026/0.026. That beats REF-paper on both at h1–h3.
+  about 0.05–0.1 per 100k. At 0.056 and +1 week (re-run): WIS
+  −3.2/−2.5/−1.1/−0.5/−0.2% (negative is better), coverage bias
+  0.040/0.031/0.026/0.027/0.027. That matches or beats REF-paper
+  (−3.2/−1.9/+2.0/+2.7/+5.3%, 0.044/0.030/0.032/0.034/0.032) at every
+  horizon.
 - With the adaptive rate, rate scale and count scale give identical results
   (the adaptive rate rescales with the location), so the rate scale matters
   only with a constant rate.
@@ -102,11 +105,12 @@ weeks, exact and stateful learning truth. Pooled over locations:
 ## Covid at the references (E10, 2026-09-30)
 
 `e10_covid.Rmd`, exact learning truth, REF-op without the warm start (as in
-covid prod). The covid base is already calibrated at h1–h3 (coverage bias
-0.043/0.034/0.027), so calibration there is neutral (REF-op −0.1/−0.2/−0.8%
-WIS) or harmful (REF-paper −5.6/−6.8/−9.4%). h−1, which over
+covid prod), rounds 2024-11-30 to 2026-09-19 (the spoiled 2024-11-23 round
+excluded). The covid base is already calibrated at h1–h3 (coverage bias
+0.046/0.036/0.028), so calibration there is neutral to slightly harmful
+(REF-op 0.0/−0.6/−1.3% WIS) or harmful (REF-paper −4.5/−7.3/−10.3%). h−1, which over
 E10's rounds is 100% the `climate_linear` ensemble (`revision_aware` took
-over h−1 only on 2026-09-23), gains +9.5% WIS. REF-op's losses come from 2025-26 and from
+over h−1 only on 2026-09-23), gains +10.2% WIS (REF-paper +11.4%). REF-op's losses come from 2025-26 and from
 September–October. Candidate change: calibrate covid at h−1 (maybe h0) only.
 
 ## Data
@@ -166,7 +170,9 @@ the central integration design issue.
 +8.9/+5.4/+2.6/+1.9/+1.9 at h−1…3 over both live seasons, calibration error
 0.040–0.073 against 0.098–0.118 uncalibrated. Current numbers for every
 variant are in `reports/writeups/calibration/calibration_findings_flu.Rmd`
-(section "Current numbers" below).
+(section "Current numbers" below). With exact learning truth and spoiled
+submissions excluded (2026-09-30): +5.4/+4.9/+2.4/+1.7/+2.2, coverage bias
+0.041–0.074 against 0.095–0.111 uncalibrated.
 
 **Numbers dated before 2026-09-17 predate the two correctness fixes**
 ("Correctness fixes" below) and used the hub target-data CSV as truth. The
@@ -503,25 +509,27 @@ biased high.
 
 ### Current numbers (2026-09-23; superseded by the exact re-runs below)
 
-Re-run 2026-09-30 with exact learning truth (the prod re-run design) in
+Re-run 2026-09-30 with exact learning truth (the prod re-run design) and
+spoiled submissions excluded (`notes/spoiled-submissions.md`) in
 `e03_scale.Rmd`, `e04_offset_structure.Rmd`, `e05_warm_start.Rmd`. WIS change
-% (positive is better) and coverage bias, same setup:
+% (positive is better) and coverage bias, same setup (base
+0.111/0.105/0.095/0.098/0.102):
 
 | variant | h−1 | h0 | h1 | h2 | h3 | cal err h−1…h3 |
 |---|---|---|---|---|---|---|
-| count space, single term | +4.2 | +2.4 | −0.5 | −2.9 | −5.2 | 0.047/0.030/0.032/0.034/0.032 |
-| sqrt, single term | +6.4 | +4.1 | +0.8 | −0.6 | −1.3 | 0.054/0.032/0.026/0.028/0.026 |
-| sqrt, leak 0.1 | +6.2 | +3.9 | +1.8 | +1.0 | +0.4 | 0.096/0.082/0.075/0.080/0.082 |
-| warm start only | +0.4 | +1.1 | +0.9 | +1.1 | +2.0 | 0.105/0.075/0.062/0.065/0.062 |
-| warm start + single term | +6.4 | +4.7 | +1.3 | +0.3 | +0.4 | 0.050/0.021/0.013/0.016/0.014 |
-| warm start + leak 0.1 | +6.3 | +4.7 | +2.5 | +1.9 | +2.1 | 0.087/0.060/0.051/0.052/0.047 |
-| operating point | +6.8 | +5.1 | +2.5 | +1.8 | +1.9 | 0.080/0.054/0.045/0.046/0.041 |
+| count space, single term | +3.2 | +1.9 | −2.0 | −2.7 | −5.3 | 0.044/0.030/0.032/0.034/0.032 |
+| sqrt, single term | +5.1 | +4.0 | +0.7 | −1.3 | −1.4 | 0.049/0.032/0.026/0.028/0.026 |
+| sqrt, leak 0.1 | +4.8 | +3.7 | +1.6 | +0.8 | +0.6 | 0.090/0.082/0.075/0.079/0.081 |
+| warm start only | +0.5 | +1.3 | +0.9 | +1.2 | +2.1 | 0.098/0.075/0.062/0.065/0.062 |
+| warm start + single term | +5.1 | +4.7 | +1.3 | −0.2 | +0.3 | 0.046/0.020/0.013/0.016/0.014 |
+| warm start + leak 0.1 | +5.0 | +4.5 | +2.3 | +1.8 | +2.4 | 0.080/0.060/0.050/0.052/0.047 |
+| operating point | +5.4 | +4.9 | +2.4 | +1.7 | +2.2 | 0.074/0.054/0.045/0.046/0.041 |
 
 The ordering of the variants is unchanged from the finalized-truth table.
-h−1 WIS of the tracking sqrt variants drops by 1.5–2 points; count space and
-the warm start alone are unchanged, and h0–h3 move by at most 0.5. New: warm start + single
-term (not run before) is the best-calibrated variant, and with REF-op it
-brackets the WIS/coverage trade-off. The finalized-truth numbers follow for
+Warm start + single term (not run before) is the best-calibrated variant, and
+with REF-op it brackets the WIS/coverage trade-off. At h3, sqrt single term
+loses more than count in October (−35% vs −27%) and March (−42% vs −26%);
+the leak brings those to −12% and −14%. The finalized-truth numbers follow for
 the record.
 
 From `reports/writeups/calibration/calibration_findings_flu.Rmd`: post-fix,

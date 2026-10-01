@@ -55,22 +55,23 @@ sweeps?
 Numbers below are from the render of 30 September 2026.
 
 - **Finalized truth flattered the earlier results only a little.** At REF-op
-  with one week of extra delay, exact vs final WIS change is +6.8 vs +8.9 at h−1,
-  within 0.3 points at h0–h3, and the h−1 coverage bias is 0.080 vs 0.073. At
-  REF-paper, exact is within 0.6 points of final at every horizon, slightly
-  better at h1–h3. Earlier conclusions stand; the h−1 gain was overstated.
+  with one week of extra delay, exact vs final WIS change is +5.4 vs +7.6 at
+  h−1, within 0.5 points at h0–h3, and the h−1 coverage bias is 0.074 vs
+  0.067. At REF-paper, exact is within 0.6 points of final at every horizon:
+  slightly better at h2/h3, slightly worse at h1. Earlier conclusions stand;
+  the h−1 gain was overstated by about 2 points.
 - **The cheap mode is not a usable stand-in.** It drifts from exact as the
   season goes on (figure below). With no extra delay it learns once from the
   first report, which under-reports and is never corrected: REF-op h−1 falls
-  to +1.2 (exact +7.4) and coverage bias rises to 0.127 (exact 0.082). Every
+  to 0.0 (exact +6.1) and coverage bias rises to 0.121 (exact 0.076). Every
   later experiment uses exact.
 - **Under prod's re-run design, a shorter delay is better.** Exact with no
-  extra delay beats one week of extra delay at every horizon, at both references (REF-op
-  +7.4/+5.3/+2.9/+2.0/+2.2 vs +6.8/+5.1/+2.5/+1.8/+1.9), with the same
-  coverage bias. Learning early from a first report costs little when next
-  week's run replaces it with the revised value. A stateful tracker (the
-  vintage mode) shows the opposite. So the value of an extra revision delay
-  depends on the deployment design, and E09 should report both.
+  extra delay beats or ties one week of extra delay at every horizon, at both
+  references (REF-op +6.1/+5.1/+2.6/+1.8/+2.2 vs +5.4/+4.9/+2.4/+1.7/+2.2),
+  with nearly the same coverage bias. Learning early from a first report costs
+  little when next week's run replaces it with the revised value. A stateful
+  tracker (the vintage mode) shows the opposite. So the value of an extra
+  revision delay depends on the deployment design, and E09 reports both.
 
 ```{r libs, cache=FALSE}
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))

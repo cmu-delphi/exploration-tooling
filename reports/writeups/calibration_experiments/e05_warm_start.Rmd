@@ -37,28 +37,30 @@ from E04:
 
 # Findings
 
-Numbers are from the render of 30 September 2026, pooled over both live seasons and all locations; WIS and absolute-error changes are % vs base, positive is better.
+Numbers are from the render of 30 September 2026, pooled over both live
+seasons and all locations; WIS and absolute-error changes are % vs base,
+positive is better.
 
 - **The warm start helps every tracker, and never hurts.** Each warm run is
   at least as good as its cold twin on WIS at every horizon, and better on
-  coverage: `single` +6.4/+4.1/+0.8/−0.6/−1.3 → `warm + single`
-  +6.4/+4.7/+1.3/+0.3/+0.4, coverage bias 0.054–0.026 → 0.050–0.013.
+  coverage: `single` +5.1/+4.0/+0.7/−1.3/−1.4 → `warm + single`
+  +5.1/+4.7/+1.3/−0.2/+0.3, coverage bias 0.049–0.026 → 0.046–0.014.
 - **`warm + single` is the best-calibrated config so far.** Its coverage bias
-  is 0.013–0.021 at h0–h3, a fifth of the base's, with WIS positive at every
-  horizon. REF-op (`warm + slow + leak`) has the best WIS
-  (+6.8/+5.1/+2.5/+1.8/+1.9) at about three times the coverage bias
-  (0.080–0.041). These two mark the ends of the WIS/coverage trade-off.
+  is 0.013–0.020 at h0–h3, a fifth of the base's, with WIS within 0.2 points
+  of the base or better at every horizon. REF-op (`warm + slow + leak`) has
+  the best WIS (+5.4/+4.9/+2.4/+1.7/+2.2) at about three times the coverage
+  bias (0.074–0.041). These two mark the ends of the WIS/coverage trade-off.
 - **The warm start's gain is in the first live season.** In 2024-25 it adds
-  1.5–3 points at h2/h3 to every tracker; in 2025-26 warm and cold runs are
+  1.7–3.2 points at h2/h3 to every tracker; in 2025-26 warm and cold runs are
   within 0.5 points, since by then the tracker has learned the level itself.
-  `warm + single` still loses 2.5–3.4% at h1–h3 in 2025-26; only the leaky
+  `warm + single` still loses 1.8–4.3% at h1–h3 in 2025-26; only the leaky
   variants gain there.
-- **The warm start alone** (no tracking) gains 0.4–2.0% WIS and cuts
-  coverage bias by a third: the persistent low bias is real and cheap to
-  correct.
+- **The warm start alone** (no tracking) gains 0.5–2.1% WIS and cuts
+  coverage bias by about a third at h0–h3 (12% at h−1): the persistent low
+  bias is real and cheap to correct.
 - **Where REF-op loses** is unchanged from the finalized-truth runs: at h3,
-  October (−28%) and March (−32%), 5% of the base WIS between them;
-  December–January (75% of it) gain about 4%.
+  October (−30%) and March (−29%), 6% of the base WIS between them;
+  December–January (71% of it) gain about 5%.
 
 ```{r runs}
 sqrt_args <- list("paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3))
