@@ -42,12 +42,12 @@ knitr::kable(cal_wide(cal_ae(cals), "ae_pct"))
 ## V-month: where in the season
 
 WIS change % by month of the reference date (clipped at −60), h0 and h3,
-and each month's share of the base WIS at h3:
+and each month's share of the base WIS at h3. Months run July to June; only
+months with forecasts are shown.
 
 ```{r v-month, fig.height=4.5}
 month_tbl <- purrr::imap(cals, function(cal, nm) cal_by_month(cal) %>% mutate(variant = nm)) %>%
   bind_rows() %>%
-  filter(month %in% month.abb[c(10:12, 1:5)]) %>%
   mutate(variant = factor(variant, levels = names(cals)), month = droplevels(month))
 ggplot(month_tbl %>% filter(horizon %in% c(0, 3)), aes(month, pct, colour = variant, group = variant)) +
   geom_hline(yintercept = 0, colour = "grey50") +
