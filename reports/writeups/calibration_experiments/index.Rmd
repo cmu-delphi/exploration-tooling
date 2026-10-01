@@ -41,6 +41,7 @@ for (f in src) {
 | E09 | With a constant learning rate on the rate scale, how do coverage and WIS trade off, and how much revision delay is best? | An L-shaped trade-off whose knee matches or beats the paper's adaptive rate at every horizon. Under prod's weekly re-run, less delay is better. |
 | E10 | Do the flu results carry over to covid? | Only at h−1 (+10% WIS). The covid base is already calibrated at h1–h3, where calibrating is neutral or harmful. |
 | E11 | How does E09's best constant learning rate compare with the adaptive trackers? | Better coverage than the cold adaptive trackers at less WIS gain near the present, and the most stable across seasons. The warm-started adaptive tracker still wins at h0–h1. |
+| E14 | On the clean `windowed_seasonal` replay, is there a constant learning rate that is good in both seasons? | Yes, 0.018–0.032 per 100k: better WIS at every horizon in both seasons and lower coverage bias. 2024-25 needs a larger rate for good coverage, which costs WIS. |
 
 # How to read the results
 
