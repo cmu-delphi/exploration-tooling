@@ -430,7 +430,7 @@ cal_month_cov_table <- function(mv, seasons = NULL) {
 #' @export
 cal_month_plot <- function(month_tbl, season, colours = NULL, linetype = NULL, colour_by = "config", clip = c(-40, 40)) {
   m_wis <- "WIS reduction %\n(positive = calibrated\nWIS lower than base)"
-  m_cov <- "L1 coverage bias\n(lower is better)"
+  m_cov <- "L1 coverage bias\nreduction %\n(positive = calibrated\nbias lower than base)"
   m_ae <- "median AE reduction %\n(positive = calibrated\nAE lower than base)"
   lv <- c(m_wis, m_cov, m_ae)
   d <- month_tbl %>%
@@ -447,26 +447,21 @@ cal_month_plot <- function(month_tbl, season, colours = NULL, linetype = NULL, c
   sq <- function(x) pmin(pmax(x, clip[1]), clip[2])
   long <- bind_rows(
     d %>% transmute(.data$config, .data$col, .data$grp, .data$month, .data$h, metric = m_wis, value = sq(.data$wis_pct), clipped = .data$wis_pct != value),
-    d %>% transmute(.data$config, .data$col, .data$grp, .data$month, .data$h, metric = m_cov, value = .data$cov_cal, clipped = FALSE),
+    d %>% mutate(cov_pct = 100 * (.data$cov_base - .data$cov_cal) / .data$cov_base) %>%
+      transmute(.data$config, .data$col, .data$grp, .data$month, .data$h, metric = m_cov, value = sq(.data$cov_pct), clipped = .data$cov_pct != value),
     d %>% transmute(.data$config, .data$col, .data$grp, .data$month, .data$h, metric = m_ae, value = sq(.data$ae_pct), clipped = .data$ae_pct != value)
   ) %>% mutate(metric = factor(.data$metric, levels = lv))
-  first_cfg <- d %>% distinct(.data$grp, .data$config) %>% group_by(.data$grp) %>% slice(1) %>% ungroup()
-  base <- d %>%
-    semi_join(first_cfg, by = c("grp", "config")) %>%
-    transmute(.data$grp, .data$month, .data$h, metric = factor(m_cov, levels = lv), value = .data$cov_base)
   share <- d %>%
     filter(.data$config == configs[1]) %>%
     transmute(.data$month, .data$h, metric = factor(m_wis, levels = lv), value = sq(.data$share))
-  zero <- tibble(metric = factor(c(m_wis, m_ae), levels = lv), y = 0)
+  zero <- tibble(metric = factor(lv, levels = lv), y = 0)
   p <- ggplot2::ggplot(long, ggplot2::aes(.data$month, .data$value)) +
     ggplot2::geom_col(data = share, fill = "grey85", width = 0.7) +
     ggplot2::geom_hline(data = zero, ggplot2::aes(yintercept = .data$y), colour = "grey40", linewidth = 0.3)
   p <- if (is.null(linetype)) {
-    p + ggplot2::geom_line(data = base, ggplot2::aes(group = .data$grp), colour = "grey45", linetype = "22", linewidth = 0.6) +
-      ggplot2::geom_line(ggplot2::aes(colour = .data$col, group = .data$config))
+    p + ggplot2::geom_line(ggplot2::aes(colour = .data$col, group = .data$config))
   } else {
-    p + ggplot2::geom_line(data = base, ggplot2::aes(group = .data$grp, linetype = .data$grp), colour = "grey55", linewidth = 0.6) +
-      ggplot2::geom_line(ggplot2::aes(colour = .data$col, group = .data$config, linetype = .data$grp)) +
+    p + ggplot2::geom_line(ggplot2::aes(colour = .data$col, group = .data$config, linetype = .data$grp)) +
       ggplot2::scale_linetype_manual(values = c("solid", "22", "13")[seq_along(unique(d$grp))], name = NULL)
   }
   p +
@@ -477,8 +472,8 @@ cal_month_plot <- function(month_tbl, season, colours = NULL, linetype = NULL, c
     ggplot2::labs(
       x = "month of reference date", y = NULL, title = season,
       caption = sprintf(
-        "States only. Grey bars: month's share of the season's base WIS (%%). Grey %sline: base coverage bias. Reductions clipped to [%d, %d]; open points are clipped.",
-        if (is.null(linetype)) "dashed " else "", clip[1], clip[2]
+        "States only. All rows: positive = better than the uncalibrated base. Grey bars: month's share of the season's base WIS (%%). Reductions clipped to [%d, %d]; open points are clipped.",
+        clip[1], clip[2]
       )
     ) +
     ggplot2::theme(
