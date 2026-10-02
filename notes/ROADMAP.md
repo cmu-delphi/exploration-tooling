@@ -7,10 +7,11 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
 
 ## Forecast evaluation
 
-1. **Use the evaluation project as the calibration testbed** (parked
-   2026-10-01 as validation for after the operating point is chosen; the
-   operating-point work runs on the hub harness, `notes/calibration-ledger.md`).
-   Done so far: a1–a4, b1–b4 (E12, E13). Calibrating needs full quantile forecasts over many rounds,
+1. **Use the evaluation project as the calibration testbed.** The
+   operating-point work (hub harness, `notes/calibration-ledger.md`) is down
+   to two finalists, REF-op and sqrt constant 0.018, which no single-run
+   comparison separates (E18). Done so far: a1–a4, b1–b4 (E12, E13). Next:
+   c, then item 1f. Calibrating needs full quantile forecasts over many rounds,
    not just scores. The evaluation project (`flu_hosp_evaluation` /
    `covid_hosp_evaluation`) replays the current prod components and
    ensemble weekly since 2024-11-20, which is what calibration would see in
@@ -61,9 +62,11 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
         Decision (2026-10-01): calibrate h0 and up only. h−1 belongs to
         the revision-aware methods (item 3) and gets integrated with them
         later.
-   b. *2023-24 as a burn-in season.* The best configs so far (E05
-      `warm + single`, REF-op) warm-start from a burn-in season, and the
-      replay has none. Delphi's `hhs` source
+   b. *2023-24 as a burn-in season.* REF-op warm-starts from a burn-in
+      season, and the replay has none. The warm start helps only in the
+      first live season (E05, E18), and sqrt 0.018 needs no burn-in, so if
+      it is chosen the open level and stitching questions below drop off the
+      critical path. Delphi's `hhs` source
       (`confirmed_admissions_{influenza,covid}_1d`) has real issue history
       for 2023-24 (CA 2023-12-01: issues 12-06, 12-08, 12-20, 12-22), until
       HHS reporting ended 2024-04-30. Steps, each checked before the next:
@@ -114,9 +117,20 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
       ensemble weights as well as exclusions, so "no hand edits" for
       `ensemble_mix` means one fixed weight block for every date. Decide
       which block (the default one at the top of the file, or the current
-      one), check the resolved weights on one date, then replay. Only
-      needed once a single component's calibration results look worth
-      extending to what we submit.
+      one), check the resolved weights on one date, then replay. Needed
+      now: the finalists are chosen on the single component, and what we
+      submit is the ensemble.
+   f. *Calibration in the evaluation pipeline.* The calibration targets in
+      `pipelines/{flu,covid}_hosp_prod.R` run in evaluation mode too, but
+      there they calibrate the submitted `CMU-TimeSeries` history from the
+      hub checkout plus only the current replayed round; learn from
+      `hhs_evaluation_data` (the latest version, so final truth, not exact);
+      hard-code REF-op; and are skipped when `EVALUATION_FORECASTERS` drops
+      an ensemble component. To evaluate calibration there: calibrate the
+      replayed forecasts over all dates, learn from per-round snapshots
+      (`calibrate_hub_forecasts_exact()`), take the config as a parameter so
+      both finalists run, and score states only. A burn-in for REF-op needs
+      the HHS stitching (b), which today exists only in the harness.
 
    **Later (not needed to evaluate calibration):**
 
@@ -231,9 +245,9 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
   no burn-in.
 - CMU-climate_baseline US forecast is too low (item 2b).
 - `us_method` spec column and removing the `usa` alias (item 2b).
-- Calibration WIS summaries pool raw counts over all locations, so US is
-  about half of every "WIS change %" in calibration-ledger.md. b4 reports states
-  only as well; re-reading the older ledger waits.
+- Ensemble-base calibration headline tables (E00, E03–E05, E09–E11) pool
+  raw counts over all locations, so US is about half of their "WIS change
+  %". The replay experiments report states only (except E12).
 
 ## Tech debt
 
