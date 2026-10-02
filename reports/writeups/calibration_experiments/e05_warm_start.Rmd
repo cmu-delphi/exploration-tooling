@@ -76,6 +76,8 @@ cals <- list(
   `warm + slow + leak (REF-op)` = run("op")
 )
 focus <- "warm + slow + leak (REF-op)"
+# The month view drops the two leak-only runs to keep it readable.
+mv_plot_cfgs <- c("warm only", "single", "warm + single", "slow + leak", "warm + slow + leak (REF-op)")
 ```
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_standard_views.Rmd")}

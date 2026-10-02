@@ -1,6 +1,6 @@
 # Standard views
 
-<!-- Expects `cals` (a named list of runs) and `focus` (the run shown in the state panels and gallery). -->
+<!-- Expects `cals` (a named list of runs) and `focus` (the run shown in the state panels and gallery). Optional: `mv_plot_cfgs`, the runs drawn in the month view. -->
 
 Every score is over both live seasons, all
 hub locations, against finalized truth; burn-in rounds are excluded.
@@ -21,6 +21,15 @@ knitr::kable(bind_rows(
   cal_wide(head_all %>% filter(variant == names(cals)[1]) %>% mutate(variant = "base"), "cal_error_base", 3),
   cal_wide(head_all %>% mutate(variant = as.character(variant)), "cal_error_cal", 3)
 ))
+```
+
+The same bias for states only, season-pooled against month-average (see
+"Month view" below), per season and for both seasons:
+
+```{r v-head-cov-month}
+mv <- cal_month_view(cals, seasons = LIVE, horizons = NULL)
+mv_show_table <- FALSE
+knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
 ```
 
 WIS reduction % by season (positive = calibrated WIS lower than base):
@@ -113,4 +122,7 @@ for (i in seq_len(nrow(picks))) {
   sub <- sprintf("%s (%s), %s, %s: WIS reduction %+.1f%% (%+.1f%% of its season's base WIS; positive = calibrated WIS lower)", abbrev[[p$location]], p$size, p$reference_date, p$kind, p$wis_pct, p$share)
   print(cal_gallery_panel(cals[[focus]], p$location, p$reference_date, truth, vintages, subtitle = sub))
 }
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```

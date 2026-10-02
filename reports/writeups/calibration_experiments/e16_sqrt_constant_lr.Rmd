@@ -252,6 +252,20 @@ season_table <- function(g, rate_keep = c(0.018, 0.032, 0.056, 0.1)) {
 knitr::kable(season_table(GEOS[["states"]]))
 ```
 
+L1 coverage bias, season-pooled against month-average (see "Month view" below):
+
+```{r table-states-month}
+lr_lab <- function(lr) vapply(lr, \(x) format(x, drop0trailing = TRUE), character(1))
+rate_keep <- RATE_LRS %in% c(0.018, 0.032, 0.056, 0.1)
+mv <- cal_month_view(c(
+  setNames(sqrt_runs, paste("sqrt", lr_lab(SQRT_LRS))),
+  setNames(rate_runs[rate_keep], paste("rate", lr_lab(RATE_LRS[rate_keep]))),
+  list(`REF-op cold` = refop)
+), seasons = LIVE)
+mv_show_table <- FALSE
+knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
+```
+
 ### All locations
 
 ```{r table-all}
@@ -344,26 +358,9 @@ month_m <- ws_month_scores(fc_pick %>% filter(config %in% names(MONTH_COLS)) %>%
   mutate(h = factor(paste0("h", horizon), levels = paste0("h", 0:3)))
 ```
 
-## WIS reduction % by month
-
-WIS reduction % (positive = calibrated WIS lower than base). Each season a row, each horizon a column. The grey bars (right axis
-scaled to the left) are each month's share of the season's base WIS, so a
-large loss in a month with a small share costs little overall. The y axis is
-clipped at −40% and +30%, which also cuts the tallest bars.
-
-```{r month-wis, fig.height=6}
-share <- month_m %>% filter(config == names(MONTH_COLS)[1])
-ggplot(month_m, aes(month, pct, colour = config, group = config)) +
-  geom_col(data = share, aes(month, share), inherit.aes = FALSE, fill = "grey85", width = 0.7) +
-  geom_hline(yintercept = 0, colour = "grey40") +
-  geom_line() +
-  geom_point(size = 1.2) +
-  facet_grid(season ~ h, scales = "free_x", space = "free_x") +
-  scale_colour_manual(values = MONTH_COLS, name = NULL) +
-  coord_cartesian(ylim = c(-40, 30)) +
-  labs(x = "month of reference date", y = "WIS reduction % (positive = calibrated\nWIS lower than base); grey: % of season base WIS") +
-  theme(legend.position = "bottom")
-```
+WIS, coverage bias and median error by month for these four trackers are in
+"Month view" at the end. Below: the share of outcomes below the median, the
+offset over time and an h2 table.
 
 ## Coverage by month
 
@@ -437,4 +434,13 @@ month_m %>%
   ) %>%
   arrange(season, month) %>%
   knitr::kable(caption = "WIS reduction %, positive = calibrated WIS lower than base (share of outcomes below the calibrated median)")
+```
+
+```{r month-view-cfgs}
+# The four trackers of section 3.
+mv_plot_cfgs <- names(MONTH_COLS)
+mv_cols <- MONTH_COLS
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```

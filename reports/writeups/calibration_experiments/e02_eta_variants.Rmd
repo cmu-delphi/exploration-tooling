@@ -221,6 +221,14 @@ wis_table(GEOS[["states"]])
 cov_table(GEOS[["states"]])
 ```
 
+L1 coverage bias, season-pooled against month-average (see "Month view" below):
+
+```{r table-states-month}
+mv <- cal_month_view(cals, seasons = LIVE)
+mv_show_table <- FALSE
+knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
+```
+
 ## All locations
 
 ```{r table-all}
@@ -245,12 +253,12 @@ bind_rows(
 
 # 2. Month by month
 
-WIS reduction % (positive = calibrated WIS lower than base) by calendar month of the reference date; rows are seasons,
-columns horizons. Grey bars are each month's share of the season's base WIS.
-States only, clipped at −40%. The burn-in configs are left out except the
+The month plots are in "Month view" below. h2 by month, states only: WIS
+reduction % (positive = calibrated WIS lower than base) (share of outcomes
+below the calibrated median). The burn-in configs are left out except the
 seasonal window with reset.
 
-```{r month, fig.height=6}
+```{r month-table}
 MONTH_CFGS <- c("reference", "off after 1 Mar", "off after 15 Feb", "per-level eta", "seasonal window, reset")
 fc_m <- purrr::imap(cals[MONTH_CFGS], \(cal, nm) cal$forecasts %>% mutate(config = nm)) %>%
   bind_rows() %>%
@@ -258,21 +266,6 @@ fc_m <- purrr::imap(cals[MONTH_CFGS], \(cal, nm) cal$forecasts %>% mutate(config
   filter(season %in% LIVE, location != "US")
 month_m <- ws_month_scores(fc_m) %>% mutate(h = factor(paste0("h", horizon), levels = paste0("h", 0:3)))
 share <- month_m %>% filter(config == "reference")
-ggplot(month_m, aes(month, pct, colour = config, group = config)) +
-  geom_col(data = share, aes(month, share), inherit.aes = FALSE, fill = "grey85", width = 0.7) +
-  geom_hline(yintercept = 0, colour = "grey40") +
-  geom_line() +
-  geom_point(size = 1.1) +
-  facet_grid(season ~ h, scales = "free_x", space = "free_x") +
-  scale_colour_manual(values = CFG_COLS[MONTH_CFGS], name = NULL) +
-  coord_cartesian(ylim = c(-40, 30)) +
-  labs(x = "month of reference date", y = "WIS reduction % (positive = calibrated\nWIS lower than base); grey: % of season base WIS") +
-  theme(legend.position = "bottom")
-```
-
-h2 by month: WIS reduction % (positive = calibrated WIS lower than base) (share of outcomes below the calibrated median).
-
-```{r month-table}
 month_m %>%
   filter(h == "h2") %>%
   transmute(season, month, config, v = sprintf("%+.1f (%.2f)", pct, below_med_cal)) %>%
@@ -281,4 +274,13 @@ month_m %>%
     by = c("season", "month")) %>%
   arrange(season, month) %>%
   knitr::kable()
+```
+
+```{r month-view-cfgs}
+# Same configs as the h2 table.
+mv_plot_cfgs <- MONTH_CFGS
+mv_cols <- CFG_COLS
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```

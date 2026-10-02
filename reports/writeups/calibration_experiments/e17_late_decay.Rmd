@@ -139,6 +139,14 @@ bind_rows(base_row, head_m %>% transmute(config = paste(rate, decay, sep = ", ")
   knitr::kable()
 ```
 
+L1 coverage bias, season-pooled against month-average (see "Month view" below):
+
+```{r head-month}
+mv <- cal_month_view(setNames(cals, paste(grid$rate, grid$decay, sep = ", ")), seasons = LIVE)
+mv_show_table <- FALSE
+knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
+```
+
 The same WIS reductions as a plot, one panel per season and horizon.
 
 ```{r head-plot, fig.height=5.5}
@@ -218,4 +226,13 @@ fc %>%
   scale_x_date(date_breaks = "1 month", date_labels = "%b") +
   labs(x = "reference date", y = "mean offset at the median, per 100k") +
   theme(legend.position = "bottom")
+```
+
+```{r month-view-cfgs}
+# sqrt 0.018 with each decay setting; section 2 has the WIS months for the rate-scale trackers.
+mv_plot_cfgs <- paste(names(RATES)[3], names(DECAYS), sep = ", ")
+mv_cols <- setNames(DECAY_COLS, mv_plot_cfgs)
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```

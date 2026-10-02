@@ -266,6 +266,30 @@ knitr::kable(
 )
 ```
 
+L1 coverage bias for states only, both seasons, season-pooled against
+month-average (see "Month view" below), for the reference configs, the knee
+(0.056) and 0.1 at several delays and both designs:
+
+```{r bridge-month}
+sweep_run <- function(learn, settle_days, lr) {
+  sweep[[which(sweep_grid$learn == learn & sweep_grid$settle_days == settle_days & abs(log10(sweep_grid$lr / lr)) < 1e-6)]]
+}
+ref_run <- function(learn, settle_days, nm) refs[[which(ref_grid$learn == learn & ref_grid$settle_days == settle_days)]][[nm]]
+mv_cals <- list(
+  `REF-paper, re-run +1 wk` = ref_run("exact", 14L, "REF-paper (count, adaptive)"),
+  `REF-op, re-run +1 wk` = ref_run("exact", 14L, "REF-op"),
+  `knee 0.056, re-run +0 wk` = sweep_run("exact", 7L, 10^-1.25),
+  `knee 0.056, re-run +1 wk` = sweep_run("exact", 14L, 10^-1.25),
+  `knee 0.056, re-run +2 wk` = sweep_run("exact", 21L, 10^-1.25),
+  `0.1, re-run +1 wk` = sweep_run("exact", 14L, 10^-1),
+  `knee 0.056, stateful +0 wk` = sweep_run("vintage", 7L, 10^-1.25),
+  `knee 0.056, stateful +1 wk` = sweep_run("vintage", 14L, 10^-1.25)
+)
+mv <- cal_month_view(mv_cals, seasons = c("2024-2025", "2025-2026"), horizons = NULL)
+mv_show_table <- FALSE
+knitr::kable(cal_month_cov_table(mv, seasons = "both"), caption = CAL_MONTH_COV_CAPTION)
+```
+
 # Coverage bias vs WIS, per location
 
 Each thin grey line is one location traced across learning rates; the bold
@@ -376,4 +400,15 @@ sweep_table("exact")
 
 ```{r table-vintage}
 sweep_table("vintage")
+```
+
+```{r month-view-cfgs}
+# The configs the Findings compare: the references and the knee at one week of delay, and the knee in the stateful design.
+mv_plot_cfgs <- c(
+  "REF-paper, re-run +1 wk", "REF-op, re-run +1 wk", "knee 0.056, re-run +1 wk", "0.1, re-run +1 wk",
+  "knee 0.056, stateful +0 wk", "knee 0.056, stateful +1 wk"
+)
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```

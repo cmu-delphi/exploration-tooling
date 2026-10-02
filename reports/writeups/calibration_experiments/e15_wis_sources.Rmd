@@ -326,3 +326,10 @@ wr <- split %>%
   mutate(horizon = paste0("h", horizon), across(where(is.double), \(x) round(x, 2)))
 knitr::kable(wr)
 ```
+
+```{r month-view-cfgs}
+mv <- cal_month_view(cals, seasons = LIVE)
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
+```

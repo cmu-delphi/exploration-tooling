@@ -368,6 +368,13 @@ season_table <- function(g) {
 knitr::kable(season_table(GEOS[["states"]]))
 ```
 
+L1 coverage bias, season-pooled against month-average (see "Month view" below):
+
+```{r table-states-month}
+mv_trk <- cal_month_view(setNames(cals, paste(grid$forecaster, grid$tracker, sep = ", ")), seasons = LIVE)
+knitr::kable(cal_month_cov_table(mv_trk), caption = CAL_MONTH_COV_CAPTION)
+```
+
 ## All locations
 
 ```{r table-all}
@@ -477,8 +484,29 @@ cand_table <- function(g) {
 knitr::kable(cand_table(GEOS[["states"]]))
 ```
 
+L1 coverage bias, season-pooled against month-average (see "Month view" below):
+
+```{r cand-table-states-month}
+mv <- cal_month_view(setNames(ccals, paste(cgrid$forecaster, cgrid$cand, sep = ", ")), seasons = LIVE)
+mv_show_table <- FALSE
+knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
+```
+
 ### All locations
 
 ```{r cand-table-all}
 knitr::kable(cand_table(GEOS[["all"]]))
+```
+
+```{r month-view-cfgs}
+# Three candidates on both forecasters: colour is the candidate, linetype the forecaster (also for the grey base lines).
+MV_CANDS <- c(`REF-op warm` = "black", `sqrt 0.018` = "#0072B2", `sqrt 0.018, off 1 Mar` = "#D55E00")
+mv_plot_cfgs <- paste(rep(names(FCS), each = length(MV_CANDS)), names(MV_CANDS), sep = ", ")
+mv_cols <- MV_CANDS
+mv$month <- mv$month %>% mutate(forecaster = sub(",.*", "", config), cand = factor(sub("^[^,]*, ", "", config), levels = names(CANDS)))
+mv_colour_by <- "cand"
+mv_linetype <- "forecaster"
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
