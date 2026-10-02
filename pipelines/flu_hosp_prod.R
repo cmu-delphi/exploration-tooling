@@ -283,26 +283,13 @@ parameters_and_date_targets <- rlang::list2(
           source = "nhsn"
         ) %>%
         filter(geo_value %nin% g_insufficient_data_geos)
-      # ILI+/flusurv historical augmentation rows (finalized data, no real
-      # vintages). Each row is versioned at its season's last time_value, so an
-      # as-of slice sees a season's extras only once that season is over.
-      extra_dt <- joined_archive_data %>%
-        epix_as_of(joined_archive_data$versions_end) %>%
+      # ILI+/flusurv augmentation rows for the seasonal forecasters, with the
+      # same Epidata v5 vintages that the explore pipeline uses. Bulk-loaded
+      # history has the faux version = time_value (see spoof_backfill_versions).
+      extra_dt <- bind_rows(ili_plus, flusurv) %>%
+        filter(agg_level %in% c("state", "nation"), geo_value %nin% g_insufficient_data_geos) %>%
         mutate(epiweek = epiweek(time_value), epiyear = epiyear(time_value)) %>%
-        filter((agg_level == "state") | (agg_level == "nation")) %>%
-        select(geo_value, source, time_value, hhs, season, season_week, epiweek, epiyear) %>%
-        rename(value = hhs) %>%
-        filter(source != "nhsn") %>%
-        group_by(source, season) %>%
-        mutate(version = max(time_value)) %>%
-        ungroup()
-      # No forecast date may see an extras row from its own (ongoing) season.
-      gen_dates <- as.Date(g_forecast_generation_dates)
-      gen_seasons <- convert_epiweek_to_season(epiyear(gen_dates), epiweek(gen_dates))
-      stopifnot(
-        all(extra_dt$version >= extra_dt$time_value),
-        !any(purrr::map2_lgl(gen_dates, gen_seasons, \(d, s) any(extra_dt$season == s & extra_dt$version <= d)))
-      )
+        select(geo_value, source, time_value, version, value = hhs, season, season_week, epiweek, epiyear)
       bind_rows(nhsn_dt, extra_dt) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
     }

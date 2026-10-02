@@ -147,9 +147,9 @@ compute_finalization_lag_weeks <- function(
 #'   `primary_source`). `primary_source` is always included. On a mixed archive
 #'   this is the include/exclude-faux-revisions knob: `primary_source` alone
 #'   ("nhsn") trains on genuinely version-aware history only, while adding
-#'   faux-versioned sources (e.g. "ILI+", "flusurv", whose `version ==
-#'   time_value`) buys a longer training window at the cost of those rows not
-#'   being truly revision-aware.
+#'   partly faux-versioned sources (e.g. "ILI+", "flusurv", whose bulk-loaded
+#'   history has `version == time_value`) buys a longer training window at the
+#'   cost of those rows not being truly revision-aware.
 #' @param ahead forecast horizon, relative to the archive's `versions_end`, in
 #'   the same `time_value` units as the archive (days for the weekly-Wednesday
 #'   archives, so a multiple of 7).

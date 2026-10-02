@@ -64,13 +64,13 @@ create_flu_data_targets <- function() {
           filter(hhs > 0.0001) %>%
           mutate(
             time_value = time_value + g_time_value_adjust,
-            version = time_value
+            version = version + g_time_value_adjust
           ) %>%
           select(geo_value, time_value, version, hhs, source, agg_level, season, season_week)
         to_keep <-
           ili_plus %>%
           group_by(geo_value, season) %>%
-          summarize(total_count = length(hhs), .groups = "drop") %>%
+          summarize(total_count = n_distinct(time_value), .groups = "drop") %>%
           filter(total_count >= 20) %>%
           select(geo_value, season)
         to_keep %>%
