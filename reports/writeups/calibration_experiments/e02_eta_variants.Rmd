@@ -19,101 +19,39 @@ knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
 ```
 
-Variants of the adaptive tracker, each changed alone from the reference.
-**Does any of them beat the reference?**
+Question: how do three variants of the adaptive tracker, each changed alone
+from a reference, change WIS and coverage?
 
 - **Switch off in spring** (`off_after`): from a calendar date until July,
   play the base forecast and stop learning; the offsets carry unchanged into
   the next season. Dates: 1 April, 1 March, 15 February.
-- **Per-level learning rate** (`lr_args$per_level`): each of the 23
-  quantile levels gets its own eta, instead of one eta pooled over levels.
+- **Per-level learning rate** (`lr_args$per_level`): each of the 23 quantile
+  levels gets its own eta, instead of one eta pooled over levels.
 - **Seasonal window** (`lr_seasonal`): eta is sized from the last 10 rounds
-  plus the rounds within 5 weeks of the same point in earlier seasons, so the
-  start of a ramp is sized by last year's ramp. Run with carry and with
-  reset at the summer.
+  plus the rounds within 5 weeks of the same point in earlier seasons. Run
+  with carry and with reset at the summer. This also shortens the window
+  from 20 to 10, so it changes two things at once.
 
-This asks the original E02's question (`calibration_qt_seasons_flu.Rmd`,
-pre-fix) on the current
-setup. It is a new experiment, not a reproduction: four things changed at
-once, so it can't say which change matters.
+This re-asks the original E02 (a pre-fix, count-scale comparison on the
+submitted ensemble with finalized truth, since deleted) on the current setup.
 
-| | original E02 | this notebook |
-|---|---|---|
-| forecaster | submitted ensemble | clean `windowed_seasonal` replay |
-| scale | count | sqrt |
-| learning truth | finalized | as published each week |
-| tracker code | before the 2026-09-17 fixes | after |
+Setup:
 
-The original also
-had a geo-pooled eta (one eta shared across locations, population-weighted).
-That option never beat the baseline and was removed from the code on
-2026-09-17, so it is not run here.
+- Disease: flu. Base forecaster: the clean `windowed_seasonal` replay (all 53
+  locations, the 55 hub rounds). Horizons h0–h3.
+- Learning truth: exact (re-run at every round on the data published by then;
+  E00), one week of extra delay.
+- Reference: E01's center point, the sqrt single-term tracker with the
+  adaptive rate (mult 0.03, floor 0.001, window 20, carry), cold start (no
+  burn-in).
+- The seasonal window needs an earlier season to look back on, so it runs
+  with the 2023-24 burn-in (the HHS-stitched backfill from E13), which only
+  warms eta. The reference is re-run with the same burn-in
+  (`reference + burn-in`) for comparison.
+- Tables lead with states only (US excluded).
 
-**Setup.** As E01: flu, the clean `windowed_seasonal` replay (all 53
-locations, the 55 hub rounds, h0–h3), learning from data as published each
-week and re-run from scratch each week, one week of extra revision delay.
-The reference is the sqrt single-term tracker with the adaptive learning
-rate (mult 0.03, floor 0.001, window 20, carry), no burn-in: E01's center
-point. The seasonal window needs an earlier season to look back on, so it
-runs with the 2023-24 burn-in (the HHS-stitched backfill from E13), which
-only warms eta; the reference is re-run with the same burn-in as a bridge.
-
-"WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so
-**positive = calibrated WIS lower than base**. "L1 coverage bias" (lower is
-better) is the mean over the 23 levels of |empirical coverage − level|. Results lead with states only.
-
-# Findings
-
-Numbers are from the render of 1 October 2026, states only, WIS reduction %
-(positive = calibrated WIS lower than base) / L1 coverage bias (lower is better), h0/h1/h2/h3, both seasons pooled
-unless stated. All-locations numbers point the same way.
-
-- **Switching off in spring is the only variant with a large WIS gain.**
-  The reference is +1.9/−0.2/−1.1/−1.7. `off_after` 1 March gives
-  +2.8/+1.7/+2.0/+2.5 and 15 February +2.7/+2.1/+2.5/+3.2, positive at every
-  horizon in both seasons. 1 April only halves the h2–h3 loss
-  (+1.6/−0.2/−0.7/−0.8).
-- **It costs coverage.** Coverage bias rises from 0.032–0.045 to
-  0.080–0.091 (1 March) and 0.086–0.100 (15 February), against the base's
-  0.105–0.127. From the switch-off date the base forecast is played, and the
-  over-prediction after the peak no longer offsets the under-prediction on
-  the ramp (E16).
-- **Where the gain comes from.** It removes the reference's March–April
-  losses (2024-25 h2: −31% in March, −41% in April). The offsets frozen in
-  February also carry into autumn 2025 and help November–December (h2 +14%
-  vs +5–6%) but hurt October (−60%, on under 1% of the season's WIS).
-- **Same as E17.** E17 found `off_after = "03-01"` raised WIS and gave back
-  most of the coverage gain for constant rates (sqrt 0.018:
-  +2.3/+1.2/+1.2/+1.3, coverage bias 0.094–0.116). The adaptive tracker
-  gains more from it because it loses more after the peak.
-- **Per-level eta: a small gain at h1–h3** (+2.1/+0.5/0.0/−0.3), mostly from
-  smaller March–April losses, with slightly higher coverage bias
-  (0.043–0.055).
-- **Seasonal window: no gain.** Against the reference with the same burn-in
-  (+2.0/0.0/−0.6/−1.0), carry gives +2.0/−0.1/−0.8/−1.3 with lower coverage
-  bias at h2–h3 (0.025–0.032 vs 0.040–0.044); reset gives
-  +1.4/−0.2/−0.9/−1.6. The burn-in alone (warming eta on 2023-24) is worth
-  +0.5–0.7 at h2–h3 over the cold reference.
-- **Against the old E02** (count scale, ensemble, finalized truth, pre-fix):
-  the same ranking. Switching off on 1 March or 15 February removes the WIS
-  cost (15 February best at h1–h3), per-level eta is a modest gain and the
-  seasonal window does not help. Two changes: reset now trails carry for the
-  seasonal window (it used to recover some ground), and the coverage cost of
-  switching off, not reported before, is large.
-- **Month view (2026-10-01):** the coverage cost of switching off is
-  mostly an artifact of pooling the season. Month-avg L1 coverage bias
-  (h0/h1/h2/h3): reference 0.095/0.120/0.150/0.176, off 1 March
-  0.104/0.124/0.153/0.170, off 15 February 0.106/0.126/0.153/0.169, base
-  0.112/0.127/0.153/0.177. The reference itself gains only 0.001–0.017 over
-  the base by month, so switching off gives up at most 0.01 and is better at
-  h3. In March 2025-26 switching off lowers the monthly bias (h2: 0.094 vs
-  0.196 for the reference). Per-level eta is slightly better than the
-  reference by month (0.092/0.117/0.147/0.173), not worse, and the seasonal
-  window with carry is worse than the burn-in reference at h2–h3
-  (0.156/0.183 vs 0.149/0.174).
-- **Month view (2026-10-01), median error:** in March the reference's median loses more
-  than its WIS (2025-26 h0–h3: absolute error −34/−54/−86/−109%, WIS
-  −22/−38/−60/−81%); switching off removes it.
+WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
+WIS lower than base. L1 coverage bias: lower is better.
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))
@@ -298,3 +236,34 @@ mv_cols <- CFG_COLS
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
+
+# Findings
+
+There are no uncertainty estimates; a WIS gap under 1 point or a month-avg
+coverage gap under 0.01 is read as no clear difference. The cold start leaves
+Nov–Dec 2024 equal to the base for the cold configs. States only, pooled over
+both seasons unless stated.
+
+- **Switching off from 1 March or 15 February:** +2.8/+1.7/+2.0/+2.5 and
+  +2.7/+2.1/+2.5/+3.2 at h0–h3, against the reference's
+  +1.9/−0.2/−1.1/−1.7, ahead at every horizon in both seasons. The two dates
+  differ by 0.1–0.7 (no clear difference). Both dates were chosen with these
+  seasons in view.
+- **Where that gain sits:** in 2024-25 it is the March–April months, where
+  the reference loses (h2: −31% in March, −41% in April). In 2025-26 about
+  half of the h2 gain is December, where offsets frozen in February 2025 are
+  still in play (+13.6% vs +6.3%), partly offset by January and October.
+- **Switching off from 1 April:** +1.6/−0.2/−0.7/−0.8, within 1 point of the
+  reference at h0–h2.
+- **Per-level eta:** +2.1/+0.5/−0.0/−0.3, about 1 point above the reference
+  at h1–h3 in both seasons.
+- **Seasonal window and burn-in:** against `reference + burn-in`
+  (+2.0/−0.0/−0.6/−1.0), the seasonal window is +2.0/−0.1/−0.8/−1.3 with carry
+  and +1.4/−0.2/−0.9/−1.6 with reset. The burn-in alone is +0.5 to +0.7 at
+  h2–h3 over the cold reference, in 2024-25 only. No strong result.
+- **Month-avg coverage (h0…h3):** base 0.112/0.127/0.153/0.177; reference
+  0.095/0.120/0.150/0.176; off 1 March 0.104/0.124/0.153/0.170; off 15
+  February 0.106/0.126/0.153/0.169; per-level 0.092/0.117/0.147/0.173. No
+  clear difference between any variant and the reference. Season-pooled the
+  switch-offs look much worse than the reference (0.080–0.100 vs
+  0.032–0.045), but pooling lets ramp and post-peak errors cancel.

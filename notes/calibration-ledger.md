@@ -3,9 +3,9 @@
 Post-hoc online calibration of our hub forecasts with MultiQT (Ding, Gibbs &
 Tibshirani 2025). Each (location, horizon) series gets an additive offset over
 the 23 quantile levels, updated by online gradient descent on pinball loss
-and projected to be monotone. Repro commands are in
-`notes/calibration-runbook.md`; dropped hub rounds are in
-`notes/spoiled-submissions.md`.
+and projected to be monotone. Dropped hub rounds are in
+`notes/spoiled-submissions.md`; how to run the tests and notebooks is under
+"Running things".
 
 Every number below was re-read from the rendered notebook (or, for E12/E13,
 the score CSV) on 2026-10-02. Older notes, pre-fix tables and the
@@ -131,12 +131,12 @@ gating), exact learning truth, spoiled submissions excluded.
 | E00 | `e00_vintage_backtest` | ensemble | learn from final, vintage or exact data? | exact ≈ final within 0.6 points except REF-op h−1 (2.2, 2024-25 only). Vintage at settle 7 loses the h−1 gain. Settle 7 vs 14: REF-paper +1 to +3 at every horizon; REF-op tie (flips by season) | |
 | E01 | `e01_eta_settings` | replay, cold | adaptive eta settings | mult ≥ 0.1 costs 7–81 at h1–h3. 0.01 beats 0.03 by 0.5–2.4 at h1–h3 in both seasons; 0.03 better at h0 in 2024-25 (0.8). Window and carry vs reset: ≤ 2.4, mostly < 1. Count is 2–5 worse than sqrt | month-avg coverage of 0.01 vs 0.03 within noise |
 | E02 | `e02_eta_variants` | replay, cold | `off_after`, per-level eta, seasonal window | off 1 Mar / 15 Feb +2 to +4 at h1–h3 over the 0.03 reference, both seasons, no month-avg coverage cost. Per-level +1. Seasonal window, burn-in, off 1 Apr: < 1 | dates in-sample; half the 2025-26 gain is December carry-over; "seasonal window" also changes `lr_window` 20 → 10 |
-| E03 | `e03_scale` | ensemble | count vs sqrt vs rate | sqrt +1.4 to +3.9 over count pooled, mostly 2025-26. Coverage: neither better (sqrt worse per season pooled, better month-avg only in 2024-25) | rate identical to count in every cell (see Known issues) |
+| E03 | `e03_scale` | ensemble | count vs sqrt vs rate | sqrt +1.4 to +3.9 over count pooled, mostly 2025-26. Coverage: neither better (sqrt worse per season pooled, better month-avg only in 2024-25) | rate identical to count in every cell (adaptive rate is scale invariant) |
 | E04 | `e04_offset_structure` | ensemble | leak, slow term | leak +2.5 to +5.6 at h1–h3 in 2025-26, −0.4 to −1.3 in 2024-25; month-avg coverage flips the same way (±0.015). Slow term without warm start: ≤ 0.5 | |
 | E05 | `e05_warm_start` | ensemble | warm start from burn-in | warm +1.7 to +3.2 at h2–h3 in 2024-25, ±0.4 in 2025-26, for every tracker. REF-op ≈ warm + leak (≤ 0.4). Month-avg coverage: all within 0.01 of each other | |
-| E07 | `e07_across_eras` | both, same rows | do results transfer between ensemble and replay? | Same direction on both; ensemble gains about 1 point more with REF-op warm. Replay base 5–7% worse pooled, 10–33% worse at h0–h1 in 2025-26. Candidate order flips by season on both; rank correlation of coverage in 2025-26 is 0.31 | month-view absolute table shows A's base for B rows (bug) |
+| E07 | `e07_across_eras` | both, same rows | do results transfer between ensemble and replay? | Same direction on both; ensemble gains about 1 point more with REF-op warm. Replay base 5–7% worse pooled, 10–33% worse at h0–h1 in 2025-26. Candidate order flips by season on both; rank correlation of coverage in 2025-26 is 0.31 | |
 | E09 | `e09_lr_delay` | ensemble | constant rate × revision delay | knee 0.056: +3 to +5.5 over REF-paper at h1–h3; REF-op +1.2 to +2.4 over knee. Extra delay costs about 1 h−1 point per week. Above 0.1 loses steeply | month-avg: no constant rate beats base at h1–h3 |
-| E10 | `e10_covid` | covid ensemble | REF-paper and REF-op on covid | h−1 +10 to +11. REF-op h1–h3: +1.9 to +2.8 in 2024-25, −3.0 to −4.3 in 2025-26. REF-paper −10 to −19 at h1–h3 in 2025-26 | headline and month tables include Aug–Sep 2026 rounds (see Known issues) |
+| E10 | `e10_covid` | covid ensemble | REF-paper and REF-op on covid | h−1 +10 to +11. REF-op h1–h3: +1.9 to +2.8 in 2024-25, −3.0 to −4.3 in 2025-26. REF-paper −10 to −19 at h1–h3 in 2025-26 | headline and month tables run to 2026-09-19, including the 2026 summer wave |
 | E11 | `e11_constant_lr` | ensemble | constant 0.1 vs adaptive | REF-op best pooled WIS at every horizon (up to 2 over warm + sqrt). Constant 0.1 gives up 1.5–2.3 at h−1/h0 vs adaptive sqrt | constant 0.1 is effectively cold; its coverage edge is season-pooled only |
 | E12 | none (`calibration_ws_replay.R`) | replay, cold, flu + covid | first look at the clean replay | flu: REF-op cold leads constant 0.1 by 0–2.5. Covid: REF-op cold h0 +1.3 states, losses at h1–h3 in 2025-26 | **all locations** (US is 47% of WIS); covid h0 gains are mostly US |
 | E13 | none (`calibration_ws_replay.R burn_in`) | replay, flu + covid | 2023-24 HHS burn-in | flu warm +1 to +2.6 in 2024-25, ≤ 0 in 2025-26. Covid: warm worse at h0–h1, better at h2–h3 (+1.3, +4.4); constant 0.1 warm −8 to −27 | HHS used as-is (3–9% below NHSN); coverage is season-pooled only |
@@ -144,36 +144,31 @@ gating), exact learning truth, spoiled submissions excluded.
 | E15 | `e15_wis_sources` | replay, cold | where the WIS gain comes from | offsets a few % of interval width; REF-op gain from the lower half and the median shift | width-only variant's coverage not measured; split is not additive |
 | E16 | `e16_sqrt_constant_lr` | replay, cold | constant rate on sqrt scale | sqrt 0.018 about +1 over rate constants at h0; at h1–h3 within 0.2 pooled, up to +0.7 in 2025-26. vs REF-op cold: behind in 2024-25 h0–h1, ahead elsewhere; month-avg coverage tie | 0.018 picked in-sample |
 | E17 | `e17_late_decay` | replay, cold | shrink or stop offsets from 1 Mar | `late_decay` fixes March but costs about 0.5 at h0, otherwise ±0.2. Off 1 Mar +0.4 to +0.7 at h1–h3 for sqrt 0.018 (mostly 2025-26), ≤ 0 for rate 0.018 | `late_decay` shrinks the stored offset, so it carries into the next season |
-| E18 | `e18_ref_op_bridge` | replay | which piece of REF-op matters | REF-op vs sqrt 0.018 within 0.6 pooled; REF-op ahead in 2024-25 by 1.3–1.5, behind in 2025-26 by 0.8–1.3. Warm start +0.9 to +2.0 in 2024-25, −0.2 to −0.7 in 2025-26. No step moves month-avg coverage beyond 0.008 | steps 0 and 4 are the same cached runs as E13; steps 4 and 5 identical (see Known issues) |
+| E18 | `e18_ref_op_bridge` | replay | which piece of REF-op matters | REF-op vs sqrt 0.018 within 0.6 pooled; REF-op ahead in 2024-25 by 1.3–1.5, behind in 2025-26 by 0.8–1.3. Warm start +0.9 to +2.0 in 2024-25, −0.2 to −0.7 in 2025-26. No step moves month-avg coverage beyond 0.008 | steps 0 and 4 are the same cached runs as E13; steps 4 and 5 identical (scale invariance) |
 
 E06 (ILI+ burn-in) and E08 (old covid) were run on code or data later found
 broken and were not rebuilt.
 
 ## Known issues
 
-Things that could change the numbers above; none checked yet.
-
 - **Run cache ignores code.** `cal_run_cached()` keys on inputs and
   arguments, not code. Some cached runs date from 2026-09-30 before the
   exact-learning commit landed that evening. The E00 and E09 caches are
-  keyed by chunk code or string and must be cleared by hand.
-- **E10 includes a third season.** Headline and month tables pool every
-  round to 2026-09-19, so Aug–Sep 2026 (season 2026-27) is in them.
-- **`scales` may be ignored.** `rate` equals `count` to every digit in E03
-  and E09 (adaptive), and E18 steps 4 and 5 are identical. Scale invariance
-  of the adaptive rate predicts this, but nothing checks that `scales` was
-  applied.
-- **Month-view base column.** `_month_view.Rmd` builds `mv_abs_base` with
-  `slice(1)`, so in E07 the absolute table shows the ensemble's base for the
-  replay's rows. Plots are fine.
-- **`late_decay` doc mismatch.** The roxygen in `calibrate.R` says the
-  offset is shrunk before it is played and learning continues; the code
-  shrinks the stored state.
-- **Stale notebook text.** E00, E05, E10 Findings say "render of 30
-  September" (numbers match the current render); E18 says 1 October.
-- **Stale runbook.** `notes/calibration-runbook.md` has old paths
-  (`~/allHail/...`, `scripts/reports/...`) and doesn't mention the
-  experiment notebooks or `calibration_ws_replay.R`.
+  keyed by chunk code or string. Plan: clear the whole cache and re-run
+  everything exact from scratch.
+
+Checked and resolved on 2026-10-02:
+
+- **`scales` is applied.** `rate` equals `count` to every digit with the
+  adaptive rate (E03, E09, E18 steps 4–5) because the adaptive rate is
+  scale invariant: all 53 locations match a population scale, adaptive
+  runs agree to 1e-11 with and without it, and with a constant rate the
+  calibrated quantiles differ by up to 300 admissions.
+- **E10 pools through the 2026 summer on purpose**, to include covid's
+  summer wave; its headline and month tables run to 2026-09-19.
+- **Month-view base column** in E07 (one base shown for configs on two
+  forecasters) and the **`late_decay` docstring** (now says it shrinks the
+  stored offset) were fixed.
 
 ## Review status
 
@@ -184,12 +179,15 @@ Things that could change the numbers above; none checked yet.
 | E18 | changes made (reference rows), not reviewed |
 | E03, E04, E05, E10, E11, E14, E15, E16, E17 | not reviewed |
 
+On 2026-10-02 every notebook's introduction and Findings were rewritten to
+state setup and measured sizes only; the rewritten text has not been
+reviewed. The index lists E00, E02, E04, E05 and E07 as archived.
+
 ## Code, data and prod
 
 - `R/calibration/qt.R`: the tracker (`qt_track`, `qt_learning_rate`,
-  `qt_project`). Bit-exact against the authors' Python on the
-  `delphi-fixes` branch of `~/repos/delphi/multiQT`; oracle fixtures in
-  `tests/testthat/test-qt.R`.
+  `qt_project`). A port of the authors' Python, tested against it (see
+  "Running things").
 - `R/calibration/calibrate.R`: `calibrate_hub_forecasts()` and
   `calibrate_hub_forecasts_exact()`, plus metrics. Options beyond the
   paper: `transform`, `scales`, `lr_slow` / `fast_decay` /
@@ -200,10 +198,14 @@ Things that could change the numbers above; none checked yet.
 - `R/calibration/views.R`: reference configs, cached runs, standard views.
 - `scripts/calibration/calibration_ws_replay.R`: E12/E13. Scores in
   `cache/calibration/ws_replay_scores_*.csv`.
-- `reports/writeups/calibration/`: the pre-experiment notebooks (findings,
-  sweep, seasons and gallery, flu and covid). Nothing in code or pipelines
-  uses them; last rendered 2026-09-23, before exact learning truth.
-  Candidates for deletion.
+- `scripts/calibration/calibration_ili_backfill.R`: replays
+  `windowed_seasonal` over the ILI+ state history (2010–2024) into
+  hub-schema parquets in `cache/calibration/`, for the ILI+ burn-in thread.
+- The pre-experiment notebooks (`reports/writeups/calibration/`) and the old
+  E07 scripts were deleted on 2026-10-02; they are in VCS history. Their
+  only analyses not in the current suite are the staleness lagged
+  correlation, the ILI+ base-bias table, per-round tracker internals (eta,
+  offsets before and after projection) and a per-level reliability plot.
 - **Data.** Flu hub submissions 2023-10-14 … 2026-05-30, 53 locations,
   h−1…h3. 2023-24 is burn-in. NHSN vintages from
   `get_nhsn_data_archive()` start 2024-11-19. With `settle_days` 14 the h3
@@ -216,6 +218,50 @@ Things that could change the numbers above; none checked yet.
   `windowed_seasonal_extra_sources` at h1–h3 and `revision_aware` at h−1
   (weights in `pipelines/covid_geo_exclusions.csv`, edited weekly).
 
+## Running things
+
+Commands run from the repo root (inside the rocker container,
+`distrobox enter rocker -- <command>`, if R isn't on the host). The hub
+checkouts are siblings of this repo: `../FluSight-forecast-hub` (sparse:
+CMU model-output only) and `../covid19-forecast-hub`.
+
+**Port tests.** `R/calibration/qt.R` ports the authors' Python
+(`projectedQT`). The oracle is `../multiQT` on branch `delphi-fixes`, which
+fixes several defects in the published code (see that branch's commit
+message); the R port implements only the fixed behavior.
+
+```sh
+# tracker tests: bit-exact oracle fixtures plus properties
+Rscript -e 'testthat::test_file("tests/testthat/test-qt.R")'
+# whole suite
+Rscript -e 'testthat::test_dir("tests/testthat")'
+
+# regenerate the fixtures (made with lr_window = 50, which test-qt.R spells out)
+(cd ../multiQT && uv run --with numpy --with scikit-learn --with matplotlib python make_r_fixtures.py)
+cp ../multiQT/r_fixtures/*.csv tests/testthat/fixtures/qt/
+
+# cross-check on real hub series; expect ALL MATCH within 1e-8
+Rscript scripts/calibration/calibration_export_series.R
+(cd ../multiQT && uv run --with numpy --with scikit-learn --with matplotlib python check_r_port_real_series.py)
+```
+
+One porting trap: numpy broadcasts `Y - Yhat` along the last axis, while R
+recycles a vector down columns. Getting it wrong silently corrupts every
+learning rate; `test-qt.R` pins `eta` against a hand-built residual matrix.
+
+**Notebooks and scripts.**
+
+```sh
+just calibration-experiments              # all notebooks and the index
+just calibration-experiments e03_scale    # one notebook and the index
+Rscript scripts/calibration/calibration_ws_replay.R 12           # E12 (12 workers)
+Rscript scripts/calibration/calibration_ws_replay.R 12 burn_in   # E13
+```
+
+Tracker runs are cached under `cache/calibration/` by `cal_run_cached()`,
+keyed on inputs and arguments but not code: clear the cache after changing
+`R/calibration/`. E00 and E09 keep their own caches, cleared by hand.
+
 ## Open threads
 
 Checked against the code on 2026-10-02. Repo-wide items are in
@@ -224,7 +270,7 @@ Checked against the code on 2026-10-02. Repo-wide items are in
 | item | status |
 |---|---|
 | Uncertainty for WIS and coverage differences (bootstrap over rounds or locations) | open; needed before any ranking under ~2 points means anything |
-| Fix the Known issues above and re-render | open |
+| Clear the run cache and re-run everything exact | open |
 | Report ramp and post-peak months separately | open; only the month view exists |
 | sqrt constant 0.018 with a warm start | open |
 | Shrink only the played offset after the peak, keep the stored state | open; `late_decay` shrinks the stored state |

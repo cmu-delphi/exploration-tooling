@@ -16,39 +16,52 @@ hub submissions. The step adjusts each submitted quantile forecast by an
 additive offset that an online quantile tracker (MultiQT; Ding, Gibbs &
 Tibshirani, 2025) learns from past coverage misses. Each notebook changes one
 setting of that tracker and compares the result with the uncalibrated
-submission.
+forecast.
 
-# Notebooks
+The summaries below give sizes, not verdicts. There are no uncertainty
+estimates, so a WIS gap under 1 point or a month-avg coverage gap under 0.01
+is read as no clear difference.
 
-```{r notebooks, results="asis", echo=FALSE}
-src <- list.files(here::here("reports/writeups/calibration_experiments"), pattern = "^e[0-9]+_.*[.]Rmd$", full.names = TRUE)
+```{r rows, include=FALSE}
 out_dir <- here::here("reports/calibration_experiments")
-for (f in src) {
-  html <- sub("[.]Rmd$", ".html", basename(f))
-  title <- rmarkdown::yaml_front_matter(f)$title
-  rendered <- file.exists(file.path(out_dir, html))
-  stamp <- if (rendered) format(file.mtime(file.path(out_dir, html)), "%Y-%m-%d %H:%M %Z", tz = "America/Los_Angeles") else "not rendered"
-  cat(sprintf("- %s (%s)\n", if (rendered) sprintf("[%s](%s)", title, html) else title, stamp))
+link <- function(id, file) {
+  html <- paste0(file, ".html")
+  if (!file.exists(file.path(out_dir, html))) return(paste(id, "(not rendered)"))
+  stamp <- format(file.mtime(file.path(out_dir, html)), "%Y-%m-%d", tz = "America/Los_Angeles")
+  sprintf("[%s](%s) (%s)", id, html, stamp)
 }
 ```
 
-| | question | short answer |
-|---|---|---|
-| E00 | Should the tracker learn from finalized data or from data as published at the time? | As published, re-run each week as prod does. Finalized data overstated the earlier gains only a little (about 2 points at h−1). |
-| E01 | Which adaptive learning-rate settings (multiplier, window, carry or reset over the summer)? | The multiplier is what matters; the window barely does, and carrying offsets beats resetting. On the square-root scale 0.03 gains at h0 and loses a little at h1–h3; 0.01 never loses but corrects coverage slowly from a cold start. |
-| E02 | Do a spring switch-off date, a per-level learning rate or a seasonal window improve on the adaptive tracker? | Switching off from 1 March or 15 February gains 2–5 points of WIS over the reference at h1–h3, at the cost of most of the coverage gain. A per-level rate gains a little; a seasonal window does not help. |
-| E03 | Which scale should the offsets live on: counts, square root, or rate per 100k? | Square root, at every horizon, mostly by avoiding spring losses. Rate equals counts with the adaptive learning rate. |
-| E04 | Should the offset shrink between updates, or have a second slow component? | Shrinking buys WIS at h1–h3 but nearly triples coverage error. A slow component alone does nothing. |
-| E05 | Should the offset start from the burn-in season's errors instead of zero? | Yes; it never hurts. With the plain tracker it gives the best-calibrated config so far. |
-| E07 | Are the gains an artifact of calibrating the submitted ensemble? | No. On the same rows and data, the single `windowed_seasonal` forecaster gains the same way, about a point less with prod's tracker. |
-| E09 | With a constant learning rate on the rate scale, how do coverage and WIS trade off, and how much revision delay is best? | An L-shaped trade-off whose knee matches or beats the paper's adaptive rate at every horizon. Under prod's weekly re-run, less delay is better. |
-| E10 | Do the flu results carry over to covid? | Only at h−1 (+10% WIS). The covid base is already calibrated at h1–h3, where calibrating is neutral or harmful. |
-| E11 | How does E09's best constant learning rate compare with the adaptive trackers? | Better coverage than the cold adaptive trackers at less WIS gain near the present, and the most stable across seasons. The warm-started adaptive tracker still wins at h0–h1. |
-| E14 | On the clean `windowed_seasonal` replay, is there a constant learning rate that is good in both seasons? | Yes, 0.018–0.032 per 100k: better WIS at every horizon in both seasons and lower coverage bias. 2024-25 needs a larger rate for good coverage, which costs WIS. |
-| E15 | Why does WIS improve when the calibrated intervals barely move? | The offsets are small (2–5% of the 90% interval width) and point up. The gain comes from shifting the forecast up, mostly at the central levels below the median; width changes cost WIS. |
-| E16 | Does a constant learning rate work better on the square-root scale, and do the offsets go stale late in the season? | sqrt 0.018 improves WIS at every horizon in both seasons, more than the rate scale at h0 and in 2025-26, with similar coverage. Every tracker loses WIS in March, after the peak, when the base already over-predicts and the offsets still push up. |
-| E17 | Does shrinking the offset from 1 March fix the March losses? | It fixes March but wipes the offset the next season starts from, so it is worse overall. Switching calibration off from 1 March (`off_after`) gains WIS at h1–h3 but gives back most of the coverage gain. |
-| E18 | Which part of prod's tracker (REF-op) does the work, stepping one setting at a time to E16's sqrt constant 0.018? | The warm start from the 2023-24 season adds 0.5–1 point of WIS (mostly in 2024-25) and the leak about a point at h1–h3 (both seasons); the burn-in season's learning-rate warm-up adds about half a point at h2–h3, the slow term nothing on its own. Switching to the constant rate adds 1–2 points at h1–h3. No step changes month-level coverage beyond noise. |
+# Notebooks
+
+| | base | question | what the numbers show |
+|---|---|---|---|
+| `r link("E01", "e01_eta_settings")` | replay, cold | How do the adaptive learning-rate settings (multiplier, window, carry or reset) change WIS and coverage? | Multipliers 0.1 and 0.3 lose 7–77 points at h1–h3. 0.01 is 0.5–2.4 points above 0.03 at h1–h3; month-avg coverage shows no clear difference. Count scale is 2–5 points below sqrt. Window and carry vs reset: no strong result. |
+| `r link("E03", "e03_scale")` | ensemble | Which scale should the offsets live on: counts, square root, or rate per 100k? | sqrt is 1.4–3.9 points above count pooled, mostly from 2025-26. Coverage: no strong result. Rate is identical to count in every cell. |
+| `r link("E09", "e09_lr_delay")` | ensemble | With a constant learning rate on the rate scale, how do WIS and coverage change with the rate and with extra learning delay? | WIS peaks near 0.056–0.1 per 100k and falls fast past 0.3. Month-avg coverage is no lower than the base at h1–h3 for any constant rate. Each week of extra delay costs about 1 point at h−1. Stateful learning with no extra delay makes h−1 worse than the base. |
+| `r link("E10", "e10_covid")` | covid ensemble | How do the two reference configs do on covid? | h−1 improves about 10–11% in both seasons. REF-paper loses 10–19% at h1–h3 in 2025-26. REF-op at h1–h3 is −4 to +3, sign depending on the season: no strong result. |
+| `r link("E11", "e11_constant_lr")` | ensemble | Does a constant learning rate do better than the adaptive rate? | Constant 0.1 vs adaptive sqrt: the order flips by horizon (1–2 points either way). REF-op has the highest pooled WIS at every horizon, by up to 2 points. On month-avg coverage the constant rate is 0.003–0.022 worse. |
+| `r link("E14", "e14_lr_by_season")` | replay, cold | How do WIS and coverage change with a constant learning rate, season by season? | Every rate from 0.0032 to 0.056 is at or above the base in both seasons, within 1.2 points of each other: no strong result for a best rate. From 0.1 WIS falls. Month-avg coverage for rates ≤ 0.032 stays within about 0.01 of the base. |
+| `r link("E15", "e15_wis_sources")` | replay, cold | Where does the WIS change come from? | Offsets are 2–5% of the 90% interval width. REF-op's gain (+2.0 at h0, about 0 by h3) comes from raising the lower quantiles; a median shift alone matches it within 0.6 points. |
+| `r link("E16", "e16_sqrt_constant_lr")` | replay, cold | Constant learning rate on the square-root scale vs the rate scale | sqrt 0.018 is about 1 point above rate 0.032 at h0 and within 0.2 at h1–h3 pooled. Against REF-op cold the order flips by season. Every tracker loses in March (up to −28% within the month at h2). |
+| `r link("E17", "e17_late_decay")` | replay, cold | Does shrinking or switching off the offset from 1 March change WIS and coverage? | No strong result: pooled WIS gaps ≤ 0.7 points and month-avg coverage gaps ≤ 0.010. The switch-off's sqrt gain comes mostly from 2025-26; the date was chosen in-sample. |
+| `r link("E18", "e18_ref_op_bridge")` | replay | Stepping from REF-op to sqrt constant 0.018 one setting at a time | REF-op vs sqrt 0.018: no strong result (0.3–0.6 points pooled, order flips by season). The warm start helps in 2024-25 only. Constant 0.018 is 1.7–2.3 points above cold adaptive at h2–h3. No step moves month-avg coverage by more than 0.008. |
+
+E12 and E13 (the clean replay without and with a 2023-24 burn-in) have no
+notebook; they are `scripts/calibration/calibration_ws_replay.R`.
+
+# Archived
+
+Earlier experiments, kept for reference. Their questions are settled or
+covered by the notebooks above.
+
+| | base | question | what the numbers show |
+|---|---|---|---|
+| `r link("E00", "e00_vintage_backtest")` | ensemble | Should the tracker learn from finalized data or from data as published? | Exact and final differ by 0.6 points or less, except REF-op h−1 (2.2, 2024-25). Learning once from the first report loses most of the h−1 gain. All other notebooks use the exact (prod) design. |
+| `r link("E02", "e02_eta_variants")` | replay, cold | Spring switch-off, per-level learning rate, seasonal window | Switching off from 1 March or 15 February is 2–4 points above the reference at h1–h3 (dates in-sample; in 2025-26 about half the gain is December carry-over). Per-level about +1. Month-avg coverage: no clear difference. |
+| `r link("E04", "e04_offset_structure")` | ensemble | Leak and slow term | The leak is +3.3 to +5.6 at h1–h3 in 2025-26 and −0.4 to −1.3 in 2024-25. The slow term without a warm start: no strong result. |
+| `r link("E05", "e05_warm_start")` | ensemble | Warm start from the burn-in season | +1.7 to +3.2 at h2/h3 in 2024-25 for every tracker, within ±0.4 in 2025-26. |
+| `r link("E07", "e07_across_eras")` | both | Does calibration act the same on the ensemble and the clean replay? | Same direction on both; REF-op gains 0.7–1.1 points more on the ensemble. The candidate order flips between seasons on both. |
 
 # How to read the results
 
@@ -57,14 +70,24 @@ for (f in src) {
   later have not been reported yet.
 - **WIS reduction %** is `100 × (WIS_base − WIS_cal) / WIS_base`, the
   calibrated forecast's weighted interval score against the uncalibrated
-  submission's, pooled over locations. Positive = calibrated WIS lower than
-  base. Every notebook uses this sign.
-- **L1 coverage bias** (lower is better) is the mean over the 23 quantile levels of
-  |empirical coverage − level|. 0 is perfect; the uncalibrated flu
-  submission sits near 0.1.
-- **Scoring.** Every score is against finalized NHSN data, over the live
-  seasons (2024-25 and 2025-26 for flu), all hub locations. A burn-in season
-  (2023-24 for flu) is used only to warm up the tracker and is not scored.
+  forecast's, pooled over locations. Positive = calibrated WIS lower than
+  base.
+- **L1 coverage bias** (lower is better) is the mean over the 23 quantile
+  levels of |empirical coverage − level|. **Month-avg** computes it within
+  each calendar month and averages; season-pooled lets under-prediction on
+  the ramp cancel over-prediction after the peak, and usually looks much
+  better. Month-level noise is about 0.01.
+- **Two bases.** "Ensemble" notebooks calibrate our submitted forecasts
+  (h−1 to h3, headline tables over all hub locations). "Replay" notebooks
+  calibrate a clean weekly replay of `windowed_seasonal` with no hand edits
+  (h0–h3, states only).
+- **Scoring.** Every score is against finalized NHSN data over the live
+  seasons (2024-25 and 2025-26). A burn-in season (2023-24 for flu) only warms
+  up the learning rate and is not scored.
+- **Cold start.** Without a warm start, offsets start at zero, and every
+  config equals the base through Nov–Dec 2024, so 2024-25 gains are diluted.
+- **In-sample choices.** The constant rates and switch-off dates in later
+  notebooks were picked on the same two seasons they are scored on.
 - **Excluded submissions.** A few submissions were broken by pipeline bugs
   or bad data and are left out, both from what the tracker learns and from
   the scores. Flu: h−1 of the 2025-11-22 round (every quantile was 0) and
@@ -79,13 +102,10 @@ for (f in src) {
 - **Re-run vs stateful.** Prod re-runs the tracker from the first round each
   week on that week's data, so early reports are replaced by their revisions.
   A stateful tracker instead learns each outcome once, from the first value
-  it sees. All notebooks use the re-run design; E09 also shows the stateful
-  one.
+  it sees. All notebooks use the re-run design; E00 and E09 also show the
+  stateful one.
 
 ## Reference configs
-
-Each experiment starts from one of two configurations and changes one
-setting.
 
 - **REF-paper**: the paper's tracker on counts. One offset per quantile level,
   updated with an adaptive learning rate (0.03 × the 90th percentile of the

@@ -20,136 +20,46 @@ knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
 ```
 
-The hub-era results (E00–E05, E09) calibrate our submitted FluSight
-forecasts: an ensemble whose members changed between seasons. **Are the
-gains an artifact of that ensemble, or does the tracker help a single,
-fixed forecaster the same way?** The fixed forecaster is flu prod's
-`windowed_seasonal`.
-
-This asks the NHSN half of the original E07's question
-(`scripts/calibration/calibration_ws_experiments.R`) on the current setup.
-It is a new experiment, not a reproduction: the original learned from
-finalized data and replayed `windowed_seasonal` with prod's data
-substitutions; here both learn from data as published each week, and B is
-the clean replay. The original's third setup, C (the ILI+ decade), was
-invalid and is not repeated.
+Question: does calibration change WIS and coverage the same way for the
+submitted ensemble as for one fixed forecaster?
 
 **Setup.** Two forecasters, everything else shared:
 
-- **A**: the submitted ensemble, read from the hub as in E00 and E03–E05.
+- **A**: the submitted flu ensemble, read from the hub as in E00 and
+  E03–E05.
 - **B**: the clean `windowed_seasonal` replay (E12–E17), with the 2023-24
   HHS backfill (E13) as its burn-in season.
 
-Both are cut to the same (round, location, horizon) rows: the hub's
-submission rounds, all 53 locations, h0–h3 (the ensemble's h−1 is a
-different model, so it is left out), and the submissions excluded from the
-hub reads are dropped from B too. Both learn from and are scored on the
-same NHSN data, as published each week and re-run from scratch each week,
-one week of extra revision delay, with 2023-24 as a burn-in.
+| | |
+|---|---|
+| rows | identical (round, location, horizon, level) rows for A and B: hub submission rounds, submissions excluded from the hub reads dropped from both |
+| seasons | 2023-24 burn-in (27 rounds), 2024-25 (27) and 2025-26 (28) scored |
+| locations | all 53; results lead with states only |
+| horizons | h0–h3 (the ensemble's h−1 is a different model) |
+| learning truth | NHSN as published each week, re-run from scratch each week, one week of extra revision delay |
+| scoring truth | the store's NHSN truth |
 
-The trackers are the original's three, all on the square-root scale with
-the adaptive learning rate (mult 0.03, floor 0.001, window 20, carry):
+Trackers (section 2), all sqrt scale, adaptive learning rate (mult 0.03,
+floor 0.001, window 20, carry):
 
-- **single**: the paper's tracker (REF-paper at sqrt).
-- **leaky**: single with the offset shrinking 10% per round (`fast_decay`).
-- **operating**: REF-op, prod's tracker: leaky plus a slow term and a warm
-  start from the burn-in season's errors.
+- **single**: REF-paper at sqrt.
+- **leaky**: single with the fast offset shrinking 10% per round.
+- **operating**: REF-op (leaky plus a slow offset and a warm start from the
+  burn-in season's errors).
 
-Section 3 also runs the operating-point candidates (E14, E16, E17) on both
-forecasters.
+Candidates (section 3): REF-op warm (= operating) and cold; constant rate
+0.018 on the sqrt of the per-100k rate (E16); constant 0.032 per 100k on
+the rate scale (E14); sqrt 0.018 switched off from 1 March
+(`off_after = "03-01"`, E17). The cold candidates see the live seasons
+only and start from zero offsets.
+
+This rebuilds the original E07 (a script since deleted),
+which learned from finalized data, used the replay with prod's data
+substitutions and included h−1.
 
 "WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so
 **positive = calibrated WIS lower than base**. "L1 coverage bias" (lower is
-better) is the mean over the 23 levels of |empirical coverage − level|. Results lead with states only.
-
-# Findings
-
-Numbers are from the render of 1 October 2026, states only, WIS reduction %
-(positive = calibrated WIS lower than base) / L1 coverage bias (lower is
-better), h0/h1/h2/h3. All-locations numbers
-point the same way.
-
-- **Base WIS: equal in 2024-25, B worse in 2025-26.** B/A base WIS is
-  0.93/0.99/1.01/1.01 in 2024-25 and 1.33/1.22/1.11/1.05 in 2025-26
-  (1.06/1.07/1.05/1.02 pooled). Per state, pooled over h0–h3, the median
-  ratio is 0.99 in 2024-25 (B better in 29 of 52 states) and 1.12 in
-  2025-26 (B better in 7 of 52). So in 2025-26 the ensemble beats B almost
-  everywhere, by about 10%, most at h0–h1.
-- **The two bases are equally miscalibrated in 2024-25** (coverage bias
-  0.13–0.17, 68–77% of outcomes above the median for both). In 2025-26 the
-  ensemble is better calibrated (0.046–0.078 vs 0.081–0.090).
-- **By month, both bases have the same shape.** Both under-predict on the
-  ramp (December: 96–97% of outcomes above the median in 2024-25, 86–94% in
-  2025-26, coverage bias 0.24–0.34) and over-predict after the peak (March
-  2025-26: 32% above for A, 38% for B). B's ramp bias is larger in 2025-26
-  (November–December coverage bias 0.19/0.31 vs 0.14/0.24). The one place
-  they differ is spring 2024-25: A still under-predicts in March–April (59%
-  and 75% above the median), while B is close to calibrated (45% and 56%).
-- **The operating-point candidates rank mostly the same on both, with one
-  exception.** Pooled over both seasons, h0/h1/h2/h3 WIS reduction %:
-
-  | candidate | A ensemble | B `windowed_seasonal` |
-  |---|---|---|
-  | REF-op warm | +3.9/+1.9/+1.5/+2.3 | +2.8/+1.1/+0.8/+1.2 |
-  | REF-op cold | +2.8/+0.7/−0.3/−0.7 | +2.0/+0.6/+0.1/−0.2 |
-  | sqrt 0.018 | +2.4/+0.6/+0.1/0.0 | +2.2/+0.8/+0.6/+0.6 |
-  | rate 0.032 | +1.5/+0.7/+0.5/+0.2 | +1.3/+0.7/+0.5/+0.4 |
-  | sqrt 0.018, off 1 Mar | +1.7/+0.6/+0.4/+0.6 | +2.3/+1.2/+1.2/+1.3 |
-
-  Ordered by the mean over h0–h3, sqrt 0.018 > rate 0.032 > REF-op cold on
-  both. REF-op warm is first on A (+2.4 mean) and tied first with
-  off-1-March on B (both +1.5). Coverage bias ranks identically on both,
-  pooled: REF-op warm best (A 0.035–0.047, B 0.037–0.061), then rate 0.032,
-  sqrt 0.018, REF-op cold, and off-1-March worst (A 0.084–0.092, B
-  0.094–0.116).
-- **The exception is the March switch-off, and it follows the base's spring
-  bias.** In 2024-25, off-1-March is last of the five on A (+0.6/+0.2/0.0/+0.1)
-  but second on B (+1.6/+0.8/+0.7/+0.5): A was still under-predicting that
-  spring, so the offsets it switches off were still helping. In 2025-26,
-  when both over-predict in March, it is first on both. So whether to
-  switch off in spring depends on the forecaster, and B's result for it
-  should not be carried over to the ensemble without checking.
-- **sqrt 0.018 is WIS-positive at every horizon in both seasons only on B.**
-  On A it is −0.3/−0.1 at h2/h3 in 2025-26, where the ensemble was already
-  close to calibrated.
-- **Calibration does the same thing to both.** The trackers rank the same
-  way on each: operating gains the most WIS, single gives the best coverage
-  and loses at h2–h3. Pooled over both seasons:
-
-  | tracker | A ensemble | B `windowed_seasonal` |
-  |---|---|---|
-  | single | +2.3/0.0/−1.3/−1.8 | +2.0/0.0/−0.6/−1.0 |
-  | leaky | +2.2/+0.8/0.0/−0.3 | +1.7/+0.6/+0.4/+0.2 |
-  | operating | +3.9/+1.9/+1.5/+2.3 | +2.8/+1.1/+0.8/+1.2 |
-
-- **The ensemble gains about 1 point more with REF-op**, mostly at h2–h3 in
-  2024-25 (+2.8/+4.3 vs +1.4/+1.7) and h0 in 2025-26 (+4.3 vs +2.2). The
-  single tracker loses more on the ensemble in 2025-26 (h2 −3.1 vs −0.7),
-  where the ensemble was already close to calibrated.
-- **Answer: the gains are not an artifact of the ensemble.** On the same
-  rows and data, one fixed forecaster gains the same way, a little less.
-  B's base is about 5% worse on WIS pooled and its bias has the same
-  monthly shape, so experiments on B transfer to the ensemble for the
-  choice of tracker. They do not transfer for date-based switches, which
-  depend on where each base is biased in spring.
-- **Against the old E07** (finalized truth, the replay with prod's data
-  substitutions, 50 locations, h−1 included): the verdict holds. The old
-  explanation for B's smaller gains does not: at h0–h3 the gap is about a
-  point, not up to 11 (that was h−1, a different model), and B is not less
-  miscalibrated than the ensemble (equal in 2024-25, worse in 2025-26).
-  B single still has much the best 2025-26 coverage (0.010–0.013).
-- **Month view (2026-10-01):** the coverage rankings do not survive
-  scoring within each month. Month-avg L1 coverage bias, both seasons, mean
-  over h0–h3: on A, REF-op warm 0.115 < REF-op cold 0.120 < sqrt 0.018
-  0.124 < off 1 Mar 0.126 < rate 0.032 0.133 (base 0.132); on B, sqrt 0.018
-  0.130 < REF-op cold 0.133 < REF-op warm 0.135 < off 1 Mar 0.136 < rate
-  0.032 0.142 (base 0.142). So off-1-March is not the worst, rate 0.032 is
-  (no better than the base), and the order differs between A and B. Among
-  the trackers, operating has the lowest month-avg bias on A
-  (0.090/0.110/0.124/0.138 vs single 0.101/0.117/0.130/0.150) and the three
-  tie on B; B single's 2025-26 lead disappears (0.078/0.105/0.128/0.142 vs
-  operating 0.078/0.111/0.128/0.145). The base comparison holds: in
-  2025-26 A's month-avg bias is 0.089–0.117 against B's 0.097–0.146.
+better) is the mean over the 23 levels of |empirical coverage − level|.
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))
@@ -522,3 +432,39 @@ mv_linetype <- "forecaster"
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
+
+# Findings
+
+States only. WIS reduction % (positive = calibrated WIS lower than base)
+differences are in points; L1 coverage bias is lower-is-better and leads
+with the month-avg.
+
+- **Bases.** B/A base WIS is 0.93–1.01 in 2024-25 and 1.05–1.33 in 2025-26
+  (largest at h0); per state B is lower in 29 of 52 states, then 7 of 52.
+  Month-avg base bias over h0–h3 is 0.116–0.151 for A and 0.112–0.177 for
+  B (both seasons), 0.089–0.117 vs 0.097–0.146 in 2025-26. Both bases have
+  over 86% of outcomes above the median in December and under 40% in March
+  2025-26. They differ in November 2024-25 (51% vs 73% above), March–April
+  2024-25 (59/75% vs 45/56%) and February 2025-26 (60% vs 71%).
+- **Trackers.** On both, pooled WIS at h1–h3 orders operating > leaky >
+  single. Operating gains 0.7–1.1 points more on A than on B (A
+  +3.9/+1.9/+1.5/+2.3, B +2.8/+1.1/+0.8/+1.2), mostly 2024-25 h2/h3
+  (+2.8/+4.3 vs +1.4/+1.7) and 2025-26 h0 (+4.3 vs +2.2). On B, leaky and
+  single are under 1 point apart except at h3 (1.2).
+- **Candidates, WIS: the order flips between seasons.** Mean over h0–h3,
+  REF-op warm leads in 2024-25 on both (A +3.44, B +2.07; next +0.79 and
+  +0.90). In 2025-26 the 1 March switch-off leads on both (A +1.96, B
+  +2.37) and REF-op warm is 4th on A, 5th on B (+0.69, +0.60). Pooled over
+  both seasons the other four candidates are within 0.2 points of each
+  other on A (+0.64 to +0.83) and within 0.9 on B (+0.63 to +1.48).
+- **1 March switch-off in 2024-25.** No strong result: 0.47 points below
+  sqrt 0.018 on A and 0.24 above it on B. The rates (0.018, 0.032) and the
+  1 March date were picked in E14/E16/E17 on these same seasons, on B.
+- **Coverage, month-avg.** No strong result among candidates: over h0–h3,
+  A ranges 0.115–0.126 for four candidates (base 0.132) and B 0.130–0.136
+  (base 0.142). Rate 0.032 is no better than the base on either (A 0.133,
+  B 0.142), and in 2025-26 it is above the base at every horizon (A by
+  0.016–0.024, B by 0.007–0.017). Season-pooled, rate 0.032 has the lowest
+  2025-26 bias on B (0.010–0.014), because pooling lets ramp and post-peak
+  errors cancel. Season-pooled coverage ranks agree between A and B over
+  both seasons (Spearman 0.97) but not in 2025-26 (0.31).

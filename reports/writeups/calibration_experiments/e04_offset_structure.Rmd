@@ -23,49 +23,31 @@ ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplo
 ```{r child=here::here("reports/writeups/calibration_experiments/_load.Rmd")}
 ```
 
-One axis: the structure of the offset. Everything else is REF-paper on the sqrt scale (the
-E03 sqrt variant), learning from vintages the way prod does (E00).
+Question: does adding a leak or a second, slow offset term to the tracker
+change WIS and coverage?
 
-- **single**: the paper's tracker, one offset per level.
-- **leak 0.1**: the offset shrinks by 10% each round, so
-  a correction that new outcomes do not refresh fades (half-life about 6.6
-  rounds).
-- **slow 0.003**: a second, persistent offset term with a small learning rate
-  (0.003 × the error percentile, against 0.03 for the main term) added to the paper's one.
-- **slow 0.003 + leak 0.1**: both. This is REF-op without its warm start
-  (E05).
+Setup:
 
-# Findings
+- Disease: flu. Base forecaster: the submitted hub ensemble (spoiled
+  submissions dropped).
+- Reference: REF-paper on the sqrt scale (E03's `sqrt`): adaptive learning
+  rate of 0.03 × the 90th percentile of the last 20 rounds' absolute errors,
+  floor 0.001; offsets carried across seasons; one week of extra delay
+  (`settle_days = 14`).
+- Burn-in: 2023-24, used only to warm up the learning rate. Offsets start at
+  zero at the first 2024-25 round (cold start; no warm start for the slow
+  term).
+- Learning truth: exact (re-run at every round on the data published by then,
+  as prod does; E00). Scores against finalized truth.
+- Seasons scored: 2024-25 and 2025-26. Horizons h−1 to h3. Headline tables:
+  all hub locations including US; month view: states only.
 
-Numbers are from the render of 30 September 2026, pooled over both live
-seasons and all locations. WIS reduction % is 100 × (base − calibrated) / base,
-so positive = calibrated WIS lower than base; the absolute-error change of the
-median is defined the same way. L1 coverage bias: lower is better.
-
-- **The leak buys WIS at h1–h3 with coverage.** `leak 0.1` moves WIS from
-  +0.7/−1.3/−1.4 to +1.6/+0.8/+0.6 at h1–h3, but coverage bias nearly
-  triples (0.026–0.028 → 0.075–0.081), close to the base's 0.095–0.102.
-  A correction that fades between refreshes cannot hold coverage through a
-  3–5 round reveal lag.
-- **The leak is what repairs the tail and the second season.** At h3 it cuts
-  the October loss from 35% to 12% and March from 42% to 14%, and turns April
-  from −20% to +10%. In 2025-26, h1–h3 go from −1.8/−4.6/−3.5 to
-  +1.5/+1.0/+0.9.
-- **A slow term alone does nothing.** `slow 0.003` is within 0.2 points of
-  `single` everywhere, and `slow 0.003 + leak 0.1` is within 0.5 points of
-  `leak 0.1` (slightly better coverage, 0.068–0.084). At this learning rate
-  the slow term never accumulates enough to matter without a warm start
-  (E05).
-- The median follows WIS: the leak improves absolute error at h1–h3
-  (+3.4/+2.8/+3.4 vs +2.4/−0.6/+1.2) and costs 1.1 points at h−1 and 0.3 at
-  h0.
-- **Month view (2026-10-01):** scored within each month (states only), the
-  leak costs no coverage. Month-avg L1 coverage bias at h−1…h3: single
-  0.108/0.102/0.117/0.130/0.150, leak 0.1 0.115/0.102/0.115/0.132/0.143,
-  base 0.134/0.116/0.123/0.137/0.151. The near-tripling of the
-  season-pooled bias is the leak no longer letting ramp and post-peak errors
-  cancel; month by month the two are level at h0–h2, the leak is better at
-  h3 and slightly worse at h−1.
+| config | change from the sqrt reference |
+|---|---|
+| `single` | none (one offset per level) |
+| `leak 0.1` | the offset shrinks by 10% each round (half-life about 6.6 rounds) |
+| `slow 0.003` | adds a second offset term with learning-rate multiplier 0.003 (vs 0.03 for the main term), no leak |
+| `slow 0.003 + leak 0.1` | both; this is REF-op without its warm start (E05) |
 
 ```{r runs}
 sqrt_args <- list("paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3))
@@ -80,3 +62,30 @@ focus <- "leak 0.1"
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_standard_views.Rmd")}
 ```
+
+# Findings
+
+WIS reduction % is positive = calibrated WIS lower than base; coverage bias is
+lower-is-better. A WIS gap under 1 point or a month-avg coverage gap under
+0.01 is read as no clear difference.
+
+- **leak 0.1 vs single, WIS: the order flips by season.** Pooled, the leak is
+  0.9–2.1 points higher at h1–h3 (+1.6/+0.8/+0.6 vs +0.7/−1.3/−1.4) and 0.3
+  lower at h−1/h0. In 2025-26 it is 3.3–5.6 points higher at h1–h3. In
+  2024-25 it is 0.4–1.3 points lower at h−1…h2 and 0.4 higher at h3.
+- **leak 0.1 vs single, h3 by month.** Most of the pooled 2.0-point h3 gap
+  comes from March (−14.2 vs −42.1, 5.4% of base WIS) and February (+0.3 vs
+  −3.8). The leak is lower in December (+0.8 vs +1.7) and May (+5.7 vs +17.7).
+- **leak 0.1 vs single, coverage: the order flips by season.** Month-avg bias
+  (states) over both seasons: no clear difference (0.115/0.102/0.115/0.132/0.143
+  vs 0.108/0.102/0.117/0.130/0.150; base 0.134/0.116/0.123/0.137/0.151). Per
+  season, the leak is 0.014–0.017 higher in 2024-25 at h−1…h2 and 0.010–0.018
+  lower in 2025-26 at h0…h3. Season-pooled bias roughly triples with the leak
+  (0.026–0.028 → 0.075–0.081 at h1–h3), but pooling lets errors cancel, and
+  `single`'s two-season value at h1 (0.026) is below either season's (0.089,
+  0.038).
+- **No strong result for the slow term.** `slow 0.003` vs `single`: at most
+  0.2 points pooled, at most 0.5 per season. `slow 0.003 + leak 0.1` vs
+  `leak 0.1`: 0.1–0.5 points; month-avg coverage within 0.004.
+- Offsets start from zero in November 2024, so early 2024-25 rounds of every
+  config equal the base.

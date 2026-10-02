@@ -23,61 +23,32 @@ ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplo
 ```{r child=here::here("reports/writeups/calibration_experiments/_load.Rmd")}
 ```
 
-One axis: the learning rate. The constant rate is the corner of E09's
-trade-off curve, re-run design, one week of extra delay: 0.1 admissions per
-100k per step on the rate scale. Below that rate, coverage bias falls with
-little change in WIS. Above it, coverage stops improving and WIS gets worse
-at every horizon. It is compared with the adaptive learning rate (0.03 × the
-90th percentile of the last 20 rounds' absolute errors) in the configs from
-E03 and E05. Everything else is REF-paper, learning from vintages the way
-prod does (re-run each week; E00).
+Question: does a constant learning rate on the rate scale do better than the
+adaptive learning rate?
 
-- **REF-paper**: counts, adaptive.
-- **sqrt, adaptive**: the E03 winner.
-- **warm + sqrt, adaptive**: the E05 `warm + single`, the best-calibrated
-  adaptive config.
-- **rate, constant 0.1**: the E09 corner.
-- **REF-op**: prod, for orientation; it differs in several settings.
+Setup:
 
-# Findings
+- Disease: flu. Base forecaster: the submitted hub ensemble (spoiled
+  submissions dropped).
+- Burn-in: 2023-24, used only to warm up the adaptive learning rate. Offsets
+  start at zero at the first 2024-25 round unless a config has a warm start.
+  The constant-rate config has no learning rate to warm up, so it is
+  effectively cold.
+- Learning truth: exact (re-run at every round on the data published by then;
+  E00), one week of extra delay. Scores against finalized truth.
+- Seasons scored: 2024-25 and 2025-26. Horizons h−1 to h3. Headline tables:
+  all hub locations; month view: states only.
 
-Numbers are from the render of 1 October 2026, pooled over both live
-seasons and all locations. WIS reduction % is 100 × (base − calibrated) / base,
-so positive = calibrated WIS lower than base; the absolute-error change of the
-median is defined the same way. L1 coverage bias: lower is better. The constant run matches E09's table at 0.1, +1 week,
-re-run.
+| config | change from REF-paper (counts, adaptive 0.03 × p90 of the last 20 errors) |
+|---|---|
+| `REF-paper` | none |
+| `sqrt, adaptive` | sqrt scale, learning-rate floor 0.001 (E03 `sqrt`) |
+| `warm + sqrt, adaptive` | as above, plus a warm start from the burn-in season (E05 `warm + single`) |
+| `rate, constant 0.1` | rate scale (per 100k), constant learning rate 0.1 (E09, +1 week, re-run) |
+| `REF-op` | the prod config; differs in several settings |
 
-- **Against the cold adaptive trackers, the constant rate trades WIS at
-  h−1/h0 for better coverage everywhere.** WIS +3.6/+2.4/+0.7/+0.3/−0.5 at
-  h−1…h3, against +5.1/+4.0/+0.7/−1.3/−1.4 for `sqrt, adaptive`; coverage
-  bias 0.032/0.022/0.018/0.017/0.018 against 0.049/0.032/0.026/0.028/0.026.
-  It beats REF-paper on both at every horizon.
-- **The warm-started adaptive tracker still beats it at h0–h1.**
-  `warm + sqrt, adaptive` has better WIS at h−1–h1 (+5.1/+4.7/+1.3) and
-  better coverage at h0–h3 (0.013–0.020). The constant rate keeps an edge only
-  in h−1 coverage (0.032 vs 0.046) and is within 0.8 points on WIS at h2/h3.
-- **It is the most stable tracker across seasons and months.** In 2025-26 it
-  loses 1.8–2.0% at h1–h3, against up to 4.6% for the adaptive sqrt trackers
-  (REF-op is the only config that gains there). By month at h3 it has the
-  smallest March loss of the plain trackers (16% vs 42–51% for sqrt), but is
-  nearly neutral in December–January (about +1%, 71% of the base WIS), where
-  the warm start and REF-op gain 4–6%. Its h−1 is the weakest in 2025-26
-  (−1.6%).
-- **The median gains less near the present.** Absolute error improves
-  +6.3/+4.9% at h−1/h0, against about +10/+8% for the sqrt trackers; it is
-  better than them at h2 (+1.8%).
-- **Untested:** a warm start on the constant-rate tracker. The warm start
-  is the largest single gain for the adaptive tracker (E05), and the constant
-  rate keeps coverage without a leak.
-- **Month view (2026-10-01):** scored within each month (states only), the
-  constant rate has the worst coverage, not the best. Month-avg L1 coverage
-  bias at h−1…h3: constant 0.1 0.118/0.114/0.127/0.147/0.172, `sqrt,
-  adaptive` 0.108/0.102/0.117/0.130/0.150, REF-paper
-  0.115/0.102/0.120/0.143/0.168, `warm + sqrt, adaptive`
-  0.107/0.100/0.116/0.128/0.146, REF-op 0.107/0.091/0.111/0.125/0.136, base
-  0.134/0.116/0.123/0.137/0.151. It is highest of the five at every horizon
-  and worse than the base at h1–h3; its h−1 edge over the warm tracker
-  disappears.
+WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
+WIS lower than base. L1 coverage bias: lower is better.
 
 ```{r runs}
 sqrt_args <- list("paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3))
@@ -93,3 +64,28 @@ focus <- "rate, constant 0.1"
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_standard_views.Rmd")}
 ```
+
+# Findings
+
+There are no uncertainty estimates; a WIS gap under 1 point or a month-avg
+coverage gap under 0.01 is read as no clear difference.
+
+- **Constant 0.1 vs `sqrt, adaptive`:** WIS +3.6/+2.4/+0.7/+0.3/−0.5 vs
+  +5.1/+4.0/+0.7/−1.3/−1.4 at h−1…h3 pooled. The adaptive tracker is ahead
+  at h−1/h0 (1.5/1.6 points), the constant at h2/h3 (1.6/0.9). In 2025-26 the
+  gaps are larger in both directions (adaptive +4.6 at h0, constant +2.8 at
+  h2). The order depends on horizon.
+- **Constant 0.1 vs `warm + sqrt, adaptive`:** the warm tracker is ahead in
+  every 2024-25 cell (by 0.8–2.7). In 2025-26 the constant is ahead at h2/h3
+  (by 2.5/1.9). This compares a cold config with a warm one.
+- **REF-op:** pooled WIS +5.4/+4.9/+2.4/+1.7/+2.2, the highest at every
+  horizon, by up to about 2 points over `warm + sqrt, adaptive`. Its 2025-26
+  gains at h1–h3 are under 1.5 points.
+- **Month-avg coverage (states, h−1…h3):** base 0.134/0.116/0.123/0.137/0.151;
+  constant 0.118/0.114/0.127/0.147/0.172; `sqrt, adaptive`
+  0.108/0.102/0.117/0.130/0.150; `warm + sqrt, adaptive`
+  0.107/0.100/0.116/0.128/0.146; REF-op 0.107/0.091/0.111/0.125/0.136. The
+  adaptive configs are within 0.01 of each other at most horizons. About half
+  of the constant's h0 gap comes from October 2025, a single sparse month
+  (0.3% of base WIS) with spring offsets carried over. Season-pooled the
+  constant has the lowest bias (0.017–0.032), but pooling lets errors cancel.

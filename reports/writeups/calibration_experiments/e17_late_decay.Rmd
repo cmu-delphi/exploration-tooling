@@ -19,79 +19,32 @@ knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
 ```
 
-E16 found that the constant-rate trackers lose WIS in March of both seasons:
-the offsets learned on the ramp up still point up after the peak, while
-outcomes fall below the base median. This notebook asks whether **shrinking
-the offset toward zero from a calendar date onward** removes those losses
-without giving up the gains elsewhere.
+Question: does shrinking the offset from 1 March, or switching calibration
+off from 1 March, change WIS and coverage compared with the same tracker
+without it?
 
-**Existing options.** None does exactly this:
+Setup:
 
-- `fast_decay` shrinks the offset every round of the year, so it also
-  weakens the ramp-up correction.
-- `season_policy` (`carry`, `reset`, `shrink`) acts only at the season
-  boundary in the autumn, after the spring has been scored.
-- `off_after` is the abrupt version: from a calendar date to July it plays
-  the base forecast and stops learning. It is run here as a comparison.
+- Disease: flu. Base forecaster: the clean `windowed_seasonal` replay (all 53
+  locations, the 55 hub rounds). Horizons h0–h3.
+- Learning truth: exact (re-run at every round on the data published by then;
+  E00), one week of extra delay. Cold start, no burn-in season. States only.
+- Three constant-rate trackers: rate 0.018 and rate 0.032 per 100k (E14),
+  and sqrt 0.018 (E16). Each crossed with five settings:
+  - **no decay**.
+  - **`late_decay`** with factor 0.85, 0.7 or 0.5: from 1 March to 30 June
+    the stored offset is multiplied by the factor at each round before it is
+    played. Learning continues, and because offsets carry across seasons,
+    the shrink carries into the next season.
+  - **`off_after = "03-01"`**: from 1 March to 30 June the base is played,
+    those rounds produce no updates, and the offset carries unchanged into
+    the next season.
+- The 1 March date was chosen after E16, on these same seasons.
+  (`fast_decay` and `season_policy` are other ways to shrink offsets; they
+  are not run here.)
 
-So this notebook uses a new option, `late_decay = list(from = "MM-DD",
-factor = f)`: from that date until July, the offset is multiplied by `f`
-at each round before it is played. Learning continues, so new outcomes can
-still push the offset.
-
-**Setup.** As E14/E16: flu, the clean `windowed_seasonal` replay, h0–h3,
-learning from data as published each week and re-run from scratch each week,
-one week of extra revision delay, no burn-in, states only. Three constant
-rates: rate scale 0.018 and 0.032 per 100k (E14) and sqrt scale
-0.018 (E16's best). For each, five settings: no decay, `late_decay` from
-1 March with factor 0.85, 0.7 or 0.5 per round, and `off_after = "03-01"`.
-The tracker carries offsets across seasons, so a decay in spring 2025 also
-changes where 2025-26 starts.
-
-"WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so **positive
-= calibrated WIS lower than base**; "L1 coverage bias" (lower is better) is
-the mean over the 23 levels of |empirical coverage − level|.
-
-# Findings
-
-Numbers are from the render of 1 October 2026, states only, WIS reduction %
-(positive = calibrated WIS lower than base) / L1 coverage bias (lower is better), h0/h1/h2/h3.
-
-- **The decay removes the March loss.** For sqrt 0.018 at h2, March 2025-26
-  goes from −27.9% to −10.7 / −6.3 / −2.9% (factor 0.85 / 0.7 / 0.5), and
-  the calibrated median comes back toward the base's (69–73% of outcomes
-  below it, base 67%). The rate-scale trackers behave the same way.
-- **But it costs more than it saves.** It also removes the April–May gains,
-  and because the offsets carry across seasons, it hands 2025-26 an offset of
-  almost zero: the next season starts cold again. 2025-26 at h0 drops from
-  +3.0 to +1.7–2.1 (sqrt 0.018) and its coverage bias triples (0.021–0.024
-  to 0.066–0.078). Pooled over both seasons, every decay setting is worse
-  than no decay on coverage and no better on WIS for all three rates.
-- **`off_after = "03-01"` does better on WIS.** It plays the base from 1
-  March and freezes the offsets, which then carry into the next season
-  unchanged. Pooled WIS for sqrt 0.018 goes from +2.2/+0.8/+0.6/+0.6 to
-  +2.3/+1.2/+1.2/+1.3, and both seasons gain at h1–h3 (2025-26:
-  +3.4/+1.6/+1.9/+2.6). Rate 0.032 gains at h2–h3 too (+0.8/+0.9 pooled vs
-  +0.5/+0.4). The cost is the October 2025 start (about −10% at h2/h3 on a
-  month with under 1% of the WIS).
-- **Any spring switch-off gives back most of the coverage gain.** With
-  `off_after`, pooled coverage bias for sqrt 0.018 is 0.094–0.116 (no decay
-  0.059–0.078, base 0.105–0.127). Spring rounds then play the base, and
-  the over-prediction after the peak no longer cancels the under-prediction
-  on the ramp (E16).
-- **Answer.** The offsets do go stale after the peak, but shrinking them
-  toward zero by the calendar is not a free fix. The gradual decay as built
-  here loses because it also wipes the offset the next season starts from.
-  `off_after` in March is the better WIS choice and the worse coverage choice.
-- **Month view (2026-10-01):** scored within each month, the coverage
-  costs nearly vanish. Month-avg L1 coverage bias, both seasons,
-  h0/h1/h2/h3, sqrt 0.018: no decay 0.094/0.116/0.143/0.169, decay 0.85
-  0.103/0.123/0.149/0.173, off after 1 Mar 0.104/0.121/0.150/0.170, base
-  0.112/0.127/0.153/0.177. No decay is still lowest, but by 0.001–0.010,
-  not the season-pooled 0.03–0.04. In 2025-26 the decays raise it by
-  0.002–0.015 (decay 0.85: 0.084/0.108/0.127/0.140 vs
-  0.075/0.098/0.119/0.138), not threefold. For rate 0.032, off after 1 Mar
-  ties no decay (0.112/0.128/0.156/0.173 vs 0.108/0.127/0.155/0.177).
+WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
+WIS lower than base. L1 coverage bias: lower is better.
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))
@@ -245,3 +198,36 @@ mv_cols <- setNames(DECAY_COLS, mv_plot_cfgs)
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
+
+# Findings
+
+There are no uncertainty estimates; a WIS gap under 1 point or a month-avg
+coverage gap under 0.01 is read as no clear difference. The cold start leaves
+Nov–Dec 2024 equal to the base for every config. States only, h0/h1/h2/h3.
+
+- **Decays vs no decay, pooled WIS:** sqrt 0.018 loses 0.4–0.5 at h0 and is
+  within 0.2 at h1–h3; rate 0.018 loses 0.5–0.7 at h0 and 0.2–0.3 at h1–h3;
+  rate 0.032 loses 0.2–0.5 at h0 and at most 0.2 at h1–h3. No strong result.
+  For sqrt the order flips by season: in 2024-25 the decays are 0.1–0.3
+  ahead at h1–h3; in 2025-26 they are 0.9–1.3 behind at h0.
+- **`off_after` vs no decay, pooled WIS:** sqrt 0.018 +2.3/+1.2/+1.2/+1.3 vs
+  +2.2/+0.8/+0.6/+0.6 (0.1–0.7 apart); rate 0.032 −0.1 to +0.5; rate 0.018
+  −0.5 to 0. No pooled gap reaches 1 point. The sqrt gain is mostly 2025-26
+  (+3.4/+1.6/+1.9/+2.6 vs +3.0/+1.0/+1.1/+1.5). In 2024-25 the rate-scale
+  trackers are lower at h0 with the switch-off. The date was tuned
+  in-sample.
+- **March and spring at h2:** the decays shrink the March loss (sqrt
+  2025-26: −27.9 to −10.7/−6.3/−2.9; `off_after` −0.0), and also remove the
+  April–May gains (sqrt May 2025-26: +17.3 to +3.3/−0.0/−0.1; `off_after`
+  +0.0).
+- **Month-avg coverage (both seasons):** sqrt 0.018 no decay
+  0.094/0.116/0.143/0.169, decay 0.85 0.103/0.123/0.149/0.173, `off_after`
+  0.104/0.121/0.150/0.170, base 0.112/0.127/0.153/0.177: gaps ≤ 0.010, no
+  clear difference. For rate 0.032, decay 0.85 is 0.005–0.007 lower than no
+  decay overall and 0.014–0.024 lower in 2025-26. Season-pooled, no decay is
+  0.032–0.043 lower for sqrt, but pooling lets ramp and post-peak errors
+  cancel.
+- **Carry-over:** `off_after` carries the pre-March offset into the next
+  ramp. In 2025-26 that ramp under-predicted too (Nov 2025 h0 month bias
+  0.065 for `off_after` vs 0.096–0.103 for the decays), which a season that
+  ramps differently would not repeat.

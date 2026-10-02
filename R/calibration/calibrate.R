@@ -97,10 +97,11 @@ hub_series_matrix <- function(series, round_date, n_levels) {
 #'   unchanged into the next season. `"04-01"` switches calibration off for the
 #'   spring tail, where the peak-tuned offsets are out of regime.
 #' @param late_decay `NULL`, or `list(from = "MM-DD", factor = )`. At each round
-#'   whose reference date falls on or after `from` (and before July), the fast
-#'   offset is multiplied by `factor` in `[0, 1]` before it is played; learning
-#'   continues as usual. The slow term is not decayed. Mutually exclusive with
-#'   `off_after`.
+#'   whose reference date falls on or after `from` (and before July), the stored
+#'   fast offset is multiplied by `factor` in `[0, 1]`, so the shrink persists:
+#'   later rounds, and the next season under `carry`, start from the shrunk
+#'   value. Learning continues as usual. The slow term is not decayed. Mutually
+#'   exclusive with `off_after`.
 #' @param lr_seasonal `NULL`, or `list(half_width_weeks = 5)`. Pools into the
 #'   eta residual window the rounds of every earlier season that fall within
 #'   `half_width_weeks` of the same point in the season (same calendar date
@@ -471,64 +472,6 @@ hub_quantile_loss <- function(cal, drop_burn_in = TRUE, by = character(0)) {
       .groups = "drop"
     ) %>%
     mutate(pct_improvement = 100 * (.data$loss_base - .data$loss_cal) / .data$loss_base)
-}
-
-
-#' Rolling calibration error against rolling quantile loss, the trade-off curve.
-#'
-#' Both quantities are rolling averages over the last `window` rounds of one
-#' series (or of a geo-pooled set of series):
-#'   calibration error = mean over levels of |rolling coverage at a - a|
-#'   quantile loss     = mean over levels and rounds of the pinball loss
-#' Plotting one against the other shows whether calibration is being bought at
-#' the cost of sharpness, which is the thing a tracker can quietly get wrong.
-#'
-#' @param cal [calibrate_hub_forecasts()] output.
-#' @param window number of rounds in the rolling window.
-#' @param by grouping columns; `character(0)` pools all locations, which is the
-#'   default because per-series rolling coverage over 20 rounds is mostly noise.
-#' @export
-hub_rolling_tradeoff <- function(cal, window = 20L, by = character(0), drop_burn_in = TRUE) {
-  fc <- if (is.list(cal) && !is.data.frame(cal)) cal$forecasts else cal
-  # Rounds a location was not forecast at are all-NA in value_base/value_cal.
-  fc <- fc %>% filter(!is.na(.data$truth), !is.na(.data$value_base))
-  if (drop_burn_in) fc <- fc %>% filter(!.data$is_burn_in)
-  pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
-
-  # Per (round, level) within each group: coverage indicator and pinball loss,
-  # pooled over whatever `by` does not name (locations, by default).
-  per_round <- fc %>%
-    group_by(across(all_of(c(by, "horizon", "round_index", "reference_date", "level")))) %>%
-    summarize(
-      cov_base = mean(.data$truth <= .data$value_base),
-      cov_cal = mean(.data$truth <= .data$value_cal),
-      loss_base = mean(pinball(.data$truth, .data$value_base, .data$level)),
-      loss_cal = mean(pinball(.data$truth, .data$value_cal, .data$level)),
-      .groups = "drop"
-    )
-
-  roll <- function(x) slider::slide_dbl(x, mean, .before = window - 1L, .complete = TRUE)
-  per_round %>%
-    group_by(across(all_of(c(by, "horizon", "level")))) %>%
-    arrange(.data$round_index, .by_group = TRUE) %>%
-    mutate(
-      roll_cov_base = roll(.data$cov_base),
-      roll_cov_cal = roll(.data$cov_cal),
-      roll_loss_base = roll(.data$loss_base),
-      roll_loss_cal = roll(.data$loss_cal)
-    ) %>%
-    ungroup() %>%
-    filter(!is.na(.data$roll_cov_base)) %>%
-    # Now collapse the level axis: calibration error is the mean over levels of
-    # |rolling coverage - nominal|.
-    group_by(across(all_of(c(by, "horizon", "round_index", "reference_date")))) %>%
-    summarize(
-      cal_error_base = mean(abs(.data$roll_cov_base - .data$level)),
-      cal_error_cal = mean(abs(.data$roll_cov_cal - .data$level)),
-      qloss_base = mean(.data$roll_loss_base),
-      qloss_cal = mean(.data$roll_loss_cal),
-      .groups = "drop"
-    )
 }
 
 
