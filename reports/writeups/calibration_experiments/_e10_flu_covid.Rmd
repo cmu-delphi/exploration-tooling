@@ -159,6 +159,41 @@ for (d in names(FIN)) {
 }
 ```
 
+# Findings, part 1
+
+States only, h0/h1/h2/h3, WIS reduction % (positive = calibrated WIS lower
+than base). No uncertainty estimates; gaps under 1 point read as no clear
+difference.
+
+- **Flu, ensemble:** sqrt 0.018 warm +4.4/+2.5/+2.7/+4.3 pooled, REF-op
+  warm +3.9/+1.9/+1.5/+2.3, both cold configs within ±0.7 at h1–h3. All of
+  the warm configs' lead is 2024-25 (sqrt warm +4.4/+4.0/+4.9/+7.9; REF-op
+  warm wins 49–51 of 52 states against sqrt cold). In 2025-26 every config
+  is within 1 point of the base at h1–h2, and both warm configs lose at h3
+  (sqrt warm −1.7, REF-op warm −0.9).
+- **Flu, replay:** as E18: sqrt 0.018 warm +3.4/+1.6/+1.5/+2.7, REF-op warm
+  +2.8/+1.1/+0.8/+1.2. Here sqrt warm stays positive in 2025-26
+  (+3.3/+0.9/+0.8/+1.3) where on the ensemble it does not, so the replay
+  overstates its 2025-26 result for what we submit.
+- **Flu coverage, month-avg:** on the ensemble, REF-op warm is the only
+  config below the base at every horizon (0.090/0.110/0.124/0.138 vs
+  0.116/0.123/0.137/0.151); sqrt warm is close to the base at h1–h3
+  (0.119/0.133/0.147). On the replay sqrt warm is 0.009–0.017 above the base
+  at h2–h3 (E18).
+- **Covid, ensemble:** REF-op cold (covid prod) +0.8/−0.1/−0.3/−0.8 pooled;
+  sqrt 0.018 +0.1/−2.7/−3.7/−4.2. Both gain a little in 2024-25; in 2025-26
+  sqrt 0.018 loses 6.9–8.3 at h1–h3 against REF-op's 2.0–2.9, and REF-op
+  has the lower WIS in 44–45 of 52 states at h1–h3. Month-avg coverage is
+  within 0.011 of the base for both, and 0.004–0.006 above it at h2–h3.
+- **Covid, replay:** nothing is consistently positive beyond h0. Warm
+  starts (from the HHS backfill) lose at h0–h2 in 2024-25 (sqrt warm −1.3
+  to −5.1) and gain at h3 in 2025-26 (+4.1, +5.0). Pooled, the best h3 is
+  REF-op warm +2.8, the best h1 sqrt 0.018 cold −1.8 and REF-op cold −1.1.
+- **So:** on flu the warm sqrt 0.018 leads on both bases, but on the
+  ensemble its whole lead is the first live season. On covid sqrt 0.018 is
+  clearly worse than REF-op cold on what we submit, and no config tested
+  helps at h1–h3.
+
 # Part 2: covid ensemble, h−1–h3
 
 - Disease: covid. Base forecaster: the submitted `CMU-TimeSeries` ensemble.
@@ -226,3 +261,7 @@ wave; those Aug–Sep 2026 rounds are in no per-season table.
   0.029–0.051 (2025-26).
 - **By month at h3:** REF-op −16.5% in September and −12.0% in October
   (together 20% of base WIS); REF-paper −42% to −49% in April–May (about 6%).
+- **sqrt 0.018 (added 2026-10-02):** the largest h−1 gain, +14.9 pooled
+  (+14.9/+14.1 by season) against REF-op's +10.2, and +24.4% median absolute
+  error. At h1–h3 it is −3.3/−4.2/−4.1 pooled and −9.5/−9.1/−7.7 in 2025-26,
+  worse than REF-op (−3.0/−4.0/−4.3) and better than REF-paper.

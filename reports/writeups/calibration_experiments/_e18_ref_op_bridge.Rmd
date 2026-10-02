@@ -277,3 +277,19 @@ h0/h1/h2/h3, both seasons pooled unless stated.
 - **References:** rate 0.032 +1.3/+0.7/+0.5/+0.4 and rate 0.056
   +1.3/+0.5/+0.3/+0.0 pooled. Month-avg coverage: rate 0.032 equals the base;
   rate 0.056 is 0.008–0.014 above it.
+- **Branch, sqrt 0.018 warm:** +3.4/+1.6/+1.6/+2.5 pooled, the highest of
+  any config here, 0.5–1.4 above REF-op and 0.8–1.9 above sqrt 0.018 cold.
+  In 2024-25 +3.4/+2.1/+2.2/+3.3 (above REF-op by 0.2–1.7); in 2025-26
+  +3.4/+0.9/+0.8/+1.2 (above REF-op by 1.0–1.2, within 0.3 of sqrt 0.018
+  cold at h1–h3). Only the h3 gap to REF-op exceeds 1 point pooled.
+- **Branch coverage costs month-avg:** 0.098/0.126/0.164/0.195 pooled
+  against base 0.112/0.127/0.153/0.177 and REF-op 0.095/0.121/0.150/0.175,
+  so 0.011–0.018 worse than the base at h2–h3. In 2025-26 it is 0.026–0.029
+  above the base at h2–h3. Season-pooled it looks best at h0–h2
+  (0.040/0.034/0.032), which is the ramp/post-peak cancellation.
+- **State by state:** in 2024-25 REF-op beats sqrt 0.018 cold in 41–45 of
+  52 states at every horizon (median gap +1.5 to +1.7); in 2025-26 in only
+  14–18 (median −0.4 to −2.0). So the season flip is broad, not a few large
+  states. The warm branch beats sqrt 0.018 cold in 37–50 states in 2024-25
+  and 20–30 in 2025-26. Against REF-op it wins 19/21/26/41 of 52 states
+  in 2024-25 and 33/36/36/41 in 2025-26 (h0/h1/h2/h3).
