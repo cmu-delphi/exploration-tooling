@@ -95,9 +95,27 @@ Coverage:
 - **Season-pooled coverage gains are cancellation.** For example, E11's
   "4–5× lower bias" is about 2× per season, and nothing month by month.
 
-Operating point: nothing tested clearly beats the prod config (REF-op).
-Choosing between the candidates above needs uncertainty estimates and more
-seasons, not more single-run comparisons.
+Finalists (E10 part 1, E18), states only, h1/h2/h3 pooled over both seasons:
+
+- **Flu: sqrt 0.018 with a warm start leads on both bases.** Ensemble
+  +2.5/+2.7/+4.3 vs REF-op warm +1.9/+1.5/+2.3; replay +1.6/+1.5/+2.7 vs
+  +1.1/+0.8/+1.2. On the ensemble all of its lead is 2024-25; in 2025-26 it
+  is −0.2/−0.9/−1.7, slightly below REF-op warm. Month-avg coverage: on the
+  ensemble REF-op warm is the only config below the base at every horizon;
+  sqrt warm is level with the base there and 0.009–0.017 above it at h2–h3
+  on the replay.
+- **Covid: sqrt 0.018 is worse than REF-op cold on the ensemble.**
+  −2.7/−3.7/−4.2 vs −0.1/−0.3/−0.8, from 2025-26 (−6.9 to −8.3 at h1–h3;
+  REF-op has the lower WIS in 44–45 of 52 states). At h−1 sqrt 0.018 gains
+  the most of any config, +14.9 vs REF-op +10.2 (E10 part 2). No config
+  helps covid at h1–h3 on either base.
+- **The season flip is broad.** REF-op beats sqrt 0.018 cold in 41–45 of
+  52 flu states in 2024-25 and 14–18 in 2025-26 (E18).
+
+Operating point: for covid nothing tested beats REF-op cold (prod) at
+h0–h3. For flu, sqrt 0.018 warm is ahead of REF-op warm (prod) by about 1
+point at h1–h2 and 2 at h3 on the ensemble, all of it in 2024-25, with
+month-avg coverage closer to the base than REF-op's.
 
 ## Reference configs
 
@@ -146,7 +164,7 @@ gating), exact learning truth, spoiled submissions excluded.
 | E05 | `tracker_structure` | ensemble | warm start from burn-in | warm +1.7 to +3.2 at h2–h3 in 2024-25, ±0.4 in 2025-26, for every tracker. REF-op ≈ warm + leak (≤ 0.4). Month-avg coverage: all within 0.01 of each other | |
 | E07 | `flu_covid` (E07), `finalists` (E07b, the candidates) | both, same rows | do results transfer between ensemble and replay? | Same direction on both; ensemble gains about 1 point more with REF-op warm. Replay base 5–7% worse pooled, 10–33% worse at h0–h1 in 2025-26. Candidate order flips by season on both; rank correlation of coverage in 2025-26 is 0.31 | |
 | E09 | `learning_rate` | ensemble | constant rate × revision delay | knee 0.056: +3 to +5.5 over REF-paper at h1–h3; REF-op +1.2 to +2.4 over knee. Extra delay costs about 1 h−1 point per week. Above 0.1 loses steeply | month-avg: no constant rate beats base at h1–h3 |
-| E10 | `flu_covid` | covid ensemble | REF-paper and REF-op on covid | h−1 +10 to +11. REF-op h1–h3: +1.9 to +2.8 in 2024-25, −3.0 to −4.3 in 2025-26. REF-paper −10 to −19 at h1–h3 in 2025-26 | headline and month tables run to 2026-09-19, including the 2026 summer wave |
+| E10 | `flu_covid` | flu + covid, ensemble + replay | the finalists on both diseases and bases (part 1); REF-paper, REF-op and sqrt 0.018 on the covid ensemble at h−1–h3 (part 2) | see "Finalists" above. Part 2: h−1 +10 to +15 (sqrt 0.018 largest). REF-op h1–h3: +1.9 to +2.8 in 2024-25, −3.0 to −4.3 in 2025-26. REF-paper −10 to −19 and sqrt 0.018 −7.7 to −9.5 at h1–h3 in 2025-26 | part 1 is h0–h3 on rows both bases have; part 2 tables run to 2026-09-19, including the 2026 summer wave |
 | E11 | `tracker_structure` | ensemble | constant 0.1 vs adaptive | REF-op best pooled WIS at every horizon (up to 2 over warm + sqrt). Constant 0.1 gives up 1.5–2.3 at h−1/h0 vs adaptive sqrt | constant 0.1 is effectively cold; its coverage edge is season-pooled only |
 | E12 | none (`calibration_ws_replay.R`) | replay, cold, flu + covid | first look at the clean replay | flu: REF-op cold leads constant 0.1 by 0–2.5. Covid: REF-op cold h0 +1.3 states, losses at h1–h3 in 2025-26 | **all locations** (US is 47% of WIS); covid h0 gains are mostly US |
 | E13 | none (`calibration_ws_replay.R burn_in`) | replay, flu + covid | 2023-24 HHS burn-in | flu warm +1 to +2.6 in 2024-25, ≤ 0 in 2025-26. Covid: warm worse at h0–h1, better at h2–h3 (+1.3, +4.4); constant 0.1 warm −8 to −27 | HHS used as-is (3–9% below NHSN); coverage is season-pooled only |
@@ -154,7 +172,7 @@ gating), exact learning truth, spoiled submissions excluded.
 | E15 | `finalists` | replay, cold | where the WIS gain comes from | offsets a few % of interval width; REF-op gain from the lower half and the median shift | width-only variant's coverage not measured; split is not additive |
 | E16 | `learning_rate` | replay, cold | constant rate on sqrt scale | sqrt 0.018 about +1 over rate constants at h0; at h1–h3 within 0.2 pooled, up to +0.7 in 2025-26. vs REF-op cold: behind in 2024-25 h0–h1, ahead elsewhere; month-avg coverage tie | 0.018 picked in-sample |
 | E17 | `late_season` | replay, cold | shrink or stop offsets from 1 Mar | `late_decay` fixes March but costs about 0.5 at h0, otherwise ±0.2. Off 1 Mar +0.4 to +0.7 at h1–h3 for sqrt 0.018 (mostly 2025-26), ≤ 0 for rate 0.018 | `late_decay` shrinks the stored offset, so it carries into the next season |
-| E18 | `finalists` | replay | which piece of REF-op matters | REF-op vs sqrt 0.018 within 0.6 pooled; REF-op ahead in 2024-25 by 1.3–1.5, behind in 2025-26 by 0.8–1.3. Warm start +0.9 to +2.0 in 2024-25, −0.2 to −0.7 in 2025-26. No step moves month-avg coverage beyond 0.008 | steps 0 and 4 are the same cached runs as E13; steps 4 and 5 identical (scale invariance) |
+| E18 | `finalists` | replay | which piece of REF-op matters | REF-op vs sqrt 0.018 within 0.6 pooled; REF-op ahead in 2024-25 by 1.3–1.5, behind in 2025-26 by 0.8–1.3. Warm start +0.9 to +2.0 in 2024-25, −0.2 to −0.7 in 2025-26. No step moves month-avg coverage beyond 0.008. Branch sqrt 0.018 warm: +3.4/+1.6/+1.6/+2.5 pooled, best of all, but month-avg coverage 0.011–0.018 worse than base at h2–h3 | steps 0 and 4 are the same cached runs as E13; steps 4 and 5 identical (scale invariance) |
 
 E06 (ILI+ burn-in) and E08 (old covid) were run on code or data later found
 broken and were not rebuilt.
@@ -162,10 +180,14 @@ broken and were not rebuilt.
 ## Known issues
 
 - **Run cache ignores code.** `cal_run_cached()` keys on inputs and
-  arguments, not code. Some cached runs date from 2026-09-30 before the
-  exact-learning commit landed that evening. The E00 and E09 caches are
-  keyed by chunk code or string. Plan: clear the whole cache and re-run
-  everything exact from scratch.
+  arguments, not code; the E00 and E09 caches are keyed by chunk code or
+  name. Clear `cache/calibration/experiments/` after changing
+  `R/calibration/`.
+
+Checked on 2026-10-02: the whole cache was cleared and every experiment
+re-run from scratch (E12, E13 and all six notebooks). Every table matched
+the cached results cell for cell, so no result above came from a stale
+run. The pre-rerun cache is in `cache/calibration/_stale_2026-10-02/`.
 
 Checked and resolved on 2026-10-02:
 
@@ -186,7 +208,7 @@ Checked and resolved on 2026-10-02:
 |---|---|
 | E00, E01 | verified |
 | E02, E07, E09 | commented; changes made, not re-verified |
-| E18 | changes made (reference rows), not reviewed |
+| E10 part 1, E18 | changes made (finalists runs, state counts), not reviewed |
 | E03, E04, E05, E10, E11, E14, E15, E16, E17 | not reviewed |
 
 On 2026-10-02 every notebook's introduction and Findings were rewritten to
@@ -280,11 +302,9 @@ Checked against the code on 2026-10-02. Repo-wide items are in
 | item | status |
 |---|---|
 | Uncertainty for WIS and coverage differences (bootstrap over rounds or locations) | open; needed before any ranking under ~2 points means anything |
-| Clear the run cache and re-run everything exact | open |
 | Report ramp and post-peak months separately | open; only the month view exists |
-| sqrt constant 0.018 with a warm start | open |
 | Shrink only the played offset after the peak, keep the stored state | open; `late_decay` shrinks the stored state |
-| Covid with sqrt constant; covid at h−1/h0 only | open; "h0 only" can be read from existing columns |
+| Disease-specific operating point (flu sqrt 0.018 warm vs REF-op; covid h−1-only sqrt 0.018) | open; E10 numbers in "Finalists" |
 | h−1 calibration | blocked on the revision-method backtests (ROADMAP 3) |
 | HHS burn-in level (3–9% below NHSN) | open; E13 used it as-is |
 | ILI+ burn-in on the fixed replay | open; replay rebuilt 2026-09-23, nothing re-run |
