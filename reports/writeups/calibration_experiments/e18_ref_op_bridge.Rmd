@@ -111,6 +111,16 @@ better).
   the residuals, so on the square-root scale only the 1e-3 floor sees the
   units. Calibrated values differ by at most 1.6 admissions and every score
   matches step 4 to the reported digits.
+- **Rate-scale constant rates (references, outside the chain).** Rate
+  0.032 (E14's best) and 0.056 (E09's knee) give +1.3/+0.7/+0.5/+0.4 and
+  +1.3/+0.5/+0.3/0.0, below sqrt 0.018 (+2.2/+0.8/+0.6/+0.6) and REF-op
+  (+2.8/+1.1/+0.9/+1.1). Month-avg coverage bias is about the base's
+  (0.108–0.177 and 0.112–0.191 vs base 0.112–0.177; 0.056 is worse at
+  h2–h3). Both sit at zero through the ramp. On the ensemble (E09) the knee
+  looked good after the 2024-25 peak because the ensemble was still
+  under-predicting that spring (E07); `windowed_seasonal` over-predicts
+  after the peak, so here the same upward offsets cost WIS and coverage in
+  March–April.
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))
@@ -132,16 +142,22 @@ STEPS <- list(
   `5 per-100k units` = list(cfg = c(sqrt_adaptive, list(scales = wi$rate_scales)), burn_in = FALSE),
   `6 constant 0.018` = list(cfg = utils::modifyList(const_cfg, list(lr = 0.018, transform = "sqrt")), burn_in = FALSE)
 )
+# Rate-scale constant rates for comparison, outside the chain: E14's best and E09's knee, as E14 runs them.
+e14_const <- ws_configs(wi$rate_scales, burn_in = TRUE)[["E11 constant 0.1"]]
+REFS <- list(
+  `ref: rate 0.032 (E14)` = list(cfg = utils::modifyList(e14_const, list(lr = 0.032)), burn_in = FALSE),
+  `ref: rate 0.056 (E09 knee)` = list(cfg = utils::modifyList(e14_const, list(lr = 0.056)), burn_in = FALSE)
+)
 run <- function(spec) {
   fc <- if (spec$burn_in) fc_burn_in else wi$fc
   do.call(cal_run_cached, c(list(fc, wi$truth), spec$cfg, list(learn = "exact", vintages = wi$vintages, workers = params$workers)))
 }
-cals <- purrr::map(STEPS, run)
+cals <- purrr::map(c(STEPS, REFS), run)
 ```
 
 ```{r metrics}
 SEASONS <- c(LIVE, "both")
-STEP_COLS <- setNames(c("#000000", "#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#D55E00"), names(STEPS))
+STEP_COLS <- setNames(c("#000000", "#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#D55E00", "#999999", "#882255"), names(c(STEPS, REFS)))
 step_m <- purrr::imap(cals, function(cal, nm) {
   fc <- cal$forecasts %>% mutate(season = season_of(reference_date)) %>% filter(location != "US")
   ws_scores(fc) %>%
@@ -151,7 +167,7 @@ step_m <- purrr::imap(cals, function(cal, nm) {
 }) %>%
   bind_rows() %>%
   mutate(
-    step = factor(step, levels = names(STEPS)),
+    step = factor(step, levels = names(c(STEPS, REFS))),
     season = factor(season, levels = SEASONS, labels = c(LIVE, "both seasons")),
     h = factor(paste0("h", horizon), levels = paste0("h", 0:3))
   )
@@ -204,7 +220,7 @@ WIS). Coverage: change in L1 coverage bias, season-pooled and month-average
 
 ```{r deltas}
 wis_both <- step_m %>%
-  filter(season == "both seasons") %>%
+  filter(season == "both seasons", step %in% names(STEPS)) %>%
   transmute(step, h, v = wis_pct)
 cov_both <- mv$cov %>%
   filter(season == "both") %>%
