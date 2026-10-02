@@ -51,6 +51,7 @@ with a "**Month view (2026-10-01):**" line. Verdicts:
 | E15 | REF-op width changes buy coverage | holds, smaller |
 | E16 | sqrt 0.018 ≈ rate 0.032 on coverage | reversed: sqrt better; rate worse than base in 2025-26 |
 | E17 | decay / off-after give back coverage | weakened: small effect month by month |
+| E18 | warm start, leak, constant rate move coverage | reversed: no step moves month-avg coverage by more than 0.008 |
 
 Differences under about 0.01 are within the month-level noise floor.
 
@@ -72,6 +73,7 @@ Differences under about 0.01 are within the month-level noise floor.
 | E15 WIS sources | clean replay | not reviewed | | |
 | E16 sqrt constant lr | clean replay | not reviewed | | |
 | E17 late decay | clean replay | not reviewed | | |
+| E18 REF-op bridge | clean replay | not reviewed | | |
 
 E12 and E13 have no notebooks; they live in `notes/CALIBRATION.md` and
 `scripts/calibration/calibration_ws_replay.R`. E06 and E08 were superseded

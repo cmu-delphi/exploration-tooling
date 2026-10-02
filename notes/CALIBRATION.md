@@ -237,6 +237,26 @@ Flu, clean replay, exact, post-fix, states only.
   coverage ranks identically; `off_after` 03-01 is last on A in 2024-25 but
   second on B, so date-based switches don't transfer between forecasters.
 
+## REF-op bridge (E18, 2026-10-01)
+
+`e18_ref_op_bridge.Rmd`: flu, clean replay with the 2023-24 HHS season,
+exact, states only, one setting per step from REF-op to sqrt constant
+0.018. Pooled WIS reduction h0/h1/h2/h3: REF-op +2.8/+1.1/+0.9/+1.1,
+sqrt 0.018 +2.2/+0.8/+0.6/+0.6; REF-op leads in 2024-25, sqrt 0.018 in
+2025-26.
+
+- REF-op's edge comes from the warm start (0.5–1 point, 2024-25 only), the
+  leak (~1 point at h1–h3, both seasons) and the eta warm-up from the
+  burn-in season (~0.5 point at h2–h3, 2024-25 only). The slow term adds
+  nothing without the warm start. Per-100k units are a no-op for adaptive
+  sqrt.
+- Over cold adaptive sqrt, the constant rate is worth +1.0 to +2.3 at h1–h3.
+- No step moves month-averaged coverage bias by more than 0.008 (noise
+  floor ~0.01); the large season-pooled coverage moves are cancellation.
+- E13 follow-up answered: the warm start is worth about twice the eta
+  warm-up; both matter only in the first live season.
+- Untested: sqrt 0.018 with a warm start, the one REF-op piece it lacks.
+
 ## Data
 
 FluSight CMU-TimeSeries submissions: 83 rounds (2023-10-14 … 2026-05-30), 53
