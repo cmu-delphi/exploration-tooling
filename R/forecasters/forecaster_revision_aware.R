@@ -232,13 +232,6 @@ scaled_pop_seasonal_revision <- function(
     cli::cli_warn("revision_aware: target {target_tv} is not a whole number of weeks past the latest data ({max_tv}); no forecast.")
     return(make_null_forecast())
   }
-  # A negative ahead asks for a week that should already be reported. If it isn't
-  # (a reporting gap), forecasting it from older data is not the nowcast the
-  # ensemble expects at h−1.
-  if (ahead < 0 && design_ahead > 0) {
-    cli::cli_warn("revision_aware: ahead {ahead} targets {target_tv}, which isn't reported yet (latest {max_tv}); no forecast.")
-    return(make_null_forecast())
-  }
 
   # Revision-aware design: as-of lags for every base column plus the finalized
   # outcome target, then restrict to the genuinely-revised primary source.
