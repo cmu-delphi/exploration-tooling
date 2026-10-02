@@ -32,8 +32,8 @@ Variants of the adaptive tracker, each changed alone from the reference.
   start of a ramp is sized by last year's ramp. Run with carry and with
   reset at the summer.
 
-This asks the original E02's question (`calibration_qt_seasons_flu.Rmd`
-and the "Method variants" table in `notes/CALIBRATION.md`) on the current
+This asks the original E02's question (`calibration_qt_seasons_flu.Rmd`,
+pre-fix) on the current
 setup. It is a new experiment, not a reproduction: four things changed at
 once, so it can't say which change matters.
 

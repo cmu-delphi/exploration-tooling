@@ -587,7 +587,7 @@ joined_targets <- list2(
 combined_targets <- build_combined_targets(external_forecast_targets)
 
 # ============================== CALIBRATION TARGETS ============================
-# Same design as flu; see flu_hosp_prod.R and notes/CALIBRATION.md. No 2023-24
+# Same design as flu; see flu_hosp_prod.R and notes/calibration-ledger.md. No 2023-24
 # burn-in for covid (hub started 2024-11-23), so slow_init is NULL.
 calibration_targets <- list(
   tar_target(

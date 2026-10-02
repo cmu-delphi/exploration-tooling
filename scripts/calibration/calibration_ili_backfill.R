@@ -4,8 +4,8 @@
 # that calibrate_hub_forecasts() consumes. ILI+ is the same augmentation source
 # the prod forecasters train on (see scripts/flu_hosp_prod.R `nhsn_prod_archive`),
 # so this is "what would our seasonal forecaster have said" for 2010-2024, on the
-# ILI+ percent scale rather than NHSN counts. See notes/CALIBRATION.md, "ILI+
-# burn-in", for how the scale mismatch is handled downstream.
+# ILI+ percent scale rather than NHSN counts. The `scales` option of
+# calibrate_hub_forecasts() handles the scale mismatch downstream.
 #
 # ILI+ is faux-versioned (version = time_value), so every snapshot is finalized
 # data cut at the forecast date; there is no revision realism here. To mimic
