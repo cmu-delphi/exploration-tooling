@@ -43,8 +43,9 @@ learns from, at both reference configs (REF-paper and REF-op; see the index):
 A round with reference date `d` sees data published by `d - 3` (the Wednesday
 submission). Vintages start 2024-11-19; earlier as-of dates use that first
 vintage. Scores are always against finalized truth, over both live seasons,
-all hub locations, with burn-in rounds excluded. "WIS change %" is positive
-when calibration improves on the base.
+all hub locations, with burn-in rounds excluded. "WIS reduction %" is
+100 × (base WIS − calibrated WIS) / base WIS, so positive = calibrated WIS
+lower than base. "L1 coverage bias" is lower-is-better.
 
 Questions: (1) how much did learning from finalized values flatter the
 earlier results, and (2) is the cheap mode close enough to exact to use in
@@ -55,7 +56,7 @@ sweeps?
 Numbers below are from the render of 30 September 2026.
 
 - **Finalized truth flattered the earlier results only a little.** At REF-op
-  with one week of extra delay, exact vs final WIS change is +5.4 vs +7.6 at
+  with one week of extra delay, exact vs final WIS reduction is +5.4 vs +7.6 at
   h−1, within 0.5 points at h0–h3, and the h−1 coverage bias is 0.074 vs
   0.067. At REF-paper, exact is within 0.6 points of final at every horizon:
   slightly better at h2/h3, slightly worse at h1. Earlier conclusions stand;
@@ -107,13 +108,13 @@ burn-in rounds use that vintage in place of their own.
 
 # Headline
 
-WIS change % by horizon:
+WIS reduction % by horizon (positive = calibrated WIS lower than base):
 
 ```{r wis-table}
 knitr::kable(cal_wide(head_tbl, "pct_improvement", id = c("ref", "settle_days", "learn")) %>% arrange(ref, settle_days, learn))
 ```
 
-L1 coverage bias (mean over levels of |coverage − level|); the `base` row is
+L1 coverage bias (lower is better; mean over levels of |coverage − level|); the `base` row is
 the uncalibrated forecast:
 
 ```{r cal-table}
@@ -125,7 +126,7 @@ knitr::kable(
 )
 ```
 
-The same by season:
+WIS reduction % by season (positive = calibrated WIS lower than base):
 
 ```{r season-table}
 knitr::kable(

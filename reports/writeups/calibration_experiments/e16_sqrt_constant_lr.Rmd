@@ -45,16 +45,16 @@ curve is E14's runs.
 Reference points: **REF-op cold** (prod's tracker without its warm start)
 and the rate-scale rates **0.018** and **0.032** (E14's best range).
 
-"WIS change %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so **positive
-is better**. "L1 coverage bias" is the mean over the 23 levels of
-|empirical coverage − level|. Each season is scored on its own rounds; the
+"WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so
+**positive = calibrated WIS lower than base**. "L1 coverage bias" (lower is
+better) is the mean over the 23 levels of |empirical coverage − level|. Each season is scored on its own rounds; the
 tracker runs over both, so 2025-26 starts from the offsets 2024-25 left
 behind. Results lead with states only (US excluded).
 
 # Findings
 
-Numbers are from the render of 1 October 2026, states only, WIS change %
-(positive is better) / L1 coverage bias, h0/h1/h2/h3. All-locations numbers
+Numbers are from the render of 1 October 2026, states only, WIS reduction %
+(positive = calibrated WIS lower than base) / L1 coverage bias (lower is better), h0/h1/h2/h3. All-locations numbers
 point the same way.
 
 - **The sqrt scale works, with a knee at 0.01–0.018.** Every sqrt rate from
@@ -141,7 +141,7 @@ sweep_m <- bind_rows(
   purrr::map2(sqrt_runs, SQRT_LRS, \(cal, lr) score(cal) %>% mutate(scale = "sqrt", lr = lr))
 ) %>% label()
 ref_m <- score(refop) %>% mutate(ref = "REF-op cold") %>% label()
-# Best sqrt rate: the highest mean WIS change among rates that improve WIS in both seasons at h0–h3 (states only).
+# Best sqrt rate: the highest mean WIS reduction among rates that improve WIS in both seasons at h0–h3 (states only).
 best_tbl <- sweep_m %>%
   filter(scale == "sqrt", geos == GEOS[["states"]], season %in% LIVE) %>%
   group_by(lr) %>%
@@ -177,7 +177,7 @@ curve_plot <- function(g) {
     scale_shape_manual(values = c(rate = 16, sqrt = 1), name = "scale") +
     facet_wrap(~h, nrow = 1) +
     coord_cartesian(ylim = c(max(-10, min(d$wis_pct)), max(c(d$wis_pct, r$wis_pct)) + 0.5)) +
-    labs(x = "L1 coverage bias", y = "WIS change % (positive is better)", title = g,
+    labs(x = "L1 coverage bias (lower is better)", y = "WIS reduction % (positive = calibrated WIS lower than base)", title = g,
       caption = "labels: r = rate-scale learning rate (per 100k), s = sqrt-scale learning rate; triangles: REF-op cold") +
     theme(legend.position = "bottom")
 }
@@ -197,20 +197,20 @@ curve_plot(GEOS[["all"]])
 
 ## Each metric against the learning rate, sqrt scale
 
-Top: WIS change %. Bottom: L1 coverage bias, each season's base dotted.
+Top: WIS reduction % (positive = calibrated WIS lower than base). Bottom: L1 coverage bias (lower is better), each season's base dotted.
 States only.
 
 ```{r vs-lr, fig.height=6.5}
 long <- sweep_m %>%
   filter(scale == "sqrt", geos == GEOS[["states"]], season != "both seasons") %>%
-  transmute(h, season, lr, `WIS change %` = wis_pct, `L1 coverage bias` = cal_err_cal) %>%
-  tidyr::pivot_longer(c(`WIS change %`, `L1 coverage bias`), names_to = "metric") %>%
-  mutate(metric = factor(metric, levels = c("WIS change %", "L1 coverage bias")))
+  transmute(h, season, lr, `WIS reduction % (positive = calibrated WIS lower than base)` = wis_pct, `L1 coverage bias (lower is better)` = cal_err_cal) %>%
+  tidyr::pivot_longer(c(`WIS reduction % (positive = calibrated WIS lower than base)`, `L1 coverage bias (lower is better)`), names_to = "metric") %>%
+  mutate(metric = factor(metric, levels = c("WIS reduction % (positive = calibrated WIS lower than base)", "L1 coverage bias (lower is better)")))
 base_lines <- sweep_m %>%
   filter(scale == "sqrt", geos == GEOS[["states"]], season != "both seasons") %>%
   distinct(h, season, value = cal_err_base) %>%
-  mutate(metric = factor("L1 coverage bias", levels = levels(long$metric)))
-zero <- tibble(metric = factor("WIS change %", levels = levels(long$metric)), value = 0)
+  mutate(metric = factor("L1 coverage bias (lower is better)", levels = levels(long$metric)))
+zero <- tibble(metric = factor("WIS reduction % (positive = calibrated WIS lower than base)", levels = levels(long$metric)), value = 0)
 ggplot(long, aes(lr, value, colour = season)) +
   geom_hline(data = zero, aes(yintercept = value), colour = "grey60", linewidth = 0.3) +
   geom_hline(data = base_lines, aes(yintercept = value, colour = season), linetype = "dotted") +
@@ -218,14 +218,14 @@ ggplot(long, aes(lr, value, colour = season)) +
   geom_point(size = 1) +
   scale_x_log10(breaks = c(0.001, 0.003, 0.01, 0.03, 0.1, 0.3), labels = c("0.001", "0.003", "0.01", "0.03", "0.1", "0.3")) +
   scale_colour_manual(values = SEASON_COLS, name = NULL) +
-  facet_grid(metric ~ h, scales = "free_y") +
+  facet_grid(metric ~ h, scales = "free_y", labeller = labeller(metric = label_wrap_gen(28))) +
   labs(x = "constant learning rate (sqrt of per-100k units per step)", y = NULL) +
   theme(legend.position = "bottom")
 ```
 
 ## Tables
 
-WIS change % / L1 coverage bias per config (rows) and season × horizon
+WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage bias (lower is better) per config (rows) and season × horizon
 (columns). The sqrt sweep, then the rate-scale rates around E14's best range
 and REF-op cold.
 
@@ -260,7 +260,7 @@ knitr::kable(season_table(GEOS[["all"]]))
 
 ### Picking the best sqrt rate
 
-For each sqrt rate, the worst and the mean WIS change % over the two seasons
+For each sqrt rate, the worst and the mean WIS reduction % (positive = calibrated WIS lower than base) over the two seasons
 and h0–h3 (states only). The best rate is the one with the highest mean
 among those whose worst case is still a gain (E14's criterion).
 
@@ -344,9 +344,9 @@ month_m <- ws_month_scores(fc_pick %>% filter(config %in% names(MONTH_COLS)) %>%
   mutate(h = factor(paste0("h", horizon), levels = paste0("h", 0:3)))
 ```
 
-## WIS change % by month
+## WIS reduction % by month
 
-Each season a row, each horizon a column. The grey bars (right axis
+WIS reduction % (positive = calibrated WIS lower than base). Each season a row, each horizon a column. The grey bars (right axis
 scaled to the left) are each month's share of the season's base WIS, so a
 large loss in a month with a small share costs little overall. The y axis is
 clipped at −40% and +30%, which also cuts the tallest bars.
@@ -361,30 +361,30 @@ ggplot(month_m, aes(month, pct, colour = config, group = config)) +
   facet_grid(season ~ h, scales = "free_x", space = "free_x") +
   scale_colour_manual(values = MONTH_COLS, name = NULL) +
   coord_cartesian(ylim = c(-40, 30)) +
-  labs(x = "month of reference date", y = "WIS change % (positive is better); grey: % of season base WIS") +
+  labs(x = "month of reference date", y = "WIS reduction % (positive = calibrated\nWIS lower than base); grey: % of season base WIS") +
   theme(legend.position = "bottom")
 ```
 
 ## Coverage by month
 
-Top: L1 coverage bias per month, base in black. Bottom: share of outcomes
+Top: L1 coverage bias (lower is better) per month, base in black. Bottom: share of outcomes
 below the median; 0.5 is calibrated, above 0.5 means the median sits too
 high (over-prediction). Base in black.
 
 ```{r month-cov, fig.height=8}
 cov_long <- bind_rows(
-  month_m %>% transmute(config = as.character(config), season, h, month, `L1 coverage bias` = cal_err_cal, `share below the median` = below_med_cal),
+  month_m %>% transmute(config = as.character(config), season, h, month, `L1 coverage bias (lower is better)` = cal_err_cal, `share below the median` = below_med_cal),
   month_m %>% filter(config == names(MONTH_COLS)[1]) %>%
-    transmute(config = "base", season, h, month, `L1 coverage bias` = cal_err_base, `share below the median` = below_med_base)
+    transmute(config = "base", season, h, month, `L1 coverage bias (lower is better)` = cal_err_base, `share below the median` = below_med_base)
 ) %>%
-  tidyr::pivot_longer(c(`L1 coverage bias`, `share below the median`), names_to = "metric") %>%
+  tidyr::pivot_longer(c(`L1 coverage bias (lower is better)`, `share below the median`), names_to = "metric") %>%
   mutate(config = factor(config, levels = c("base", names(MONTH_COLS))))
 half <- tibble(metric = "share below the median", y = 0.5)
 ggplot(cov_long, aes(month, value, colour = config, group = config)) +
   geom_hline(data = half, aes(yintercept = y), colour = "grey50", linetype = "dashed") +
   geom_line() +
   geom_point(size = 1) +
-  facet_grid(metric + season ~ h, scales = "free", space = "free_x") +
+  facet_grid(metric + season ~ h, scales = "free", space = "free_x", labeller = labeller(metric = label_wrap_gen(20))) +
   scale_colour_manual(values = c(base = "black", MONTH_COLS), name = NULL) +
   labs(x = "month of reference date", y = NULL) +
   theme(legend.position = "bottom")
@@ -422,7 +422,7 @@ ggplot(off_long, aes(reference_date, value, colour = config)) +
 
 ## Month table, h2
 
-WIS change % per month (states only, h2), with the base's share of the
+WIS reduction % (positive = calibrated WIS lower than base) per month (states only, h2), with the base's share of the
 season's WIS and the share of outcomes below the base and calibrated medians.
 
 ```{r month-table}
@@ -436,5 +436,5 @@ month_m %>%
     by = c("season", "month")
   ) %>%
   arrange(season, month) %>%
-  knitr::kable(caption = "WIS change % (share of outcomes below the calibrated median)")
+  knitr::kable(caption = "WIS reduction %, positive = calibrated WIS lower than base (share of outcomes below the calibrated median)")
 ```

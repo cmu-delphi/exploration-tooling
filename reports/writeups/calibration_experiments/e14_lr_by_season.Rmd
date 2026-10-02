@@ -39,17 +39,17 @@ Reference points, run on the same data:
 - **sqrt, adaptive**: the plain tracker on the square-root scale with the
   adaptive learning rate (E03's winner; E13's "E05 single cold").
 
-"WIS change %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so **positive
-is better** (the opposite sign of E09's "inflation"). "L1 coverage bias" is
-the mean over the 23 levels of |empirical coverage − level|. Each season is
+"WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so
+**positive = calibrated WIS lower than base**. "L1 coverage bias" (lower is
+better) is the mean over the 23 levels of |empirical coverage − level|. Each season is
 scored on its own rounds; the tracker still runs over both seasons, so
 2025-26 starts from the offsets 2024-25 left behind. Results lead with states
 only (US excluded), since US alone is about 45% of the all-locations WIS.
 
 # Findings
 
-Numbers are from the render of 1 October 2026, states only, WIS change %
-(positive is better) / L1 coverage bias. All-locations numbers point the
+Numbers are from the render of 1 October 2026, states only, WIS reduction %
+(positive = calibrated WIS lower than base) / L1 coverage bias (lower is better). All-locations numbers point the
 same way.
 
 - **Yes: 0.018–0.032 per 100k is good in both seasons.** At those rates WIS
@@ -96,7 +96,7 @@ refs <- purrr::map(ref_cfgs, run)
 ```{r metrics}
 GEOS <- c(states = "states only (US excluded)", all = "all locations")
 SEASONS <- c(LIVE, "both")
-# ws_scores() per location subset; wis_pct is the change vs base, positive is better.
+# ws_scores() per location subset; wis_pct is the WIS reduction % vs base (positive = calibrated WIS lower).
 score <- function(cal) {
   fc <- cal$forecasts %>% mutate(season = season_of(reference_date))
   purrr::imap(WS_GEOS[names(GEOS)], function(keep, g) ws_scores(fc %>% filter(keep(location))) %>% mutate(geos = g)) %>%
@@ -144,7 +144,7 @@ curve_plot <- function(g) {
     scale_shape_manual(values = c(`REF-op cold` = 17, `sqrt, adaptive` = 15), name = NULL) +
     facet_wrap(~h, nrow = 1) +
     coord_cartesian(ylim = c(max(-10, min(d$wis_pct)), max(c(d$wis_pct, r$wis_pct)) + 0.5)) +
-    labs(x = "L1 coverage bias", y = "WIS change % (positive is better)", title = g) +
+    labs(x = "L1 coverage bias (lower is better)", y = "WIS reduction % (positive = calibrated WIS lower than base)", title = g) +
     theme(legend.position = "bottom")
 }
 ```
@@ -164,20 +164,20 @@ curve_plot(GEOS[["all"]])
 # Each metric against the learning rate
 
 The same runs with the learning rate on the x axis, so the seasons can be
-compared at the same rate. Top: WIS change % (positive is better). Bottom:
-L1 coverage bias, with each season's base as a dotted line. States only.
+compared at the same rate. Top: WIS reduction % (positive = calibrated WIS lower than
+base). Bottom: L1 coverage bias (lower is better), with each season's base as a dotted line. States only.
 
 ```{r vs-lr, fig.height=6.5}
 long <- sweep_m %>%
   filter(geos == GEOS[["states"]], season != "both seasons") %>%
-  transmute(h, season, lr, `WIS change %` = wis_pct, `L1 coverage bias` = cal_err_cal) %>%
-  tidyr::pivot_longer(c(`WIS change %`, `L1 coverage bias`), names_to = "metric") %>%
-  mutate(metric = factor(metric, levels = c("WIS change %", "L1 coverage bias")))
+  transmute(h, season, lr, `WIS reduction % (positive = calibrated WIS lower than base)` = wis_pct, `L1 coverage bias (lower is better)` = cal_err_cal) %>%
+  tidyr::pivot_longer(c(`WIS reduction % (positive = calibrated WIS lower than base)`, `L1 coverage bias (lower is better)`), names_to = "metric") %>%
+  mutate(metric = factor(metric, levels = c("WIS reduction % (positive = calibrated WIS lower than base)", "L1 coverage bias (lower is better)")))
 base_lines <- sweep_m %>%
   filter(geos == GEOS[["states"]], season != "both seasons") %>%
   distinct(h, season, value = cal_err_base) %>%
-  mutate(metric = factor("L1 coverage bias", levels = levels(long$metric)))
-zero <- tibble(metric = factor("WIS change %", levels = levels(long$metric)), value = 0)
+  mutate(metric = factor("L1 coverage bias (lower is better)", levels = levels(long$metric)))
+zero <- tibble(metric = factor("WIS reduction % (positive = calibrated WIS lower than base)", levels = levels(long$metric)), value = 0)
 ggplot(long, aes(lr, value, colour = season)) +
   geom_hline(data = zero, aes(yintercept = value), colour = "grey60", linewidth = 0.3) +
   geom_hline(data = base_lines, aes(yintercept = value, colour = season), linetype = "dotted") +
@@ -185,15 +185,16 @@ ggplot(long, aes(lr, value, colour = season)) +
   geom_point(size = 1) +
   scale_x_log10(breaks = c(0.003, 0.01, 0.03, 0.1, 0.3, 1), labels = c("0.003", "0.01", "0.03", "0.1", "0.3", "1")) +
   scale_colour_manual(values = SEASON_COLS, name = NULL) +
-  facet_grid(metric ~ h, scales = "free_y") +
+  facet_grid(metric ~ h, scales = "free_y", labeller = labeller(metric = label_wrap_gen(28))) +
   labs(x = "constant learning rate (per 100k per step)", y = NULL) +
   theme(legend.position = "bottom")
 ```
 
 # Tables
 
-WIS change % / L1 coverage bias, per learning rate (rows) and season ×
-horizon (columns). The base row shows the base's coverage bias. The
+WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage
+bias (lower is better), per learning rate (rows) and season × horizon
+(columns). The base row shows the base's coverage bias. The
 references follow the sweep.
 
 ```{r tables}

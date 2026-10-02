@@ -38,8 +38,9 @@ from E04:
 # Findings
 
 Numbers are from the render of 30 September 2026, pooled over both live
-seasons and all locations; WIS and absolute-error changes are % vs base,
-positive is better.
+seasons and all locations. WIS reduction % is 100 × (base − calibrated) / base,
+so positive = calibrated WIS lower than base; the absolute-error change of the
+median is defined the same way. L1 coverage bias: lower is better.
 
 - **The warm start helps every tracker, and never hurts.** Each warm run is
   at least as good as its cold twin on WIS at every horizon, and better on

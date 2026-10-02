@@ -58,14 +58,14 @@ point. The seasonal window needs an earlier season to look back on, so it
 runs with the 2023-24 burn-in (the HHS-stitched backfill from E13), which
 only warms eta; the reference is re-run with the same burn-in as a bridge.
 
-"WIS change %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so **positive
-is better**. "L1 coverage bias" is the mean over the 23 levels of
-|empirical coverage − level|. Results lead with states only.
+"WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so
+**positive = calibrated WIS lower than base**. "L1 coverage bias" (lower is
+better) is the mean over the 23 levels of |empirical coverage − level|. Results lead with states only.
 
 # Findings
 
-Numbers are from the render of 1 October 2026, states only, WIS change %
-(positive is better) / L1 coverage bias, h0/h1/h2/h3, both seasons pooled
+Numbers are from the render of 1 October 2026, states only, WIS reduction %
+(positive = calibrated WIS lower than base) / L1 coverage bias (lower is better), h0/h1/h2/h3, both seasons pooled
 unless stated. All-locations numbers point the same way.
 
 - **Switching off in spring is the only variant with a large WIS gain.**
@@ -156,7 +156,7 @@ CFG_COLS <- setNames(c("black", "#56B4E9", "#0072B2", "#003F6B", "#CC79A7", "gre
 
 # 1. Overall, by season
 
-WIS change % per config, one panel per season and horizon, states only. The
+WIS reduction % (positive = calibrated WIS lower than base) per config, one panel per season and horizon, states only. The
 seasonal-window bars compare with "reference + burn-in", the others with
 "reference".
 
@@ -166,11 +166,11 @@ ggplot(m %>% filter(geos == GEOS[["states"]]), aes(config, wis_pct, fill = confi
   geom_col(width = 0.8) +
   facet_grid(season ~ h) +
   scale_fill_manual(values = CFG_COLS, name = NULL) +
-  labs(x = NULL, y = "WIS change % (positive is better)") +
+  labs(x = NULL, y = "WIS reduction % (positive = calibrated WIS lower than base)") +
   theme(legend.position = "bottom", axis.text.x = element_blank(), axis.ticks.x = element_blank())
 ```
 
-WIS change % / L1 coverage bias.
+WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage bias (lower is better).
 
 ```{r tables}
 season_table <- function(g) {
@@ -215,7 +215,7 @@ bind_rows(
 
 # 2. Month by month
 
-WIS change % by calendar month of the reference date; rows are seasons,
+WIS reduction % (positive = calibrated WIS lower than base) by calendar month of the reference date; rows are seasons,
 columns horizons. Grey bars are each month's share of the season's base WIS.
 States only, clipped at −40%. The burn-in configs are left out except the
 seasonal window with reset.
@@ -236,11 +236,11 @@ ggplot(month_m, aes(month, pct, colour = config, group = config)) +
   facet_grid(season ~ h, scales = "free_x", space = "free_x") +
   scale_colour_manual(values = CFG_COLS[MONTH_CFGS], name = NULL) +
   coord_cartesian(ylim = c(-40, 30)) +
-  labs(x = "month of reference date", y = "WIS change %; grey: % of season base WIS") +
+  labs(x = "month of reference date", y = "WIS reduction % (positive = calibrated\nWIS lower than base); grey: % of season base WIS") +
   theme(legend.position = "bottom")
 ```
 
-h2 by month: WIS change % (share of outcomes below the calibrated median).
+h2 by month: WIS reduction % (positive = calibrated WIS lower than base) (share of outcomes below the calibrated median).
 
 ```{r month-table}
 month_m %>%

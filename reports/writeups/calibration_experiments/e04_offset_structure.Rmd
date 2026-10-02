@@ -38,8 +38,9 @@ E03 sqrt variant), learning from vintages the way prod does (E00).
 # Findings
 
 Numbers are from the render of 30 September 2026, pooled over both live
-seasons and all locations; WIS and absolute-error changes are % vs base,
-positive is better.
+seasons and all locations. WIS reduction % is 100 × (base − calibrated) / base,
+so positive = calibrated WIS lower than base; the absolute-error change of the
+median is defined the same way. L1 coverage bias: lower is better.
 
 - **The leak buys WIS at h1–h3 with coverage.** `leak 0.1` moves WIS from
   +0.7/−1.3/−1.4 to +1.6/+0.8/+0.6 at h1–h3, but coverage bias nearly

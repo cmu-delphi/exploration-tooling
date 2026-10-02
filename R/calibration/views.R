@@ -50,7 +50,7 @@ cal_run <- function(forecasts, truth, ref = "paper", ..., learn = c("final", "vi
 }
 
 
-#' V-head: WIS change % and L1 coverage bias by horizon, one row per
+#' V-head: WIS reduction % and L1 coverage bias by horizon, one row per
 #' (variant, `by`, horizon).
 #'
 #' @param cals named list of [calibrate_hub_forecasts()] outputs.
@@ -82,7 +82,7 @@ cal_wide <- function(tbl, col, digits = 1, id = "variant") {
 }
 
 
-#' V-month: WIS change % by month of reference date, with each month's share
+#' V-month: WIS reduction % by month of reference date, with each month's share
 #' of the base WIS, per horizon.
 #' @export
 cal_by_month <- function(cal) {
@@ -222,7 +222,7 @@ cal_state_panel <- function(cal, loc, season, truth, vintages, title = NULL) {
 #' Ranking by a single metric fills a gallery with small states late in the
 #' season, where a stale offset on a tiny base inflates relative error, and
 #' ranking by WIS per 100k favours small places too (their rates are noisier).
-#' Here each forecast is scored by its WIS change as a share of its own
+#' Here each forecast is scored by its WIS reduction as a share of its own
 #' location-season's base WIS, so a late-season forecast on a tiny base only
 #' ranks high if it moved a real part of that location's season error. Small
 #' places still vary more, so slots are split by size (population above or
