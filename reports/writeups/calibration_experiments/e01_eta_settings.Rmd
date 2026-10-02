@@ -88,6 +88,15 @@ unless stated. All-locations numbers point the same way.
   the same answer. The multiplier is the knob, the window is immaterial, 0.1
   overpays and 0.01 is near WIS parity but slow. One change: carry vs reset
   was "minor" before; here carry is clearly better in 2025-26.
+- **Month view (2026-10-01):** scored within each month, the coverage
+  ranking changes. Month-avg L1 coverage bias (both seasons, h0/h1/h2/h3,
+  window 20, carry): base 0.112/0.127/0.153/0.177, mult 0.01
+  0.093/0.114/0.142/0.168, 0.03 0.095/0.120/0.150/0.176, 0.1
+  0.097/0.130/0.161/0.190. So 0.01, not 0.03, has the lowest month-level
+  bias, and at h2–h3 0.03 is level with the base: most of its season-pooled
+  coverage gain is ramp and post-peak errors cancelling. Carry vs reset
+  flips slightly in 2025-26: reset 0.076/0.103/0.122/0.138, carry
+  0.078/0.105/0.130/0.143.
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))

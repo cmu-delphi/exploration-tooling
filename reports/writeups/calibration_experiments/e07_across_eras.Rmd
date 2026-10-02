@@ -138,6 +138,18 @@ point the same way.
   point, not up to 11 (that was h−1, a different model), and B is not less
   miscalibrated than the ensemble (equal in 2024-25, worse in 2025-26).
   B single still has much the best 2025-26 coverage (0.010–0.013).
+- **Month view (2026-10-01):** the coverage rankings do not survive
+  scoring within each month. Month-avg L1 coverage bias, both seasons, mean
+  over h0–h3: on A, REF-op warm 0.115 < REF-op cold 0.120 < sqrt 0.018
+  0.124 < off 1 Mar 0.126 < rate 0.032 0.133 (base 0.132); on B, sqrt 0.018
+  0.130 < REF-op cold 0.133 < REF-op warm 0.135 < off 1 Mar 0.136 < rate
+  0.032 0.142 (base 0.142). So off-1-March is not the worst, rate 0.032 is
+  (no better than the base), and the order differs between A and B. Among
+  the trackers, operating has the lowest month-avg bias on A
+  (0.090/0.110/0.124/0.138 vs single 0.101/0.117/0.130/0.150) and the three
+  tie on B; B single's 2025-26 lead disappears (0.078/0.105/0.128/0.142 vs
+  operating 0.078/0.111/0.128/0.145). The base comparison holds: in
+  2025-26 A's month-avg bias is 0.089–0.117 against B's 0.097–0.146.
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))

@@ -59,6 +59,13 @@ median is defined the same way. L1 coverage bias: lower is better.
 - The median follows WIS: the leak improves absolute error at h1–h3
   (+3.4/+2.8/+3.4 vs +2.4/−0.6/+1.2) and costs 1.1 points at h−1 and 0.3 at
   h0.
+- **Month view (2026-10-01):** scored within each month (states only), the
+  leak costs no coverage. Month-avg L1 coverage bias at h−1…h3: single
+  0.108/0.102/0.117/0.130/0.150, leak 0.1 0.115/0.102/0.115/0.132/0.143,
+  base 0.134/0.116/0.123/0.137/0.151. The near-tripling of the
+  season-pooled bias is the leak no longer letting ramp and post-peak errors
+  cancel; month by month the two are level at h0–h2, the leak is better at
+  h3 and slightly worse at h−1.
 
 ```{r runs}
 sqrt_args <- list("paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3))

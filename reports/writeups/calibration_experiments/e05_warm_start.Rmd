@@ -62,6 +62,15 @@ median is defined the same way. L1 coverage bias: lower is better.
 - **Where REF-op loses** is unchanged from the finalized-truth runs: at h3,
   October (−30%) and March (−29%), 6% of the base WIS between them;
   December–January (71% of it) gain about 5%.
+- **Month view (2026-10-01):** scored within each month (states only),
+  `warm + single` is not the best-calibrated config. Month-avg L1 coverage
+  bias at h−1…h3: `warm + single` 0.107/0.100/0.116/0.128/0.146, REF-op
+  0.107/0.091/0.111/0.125/0.136, base 0.134/0.116/0.123/0.137/0.151. REF-op
+  is lowest at h0–h3, so the two do not mark opposite ends of a coverage
+  trade-off; `warm + single`'s low season-pooled bias is largely ramp and
+  post-peak errors cancelling (in March 2025-26 it loses 71/83% of WIS at
+  h2/h3 with bias 0.25/0.27 vs the base's 0.15/0.18). The warm start alone
+  cuts month-avg bias by 5–15% at h0–h3, not a third.
 
 ```{r runs}
 sqrt_args <- list("paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3))

@@ -62,6 +62,11 @@ median is defined the same way. L1 coverage bias: lower is better.
   with a constant learning rate (E09).
 - **2025-26 is harder for both.** sqrt loses 1.8–4.6% at h1–h3 there (count
   6.9–7.9%), against gains in 2024-25.
+- **Month view (2026-10-01):** scored within each month (states only),
+  sqrt's coverage edge is clearer than "similar": month-avg L1 coverage bias
+  0.108/0.102/0.117/0.130/0.150 at h−1…h3 vs count
+  0.115/0.102/0.120/0.143/0.168, base 0.134/0.116/0.123/0.137/0.151. Count
+  is worse than the base at h2–h3 month by month.
 
 ```{r runs}
 cals <- list(

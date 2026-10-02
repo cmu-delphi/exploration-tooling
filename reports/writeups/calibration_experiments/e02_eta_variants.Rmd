@@ -100,6 +100,20 @@ unless stated. All-locations numbers point the same way.
   seasonal window does not help. Two changes: reset now trails carry for the
   seasonal window (it used to recover some ground), and the coverage cost of
   switching off, not reported before, is large.
+- **Month view (2026-10-01):** the coverage cost of switching off is
+  mostly an artifact of pooling the season. Month-avg L1 coverage bias
+  (h0/h1/h2/h3): reference 0.095/0.120/0.150/0.176, off 1 March
+  0.104/0.124/0.153/0.170, off 15 February 0.106/0.126/0.153/0.169, base
+  0.112/0.127/0.153/0.177. The reference itself gains only 0.001–0.017 over
+  the base by month, so switching off gives up at most 0.01 and is better at
+  h3. In March 2025-26 switching off lowers the monthly bias (h2: 0.094 vs
+  0.196 for the reference). Per-level eta is slightly better than the
+  reference by month (0.092/0.117/0.147/0.173), not worse, and the seasonal
+  window with carry is worse than the burn-in reference at h2–h3
+  (0.156/0.183 vs 0.149/0.174).
+- **Month view (2026-10-01), median error:** in March the reference's median loses more
+  than its WIS (2025-26 h0–h3: absolute error −34/−54/−86/−109%, WIS
+  −22/−38/−60/−81%); switching off removes it.
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))

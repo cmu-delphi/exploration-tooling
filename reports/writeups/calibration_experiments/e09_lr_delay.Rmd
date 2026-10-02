@@ -132,6 +132,16 @@ step.
   the uncalibrated 0.111, and h−1 WIS is 0.9% worse than the base. +1 week
   recovers most of it (0.066); +2 and +3 weeks change little at h1–h3 and
   lose WIS at h−1.
+- **Month view (2026-10-01):** scored within each month (states only, +1
+  week, re-run), the knee does not beat REF-paper on coverage and REF-op has
+  the lowest bias, not twice it. Month-avg L1 coverage bias at h−1…h3: knee
+  0.122/0.117/0.129/0.142/0.164, 0.1 0.118/0.114/0.127/0.147/0.172,
+  REF-paper 0.115/0.102/0.120/0.143/0.168, REF-op
+  0.107/0.091/0.111/0.125/0.136, base 0.134/0.116/0.123/0.137/0.151. At
+  h1–h3 the knee and 0.1 are worse than the base month by month, so the
+  L-shaped drop in season-pooled bias is ramp and post-peak errors
+  cancelling. The delay results hold: stateful +0 weeks is worse than the
+  base at h−1 (0.151 vs 0.134) and +1 week recovers (0.118).
 
 ```{r libs, cache=FALSE}
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))

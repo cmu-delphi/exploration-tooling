@@ -69,6 +69,15 @@ re-run.
 - **Untested:** a warm start on the constant-rate tracker. The warm start
   is the largest single gain for the adaptive tracker (E05), and the constant
   rate keeps coverage without a leak.
+- **Month view (2026-10-01):** scored within each month (states only), the
+  constant rate has the worst coverage, not the best. Month-avg L1 coverage
+  bias at h−1…h3: constant 0.1 0.118/0.114/0.127/0.147/0.172, `sqrt,
+  adaptive` 0.108/0.102/0.117/0.130/0.150, REF-paper
+  0.115/0.102/0.120/0.143/0.168, `warm + sqrt, adaptive`
+  0.107/0.100/0.116/0.128/0.146, REF-op 0.107/0.091/0.111/0.125/0.136, base
+  0.134/0.116/0.123/0.137/0.151. It is highest of the five at every horizon
+  and worse than the base at h1–h3; its h−1 edge over the warm tracker
+  disappears.
 
 ```{r runs}
 sqrt_args <- list("paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3))

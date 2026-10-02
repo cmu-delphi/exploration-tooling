@@ -67,6 +67,14 @@ bad NHSN release that was corrected the next day.
 - **Implication for prod:** for covid, calibrating h−1 (and perhaps h0) and
   passing h1–h3 through would keep the gain and drop the losses. The covid prod
   pipeline calibrates every horizon today.
+- **Month view (2026-10-01):** the covid base is calibrated only
+  season-pooled. Scored within each month (states only, August–July
+  seasons 2024-25 and 2025-26), its L1 coverage bias is
+  0.148/0.102/0.125/0.143/0.157 at h−1…h3, about the flu base's level
+  (0.134/0.116/0.123/0.137/0.151). Neither config improves on it beyond
+  h−1/h0: REF-op
+  0.123/0.096/0.126/0.147/0.161, REF-paper 0.111/0.094/0.126/0.155/0.171.
+  The h−1 gain and the h2–h3 coverage cost hold.
 
 ```{r runs}
 no_burn_in <- list(burn_in_seasons = character(0), slow_init = NULL)
