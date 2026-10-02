@@ -126,6 +126,15 @@ knitr::kable(
 )
 ```
 
+The same bias for states only, both seasons, season-pooled against
+month-average (see "Month view" below). Configs are `ref/settle_days/learn`:
+
+```{r cal-table-month}
+mv <- cal_month_view(cals, seasons = LIVE, horizons = NULL)
+mv_show_table <- FALSE
+knitr::kable(cal_month_cov_table(mv, seasons = "both"), caption = CAL_MONTH_COV_CAPTION)
+```
+
 WIS reduction % by season (positive = calibrated WIS lower than base):
 
 ```{r season-table}
@@ -162,4 +171,12 @@ ggplot(drift, aes(month, 100 * rel, colour = factor(horizon), group = horizon)) 
   geom_point(size = 0.8) +
   facet_wrap(~config) +
   labs(x = NULL, y = "median |cheap − exact| / base median (%)", colour = "horizon")
+```
+
+```{r month-view-cfgs}
+# The runs the Findings compare: final vs exact at one week of delay, and the cheap (vintage) mode vs exact with none.
+mv_plot_cfgs <- c("op/14/final", "op/14/exact", "op/7/vintage", "op/7/exact", "paper/14/final", "paper/14/exact")
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```

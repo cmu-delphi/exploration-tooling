@@ -258,6 +258,18 @@ season_table <- function(g) {
 knitr::kable(season_table(GEOS[["states"]]))
 ```
 
+L1 coverage bias, season-pooled against month-average (see "Month view" below):
+
+```{r table-states-month}
+mv_cals <- c(
+  setNames(sweep, with(grid, sprintf("sqrt mult %s, window %s, %s", mult, as.character(window), policy))),
+  list(`count mult 0.03, window 20, carry` = count_ref)
+)
+mv <- cal_month_view(mv_cals, seasons = LIVE)
+mv_show_table <- FALSE
+knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
+```
+
 ## All locations
 
 ```{r table-all}
@@ -277,4 +289,15 @@ bind_rows(
   tidyr::pivot_wider(names_from = col, values_from = cell) %>%
   arrange(config) %>%
   knitr::kable()
+```
+
+```{r month-view-cfgs}
+# The multipliers and the season policy the Findings compare, at window 20, plus the count-scale run.
+mv_plot_cfgs <- c(
+  "sqrt mult 0.1, window 20, carry", "sqrt mult 0.03, window 20, carry", "sqrt mult 0.01, window 20, carry",
+  "sqrt mult 0.03, window 20, reset", "count mult 0.03, window 20, carry"
+)
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```

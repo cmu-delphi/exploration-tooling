@@ -219,6 +219,14 @@ season_table <- function(g) {
 knitr::kable(season_table(GEOS[["states"]]))
 ```
 
+L1 coverage bias, season-pooled against month-average (see "Month view" below):
+
+```{r table-states-month}
+mv <- cal_month_view(c(setNames(sweep, paste("rate", format(LRS, drop0trailing = TRUE))), refs), seasons = LIVE)
+mv_show_table <- FALSE
+knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
+```
+
 ## All locations
 
 ```{r table-all}
@@ -242,4 +250,12 @@ bind_rows(
   tidyr::pivot_wider(names_from = col, values_from = cell) %>%
   arrange(config) %>%
   knitr::kable()
+```
+
+```{r month-view-cfgs}
+# The good range (0.018–0.032), the knee and E11's 0.1, and the two references.
+mv_plot_cfgs <- c("rate 0.018", "rate 0.032", "rate 0.056", "rate 0.1", "REF-op cold", "sqrt, adaptive")
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
