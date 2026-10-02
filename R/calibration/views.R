@@ -310,3 +310,179 @@ cal_gallery_panel <- function(cal, loc, ref_date, truth, vintages, subtitle = NU
     ggplot2::scale_fill_manual(values = CAL_FAN_COLS, aesthetics = c("fill", "colour")) +
     ggplot2::labs(x = NULL, y = "admissions", colour = NULL, fill = NULL, subtitle = subtitle)
 }
+
+
+#' V-month3: the month view. Per config × season × calendar month × horizon:
+#' WIS reduction %, L1 coverage bias within the month (base and calibrated),
+#' and the absolute error of the median, reduction % vs base.
+#'
+#' Seasons are August–July years of the reference date, so hub runs and the
+#' clean replay are cut the same way. Burn-in rounds are dropped.
+#'
+#' @param cals named list of runs (each with `$forecasts`) or of forecast
+#'   frames with `location`, `horizon`, `reference_date`, `level`, `truth`,
+#'   `value_base`, `value_cal` and optionally `is_burn_in`.
+#' @param horizons horizons to keep; `NULL` keeps all.
+#' @param states_only drop the US national series.
+#' @return list of `month` (one row per config, season, month, horizon) and
+#'   `cov` (season-pooled and month-average L1 coverage bias per config,
+#'   season and horizon; season `"both"` pools the seasons).
+#' @export
+cal_month_view <- function(cals, seasons = c("2024-2025", "2025-2026"), horizons = 0:3, states_only = TRUE) {
+  pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
+  per_level <- purrr::imap(cals, function(x, nm) {
+    fc <- if (is.data.frame(x)) x else x$forecasts
+    if (!"is_burn_in" %in% names(fc)) fc$is_burn_in <- FALSE
+    if (!is.null(horizons)) fc <- fc %>% filter(.data$horizon %in% horizons)
+    if (states_only) fc <- fc %>% filter(.data$location != "US")
+    yr <- as.integer(format(fc$reference_date, "%Y")) - (as.integer(format(fc$reference_date, "%m")) < 8L)
+    fc %>%
+      mutate(season = paste0(yr, "-", yr + 1L)) %>%
+      filter(!.data$is_burn_in, !is.na(.data$truth), !is.na(.data$value_base), .data$season %in% seasons) %>%
+      mutate(month = factor(format(.data$reference_date, "%b"), levels = month.abb[c(8:12, 1:7)])) %>%
+      group_by(.data$season, .data$month, .data$horizon, .data$level) %>%
+      summarize(
+        wis_base = sum(pinball(.data$truth, .data$value_base, .data$level)),
+        wis_cal = sum(pinball(.data$truth, .data$value_cal, .data$level)),
+        ae_base = sum(abs(.data$truth - .data$value_base)), ae_cal = sum(abs(.data$truth - .data$value_cal)),
+        below_base = sum(.data$truth <= .data$value_base), below_cal = sum(.data$truth <= .data$value_cal),
+        n = n(), rounds = n_distinct(.data$reference_date), .groups = "drop"
+      ) %>%
+      mutate(config = nm, .before = 1)
+  }) %>%
+    bind_rows() %>%
+    mutate(config = factor(.data$config, levels = names(cals)))
+  month <- per_level %>%
+    group_by(.data$config, .data$season, .data$month, .data$horizon) %>%
+    summarize(
+      wis_base = sum(.data$wis_base), wis_cal = sum(.data$wis_cal),
+      cov_base = mean(abs(.data$below_base / .data$n - .data$level)),
+      cov_cal = mean(abs(.data$below_cal / .data$n - .data$level)),
+      ae_base = .data$ae_base[.data$level == 0.5], ae_cal = .data$ae_cal[.data$level == 0.5],
+      n = first(.data$n), rounds = first(.data$rounds), .groups = "drop"
+    ) %>%
+    group_by(.data$config, .data$season, .data$horizon) %>%
+    mutate(
+      wis_pct = 100 * (.data$wis_base - .data$wis_cal) / .data$wis_base,
+      ae_pct = 100 * (.data$ae_base - .data$ae_cal) / .data$ae_base,
+      share = 100 * .data$wis_base / sum(.data$wis_base)
+    ) %>%
+    ungroup()
+  both <- function(d) bind_rows(d, d %>% mutate(season = "both"))
+  pooled <- both(per_level) %>%
+    group_by(.data$config, .data$season, .data$horizon, .data$level) %>%
+    summarize(b = sum(.data$below_base) / sum(.data$n), c = sum(.data$below_cal) / sum(.data$n), .groups = "drop") %>%
+    group_by(.data$config, .data$season, .data$horizon) %>%
+    summarize(pooled_base = mean(abs(.data$b - .data$level)), pooled_cal = mean(abs(.data$c - .data$level)), .groups = "drop")
+  mavg <- both(month) %>%
+    group_by(.data$config, .data$season, .data$horizon) %>%
+    summarize(mavg_base = mean(.data$cov_base), mavg_cal = mean(.data$cov_cal), months = n(), .groups = "drop")
+  cov <- left_join(pooled, mavg, by = c("config", "season", "horizon")) %>%
+    mutate(season = factor(.data$season, levels = c(seasons, "both")))
+  list(month = month, cov = cov)
+}
+
+
+#' Caption for [cal_month_cov_table()].
+#' @export
+CAL_MONTH_COV_CAPTION <- paste(
+  "L1 coverage bias (lower is better), states only, as season-pooled / month-avg.",
+  "Season-pooled scores all of a season's rounds together. Month-avg is the mean over calendar months",
+  "of the bias computed within each month, every month weighted equally ('both': every season-month weighted equally)."
+)
+
+
+#' Season-pooled / month-average L1 coverage bias as a wide table: configs as
+#' rows (base first; one base row per distinct base), `season hX` as columns.
+#' @export
+cal_month_cov_table <- function(mv, seasons = NULL) {
+  cov <- mv$cov
+  if (!is.null(seasons)) cov <- cov %>% filter(.data$season %in% seasons)
+  cell <- function(p, m) sprintf("%.3f / %.3f", p, m)
+  wide <- function(d) {
+    d %>%
+      arrange(.data$season, .data$horizon) %>%
+      transmute(.data$config, col = paste0(.data$season, " h", .data$horizon), cell = .data$cell) %>%
+      tidyr::pivot_wider(names_from = "col", values_from = "cell")
+  }
+  base <- wide(cov %>% mutate(cell = cell(.data$pooled_base, .data$mavg_base)))
+  base <- base[!duplicated(base[-1]), ]
+  base$config <- if (nrow(base) == 1L) "base" else paste0("base (", base$config, ")")
+  cal <- wide(cov %>% mutate(cell = cell(.data$pooled_cal, .data$mavg_cal))) %>% mutate(config = as.character(.data$config))
+  bind_rows(base, cal)
+}
+
+
+#' The month view plot for one season: rows are WIS reduction %, L1 coverage
+#' bias and median absolute-error reduction %; columns are horizons; one line
+#' per config. The base's coverage bias is grey (dashed unless `linetype` is
+#' given), and grey bars are each month's share of the season's base WIS.
+#'
+#' @param month_tbl the `month` element of [cal_month_view()].
+#' @param colours named colours, keyed by the `colour_by` values; defaults to
+#'   a fixed palette.
+#' @param colour_by column of `month_tbl` mapped to colour; each config is
+#'   still its own line.
+#' @param linetype optional column of `month` mapped to linetype (e.g. the
+#'   forecaster); the base line is then drawn once per linetype group.
+#' @param clip WIS and AE reductions are squished into this range; clipped
+#'   points are drawn open.
+#' @export
+cal_month_plot <- function(month_tbl, season, colours = NULL, linetype = NULL, colour_by = "config", clip = c(-40, 40)) {
+  m_wis <- "WIS reduction %\n(positive = calibrated\nWIS lower than base)"
+  m_cov <- "L1 coverage bias\n(lower is better)"
+  m_ae <- "median AE reduction %\n(positive = calibrated\nAE lower than base)"
+  lv <- c(m_wis, m_cov, m_ae)
+  d <- month_tbl %>%
+    filter(.data$season == !!season) %>%
+    mutate(month = droplevels(.data$month), h = factor(paste0("h", .data$horizon), levels = paste0("h", sort(unique(month_tbl$horizon)))))
+  d$grp <- if (is.null(linetype)) "base" else as.character(d[[linetype]])
+  d$col <- d[[colour_by]]
+  configs <- levels(droplevels(d$config))
+  if (is.null(colours)) {
+    keys <- if (is.factor(d$col)) levels(droplevels(d$col)) else unique(d$col)
+    pal <- c("black", "#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#999933")
+    colours <- setNames(rep_len(pal, length(keys)), keys)
+  }
+  sq <- function(x) pmin(pmax(x, clip[1]), clip[2])
+  long <- bind_rows(
+    d %>% transmute(.data$config, .data$col, .data$grp, .data$month, .data$h, metric = m_wis, value = sq(.data$wis_pct), clipped = .data$wis_pct != value),
+    d %>% transmute(.data$config, .data$col, .data$grp, .data$month, .data$h, metric = m_cov, value = .data$cov_cal, clipped = FALSE),
+    d %>% transmute(.data$config, .data$col, .data$grp, .data$month, .data$h, metric = m_ae, value = sq(.data$ae_pct), clipped = .data$ae_pct != value)
+  ) %>% mutate(metric = factor(.data$metric, levels = lv))
+  first_cfg <- d %>% distinct(.data$grp, .data$config) %>% group_by(.data$grp) %>% slice(1) %>% ungroup()
+  base <- d %>%
+    semi_join(first_cfg, by = c("grp", "config")) %>%
+    transmute(.data$grp, .data$month, .data$h, metric = factor(m_cov, levels = lv), value = .data$cov_base)
+  share <- d %>%
+    filter(.data$config == configs[1]) %>%
+    transmute(.data$month, .data$h, metric = factor(m_wis, levels = lv), value = sq(.data$share))
+  zero <- tibble(metric = factor(c(m_wis, m_ae), levels = lv), y = 0)
+  p <- ggplot2::ggplot(long, ggplot2::aes(.data$month, .data$value)) +
+    ggplot2::geom_col(data = share, fill = "grey85", width = 0.7) +
+    ggplot2::geom_hline(data = zero, ggplot2::aes(yintercept = .data$y), colour = "grey40", linewidth = 0.3)
+  p <- if (is.null(linetype)) {
+    p + ggplot2::geom_line(data = base, ggplot2::aes(group = .data$grp), colour = "grey45", linetype = "22", linewidth = 0.6) +
+      ggplot2::geom_line(ggplot2::aes(colour = .data$col, group = .data$config))
+  } else {
+    p + ggplot2::geom_line(data = base, ggplot2::aes(group = .data$grp, linetype = .data$grp), colour = "grey55", linewidth = 0.6) +
+      ggplot2::geom_line(ggplot2::aes(colour = .data$col, group = .data$config, linetype = .data$grp)) +
+      ggplot2::scale_linetype_manual(values = c("solid", "22", "13")[seq_along(unique(d$grp))], name = NULL)
+  }
+  p +
+    ggplot2::geom_point(ggplot2::aes(colour = .data$col, shape = .data$clipped), size = 1.2) +
+    ggplot2::scale_shape_manual(values = c(`FALSE` = 16, `TRUE` = 1), guide = "none") +
+    ggplot2::scale_colour_manual(values = colours, name = NULL) +
+    ggplot2::facet_grid(metric ~ h, scales = "free_y", switch = "y") +
+    ggplot2::labs(
+      x = "month of reference date", y = NULL, title = season,
+      caption = sprintf(
+        "States only. Grey bars: month's share of the season's base WIS (%%). Grey %sline: base coverage bias. Reductions clipped to [%d, %d]; open points are clipped.",
+        if (is.null(linetype)) "dashed " else "", clip[1], clip[2]
+      )
+    ) +
+    ggplot2::theme(
+      legend.position = "bottom", legend.box = "vertical", strip.placement = "outside", strip.text.y.left = ggplot2::element_text(angle = 0),
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
+    )
+}
