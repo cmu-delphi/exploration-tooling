@@ -1,0 +1,250 @@
+---
+title: "E18: a bridge from REF-op to sqrt constant 0.018"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 11, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+REF-op (prod's tracker) and sqrt constant 0.018 (E16's best) differ in
+several settings at once. This notebook walks from one to the other,
+changing one setting per step, to see which piece of REF-op does the work.
+
+**Setup.** As E13/E16: the clean `windowed_seasonal` replay for flu (53
+locations, the 55 hub rounds, h0–h3), learning from data as published each
+week and re-run from scratch each week as prod does, one week of extra
+revision delay. Scores are over the two live seasons; results are states
+only (US excluded).
+
+**The steps.** Each row changes one setting from the row above.
+
+| step | change | config after the change |
+|---|---|---|
+| 0 REF-op | — | sqrt, adaptive mult 0.03 floor 1e-3, window 20, carry; slow term (mult 0.003) warm-started from the 2023-24 burn-in; leak 0.1 on the fast term |
+| 1 no warm start | `slow_init = NULL` | the slow term starts at zero |
+| 2 no slow term | `lr_slow = NULL` | single fast term with the leak |
+| 3 no leak | `fast_decay = 0` | sqrt, adaptive, mult 0.03, window 20, carry, with the 2023-24 season present |
+| 4 no burn-in season | drop the 2023-24 rounds | as 3, cold: the eta pool starts empty |
+| 5 per-100k units | `scales` = population / 100k | as 4, on the square root of admissions per 100k |
+| 6 constant 0.018 | `lr = 0.018` | E16's best: sqrt per 100k, constant 0.018 |
+
+**Why steps 4 and 5.** The 2023-24 burn-in season does two things. With
+`slow_init` it sets the slow term's starting value (the warm start). Without
+it, its residuals still fill the adaptive learning rate's window, so eta is
+sized from the first live round instead of growing from an empty pool; the
+offsets themselves stay at zero, since burn-in outcomes never step. So the
+burn-in season stays present through step 3, and dropping it is step 4: step
+1 isolates the warm start, step 4 the eta warm-up (E13 follow-up 2). E16's
+constant rate runs on the square root of the per-100k rate. The adaptive
+rate is almost unchanged by that rescaling (it scales with the residuals;
+only the 1e-3 floor does not), but it is still a change, so it is step 5,
+and step 6 changes only the learning rate.
+
+Steps 0, 3, 4 and 6 are the cached runs of E13 (REF-op warm), E02
+("reference + burn-in"), E01/E02 ("reference") and E16 (sqrt 0.018). Step 3
+is written as E02 writes it (REF-paper with sqrt and the 1e-3 floor), which
+equals REF-op with `slow_init`, `lr_slow` and the leak removed.
+
+"WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so
+**positive = calibrated WIS lower than base**. "L1 coverage bias" (lower is
+better) is the mean over the 23 levels of |empirical coverage − level|.
+"Month-avg" coverage bias is computed within each calendar month and then
+averaged, so errors on the ramp and after the peak cannot cancel.
+
+# Findings
+
+Numbers are from the render of 1 October 2026, states only, both seasons
+pooled unless named, h0/h1/h2/h3. WIS is WIS reduction % (positive =
+calibrated WIS lower than base); coverage is L1 coverage bias (lower is
+better).
+
+- **Endpoints.** REF-op +2.8/+1.1/+0.9/+1.1, sqrt constant 0.018
+  +2.2/+0.8/+0.6/+0.6. REF-op is ahead overall because of 2024-25
+  (+3.2/+1.9/+1.6/+1.6 vs +1.7/+0.6/+0.3/+0.1); sqrt 0.018 is ahead in
+  2025-26 (+3.0/+1.0/+1.1/+1.5 vs +2.2/−0.1/−0.0/+0.2). Month-avg coverage
+  bias is about the same: 0.095/0.121/0.150/0.175 vs 0.094/0.116/0.143/0.169.
+- **WIS: the learning rate moves it most at h1–h3, the warm start at h0.**
+  Switching the adaptive rate to constant 0.018 (step 6) adds
+  +0.3/+1.0/+1.7/+2.3. Inside REF-op, three pieces each add about a point:
+  the warm start (step 1 costs −0.9/−0.5/−0.6/−1.0, nearly all of it in
+  2024-25: h3 goes from +1.6 to −0.4), the leak (step 3 costs
+  −0.6/−1.0/−1.2 at h1–h3 and gains +0.4 at h0) and, smaller, the burn-in
+  season's eta warm-up (step 4 costs −0.1/−0.2/−0.5/−0.7, again in
+  2024-25). Without the warm start, the slow term does nothing (step 2:
+  within ±0.2).
+- **Warm start vs eta warm-up (E13 follow-up 2).** Both matter only in
+  2024-25, the first live season. The warm start is worth about twice as
+  much WIS as the eta warm-up and shows from the first rounds (the month
+  view gains at h2–h3 in Nov–Feb 2024-25). The eta warm-up is about half a
+  point at h2–h3 and nothing in 2025-26.
+- **Month-level coverage: no step moves it beyond noise.** Every step
+  changes month-avg coverage bias by 0.008 or less, under the ~0.01 noise
+  floor. The largest are dropping the warm start at h3 (−0.008) and the
+  constant rate at h1–h3 (−0.005/−0.007/−0.007).
+- **Season-pooled coverage moves a lot, and it is cancellation.** Dropping
+  the warm start worsens pooled bias by +0.024/+0.032/+0.044/+0.052,
+  dropping the leak improves it by −0.040/−0.042/−0.051/−0.060, and the
+  constant rate worsens it by +0.014/+0.023/+0.034/+0.047. None of these
+  shows up month by month, so they come from ramp and post-peak errors
+  cancelling differently, not from better-calibrated months.
+- **Where the WIS steps act: March and April.** The month view shows the
+  WIS steps mostly as spring losses at h2–h3. In 2024-25 at h2, March costs
+  about −13% with the leak and no slow term (step 2), −23% without the leak
+  (step 3) and −31% without the burn-in season (steps 4–5); constant 0.018
+  costs about −7%. April is worse for the adaptive trackers without the leak
+  (down to the −40% clip). In 2025-26 every step loses 27–40% in March at
+  h1–h2, constant 0.018 slightly less.
+- **Per-100k units change nothing (step 5).** The adaptive rate scales with
+  the residuals, so on the square-root scale only the 1e-3 floor sees the
+  units. Calibrated values differ by at most 1.6 admissions and every score
+  matches step 4 to the reported digits.
+
+```{r load}
+source(here::here("scripts/calibration/calibration_ws_replay.R"))
+wi <- ws_inputs("flu")
+fc_burn_in <- bind_rows(ws_burn_in_forecasts("flu"), wi$fc)
+# Each config is written as the experiment that first ran it writes it, so cached runs are reused.
+refop_warm <- ws_configs(wi$rate_scales, burn_in = TRUE)[["REF-op warm"]]
+sqrt_adaptive <- list(
+  ref = "paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3),
+  burn_in_seasons = character(0), slow_init = NULL, lr_window = 20, season_policy = "carry"
+)
+const_cfg <- ws_configs(wi$rate_scales, burn_in = FALSE)[["E11 constant 0.1"]]
+STEPS <- list(
+  `0 REF-op` = list(cfg = refop_warm, burn_in = TRUE),
+  `1 no warm start` = list(cfg = list(ref = "op", burn_in_seasons = "2023-2024", slow_init = NULL), burn_in = TRUE),
+  `2 no slow term` = list(cfg = list(ref = "op", burn_in_seasons = "2023-2024", slow_init = NULL, lr_slow = NULL), burn_in = TRUE),
+  `3 no leak` = list(cfg = utils::modifyList(sqrt_adaptive, list(burn_in_seasons = "2023-2024")), burn_in = TRUE),
+  `4 no burn-in season` = list(cfg = sqrt_adaptive, burn_in = FALSE),
+  `5 per-100k units` = list(cfg = c(sqrt_adaptive, list(scales = wi$rate_scales)), burn_in = FALSE),
+  `6 constant 0.018` = list(cfg = utils::modifyList(const_cfg, list(lr = 0.018, transform = "sqrt")), burn_in = FALSE)
+)
+run <- function(spec) {
+  fc <- if (spec$burn_in) fc_burn_in else wi$fc
+  do.call(cal_run_cached, c(list(fc, wi$truth), spec$cfg, list(learn = "exact", vintages = wi$vintages, workers = params$workers)))
+}
+cals <- purrr::map(STEPS, run)
+```
+
+```{r metrics}
+SEASONS <- c(LIVE, "both")
+STEP_COLS <- setNames(c("#000000", "#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#D55E00"), names(STEPS))
+step_m <- purrr::imap(cals, function(cal, nm) {
+  fc <- cal$forecasts %>% mutate(season = season_of(reference_date)) %>% filter(location != "US")
+  ws_scores(fc) %>%
+    select(season, horizon, which, wis, cal_err) %>%
+    tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err)) %>%
+    mutate(step = nm, wis_pct = 100 * (wis_base - wis_cal) / wis_base)
+}) %>%
+  bind_rows() %>%
+  mutate(
+    step = factor(step, levels = names(STEPS)),
+    season = factor(season, levels = SEASONS, labels = c(LIVE, "both seasons")),
+    h = factor(paste0("h", horizon), levels = paste0("h", 0:3))
+  )
+mv <- cal_month_view(cals, seasons = LIVE)
+step_table <- function(col, fmt, base_col = NULL) {
+  rows <- step_m %>% mutate(step = as.character(step), v = .data[[col]])
+  if (!is.null(base_col)) {
+    rows <- bind_rows(step_m %>% filter(step == names(STEPS)[1]) %>% mutate(step = "base", v = .data[[base_col]]), rows)
+  }
+  rows %>%
+    mutate(step = factor(step, levels = unique(step))) %>%
+    arrange(season, h) %>%
+    transmute(step, col = paste(season, h), cell = sprintf(fmt, v)) %>%
+    tidyr::pivot_wider(names_from = col, values_from = cell) %>%
+    arrange(step)
+}
+```
+
+# 1. Season scores per step
+
+States only. Each season is scored on its own rounds; "both seasons" pools
+them. The tracker runs over both seasons, so 2025-26 starts from the offsets
+2024-25 left behind.
+
+## WIS reduction % (positive = calibrated WIS lower than base)
+
+```{r table-wis}
+knitr::kable(step_table("wis_pct", "%+.1f"), caption = "WIS reduction % (positive = calibrated WIS lower than base), states only")
+```
+
+## L1 coverage bias (lower is better), season-pooled
+
+```{r table-cov}
+knitr::kable(step_table("cal_err_cal", "%.3f", base_col = "cal_err_base"), caption = "L1 coverage bias (lower is better), season-pooled, states only")
+```
+
+## L1 coverage bias (lower is better), season-pooled and month-average
+
+```{r table-month-cov}
+mv_show_table <- FALSE
+knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
+```
+
+# 2. What each step changes
+
+The change each step makes to the step before it, both seasons pooled,
+states only. WIS: change in WIS reduction % (positive = the step lowers
+WIS). Coverage: change in L1 coverage bias, season-pooled and month-average
+(negative = the step improves coverage).
+
+```{r deltas}
+wis_both <- step_m %>%
+  filter(season == "both seasons") %>%
+  transmute(step, h, v = wis_pct)
+cov_both <- mv$cov %>%
+  filter(season == "both") %>%
+  transmute(step = config, h = factor(paste0("h", horizon), levels = paste0("h", 0:3)), pooled = pooled_cal, mavg = mavg_cal)
+delta <- wis_both %>%
+  left_join(cov_both, by = c("step", "h")) %>%
+  arrange(h, step) %>%
+  group_by(h) %>%
+  mutate(d_wis = v - lag(v), d_pooled = pooled - lag(pooled), d_mavg = mavg - lag(mavg)) %>%
+  ungroup() %>%
+  filter(step != names(STEPS)[1])
+knitr::kable(
+  delta %>%
+    transmute(step, h, cell = sprintf("%+.1f / %+.3f / %+.3f", d_wis, d_pooled, d_mavg)) %>%
+    tidyr::pivot_wider(names_from = h, values_from = cell) %>%
+    arrange(step),
+  caption = "Both seasons, states only: change from the previous step in WIS reduction % / season-pooled L1 coverage bias / month-avg L1 coverage bias"
+)
+```
+
+```{r delta-plot, fig.height=6.5}
+delta_long <- delta %>%
+  transmute(step, h,
+    `WIS reduction %, change\n(positive = step lowers WIS)` = d_wis,
+    `month-avg L1 coverage bias,\nchange (negative = better)` = d_mavg,
+    `season-pooled L1 coverage bias,\nchange (negative = better)` = d_pooled
+  ) %>%
+  tidyr::pivot_longer(-c(step, h), names_to = "metric") %>%
+  mutate(metric = factor(metric, levels = unique(metric)), step = factor(step, levels = rev(names(STEPS)[-1])))
+ggplot(delta_long, aes(value, step, fill = step)) +
+  geom_vline(xintercept = 0, colour = "grey50", linewidth = 0.3) +
+  geom_col(width = 0.7, show.legend = FALSE) +
+  scale_fill_manual(values = STEP_COLS) +
+  facet_grid(h ~ metric, scales = "free_x") +
+  labs(x = "change from the previous step (both seasons, states only)", y = NULL)
+```
+
+```{r month-view-cfgs}
+mv_cols <- STEP_COLS
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
+```
