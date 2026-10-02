@@ -149,6 +149,11 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
       shares the scale question with NSSP-target scoring (item 2). Prototype
       on one forecaster and a few seasons; `calibration_ili_backfill.R`
       (ILI+, no vintages) is a reference, not the base to extend.
+      Source (checked 2026-10-02, `notes/ilinet-sources.md`): v5
+      `fluview_ilinet` matches epidatr `fluview` at every issue outside NY
+      (99.99% of state rows), with version date = CDC release Friday. State
+      version history starts 2017w40 in both, so a vintage backtest has
+      2017-18 on; use state `ili` (v5 has no state `wili`).
 2. **NSSP-target backtesting is second-class and needs dedicated
    attention.**
    - Explore forecasts NHSN only: every family sets `outcome = "hhs"`. NSSP
