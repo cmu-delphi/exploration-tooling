@@ -36,7 +36,14 @@ get_external_forecasts <- function(external_object_name) {
   )
 }
 
-score_forecasts <- function(latest_data, forecasts, target) {
+# Hub locations score_forecasts() never scores: American Samoa, Guam, US Virgin Islands.
+SCORING_EXCLUDED_LOCATIONS <- c("60", "66", "78")
+
+# Scores quantile forecasts against latest_data with hubEvals. Returns one row per
+# (forecaster, forecast_date, ahead, geo_value); geo_level is "nation" for us and
+# "state" otherwise, so cross-geo means should filter to states. Aborts if a forecast
+# location with truth for its target dates is neither scored nor excluded.
+score_forecasts <- function(latest_data, forecasts, target, excluded_locations = SCORING_EXCLUDED_LOCATIONS) {
   if (length(forecasts) == 0) {
     return(tibble())
   }
@@ -71,36 +78,27 @@ score_forecasts <- function(latest_data, forecasts, target) {
   if (nrow(forecasts_formatted) == 0) {
     return(tibble())
   }
+  # format_scoring_utils() drops geos it can't map to a hub location.
+  unmapped_geos <- setdiff(unique(forecasts_formatted$geo_value), get_population_data()$state_id)
+  if (length(unmapped_geos) > 0) {
+    cli::cli_abort("score_forecasts: forecast geos with no hub location: {.val {unmapped_geos}}")
+  }
   forecasts_formatted %<>%
     format_scoring_utils(target)
   if (target == "wk inc covid prop ed visits") {
     forecasts_formatted %<>% mutate(value = value * 100)
   }
-  tryCatch(
+  scores <- tryCatch(
     {
-      scores <-
-        forecasts_formatted %>%
+      forecasts_formatted %>%
         filter(output_type == "quantile") %>%
-        filter(location %nin% c("US", "60", "66", "78")) %>%
+        filter(location %nin% excluded_locations) %>%
         hubEvals::score_model_out(
           truth_data,
           metrics = c("wis", "ae_median", "interval_coverage_50", "interval_coverage_90"),
           summarize = TRUE,
           by = c("model_id", "target", "reference_date", "location", "horizon")
         )
-      scores %>%
-        left_join(
-          get_population_data() %>%
-            select(state_id, state_code),
-          by = c("location" = "state_code")
-        ) %>%
-        rename(
-          forecaster = model_id,
-          forecast_date = reference_date,
-          ahead = horizon,
-          geo_value = state_id
-        ) %>%
-        select(-location)
     },
     error = function(e) {
       if (grepl("no forecasts", rlang::cnd_message(e))) {
@@ -110,6 +108,35 @@ score_forecasts <- function(latest_data, forecasts, target) {
       }
     }
   )
+  if (!is.data.frame(scores)) {
+    return(scores)
+  }
+  # A location must be scored if truth exists (for any geo) on one of its target dates.
+  expected_locations <- forecasts_formatted %>%
+    filter(target_end_date %in% truth_data$target_end_date, location %nin% excluded_locations) %>%
+    distinct(location) %>%
+    pull()
+  dropped <- setdiff(expected_locations, scores$location)
+  if (length(dropped) > 0) {
+    cli::cli_abort("score_forecasts: locations neither scored nor excluded: {.val {dropped}}")
+  }
+  if (nrow(scores) == 0) {
+    return(scores)
+  }
+  scores <- scores %>%
+    left_join(hub_location_crosswalk(), by = "location") %>%
+    rename(
+      forecaster = model_id,
+      forecast_date = reference_date,
+      ahead = horizon
+    ) %>%
+    select(-location) %>%
+    mutate(geo_level = if_else(geo_value == "us", "nation", "state"))
+  n_dup <- scores %>% count(forecaster, forecast_date, ahead, geo_value) %>% filter(n > 1) %>% nrow()
+  if (n_dup > 0) {
+    cli::cli_abort("score_forecasts: {n_dup} duplicate (forecaster, forecast_date, ahead, geo_value) keys")
+  }
+  scores
 }
 
 render_score_plot <- function(score_report_rmd, scores, forecast_dates, disease, target) {

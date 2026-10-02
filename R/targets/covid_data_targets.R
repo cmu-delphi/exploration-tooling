@@ -21,7 +21,7 @@ create_covid_data_targets <- function() {
         # NHSN weeks end Saturday; shift to the Wednesday label the rest of this
         # pipeline uses internally (g_time_value_adjust pushes back to Saturday at
         # scoring/output).
-        nhsn_archive <- get_nhsn_data_archive("covid")$DT %>%
+        nhsn_archive <- retry_fn(max_attempts = 10, wait_seconds = 1, fn = get_nhsn_data_archive, disease = "covid")$DT %>%
           as.data.frame() %>%
           mutate(time_value = time_value - 3L) %>%
           as_epi_archive(compactify = TRUE)
@@ -60,44 +60,16 @@ create_covid_data_targets <- function() {
     tar_target(
       name = nssp_archive,
       command = {
-        nssp_state <- retry_fn(
+        # States only: the joined archive keeps state geos and drops "us".
+        nssp <- retry_fn(
           max_attempts = 10,
           wait_seconds = 1,
-          fn = pub_covidcast,
-          source = "nssp",
-          signals = "pct_ed_visits_covid",
-          time_type = "week",
-          geo_type = "state",
-          geo_values = "*",
-          fetch_args = g_fetch_args
+          fn = up_to_date_nssp_state_archive,
+          disease = "covid",
+          geo_types = "state"
         )
-        nssp_hhs <- retry_fn(
-          max_attempts = 10,
-          wait_seconds = 1,
-          fn = pub_covidcast,
-          source = "nssp",
-          signals = "pct_ed_visits_covid",
-          time_type = "week",
-          geo_type = "hhs",
-          geo_values = "*",
-          fetch_args = g_fetch_args
-        )
-        nssp_state %>%
-          bind_rows(nssp_hhs) %>%
-          select(geo_value, time_value, issue, nssp = value) %>%
-          as_epi_archive(compactify = TRUE) %>%
-          extract2("DT") %>%
-          # weekly data is indexed from the start of the week
-          mutate(time_value = time_value + 6 - g_time_value_adjust) %>%
-          group_by(.data$geo_value, .data$time_value) %>%
-          slice_max(.data$version, n = 1L, with_ties = FALSE) %>%
-          ungroup() %>%
-          # Artifically add in a one-week latency.
-          mutate(version = time_value + 7) %>%
-          # Always convert to data.frame after dplyr operations on data.table.
-          # https://github.com/cmu-delphi/epiprocess/issues/618
-          as.data.frame() %>%
-          as_epi_archive(compactify = TRUE)
+        nssp$geo_type <- "custom"
+        nssp
       }
     ),
     # see git history for the google symptoms target

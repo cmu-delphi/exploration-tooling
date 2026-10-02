@@ -53,6 +53,8 @@ prod-backtest: prod-rsv-backtest
 # Historical replays are their own targets projects (separate stores), not a
 # BACKTEST_MODE flag on prod (BACKTEST_MODE remains only for the rsv stub).
 # Set EVALUATION_N_DATES=<n> to replay only the last n forecast dates.
+# EVALUATION_DATES=<d1,d2> and EVALUATION_FORECASTERS=<id1,id2> narrow it further;
+# EVALUATION_SUBSTITUTIONS=false replays without the data substitutions (AGENTS.md).
 eval-flu: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=flu_hosp_evaluation; Rscript scripts/run.R 2>&1 | tee -a cache/logs/eval_flu
 

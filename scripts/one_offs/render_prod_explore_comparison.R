@@ -61,6 +61,8 @@ read_prod <- function(target_name) {
 prod_scores <- read_prod("scores_nhsn") %>%
   { if (nrow(.) > 0) rename(., ae = ae_median, coverage_50 = interval_coverage_50, coverage_90 = interval_coverage_90) else . } %>%
   select(-any_of("target")) %>%
+  # Explore scores are state-only, so drop US (stores scored before geo_level have no US).
+  { if ("geo_level" %in% names(.)) filter(., geo_level == "state") %>% select(-geo_level) else . } %>%
   filter(forecaster %in% prod_forecaster_ids)
 
 prod_forecasts <- read_prod("local_forecasts_and_ensembles_nhsn") %>%
@@ -72,6 +74,7 @@ truth_data <- read_prod("nhsn_latest_data") %>%
 
 # ---- Select best-in-class explore forecasters, relabeled by family -------
 g_aheads <- 0:4 * 7
+g_nowcast_aheads <- -7
 g_dummy_mode <- FALSE
 g_very_latent_locations <- list(list(c("source"), c("flusurv", "ILI+")))
 forecaster_params <- if (disease == "covid") {

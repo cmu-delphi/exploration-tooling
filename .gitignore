@@ -12,7 +12,7 @@ aux_data
 # Local Netlify folder
 .netlify
 *cache*
-data/
+/data/
 .vscode/
 .envrc
 .nhsn_covid_cache.parquet

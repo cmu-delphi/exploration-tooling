@@ -58,7 +58,9 @@ if (averaging_method == "individual") {
   stop("Unknown averaging method")
 }
 our_forecasters <- c("linear", "windowed_seasonal", "windowed_seasonal_nssp", "climate_base", "climate_geo_agged", "climate_linear", "ensemble_windowed", "retro_submission", "CMU-TimeSeries", "CMU-TimeSeries-Calibrated", "seasonal_nssp_latest")
+# Cross-geo means are over states only; US (geo_level "nation") is not averaged in.
 scores <- scores %>%
+  filter(geo_level == "state") %>%
   mutate(
     forecaster =
       case_match(

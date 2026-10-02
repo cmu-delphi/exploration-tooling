@@ -36,7 +36,8 @@ get_partially_applied_forecaster <- function(forecaster, ahead, params) {
 #' @export
 create_parameter_targets <- function() {
   list2(
-    tar_target(name = aheads, command = g_aheads),
+    # Nowcast aheads are mapped too; families not opted in skip them (run_aheads).
+    tar_target(name = aheads, command = c(g_nowcast_aheads, g_aheads)),
     tar_target(name = forecast_dates, command = g_forecast_dates),
     # This is for forecaster_lookup.
     tar_target(name = forecaster_params_grid, command = g_forecaster_params_grid),
@@ -75,32 +76,37 @@ create_forecast_targets <- function() {
         # is a spec column (was a `g_disease == "flu"` grep). target_end_date stays
         # Wednesday here; the Wednesday->Saturday shift is applied downstream
         # (score/combine).
-        archive_hash <- rlang::hash(joined_archive_data)
-        map(forecast_dates, function(fdate) {
-          # Revision-aware forecasters (needs_archive) train on past vintages, so
-          # they get the truncated archive; everyone else gets the as-of snapshot.
-          input <- if (needs_archive) {
-            make_forecast_archive_snapshot(joined_archive_data, forecast_date = fdate, generation_date = fdate)
-          } else {
-            make_forecast_snapshot(
-              joined_archive_data,
-              forecast_date = fdate,
-              generation_date = fdate,
-              cache_key = "joined_archive_data",
-              archive_hash = archive_hash
+        # Families not opted into this ahead (run_aheads) skip it.
+        if (!(aheads %in% (run_aheads %||% g_aheads))) {
+          make_null_forecast() %>% mutate(ahead = numeric())
+        } else {
+          archive_hash <- rlang::hash(joined_archive_data)
+          map(forecast_dates, function(fdate) {
+            # Revision-aware forecasters (needs_archive) train on past vintages, so
+            # they get the truncated archive; everyone else gets the as-of snapshot.
+            input <- if (needs_archive) {
+              make_forecast_archive_snapshot(joined_archive_data, forecast_date = fdate, generation_date = fdate)
+            } else {
+              make_forecast_snapshot(
+                joined_archive_data,
+                forecast_date = fdate,
+                generation_date = fdate,
+                cache_key = "joined_archive_data",
+                archive_hash = archive_hash
+              )
+            }
+            run_forecaster(
+              snapshot = input,
+              forecaster = forecaster,
+              aheads = aheads * ahead_multiplier,
+              params = params,
+              id = id,
+              sort_quantiles = sort_quantiles
             )
-          }
-          run_forecaster(
-            snapshot = input,
-            forecaster = forecaster,
-            aheads = aheads * ahead_multiplier,
-            params = params,
-            id = id,
-            sort_quantiles = sort_quantiles
-          )
-        }) %>%
-          bind_rows() %>%
-          mutate(ahead = as.numeric(target_end_date - forecast_date))
+          }) %>%
+            bind_rows() %>%
+            mutate(ahead = as.numeric(target_end_date - forecast_date))
+        }
       },
       pattern = map(aheads)
     ),
@@ -198,11 +204,12 @@ create_joined_targets <- function() {
         command = {
           params_subset <- g_forecaster_parameter_combinations[[forecaster_family]]
           forecaster_ids <- c(params_subset$id, outside_forecaster_subset)
+          # h−1 rows go to nowcast_notebook instead.
           family_forecasts <- joined_forecasts %>%
-            filter(forecaster %in% forecaster_ids) %>%
+            filter(forecaster %in% forecaster_ids, target_end_date >= forecast_date) %>%
             mutate(season_slug = season_of_date(forecast_date))
           family_scores <- joined_scores %>%
-            filter(forecaster %in% forecaster_ids) %>%
+            filter(forecaster %in% forecaster_ids, target_end_date >= forecast_date) %>%
             mutate(season_slug = season_of_date(forecast_date))
           for (slug in sort(unique(family_forecasts$season_slug))) {
             rmarkdown::render(
@@ -224,8 +231,12 @@ create_joined_targets <- function() {
     tar_target(
       overall_notebook,
       command = {
-        all_forecasts <- joined_forecasts %>% mutate(season_slug = season_of_date(forecast_date))
-        all_scores <- joined_scores %>% mutate(season_slug = season_of_date(forecast_date))
+        all_forecasts <- joined_forecasts %>%
+          filter(target_end_date >= forecast_date) %>%
+          mutate(season_slug = season_of_date(forecast_date))
+        all_scores <- joined_scores %>%
+          filter(target_end_date >= forecast_date) %>%
+          mutate(season_slug = season_of_date(forecast_date))
         for (slug in sort(unique(all_forecasts$season_slug))) {
           rmarkdown::render(
             "pipelines/templates/overall-comparison-notebook.Rmd",
@@ -237,6 +248,36 @@ create_joined_targets <- function() {
               disease = g_disease
             ),
             output_file = here::here(g_reports_dir, paste0(g_disease, "-overall-notebook-", slug, ".html"))
+          )
+        }
+      }
+    ),
+    # h−1 (already-reported week) forecasts from the families that opt into
+    # g_nowcast_aheads, scored relative to the revision_ratio baseline.
+    tar_target(
+      nowcast_notebook,
+      command = {
+        nowcast_grid <- g_forecaster_params_grid %>%
+          filter(purrr::map_lgl(run_aheads, \(a) any(a < 0)))
+        nowcast_ids <- c(nowcast_grid$id, outside_forecaster_subset)
+        nowcast_forecasts <- joined_forecasts %>%
+          filter(forecaster %in% nowcast_ids, target_end_date < forecast_date) %>%
+          mutate(season_slug = season_of_date(forecast_date))
+        nowcast_scores <- joined_scores %>%
+          filter(forecaster %in% nowcast_ids, target_end_date < forecast_date) %>%
+          mutate(season_slug = season_of_date(forecast_date))
+        for (slug in sort(unique(nowcast_forecasts$season_slug))) {
+          rmarkdown::render(
+            "pipelines/templates/nowcast-notebook.Rmd",
+            params = list(
+              forecaster_parameters = g_forecaster_parameter_combinations[unique(nowcast_grid$family)] %>% bind_rows(.id = "family"),
+              baseline_id = nowcast_grid$id[nowcast_grid$family == "revision_ratio"][[1]],
+              forecasts = nowcast_forecasts %>% filter(season_slug == slug) %>% select(-season_slug),
+              scores = nowcast_scores %>% filter(season_slug == slug) %>% select(-season_slug),
+              truth_data = hhs_evaluation_data,
+              disease = g_disease
+            ),
+            output_file = here::here(g_reports_dir, paste0(g_disease, "-nowcast-notebook-", slug, ".html"))
           )
         }
       }

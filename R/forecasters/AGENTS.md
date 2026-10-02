@@ -9,6 +9,7 @@ All forecasters follow the signature `function(epi_data, outcome, ahead = 1, ...
 - **forecaster_scaled_pop_seasonal.R** — `scaled_pop_seasonal`: adds seasonal whitening, climate baseline, PCA, window methods.
 - **forecaster_smoothed_scaled.R** — `smoothed_scaled`: smoothed + scaled variant.
 - **forecaster_revision_aware.R** — `scaled_pop_seasonal_revision`: revision-aware forecaster (takes `epi_archive`); `flag_revision_outlier_versions`, `compute_finalization_lag_weeks`.
+- **forecaster_revision_ratio.R** — `revision_ratio_nowcast`: baseline for already-reported weeks (negative aheads); reported value times recent revision ratios (takes `epi_archive`).
 - **revision_predictors.R** — Revision design matrix: `archive_to_revision_predictors`, `revision_predictor_design`, `roll_asof_value` (data.table rolling joins), `replicate_whitening_params`.
 - **forecaster_baseline_linear.R** — `cdc_baseline_linear`: CDC-style linear baseline.
 - **forecaster_climatological.R** — `climatological`: seasonal median baseline.
@@ -21,7 +22,7 @@ All forecasters follow the signature `function(epi_data, outcome, ahead = 1, ...
 - **data_validation.R** — `validate_forecast_output` and related shape/key checks.
 - **epipredict_utilities.R** — Helpers that wrap epipredict internals.
 - **formatters.R** — Output formatting to hub submission format.
-- **ensemble_average.R**, **ensemble_linear_climate.R** — Ensemble combination methods.
+- **ensemble_linear_climate.R** — `ensemble_climate_linear`: climate/linear mix with ahead- and quantile-dependent weights. The weighted ensemble is in `R/ensemble_weights.R`.
 - **default_epipredict_args.R** — `default_args_list`, `default_flatline_args`: ARX / flatline parameter constructors.
 
 ## Inter-file dependencies

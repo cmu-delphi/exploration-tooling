@@ -15,6 +15,11 @@
 #' @return A list of forecaster parameter combinations
 #' @export
 get_covid_forecaster_params <- function() {
+  # Families that also forecast h−1, and the aheads each runs.
+  nowcast_run_aheads <- list(
+    revision_aware = c(g_nowcast_aheads, g_aheads),
+    revision_ratio = g_nowcast_aheads
+  )
   out <- rlang::list2(
     scaled_pop_main = tidyr::expand_grid(
       forecaster = "scaled_pop",
@@ -91,6 +96,11 @@ get_covid_forecaster_params <- function() {
       finalization_coverage = 0.8,
       needs_archive = TRUE,
       sort_quantiles = TRUE
+    ),
+    # Nowcast baseline for h−1: the reported value times recent revision ratios.
+    revision_ratio = tibble(
+      forecaster = "revision_ratio_nowcast",
+      needs_archive = TRUE
     ),
     # Revision-aware with nssp as an exogenous predictor. No train_sources knob
     # since the covid explore archive has no source key (single-source nhsn).
@@ -253,7 +263,7 @@ get_covid_forecaster_params <- function() {
       ),
     )
   ) %>%
-    map(function(x) {
+    imap(function(x, family) {
       if (g_dummy_mode) {
         x$forecaster <- "dummy_forecaster"
       }
@@ -267,12 +277,14 @@ get_covid_forecaster_params <- function() {
       # strict so a real crossing still surfaces as an error. Set after add_id so
       # the spec column stays out of the id hash and existing ids/caches hold.
       x$sort_quantiles <- x$forecaster %in% c("scaled_pop", "scaled_pop_seasonal", "scaled_pop_seasonal_revision")
+      if (family %in% names(nowcast_run_aheads)) {
+        x$run_aheads <- list(nowcast_run_aheads[[family]])
+      }
       x
     })
 
   # Make sure all ids are unique.
-  stopifnot(
-    length(out$id %>% unique()) == length(out$id)
-  )
+  ids <- unlist(purrr::map(out, "id"))
+  stopifnot(!anyDuplicated(names(out)), !anyDuplicated(ids))
   out
 }

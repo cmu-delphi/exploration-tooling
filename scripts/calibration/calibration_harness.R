@@ -404,9 +404,11 @@ ch_compare <- function(calibrated, inputs) {
   bind_rows(raw_scores, cal_scores)
 }
 
-#' Summarize a ch_compare() result: mean skill by ahead, raw vs calibrated.
+#' Summarize a ch_compare() result: mean skill by ahead over states (US excluded),
+#' raw vs calibrated.
 ch_summarize <- function(scores) {
   scores %>%
+    filter(geo_level == "state") %>%
     group_by(forecaster, ahead) %>%
     summarize(
       across(c(wis, ae_median, interval_coverage_50, interval_coverage_90), mean),

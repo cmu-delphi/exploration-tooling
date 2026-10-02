@@ -86,6 +86,8 @@ g_forecast_schedule <- tibble(
   forecast_date_chr = as.character(fc_dates)
 )
 if (g_evaluation_mode) {
+  # Optional: EVALUATION_DATES keeps only the listed forecast dates.
+  g_forecast_schedule <- filter_evaluation_dates(g_forecast_schedule)
   # Optional: keep only the last N dates for a fast partial evaluation
   # (scripts/oracle/capture.R). Inert when unset or 0.
   # flu_hosp_prod_regr defaults to 1 so a regression run is always fast.
@@ -217,6 +219,13 @@ g_forecaster_params_grid <- list(
   imap(\(tib, family) make_forecaster_grid(tib, family)) %>%
   bind_rows() %>%
   select(-family)
+# Evaluation runs can be scoped to some forecasters (EVALUATION_FORECASTERS) and
+# replayed without the data substitutions (EVALUATION_SUBSTITUTIONS=false).
+g_substitutions_arg <- rlang::sym("flu_data_substitutions")
+if (g_evaluation_mode) {
+  g_forecaster_params_grid <- filter_evaluation_forecasters(g_forecaster_params_grid)
+  g_substitutions_arg <- evaluation_substitutions_arg("flu_data_substitutions")
+}
 
 
 # ================================ PARAMETERS AND DATA TARGETS ================================
@@ -274,26 +283,13 @@ parameters_and_date_targets <- rlang::list2(
           source = "nhsn"
         ) %>%
         filter(geo_value %nin% g_insufficient_data_geos)
-      # ILI+/flusurv historical augmentation rows (static, finalized data for the
-      # seasonal forecasters). Previously bound at joined_archive_data's
-      # versions_end into every full_data snapshot. Folded in here as faux-
-      # versioned rows with version = time_value: these are historical seasons
-      # (time_values predate the forecast window), so every as-of slice includes
-      # all of them exactly as the old unconditional bind did, while keeping the
-      # archive honestly versioned like the explore pipeline.
-      extra_dt <- joined_archive_data %>%
-        epix_as_of(joined_archive_data$versions_end) %>%
+      # ILI+/flusurv augmentation rows for the seasonal forecasters, with the
+      # same Epidata v5 vintages that the explore pipeline uses. Bulk-loaded
+      # history has the faux version = time_value (see spoof_backfill_versions).
+      extra_dt <- bind_rows(ili_plus, flusurv) %>%
+        filter(agg_level %in% c("state", "nation"), geo_value %nin% g_insufficient_data_geos) %>%
         mutate(epiweek = epiweek(time_value), epiyear = epiyear(time_value)) %>%
-        filter((agg_level == "state") | (agg_level == "nation")) %>%
-        select(geo_value, source, time_value, hhs, season, season_week, epiweek, epiyear) %>%
-        rename(value = hhs) %>%
-        filter(source != "nhsn") %>%
-        mutate(version = time_value)
-      # The faux-versioning above is only equivalent to the old unconditional
-      # bind if no augmentation row lands inside the forecast window (flusurv is
-      # a live fetch, currently bounded at 2020 by the burden-estimate join;
-      # ILI+ ends mid-2024). Fail loudly if that ever drifts.
-      stopifnot(max(extra_dt$time_value) < min(as.Date(g_forecast_generation_dates)))
+        select(geo_value, source, time_value, version, value = hhs, season, season_week, epiweek, epiyear)
       bind_rows(nhsn_dt, extra_dt) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
     }
@@ -361,7 +357,7 @@ forecast_targets <- tar_map(
         forecast_date = forecast_date_int,
         generation_date = forecast_generation_date_int,
         as_of_policy = as_of_policy,
-        substitutions = flu_data_substitutions
+        substitutions = !!g_substitutions_arg
       )
     }
   ),
@@ -519,13 +515,16 @@ g_ensemble_specs <- list(
     sort_quantiles = FALSE
   )
 )
+# Prod always builds the ensembles, so a missing component fails loudly in run_ensemble().
+g_run_ensembles <- !g_evaluation_mode || ensemble_components_present(g_ensemble_specs, g_forecaster_params_grid$id)
 ensemble_targets <- build_prod_ensemble_targets(
   g_forecast_schedule,
   disease = "flu",
   geo_exclusions_file = "flu_geo_exclusions",
   nssp_geo_exclusions_file = "flu_nssp_geo_exclusions",
   ensemble_spec = g_ensemble_specs,
-  climate_submission_excluded_geos = c("as", "gu", "mh")
+  climate_submission_excluded_geos = c("as", "gu", "mh"),
+  run_ensembles = g_run_ensembles
 )
 
 
@@ -664,12 +663,9 @@ calibration_targets <- list(
       if (is.null(calibrated_ensemble_nhsn)) return(tibble())
       calibrated_ensemble_nhsn$forecasts %>%
         filter(!.data$is_burn_in, !is.na(.data$value_cal)) %>%
-        left_join(
-          get_population_data() %>% select("state_code", "state_id"),
-          by = c("location" = "state_code")
-        ) %>%
+        left_join(hub_location_crosswalk(), by = "location") %>%
         transmute(
-          geo_value = .data$state_id,
+          geo_value = .data$geo_value,
           forecast_date = .data$reference_date,
           target_end_date = .data$target_end_date,
           quantile = .data$level,
@@ -681,6 +677,9 @@ calibration_targets <- list(
     cue = tar_cue("always")
   )
 )
+
+# Calibration consumes ensemble_mix.
+if (!g_run_ensembles) calibration_targets <- list()
 
 if (g_evaluation_mode) {
   score_notebook <- build_backtest_score_targets()

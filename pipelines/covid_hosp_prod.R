@@ -74,6 +74,8 @@ g_forecast_schedule <- tibble(
   forecast_date_chr = as.character(fc_dates)
 )
 if (g_evaluation_mode) {
+  # Optional: EVALUATION_DATES keeps only the listed forecast dates.
+  g_forecast_schedule <- filter_evaluation_dates(g_forecast_schedule)
   # Optional: keep only the last N dates for a fast partial evaluation
   # (scripts/oracle/capture.R). Inert when unset or 0.
   # covid_hosp_prod_regr defaults to 1 so a regression run is always fast.
@@ -216,6 +218,13 @@ g_forecaster_params_grid <- list(
   imap(\(tib, family) make_forecaster_grid(tib, family)) %>%
   bind_rows() %>%
   select(-family)
+# Evaluation runs can be scoped to some forecasters (EVALUATION_FORECASTERS) and
+# replayed without the data substitutions (EVALUATION_SUBSTITUTIONS=false).
+g_substitutions_arg <- rlang::sym("covid_data_substitutions")
+if (g_evaluation_mode) {
+  g_forecaster_params_grid <- filter_evaluation_forecasters(g_forecaster_params_grid)
+  g_substitutions_arg <- evaluation_substitutions_arg("covid_data_substitutions")
+}
 
 
 # ================================ PARAMETERS AND DATA TARGETS ================================
@@ -371,7 +380,7 @@ forecast_targets <- tar_map(
         forecast_date = forecast_date_int,
         generation_date = forecast_generation_date_int,
         as_of_policy = as_of_policy,
-        substitutions = covid_data_substitutions
+        substitutions = !!g_substitutions_arg
       )
     }
   ),
@@ -532,12 +541,15 @@ g_ensemble_specs <- list(
     sort_quantiles = FALSE
   )
 )
+# Prod always builds the ensembles, so a missing component fails loudly in run_ensemble().
+g_run_ensembles <- !g_evaluation_mode || ensemble_components_present(g_ensemble_specs, g_forecaster_params_grid$id)
 ensemble_targets <- build_prod_ensemble_targets(
   g_forecast_schedule,
   disease = "covid",
   geo_exclusions_file = "covid_geo_exclusions",
   nssp_geo_exclusions_file = "covid_nssp_geo_exclusions",
-  ensemble_spec = g_ensemble_specs
+  ensemble_spec = g_ensemble_specs,
+  run_ensembles = g_run_ensembles
 )
 
 
@@ -651,12 +663,9 @@ calibration_targets <- list(
       if (is.null(calibrated_ensemble_nhsn)) return(tibble())
       calibrated_ensemble_nhsn$forecasts %>%
         filter(!.data$is_burn_in, !is.na(.data$value_cal)) %>%
-        left_join(
-          get_population_data() %>% select("state_code", "state_id"),
-          by = c("location" = "state_code")
-        ) %>%
+        left_join(hub_location_crosswalk(), by = "location") %>%
         transmute(
-          geo_value = .data$state_id,
+          geo_value = .data$geo_value,
           forecast_date = .data$reference_date,
           target_end_date = .data$target_end_date,
           quantile = .data$level,
@@ -668,6 +677,9 @@ calibration_targets <- list(
     cue = tar_cue("always")
   )
 )
+
+# Calibration consumes ensemble_mix.
+if (!g_run_ensembles) calibration_targets <- list()
 
 if (g_evaluation_mode) {
   score_notebook <- build_backtest_score_targets()

@@ -1,0 +1,99 @@
+---
+title: "`r params$disease` health check, `r params$forecast_date`"
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M')`"
+output:
+  html_document:
+    toc: true
+params:
+  disease: ""
+  forecast_date: ""
+  health: NULL
+  coverage: NULL
+  messages: NULL
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+health <- params$health
+coverage <- params$coverage
+messages <- params$messages
+components <- if (!is.null(coverage)) bind_rows(purrr::map(coverage, "components")) else tibble()
+submission <- if (!is.null(coverage)) bind_rows(purrr::map(coverage, "submission")) else tibble()
+status_color <- c(ok = "#2e7d32", attention = "#b26a00", fail = "#c62828", error = "#c62828")[[health$status]]
+```
+
+Check this before the fan plots. See `notes/prod-health-check.md` for what each
+section means.
+
+<div style="padding: 0.8em 1em; border-left: 6px solid `r status_color`; background: #f6f6f6; margin-bottom: 1em;">
+**Status: `r toupper(health$status)`**
+`r if (length(health$reasons) > 0) paste0("<br>", paste("&bull;", health$reasons, collapse = "<br>")) else "<br>Everything configured was forecast and submitted."`
+</div>
+
+## Submission coverage
+
+Locations submitted per signal and horizon, out of those expected. A horizon
+missing more than a quarter of its locations fails the run.
+
+```{r}
+if (nrow(submission) > 0) {
+  submission %>%
+    group_by(signal, horizon = ahead) %>%
+    summarize(
+      expected = n(),
+      submitted = sum(submitted),
+      missing = paste(sort(geo_value[!submitted]), collapse = ", "),
+      .groups = "drop"
+    ) %>%
+    datatable(rownames = FALSE, options = list(pageLength = 20, dom = "t"))
+} else {
+  cat("No coverage table: the health_coverage target was not built.")
+}
+```
+
+## Substituted components
+
+Configured ensemble components that produced no forecast for a location and
+horizon. Their weight went to the components that did (listed under
+`used_instead`); for example, a missing `revision_aware` at h−1 means
+`climate_linear` alone carried h−1.
+
+```{r}
+missing <- if (nrow(components) > 0) filter(components, !present) else tibble()
+if (nrow(missing) > 0) {
+  used <- components %>%
+    filter(present) %>%
+    group_by(signal, geo_value, ahead) %>%
+    summarize(used_instead = paste(sort(forecaster), collapse = " + "), .groups = "drop")
+  missing %>%
+    left_join(used, by = c("signal", "geo_value", "ahead")) %>%
+    group_by(signal, horizon = ahead, component = forecaster, used_instead) %>%
+    summarize(
+      n_locations = n(),
+      mean_share_lost = round(mean(share), 2),
+      locations = paste(sort(geo_value), collapse = ", "),
+      .groups = "drop"
+    ) %>%
+    arrange(signal, horizon, component) %>%
+    datatable(rownames = FALSE, options = list(pageLength = 20))
+} else {
+  cat("None: every configured component forecast every location and horizon.")
+}
+```
+
+## Pipeline errors and warnings
+
+Errors and warnings that `targets` recorded for this round's targets and for
+the shared data targets. A shared target's message can come from an earlier
+build; `time` says when.
+
+```{r}
+if (!is.null(messages) && nrow(messages) > 0) {
+  messages %>%
+    mutate(message = substr(message, 1, 400), time = format(time, "%Y-%m-%d %H:%M")) %>%
+    datatable(rownames = FALSE, options = list(pageLength = 25))
+} else {
+  cat("None.")
+}
+```

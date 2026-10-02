@@ -2,14 +2,34 @@
 #
 # Fired every 30 minutes, 07:00-14:00 America/Los_Angeles, on Wednesdays (see
 # prod-forecasts.timer). Runs the forecasts once the data is fresh, retries on
-# later firings if not, and gives up with a CRITICAL log line at the 14:00
-# cutoff.
+# later firings if not, and gives up with an alert at the 14:00 cutoff. After
+# the pipelines it renders each disease's health notebook and publishes; a
+# pipeline error, failed health check, or failed publish step alerts on Slack
+# (see notes/prod-health-check.md) and leaves the day unfinished so the next
+# firing retries.
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 log_file <- here::here("cache", "logs", "prod_forecast_freshness.log")
 dir.create(dirname(log_file), recursive = TRUE, showWarnings = FALSE)
 log_msg <- function(msg) {
   cat(sprintf("[%s] %s\n", format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"), msg), file = log_file, append = TRUE)
+}
+
+# Log a CRITICAL line and post it to Slack (SLACK_WEBHOOK_URL), once per
+# distinct message per day so the half-hourly retries don't repeat it.
+alert <- function(msg) {
+  log_msg(sprintf("CRITICAL: %s", msg))
+  sent_file <- here::here("cache", sprintf("prod_alerts_sent_%s", Sys.Date()))
+  sent <- if (file.exists(sent_file)) readLines(sent_file) else character(0)
+  key <- rlang::hash(msg)
+  if (key %in% sent) {
+    return(invisible())
+  }
+  if (notify_slack(sprintf(":rotating_light: prod forecasts\n%s", msg))) {
+    cat(key, "\n", file = sent_file, append = TRUE, sep = "")
+  } else {
+    log_msg("CRITICAL: the alert above was not delivered (SLACK_WEBHOOK_URL unset or the post failed).")
+  }
 }
 
 today <- Sys.Date()
@@ -29,8 +49,8 @@ fresh <- all(vapply(c("covid_hosp_prod", "flu_hosp_prod"), function(project) {
 if (!fresh) {
   log_msg(sprintf("Data is stale (local hour=%d).", hour))
   if (hour >= 14) {
-    log_msg(sprintf(
-      "CRITICAL: NHSN/NSSP data is still stale at the 14:00 cutoff. Skipping forecast run for %s; upstream data needs investigation.",
+    alert(sprintf(
+      "NHSN/NSSP data is still stale at the 14:00 cutoff. Skipping forecast run for %s; upstream data needs investigation.",
       today
     ))
   }
@@ -79,15 +99,11 @@ run_project_pipeline <- function(project, log_path) {
   run_logged_r(log_path, targets::tar_make(store = store, script = script))
 }
 
-steps <- list(
-  list(
-    name = "covid prod pipeline",
-    run = function() run_project_pipeline("covid_hosp_prod", here::here("cache", "logs", "prod_covid"))
-  ),
-  list(
-    name = "flu prod pipeline",
-    run = function() run_project_pipeline("flu_hosp_prod", here::here("cache", "logs", "prod_flu"))
-  ),
+pipelines <- list(
+  list(project = "covid_hosp_prod", disease = "covid", log = here::here("cache", "logs", "prod_covid")),
+  list(project = "flu_hosp_prod", disease = "flu", log = here::here("cache", "logs", "prod_flu"))
+)
+publish_steps <- list(
   list(
     name = "sync reports to S3",
     run = function() {
@@ -106,15 +122,39 @@ steps <- list(
   )
 )
 
-for (step in steps) {
+# Run both pipelines, then always render their health notebooks and publish, so
+# a failed or degraded run is visible on the site before anyone is alerted.
+failures <- character(0)
+for (p in pipelines) {
+  log_msg(sprintf("Starting: %s prod pipeline", p$disease))
+  if (run_project_pipeline(p$project, p$log) != 0) {
+    failures <- c(failures, sprintf("%s prod pipeline errored (log: %s)", p$disease, p$log))
+  }
+}
+for (p in pipelines) {
+  health <- tryCatch(
+    render_prod_health(p$project, p$disease),
+    error = function(e) list(status = "error", reasons = sprintf("health notebook failed: %s", conditionMessage(e)), file = NA)
+  )
+  log_msg(sprintf("%s health: %s. %s", p$disease, health$status, paste(health$reasons, collapse = "; ")))
+  if (health$status %in% c("fail", "error")) {
+    failures <- c(failures, sprintf(
+      "%s health check %s: %s (%s)",
+      p$disease, toupper(health$status), paste(health$reasons, collapse = "; "), basename(health$file %||% "no report")
+    ))
+  }
+}
+for (step in publish_steps) {
   log_msg(sprintf("Starting: %s", step$name))
-  status <- step$run()
-  if (status != 0) {
-    log_msg(sprintf("CRITICAL: %s failed with exit code %s. Aborting prod run for %s.", step$name, status, today))
-    quit(status = 1)
+  if (step$run() != 0) {
+    failures <- c(failures, sprintf("%s failed", step$name))
   }
 }
 
+if (length(failures) > 0) {
+  alert(paste("-", failures, collapse = "\n"))
+  quit(status = 1)
+}
 file.create(marker)
 log_msg(sprintf("Prod forecast run for %s completed successfully.", today))
 quit(status = 0)

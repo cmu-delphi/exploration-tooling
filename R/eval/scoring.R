@@ -17,6 +17,16 @@ evaluate_predictions <- function(forecasts, truth_data) {
     must.include = c("geo_value", "target_end_date", "true_value")
   )
 
+  # scoringutils rejects empty input; a forecaster that skips an ahead returns none.
+  if (nrow(forecasts) == 0) {
+    return(tibble(
+      model = character(), geo_value = character(),
+      forecast_date = as.Date(character()), target_end_date = as.Date(character()),
+      wis = numeric(), ae = numeric(), coverage_50 = numeric(), coverage_90 = numeric(),
+      ahead = numeric()
+    ))
+  }
+
   forecast_obj <- left_join(forecasts, truth_data, by = c("geo_value", "target_end_date")) %>%
     scoringutils::as_forecast_quantile(
       quantile_level = "quantile",

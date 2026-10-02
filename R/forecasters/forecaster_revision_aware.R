@@ -147,9 +147,9 @@ compute_finalization_lag_weeks <- function(
 #'   `primary_source`). `primary_source` is always included. On a mixed archive
 #'   this is the include/exclude-faux-revisions knob: `primary_source` alone
 #'   ("nhsn") trains on genuinely version-aware history only, while adding
-#'   faux-versioned sources (e.g. "ILI+", "flusurv", whose `version ==
-#'   time_value`) buys a longer training window at the cost of those rows not
-#'   being truly revision-aware.
+#'   partly faux-versioned sources (e.g. "ILI+", "flusurv", whose bulk-loaded
+#'   history has `version == time_value`) buys a longer training window at the
+#'   cost of those rows not being truly revision-aware.
 #' @param ahead forecast horizon, relative to the archive's `versions_end`, in
 #'   the same `time_value` units as the archive (days for the weekly-Wednesday
 #'   archives, so a multiple of 7).
@@ -215,20 +215,23 @@ scaled_pop_seasonal_revision <- function(
   train_sources <- union(primary_source, unlist(train_sources) %||% primary_source)
 
 
-  # For negative aheads, the most recent anchor week is still being actively
-  # revised. Drop it so the model anchors on the previous (more finalized) week,
-  # effectively adding one week of latency per negative-ahead step.
-  # For negative aheads, the most recent anchor week is still being actively
-  # revised and its lag-0 value directly covers the target week. Drop one week
-  # per negative-ahead step so the model predicts from genuinely prior data.
+  # The anchor is the latest week the primary source has reported, kept even
+  # though it is still being revised. The model predicts `design_ahead` days past
+  # it; at ahead = -1 week in normal operation that is the anchor week itself,
+  # predicted from its first report (lag 0).
   archive_for_design <- epi_data
-  max_tv <- max(archive_for_design$DT$time_value, na.rm = TRUE)
-  # Reporting latency: gap between forecast date and most recent data. Both
-  # max_tv and versions_end are Wednesdays (nhsn_prod_archive shifts time_values
-  # via floor_date + 3), so this is always a multiple of 7 in normal operation.
-  # Rounded up to the nearest week for robustness against off-schedule runs.
-  reporting_latency_days <- as.integer(epi_data$versions_end - max_tv)
-  design_ahead <- ahead + ceiling(reporting_latency_days / 7L) * 7L
+  reported <- epi_data$DT
+  if ("source" %in% names(reported)) {
+    reported <- reported[reported$source == primary_source, ]
+  }
+  max_tv <- max(reported$time_value[!is.na(reported[[outcome]])])
+  forecast_date <- archive_forecast_date(epi_data)
+  target_tv <- forecast_date + ahead
+  design_ahead <- as.integer(target_tv - max_tv)
+  if (design_ahead %% 7L != 0L) {
+    cli::cli_warn("revision_aware: target {target_tv} is not a whole number of weeks past the latest data ({max_tv}); no forecast.")
+    return(make_null_forecast())
+  }
 
   # Revision-aware design: as-of lags for every base column plus the finalized
   # outcome target, then restrict to the genuinely-revised primary source.
@@ -303,6 +306,13 @@ scaled_pop_seasonal_revision <- function(
   forecast_rows <- design %>%
     filter(source == primary_source, version == latest_primary_version) %>%
     drop_na(all_of(lag_cols))
+  # A geo whose latest week is older than max_tv would be predicting an earlier
+  # week than target_tv, so it gets no forecast.
+  late_geos <- forecast_rows$geo_value[forecast_rows$time_value != max_tv]
+  if (length(late_geos) > 0) {
+    cli::cli_warn("revision_aware: no forecast for {late_geos}, whose latest week is before {max_tv}.")
+    forecast_rows <- forecast_rows %>% filter(time_value == max_tv)
+  }
 
   # Bail out before the expensive full-archive scans below (seasonal-window
   # season lookup, compute_finalization_lag_weeks, flag_revision_outlier_versions)
@@ -392,8 +402,8 @@ scaled_pop_seasonal_revision <- function(
     tibble(
       geo_value = forecast_rows$geo_value[[ii]],
       source = forecast_rows$source[[ii]],
-      forecast_date = lubridate::floor_date(epi_data$versions_end, "week", week_start = 7L) + 3L,
-      target_end_date = epi_data$versions_end + ahead,
+      forecast_date = forecast_date,
+      target_end_date = target_tv,
       quantile = levels_out,
       value = quantile_mat[ii, ]
     )

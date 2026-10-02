@@ -211,8 +211,9 @@ make_forecast_snapshot <- function(
 #' faithfulness [make_forecast_snapshot] has to assert after the fact.
 #'
 #' @param archive         an `epi_archive`.
-#' @param forecast_date   nominal (Wednesday) forecast date. Kept for a symmetric
-#'   signature with [make_forecast_snapshot]; must not be after `generation_date`.
+#' @param forecast_date   nominal (Wednesday) forecast date; must not be after
+#'   `generation_date`. Stored on the result (see [archive_forecast_date]) so
+#'   forecasters date their targets from it, as epi_df snapshots do via `as_of`.
 #' @param generation_date date the forecast is actually generated; the latest
 #'   version retained.
 #' @return an `epi_archive` with `versions_end <= generation_date`.
@@ -226,7 +227,18 @@ make_forecast_archive_snapshot <- function(archive, forecast_date, generation_da
       "make_forecast_archive_snapshot(): forecast_date ({forecast_date}) is after generation_date ({generation_date})."
     )
   }
-  epix_truncate_versions_after(archive, min(generation_date, archive$versions_end))
+  out <- epix_truncate_versions_after(archive, min(generation_date, archive$versions_end))
+  attr(out, "forecast_date") <- min(forecast_date, out$versions_end)
+  out
+}
+
+#' Forecast date of an archive snapshot.
+#'
+#' The date set by [make_forecast_archive_snapshot], or `versions_end` for an
+#' archive without one. Targets are dated `forecast_date + ahead`.
+#' @param archive an `epi_archive`.
+archive_forecast_date <- function(archive) {
+  attr(archive, "forecast_date") %||% archive$versions_end
 }
 
 

@@ -16,7 +16,7 @@ make prod-covid           # covid production pipeline
 make prod-rsv             # STUB: scripts/rsv_hosp_prod.R does not exist yet; recipe fails if run
 make explore-flu          # flu exploration sweep (~3h)
 make explore-covid        # covid exploration sweep (~3h)
-make eval-flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n forecast dates. Also: eval-covid. BACKTEST_MODE survives only for the rsv stub (prod-rsv-backtest)
+make eval-flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n forecast dates; see Key env vars for the other EVALUATION_* scopes. Also: eval-covid. BACKTEST_MODE survives only for the rsv stub (prod-rsv-backtest)
 make pull / make push     # sync aux_data, targets stores, and forecasts with S3 (forecasting-team-data bucket)
 make update-site && make netlify   # rebuild report index and deploy
 make submit-flu           # commit forecast to ../FluSight-forecast-hub, open PR, then commit + push flu weights CSVs to main (also: submit-covid, submit-rsv; *-dry skips the weights push)
@@ -37,17 +37,17 @@ get_targets_errors("covid_hosp_prod", top_n = 10)
 forecaster_lookup("surprised.tarantula")  # map code name -> parameter settings
 ```
 
-Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in a REPL — never in `.Renviron`, which overrides the shell env on every Rscript start), `TAR_RUN_PROJECT` (how make recipes/`scripts/run.R` select the project, immune to `.Renviron`), `BACKTEST_MODE` (rsv stub only; flu/covid evaluation mode dispatches on the project name), `FORECAST_REFERENCE_DATE` (pins the pipeline's "today" for reproducible replays/captures), `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
+Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in a REPL — never in `.Renviron`, which overrides the shell env on every Rscript start), `TAR_RUN_PROJECT` (how make recipes/`scripts/run.R` select the project, immune to `.Renviron`), `BACKTEST_MODE` (rsv stub only; flu/covid evaluation mode dispatches on the project name), `FORECAST_REFERENCE_DATE` (pins the pipeline's "today" for reproducible replays/captures), `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EVALUATION_N_DATES` / `EVALUATION_DATES` (comma-separated forecast dates) / `EVALUATION_FORECASTERS` (comma-separated grid ids; if any ensemble component is left out, the ensemble, submission, report and calibration targets are skipped) / `EVALUATION_SUBSTITUTIONS=false` (replay without `*_data_substitutions.csv`) — all inert outside flu/covid evaluation mode, `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
 
 ## Architecture
 
 Each project in `_targets.yaml` maps a pipeline script to a store directory of the same name: `covid_hosp_explore`, `flu_hosp_explore`, `covid_hosp_prod`, `flu_hosp_prod`, `rsv_hosp_prod` (a stub — see below), plus `flu_hosp_evaluation` / `covid_hosp_evaluation` (same scripts as the prod projects, separate stores, for historical replays). Explore projects sweep many forecaster/parameter combinations to find good settings; prod projects generate the weekly submission and reports. Store directories (targets caches) are synced to/from S3 rather than recomputed.
 
-- `scripts/<project>.R` — pipeline definitions. Globals are prefixed `g_` and must be top-level (targets freezes commands as expressions, so function arguments can't carry them). `g_forecast_dates` are the nominal (Wednesday) forecast dates; `g_forecast_generation_dates` are when forecasts actually ran (differ on holiday/outage delays) and serve as the data `as_of`.
+- `pipelines/<project>.R` — pipeline definitions. Globals are prefixed `g_` and must be top-level (targets freezes commands as expressions, so function arguments can't carry them). `g_forecast_dates` are the nominal (Wednesday) forecast dates; `g_forecast_generation_dates` are when forecasts actually ran (differ on holiday/outage delays) and serve as the data `as_of`.
 - `g_forecaster_parameter_combinations` — human-readable tibble of forecasters × parameter settings; `g_forecaster_params_grid` is the same data reshaped for targets' dynamic branching. Each heading in the combinations tibble gets its own report notebook in `reports/`.
 - `R/` — all shared code, sourced wholesale by `R/load_all.R` (imports in `R/imports.R`). Subdirs: `R/forecasters/` (forecaster functions), `R/targets/` (target factory/config code per disease), `R/new_epipredict_steps/`. Built on the Delphi stack: epiprocess/epipredict/epidatr, with `epi_df`/`epi_archive` data structures.
 - `scripts/build_nhsn_archive.R`, `build_nssp_archive.R` — fast polling scripts that build versioned data archives; pipelines depend on these archives rather than fetching data themselves. Run every 5 min via systemd timers (see `deploy/systemd/README.md`; `scripts/run_prod_if_fresh.R` gates the Wednesday prod run on data freshness via `check_data_freshness()`).
-- `scripts/*_geo_exclusions.csv` — per-date/geo forecaster ensemble weights, edited by hand to tune weekly submissions; `*_data_substitutions.csv` — manual data corrections.
+- `pipelines/*_geo_exclusions.csv` — per-date/geo forecaster ensemble weights, edited by hand to tune weekly submissions; `*_data_substitutions.csv` — manual data corrections.
 - `scripts/reports/` — Rmd/qmd report sources rendered into `reports/` (the Netlify site).
 - `aux_data/` — non-public input data, synced from S3.
 
@@ -81,14 +81,15 @@ prod, covid prod, and flu/covid explore are all on this stack. Three layers:
 
 The prod ensemble layer mirrors this: `build_prod_ensemble_targets()`
 (`R/targets/prod_shared.R`) builds both diseases' ensemble targets from a
-declarative per-disease `g_ensemble_specs` (in `scripts/*_hosp_prod.R`;
+declarative per-disease `g_ensemble_specs` (in `pipelines/*_hosp_prod.R`;
 per-disease asymmetries are spec fields or factory arguments, never forked
 code), executed by `run_ensemble()` (`R/targets/ensemble_runner.R`): component
 presence asserted loudly, method dispatch (`climate_linear`/`mean`/`weighted`),
 geo-exclusion filtering, id stamping, output validation. The hand-edited
-`scripts/*_geo_exclusions.csv` weights files are schema-validated inside
-`parse_prod_weights()` (`R/utils.R`; retired-but-inert forecaster ids are
-whitelisted via `LEGACY_PROD_WEIGHT_FORECASTER_IDS`).
+`pipelines/*_geo_exclusions.csv` weights files are schema-validated inside
+`parse_prod_weights()` (`R/ensemble_weights.R`; retired-but-inert forecaster ids are
+whitelisted via `LEGACY_PROD_WEIGHT_FORECASTER_IDS`). The `weighted` method,
+`ensemble_weighted()`, lives in the same file.
 
 Contracts guard the boundaries: `make_forecast_snapshot()` asserts version
 faithfulness (no as-of row observed after the generation date), and

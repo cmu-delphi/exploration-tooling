@@ -1,0 +1,136 @@
+---
+title: "`r params$disease` h−1 nowcasts"
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output:
+  html_document:
+    code_folding: hide
+params:
+  forecaster_parameters: ""
+  baseline_id: ""
+  forecasts: ""
+  scores: ""
+  truth_data: ""
+  disease: ""
+editor_options:
+  chunk_output_type: console
+---
+
+Forecasts of the already-reported week (h−1), from the families that opt into
+`g_nowcast_aheads`. Relative WIS is each forecaster's summed WIS over the
+(geo, forecast date) pairs it shares with the baseline, divided by the
+baseline's; below 1 beats the baseline.
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", message = FALSE, warning = FALSE, cache = FALSE)
+ggplot2::theme_set(ggplot2::theme_bw())
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+```
+
+```{r}
+scores <- params$scores
+baseline_id <- params$baseline_id
+base_scores <- scores %>%
+  filter(forecaster == baseline_id) %>%
+  select(geo_value, forecast_date, target_end_date, wis_base = wis)
+paired <- scores %>% inner_join(base_scores, by = c("geo_value", "forecast_date", "target_end_date"))
+```
+
+**Baseline:** `r baseline_id` (`revision_ratio_nowcast`).
+**Forecast dates:** `r paste(range(scores$forecast_date), collapse = " to ")`.
+
+### Overall
+
+```{r}
+summary_table <- paired %>%
+  group_by(forecaster) %>%
+  summarize(
+    n = n(),
+    rel_wis = round(sum(wis) / sum(wis_base), 3),
+    mean_wis = round(mean(wis), 2),
+    mean_ae = round(mean(ae), 2),
+    coverage_50 = round(mean(coverage_50), 2),
+    coverage_90 = round(mean(coverage_90), 2),
+    .groups = "drop"
+  ) %>%
+  left_join(
+    params$forecaster_parameters %>% select(id, family) %>% distinct(),
+    by = c("forecaster" = "id")
+  ) %>%
+  relocate(forecaster, family) %>%
+  arrange(rel_wis)
+datatable(summary_table)
+```
+
+### Over time {.tabset}
+
+#### Relative WIS by forecast date
+
+```{r}
+paired %>%
+  group_by(forecaster, forecast_date) %>%
+  summarize(rel_wis = sum(wis) / sum(wis_base), .groups = "drop") %>%
+  ggplot(aes(forecast_date, rel_wis, color = forecaster)) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_line() +
+  scale_y_log10() +
+  labs(x = "forecast date", y = "relative WIS (log scale)")
+```
+
+#### Coverage by forecast date
+
+```{r}
+scores %>%
+  group_by(forecaster, forecast_date) %>%
+  summarize(`50%` = mean(coverage_50), `90%` = mean(coverage_90), .groups = "drop") %>%
+  pivot_longer(c(`50%`, `90%`), names_to = "interval", values_to = "coverage") %>%
+  ggplot(aes(forecast_date, coverage, color = forecaster)) +
+  geom_hline(aes(yintercept = as.numeric(sub("%", "", interval)) / 100), linetype = "dashed") +
+  geom_line() +
+  facet_wrap(~interval, ncol = 1) +
+  labs(x = "forecast date", y = "empirical coverage")
+```
+
+### Relative WIS by location
+
+```{r fig.height = 10}
+paired %>%
+  filter(forecaster != baseline_id) %>%
+  group_by(forecaster, geo_value) %>%
+  summarize(rel_wis = sum(wis) / sum(wis_base), .groups = "drop") %>%
+  ggplot(aes(rel_wis, reorder(geo_value, rel_wis), color = forecaster)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  geom_point() +
+  scale_x_log10() +
+  labs(x = "relative WIS (log scale)", y = NULL)
+```
+
+### Nowcasts against finalized values
+
+Median with 50% and 90% intervals, by target week. The line is the finalized value.
+
+```{r fig.height = 12}
+plot_geos <- params$truth_data %>%
+  filter(geo_value %in% unique(params$forecasts$geo_value)) %>%
+  group_by(geo_value) %>%
+  summarize(total = sum(true_value, na.rm = TRUE), .groups = "drop") %>%
+  slice_max(total, n = 9) %>%
+  pull(geo_value)
+bands <- params$forecasts %>%
+  filter(geo_value %in% plot_geos) %>%
+  mutate(q = case_when(
+    abs(quantile - 0.05) < 1e-6 ~ "q05", abs(quantile - 0.25) < 1e-6 ~ "q25",
+    abs(quantile - 0.5) < 1e-6 ~ "q50", abs(quantile - 0.75) < 1e-6 ~ "q75",
+    abs(quantile - 0.95) < 1e-6 ~ "q95"
+  )) %>%
+  filter(!is.na(q)) %>%
+  pivot_wider(id_cols = c(forecaster, geo_value, target_end_date), names_from = q, values_from = prediction)
+truth <- params$truth_data %>%
+  filter(geo_value %in% plot_geos, between(target_end_date, min(bands$target_end_date), max(bands$target_end_date)))
+ggplot(bands, aes(target_end_date)) +
+  geom_ribbon(aes(ymin = q05, ymax = q95, fill = forecaster), alpha = 0.15) +
+  geom_ribbon(aes(ymin = q25, ymax = q75, fill = forecaster), alpha = 0.3) +
+  geom_point(aes(y = q50, color = forecaster), size = 0.8) +
+  geom_line(data = truth, aes(y = true_value), color = "black") +
+  facet_wrap(~geo_value, scales = "free_y", ncol = 3) +
+  labs(x = "target week", y = NULL)
+```

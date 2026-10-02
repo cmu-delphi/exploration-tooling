@@ -663,3 +663,99 @@ test_that("scaled_pop_seasonal_revision keeps a prior year's seasonal window acr
   expect_true(nrow(res) > 0)
   expect_setequal(unique(res$geo_value), geos$geo_value)
 })
+
+run_nowcast <- function(archive) {
+  scaled_pop_seasonal_revision(
+    archive,
+    outcome = "value", primary_source = "nhsn", ahead = -7, lags = c(0, 7),
+    pop_scaling = FALSE, scale_method = "none", center_method = "none", nonlin_method = "none",
+    use_seasonal_window = FALSE, trainer = epipredict::quantile_reg(method = "fn"),
+    finalization_coverage = 0.8
+  )
+}
+
+test_that("scaled_pop_seasonal_revision gives no forecast when the target is off the weekly grid", {
+  set.seed(5)
+  archive <- mk_revision_archive()$archive
+  attr(archive, "forecast_date") <- archive$versions_end + 8
+  expect_warning(res <- run_nowcast(archive), "whole number of weeks")
+  expect_equal(nrow(res), 0)
+})
+
+test_that("scaled_pop_seasonal_revision drops a geo whose latest week is behind the others", {
+  set.seed(6)
+  fixture <- mk_revision_archive()
+  last_week <- max(fixture$archive$DT$time_value)
+  archive <- fixture$archive$DT %>%
+    as_tibble() %>%
+    filter(!(geo_value == "tx" & time_value == last_week)) %>%
+    as_epi_archive(other_keys = "source", versions_end = fixture$archive$versions_end)
+  attr(archive, "forecast_date") <- last_week + 7
+  expect_warning(res <- run_nowcast(archive), "no forecast for tx")
+  expect_equal(unique(res$geo_value), "ca")
+  expect_true(all(res$target_end_date == last_week))
+})
+
+# Replay-style archive with prod latency: week W is first reported at W + 7 (at
+# 40% of its final value) and final at W + 21. The archive's versions_end is past
+# the last report, as in a historical replay, so a snapshot's versions_end is
+# its generation date. The steep trend makes a forecast of the wrong week visible.
+mk_latent_revision_archive <- function() {
+  weeks <- seq(as.Date("2023-01-04"), by = 7, length.out = 30)
+  last_report <- max(weeks) + 7
+  truth <- tidyr::expand_grid(geo_value = c("ca", "tx"), time_value = c(weeks, max(weeks) + 7 * 1:4)) %>%
+    mutate(final_value = 20 + 4 * as.numeric(time_value - min(weeks)) / 7 + rnorm(dplyr::n(), sd = 0.3))
+  rows <- bind_rows(
+    truth %>% filter(time_value %in% weeks) %>% mutate(version = time_value + 7, value = 0.4 * final_value),
+    truth %>% mutate(version = time_value + 21, value = final_value) %>% filter(version <= last_report)
+  )
+  list(
+    archive = rows %>%
+      mutate(source = "nhsn") %>%
+      select(geo_value, time_value, source, version, value) %>%
+      as_epi_archive(other_keys = "source", versions_end = last_report + 30),
+    truth = truth,
+    forecast_date = last_report
+  )
+}
+
+run_latent <- function(snapshot, ahead) {
+  suppressMessages(scaled_pop_seasonal_revision(
+    snapshot,
+    outcome = "value", primary_source = "nhsn", ahead = ahead, lags = c(0, 7),
+    pop_scaling = FALSE, scale_method = "none", center_method = "none", nonlin_method = "none",
+    use_seasonal_window = FALSE, quantile_levels = 0.5, finalization_coverage = 0.8
+  ))
+}
+
+expect_forecasts_week <- function(res, truth, target) {
+  expect_equal(nrow(res), 2)
+  expect_true(all(res$target_end_date == target))
+  scored <- res %>% left_join(truth, by = c("geo_value", "target_end_date" = "time_value"))
+  expect_equal(scored$value, scored$final_value, tolerance = 0.02)
+}
+
+test_that("scaled_pop_seasonal_revision dates and forecasts the same week on an on-time and a late run", {
+  set.seed(7)
+  fixture <- mk_latent_revision_archive()
+  fd <- fixture$forecast_date
+  for (generation_date in c(fd, fd + 1)) {
+    snapshot <- make_forecast_archive_snapshot(fixture$archive, fd, as.Date(generation_date))
+    for (ahead in c(-7, 0, 7)) {
+      res <- run_latent(snapshot, ahead)
+      expect_true(all(res$forecast_date == fd))
+      expect_forecasts_week(res, fixture$truth, fd + ahead)
+    }
+  }
+})
+
+test_that("scaled_pop_seasonal_revision forecasts past a reporting gap, including the unreported h−1 week", {
+  set.seed(8)
+  fixture <- mk_latent_revision_archive()
+  # No new week was reported for the next forecast date.
+  fd <- fixture$forecast_date + 7
+  snapshot <- make_forecast_archive_snapshot(fixture$archive, fd, fd)
+  for (ahead in c(-7, 7)) {
+    expect_forecasts_week(run_latent(snapshot, ahead), fixture$truth, fd + ahead)
+  }
+})
