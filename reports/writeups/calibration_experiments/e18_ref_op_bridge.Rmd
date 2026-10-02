@@ -39,7 +39,7 @@ only (US excluded).
 | 3 no leak | `fast_decay = 0` | sqrt, adaptive, mult 0.03, window 20, carry, with the 2023-24 season present |
 | 4 no burn-in season | drop the 2023-24 rounds | as 3, cold: the eta pool starts empty |
 | 5 per-100k units | `scales` = population / 100k | as 4, on the square root of admissions per 100k |
-| 6 constant 0.018 | `lr = 0.018` | E16's best: sqrt per 100k, constant 0.018 |
+| 6 sqrt constant 0.018 (E16) | `lr = 0.018` | E16's best: sqrt per 100k, constant 0.018 |
 
 **Why steps 4 and 5.** The 2023-24 burn-in season does two things. With
 `slow_init` it sets the slow term's starting value (the warm start). Without
@@ -140,7 +140,7 @@ STEPS <- list(
   `3 no leak` = list(cfg = utils::modifyList(sqrt_adaptive, list(burn_in_seasons = "2023-2024")), burn_in = TRUE),
   `4 no burn-in season` = list(cfg = sqrt_adaptive, burn_in = FALSE),
   `5 per-100k units` = list(cfg = c(sqrt_adaptive, list(scales = wi$rate_scales)), burn_in = FALSE),
-  `6 constant 0.018` = list(cfg = utils::modifyList(const_cfg, list(lr = 0.018, transform = "sqrt")), burn_in = FALSE)
+  `6 sqrt constant 0.018 (E16)` = list(cfg = utils::modifyList(const_cfg, list(lr = 0.018, transform = "sqrt")), burn_in = FALSE)
 )
 # Rate-scale constant rates for comparison, outside the chain: E14's best and E09's knee, as E14 runs them.
 e14_const <- ws_configs(wi$rate_scales, burn_in = TRUE)[["E11 constant 0.1"]]
