@@ -54,10 +54,11 @@ for (f in src) {
 - **Horizons** h−1 to h3 are weeks relative to the forecast's reference date.
   h−1 is the latest week NHSN has reported, still open to revision; h0 and
   later have not been reported yet.
-- **WIS change %** compares the calibrated forecast's weighted interval score
-  with the uncalibrated submission's, pooled over locations. The sign
-  convention is stated in each notebook.
-- **L1 coverage bias** is the mean over the 23 quantile levels of
+- **WIS reduction %** is `100 × (WIS_base − WIS_cal) / WIS_base`, the
+  calibrated forecast's weighted interval score against the uncalibrated
+  submission's, pooled over locations. Positive = calibrated WIS lower than
+  base. Every notebook uses this sign.
+- **L1 coverage bias** (lower is better) is the mean over the 23 quantile levels of
   |empirical coverage − level|. 0 is perfect; the uncalibrated flu
   submission sits near 0.1.
 - **Scoring.** Every score is against finalized NHSN data, over the live

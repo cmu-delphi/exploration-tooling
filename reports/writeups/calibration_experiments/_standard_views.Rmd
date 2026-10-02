@@ -7,14 +7,14 @@ hub locations, against finalized truth; burn-in rounds are excluded.
 
 ## WIS and coverage
 
-WIS change % (positive is better than the base):
+WIS reduction % (positive = calibrated WIS lower than base):
 
 ```{r v-head}
 head_all <- cal_headline(cals)
 knitr::kable(cal_wide(head_all, "pct_improvement"))
 ```
 
-L1 coverage bias (mean over levels of |coverage − level|), with the base first:
+L1 coverage bias (lower is better; mean over levels of |coverage − level|), with the base first:
 
 ```{r v-head-cov}
 knitr::kable(bind_rows(
@@ -23,7 +23,7 @@ knitr::kable(bind_rows(
 ))
 ```
 
-WIS change % by season:
+WIS reduction % by season (positive = calibrated WIS lower than base):
 
 ```{r v-head-season}
 knitr::kable(
@@ -34,7 +34,7 @@ knitr::kable(
 
 ## Absolute error of the median
 
-Summed |truth − median|, change % vs base (positive is better):
+Summed |truth − median|, reduction % vs base (positive = calibrated absolute error lower than base):
 
 ```{r v-ae}
 knitr::kable(cal_wide(cal_ae(cals), "ae_pct"))
@@ -42,7 +42,7 @@ knitr::kable(cal_wide(cal_ae(cals), "ae_pct"))
 
 ## Where in the season
 
-WIS change % by month of the reference date (clipped at −60), h0 and h3,
+WIS reduction % (positive = calibrated WIS lower than base) by month of the reference date (clipped at −60), h0 and h3,
 and each month's share of the base WIS at h3. Months run July to June; only
 months with forecasts are shown.
 
@@ -57,7 +57,7 @@ ggplot(month_tbl %>% filter(horizon %in% c(0, 3)), aes(month, pct, colour = vari
   facet_wrap(~ paste0("h", horizon)) +
   scale_colour_brewer(palette = "Dark2", name = NULL) +
   coord_cartesian(ylim = c(-60, 30)) +
-  labs(x = "month of reference date", y = "WIS change %") +
+  labs(x = "month of reference date", y = "WIS reduction % (positive = calibrated\nWIS lower than base)") +
   theme(legend.position = "bottom", legend.direction = "vertical")
 knitr::kable(
   month_tbl %>%
@@ -100,7 +100,7 @@ for (nm in names(CAL_STATES)) {
 For each season phase and location size (population above or below the
 median), the forecast with the largest WIS gain and the one with the largest
 loss, each from a different location. Forecasts are ranked by their
-WIS change as a share of their own location-season's base WIS, so small states late in the season, where the base is
+WIS reduction as a share of their own location-season's base WIS, so small states late in the season, where the base is
 tiny, do not crowd the gallery. Ribbons are the 50%
 and 90% bands, the dashed line is the forecast date.
 
@@ -110,7 +110,7 @@ abbrev <- setNames(toupper(get_population_data()$state_id), get_population_data(
 for (i in seq_len(nrow(picks))) {
   p <- picks[i, ]
   if (i == 1L || p$phase != picks$phase[i - 1L]) cat("\n\n### ", as.character(p$phase), "\n\n", sep = "")
-  sub <- sprintf("%s (%s), %s, %s: WIS %+.1f%% (%+.1f%% of its season's base WIS)", abbrev[[p$location]], p$size, p$reference_date, p$kind, p$wis_pct, p$share)
+  sub <- sprintf("%s (%s), %s, %s: WIS reduction %+.1f%% (%+.1f%% of its season's base WIS; positive = calibrated WIS lower)", abbrev[[p$location]], p$size, p$reference_date, p$kind, p$wis_pct, p$share)
   print(cal_gallery_panel(cals[[focus]], p$location, p$reference_date, truth, vintages, subtitle = sub))
 }
 ```

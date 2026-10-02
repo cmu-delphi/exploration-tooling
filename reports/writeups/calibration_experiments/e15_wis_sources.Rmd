@@ -32,12 +32,12 @@ burn-in season. Two calibrated configs, both from E12:
 - **E11 constant 0.1**: the plain tracker on the rate scale (per 100k)
   with a constant learning rate of 0.1.
 
-Scores are against finalized truth over 2024-25 and 2025-26. "WIS change %"
-is `100 × (WIS_base − WIS_cal) / WIS_base`: **positive is better**.
+Scores are against finalized truth over 2024-25 and 2025-26. "WIS reduction %"
+is `100 × (WIS_base − WIS_cal) / WIS_base`: **positive = calibrated WIS lower than base**.
 Results lead with states only (US excluded), since US alone is about 45% of
 the all-locations WIS.
 
-**Three ways to cut the WIS change.**
+**Three ways to cut the WIS reduction.**
 
 1. **By quantile level.** WIS is the average pinball loss over the 23
    quantile levels, so the total change splits exactly into one piece per
@@ -58,14 +58,14 @@ the all-locations WIS.
      median sits on the base median. The calibrated widths and shape are
      kept, the base centre is kept.
 
-   If the two parts did not interact, their WIS changes would add up to the
+   If the two parts did not interact, their WIS reductions would add up to the
    full change. Both parts are floored at zero, as the calibrated forecast
    is.
 
 # Findings
 
 Numbers are from the render of 1 October 2026, states only, h0/h1/h2/h3,
-WIS change % with positive better. All-locations numbers point the same way.
+WIS reduction % (positive = calibrated WIS lower than base). All-locations numbers point the same way.
 
 - **The offsets are small, and that is why the fans look unchanged.** The
   typical (median) offset is 2–5% of the base forecast's 90% interval width
@@ -119,10 +119,10 @@ fc <- bind_rows(fc %>% filter(location != "US") %>% mutate(geos = "states"), fc 
   mutate(geos = factor(geos, levels = names(GEOS), labels = GEOS))
 ```
 
-# 1. WIS change by quantile level
+# 1. WIS reduction by quantile level
 
-Each bar is one level's share of the total WIS change % (positive is
-better); the bars in a panel add up to the panel's total, printed in the
+Each bar is one level's share of the total WIS reduction % (positive =
+calibrated WIS lower than base); the bars in a panel add up to the panel's total, printed in the
 strip.
 
 ```{r by-level}
@@ -142,7 +142,7 @@ level_plot <- function(g) {
     facet_wrap(~ paste(config, panel, sep = ": "), ncol = 4) +
     scale_fill_manual(values = c(`REF-op cold` = "#D55E00", `E11 constant 0.1` = "#0072B2"), guide = "none") +
     scale_x_discrete(labels = function(x) ifelse(x %in% c("0.01", "0.05", "0.25", "0.5", "0.75", "0.95", "0.99"), x, "")) +
-    labs(x = "quantile level", y = "share of WIS change, % of base WIS", title = g) +
+    labs(x = "quantile level", y = "share of WIS reduction, % of base WIS\n(positive = calibrated WIS lower than base)", title = g) +
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 7))
 }
 ```
@@ -185,8 +185,8 @@ group_tbl <- function(g) {
     tidyr::pivot_wider(names_from = horizon, values_from = v) %>%
     arrange(config, part)
 }
-knitr::kable(group_tbl(GEOS[["states"]]), caption = "States only: WIS change % by group of levels (positive is better)")
-knitr::kable(group_tbl(GEOS[["all"]]), caption = "All locations: WIS change % by group of levels (positive is better)")
+knitr::kable(group_tbl(GEOS[["states"]]), caption = "States only: WIS reduction % by group of levels (positive = calibrated WIS lower than base)")
+knitr::kable(group_tbl(GEOS[["all"]]), caption = "All locations: WIS reduction % by group of levels (positive = calibrated WIS lower than base)")
 ```
 
 Change in pinball loss at each level relative to that level's own base
@@ -201,7 +201,7 @@ knitr::kable(
     transmute(config, level, horizon = paste0("h", horizon), v = round(level_pct, 1)) %>%
     tidyr::pivot_wider(names_from = horizon, values_from = v) %>%
     arrange(config, level),
-  caption = "States only: pinball loss change % at selected levels, vs that level's base loss"
+  caption = "States only: pinball loss reduction % at selected levels, vs that level's base loss (positive = calibrated loss lower than base)"
 )
 ```
 
@@ -300,8 +300,8 @@ split_tbl <- function(g) {
     tidyr::pivot_wider(names_from = horizon, values_from = pct) %>%
     arrange(config, variant)
 }
-knitr::kable(split_tbl(GEOS[["states"]]), caption = "States only: WIS change % (positive is better)")
-knitr::kable(split_tbl(GEOS[["all"]]), caption = "All locations: WIS change % (positive is better)")
+knitr::kable(split_tbl(GEOS[["states"]]), caption = "States only: WIS reduction % (positive = calibrated WIS lower than base)")
+knitr::kable(split_tbl(GEOS[["all"]]), caption = "All locations: WIS reduction % (positive = calibrated WIS lower than base)")
 ```
 
 How the calibrated widths compare with the base: the median over forecasts

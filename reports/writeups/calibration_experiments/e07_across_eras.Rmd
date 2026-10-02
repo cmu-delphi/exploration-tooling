@@ -58,14 +58,15 @@ the adaptive learning rate (mult 0.03, floor 0.001, window 20, carry):
 Section 3 also runs the operating-point candidates (E14, E16, E17) on both
 forecasters.
 
-"WIS change %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so **positive
-is better**. "L1 coverage bias" is the mean over the 23 levels of
-|empirical coverage − level|. Results lead with states only.
+"WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so
+**positive = calibrated WIS lower than base**. "L1 coverage bias" (lower is
+better) is the mean over the 23 levels of |empirical coverage − level|. Results lead with states only.
 
 # Findings
 
-Numbers are from the render of 1 October 2026, states only, WIS change %
-(positive is better) / L1 coverage bias, h0/h1/h2/h3. All-locations numbers
+Numbers are from the render of 1 October 2026, states only, WIS reduction %
+(positive = calibrated WIS lower than base) / L1 coverage bias (lower is
+better), h0/h1/h2/h3. All-locations numbers
 point the same way.
 
 - **Base WIS: equal in 2024-25, B worse in 2025-26.** B/A base WIS is
@@ -85,7 +86,7 @@ point the same way.
   they differ is spring 2024-25: A still under-predicts in March–April (59%
   and 75% above the median), while B is close to calibrated (45% and 56%).
 - **The operating-point candidates rank mostly the same on both, with one
-  exception.** Pooled over both seasons, h0/h1/h2/h3 WIS change %:
+  exception.** Pooled over both seasons, h0/h1/h2/h3 WIS reduction %:
 
   | candidate | A ensemble | B `windowed_seasonal` |
   |---|---|---|
@@ -273,7 +274,7 @@ m %>%
   transmute(forecaster, season, h, cell = sprintf("%.1f / %.3f / %.2f", wis_base, cal_err_base, above_median)) %>%
   tidyr::pivot_wider(names_from = h, values_from = cell) %>%
   arrange(season, forecaster) %>%
-  knitr::kable(caption = "Base WIS / L1 coverage bias / share above the median, states only")
+  knitr::kable(caption = "Base WIS / L1 coverage bias (lower is better) / share above the median, states only")
 ```
 
 ## Base bias by month
@@ -295,18 +296,18 @@ base_fc_states <- base_fc %>%
 mb <- month_base(base_fc_states) %>% mutate(h = factor(paste0("h", horizon), levels = paste0("h", 0:3)))
 mb %>%
   tidyr::pivot_longer(c(above, cal_err), names_to = "metric") %>%
-  mutate(metric = factor(metric, levels = c("above", "cal_err"), labels = c("share above median", "L1 coverage bias"))) %>%
+  mutate(metric = factor(metric, levels = c("above", "cal_err"), labels = c("share above median", "L1 coverage bias (lower is better)"))) %>%
   ggplot(aes(month, value, colour = forecaster, group = forecaster)) +
-  geom_hline(data = data.frame(metric = factor("share above median", levels = c("share above median", "L1 coverage bias")), y = 0.5), aes(yintercept = y), colour = "grey50") +
+  geom_hline(data = data.frame(metric = factor("share above median", levels = c("share above median", "L1 coverage bias (lower is better)")), y = 0.5), aes(yintercept = y), colour = "grey50") +
   geom_line() +
   geom_point(size = 1.1) +
-  facet_grid(metric + season ~ h, scales = "free", space = "free_x") +
+  facet_grid(metric + season ~ h, scales = "free", space = "free_x", labeller = labeller(metric = label_wrap_gen(20))) +
   scale_colour_manual(values = FC_COLS, name = NULL) +
   labs(x = "month of reference date", y = NULL) +
   theme(legend.position = "bottom")
 ```
 
-Pooled over h0–h3: share above the base median / L1 coverage bias, A vs B.
+Pooled over h0–h3: share above the base median / L1 coverage bias (lower is better), A vs B.
 
 ```{r base-month-table}
 month_base(base_fc_states %>% select(-horizon)) %>%
@@ -314,12 +315,12 @@ month_base(base_fc_states %>% select(-horizon)) %>%
   tidyr::pivot_wider(names_from = forecaster, values_from = cell) %>%
   left_join(base_fc_states %>% filter(level == 0.5) %>% count(season, month, forecaster) %>% filter(forecaster == names(FCS)[1]) %>% select(season, month, forecasts = n), by = c("season", "month")) %>%
   arrange(season, month) %>%
-  knitr::kable(caption = "Share above base median / L1 coverage bias, states only, h0–h3 pooled")
+  knitr::kable(caption = "Share above base median / L1 coverage bias (lower is better), states only, h0–h3 pooled")
 ```
 
 # 2. What calibration does to each
 
-WIS change % per tracker, one panel per season and horizon, states only.
+WIS reduction % (positive = calibrated WIS lower than base) per tracker, one panel per season and horizon, states only.
 
 ```{r head-plot, fig.height=6}
 ggplot(m %>% filter(geos == GEOS[["states"]]), aes(tracker, wis_pct, fill = forecaster)) +
@@ -327,11 +328,11 @@ ggplot(m %>% filter(geos == GEOS[["states"]]), aes(tracker, wis_pct, fill = fore
   geom_col(position = position_dodge(width = 0.85), width = 0.8) +
   facet_grid(season ~ h) +
   scale_fill_manual(values = FC_COLS, name = NULL) +
-  labs(x = NULL, y = "WIS change % (positive is better)") +
+  labs(x = NULL, y = "WIS reduction % (positive = calibrated WIS lower than base)") +
   theme(legend.position = "bottom")
 ```
 
-L1 coverage bias, calibrated (filled) against the base (open), states only.
+L1 coverage bias (lower is better), calibrated (filled) against the base (open), states only.
 
 ```{r cov-plot, fig.height=6}
 d <- m %>% filter(geos == GEOS[["states"]])
@@ -341,11 +342,11 @@ ggplot(d, aes(tracker, cal_err_cal, colour = forecaster)) +
   facet_grid(season ~ h) +
   scale_colour_manual(values = FC_COLS, name = NULL) +
   expand_limits(y = 0) +
-  labs(x = NULL, y = "L1 coverage bias (open: base)") +
+  labs(x = NULL, y = "L1 coverage bias (lower is better; open: base)") +
   theme(legend.position = "bottom")
 ```
 
-WIS change % / L1 coverage bias:
+WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage bias (lower is better):
 
 ```{r tables}
 season_table <- function(g) {
@@ -392,7 +393,7 @@ cm <- purrr::map2(ccals, seq_len(nrow(cgrid)), \(cal, i) score(cal) %>% mutate(c
   )
 ```
 
-WIS change % per candidate, states only.
+WIS reduction % (positive = calibrated WIS lower than base) per candidate, states only.
 
 ```{r cand-plot, fig.height=6.5}
 ggplot(cm %>% filter(geos == GEOS[["states"]]), aes(cand, wis_pct, fill = forecaster)) +
@@ -400,11 +401,11 @@ ggplot(cm %>% filter(geos == GEOS[["states"]]), aes(cand, wis_pct, fill = foreca
   geom_col(position = position_dodge(width = 0.85), width = 0.8) +
   facet_grid(season ~ h) +
   scale_fill_manual(values = FC_COLS, name = NULL) +
-  labs(x = NULL, y = "WIS change % (positive is better)") +
+  labs(x = NULL, y = "WIS reduction % (positive = calibrated WIS lower than base)") +
   theme(legend.position = "bottom", axis.text.x = element_text(angle = 30, hjust = 1))
 ```
 
-L1 coverage bias, calibrated (filled) against the base (open), states only.
+L1 coverage bias (lower is better), calibrated (filled) against the base (open), states only.
 
 ```{r cand-cov, fig.height=6.5}
 ggplot(cm %>% filter(geos == GEOS[["states"]]), aes(cand, cal_err_cal, colour = forecaster)) +
@@ -413,15 +414,15 @@ ggplot(cm %>% filter(geos == GEOS[["states"]]), aes(cand, cal_err_cal, colour = 
   facet_grid(season ~ h) +
   scale_colour_manual(values = FC_COLS, name = NULL) +
   expand_limits(y = 0) +
-  labs(x = NULL, y = "L1 coverage bias (open: base)") +
+  labs(x = NULL, y = "L1 coverage bias (lower is better; open: base)") +
   theme(legend.position = "bottom", axis.text.x = element_text(angle = 30, hjust = 1))
 ```
 
 ## Rankings on A and B
 
-Candidates ordered by mean WIS change % over h0–h3, separately on each
+Candidates ordered by mean WIS reduction % (positive = calibrated WIS lower than base) over h0–h3, separately on each
 forecaster, states only. `rank A` / `rank B` are the positions (1 is the
-largest gain); Spearman ρ compares the two orders per season, over all
+largest WIS reduction; `cov rank` 1 is the lowest L1 coverage bias); Spearman ρ compares the two orders per season, over all
 (candidate, horizon) cells.
 
 ```{r cand-rank}
@@ -437,9 +438,9 @@ rk <- cm %>%
   tidyr::pivot_wider(names_from = fc, values_from = c(wis, rank, cov, cov_rank)) %>%
   arrange(season, rank_A)
 rk %>%
-  transmute(season, cand, `WIS % A` = wis_A, `rank A` = rank_A, `WIS % B` = wis_B, `rank B` = rank_B,
+  transmute(season, cand, `WIS reduction % A` = wis_A, `rank A` = rank_A, `WIS reduction % B` = wis_B, `rank B` = rank_B,
             `cov bias A` = cov_A, `cov rank A` = cov_rank_A, `cov bias B` = cov_B, `cov rank B` = cov_rank_B) %>%
-  knitr::kable(digits = c(0, 0, 2, 0, 2, 0, 3, 0, 3, 0), caption = "Mean over h0–h3, states only")
+  knitr::kable(digits = c(0, 0, 2, 0, 2, 0, 3, 0, 3, 0), caption = "Mean over h0–h3, states only. WIS reduction %: positive = calibrated WIS lower than base. Coverage bias is L1 coverage bias (lower is better)")
 cm %>%
   filter(geos == GEOS[["states"]]) %>%
   select(season, cand, h, forecaster, wis_pct, cal_err_cal) %>%
@@ -454,7 +455,7 @@ cm %>%
 
 ## Tables
 
-WIS change % / L1 coverage bias.
+WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage bias (lower is better).
 
 ```{r cand-tables}
 cand_table <- function(g) {

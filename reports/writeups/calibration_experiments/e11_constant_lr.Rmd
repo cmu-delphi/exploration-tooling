@@ -42,8 +42,9 @@ prod does (re-run each week; E00).
 # Findings
 
 Numbers are from the render of 1 October 2026, pooled over both live
-seasons and all locations; WIS and absolute-error changes are % vs base,
-positive is better. The constant run matches E09's table at 0.1, +1 week,
+seasons and all locations. WIS reduction % is 100 × (base − calibrated) / base,
+so positive = calibrated WIS lower than base; the absolute-error change of the
+median is defined the same way. L1 coverage bias: lower is better. The constant run matches E09's table at 0.1, +1 week,
 re-run.
 
 - **Against the cold adaptive trackers, the constant rate trades WIS at

@@ -40,8 +40,9 @@ seasons. For the per-season views below, seasons are August–July years.
 # Findings
 
 Numbers are from the render of 30 September 2026, pooled over all rounds
-(2024-11-30 to 2026-09-19) and locations; WIS changes are % vs base, positive
-is better. The first covid round (2024-11-23) is excluded: it was made from a
+(2024-11-30 to 2026-09-19) and locations. WIS reduction % is 100 × (base −
+calibrated) / base, so positive = calibrated WIS lower than base. L1 coverage
+bias: lower is better. The first covid round (2024-11-23) is excluded: it was made from a
 bad NHSN release that was corrected the next day.
 
 - **The covid base is already calibrated at h1–h3,** so there is little to

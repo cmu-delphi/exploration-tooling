@@ -132,7 +132,7 @@ ws_scores <- function(fc) {
     left_join(above, by = c("season", "horizon"))
 }
 
-#' V-month per season: WIS change % (positive is better), L1 coverage bias and
+#' V-month per season: WIS reduction % (positive = calibrated WIS lower than base), L1 coverage bias and
 #' the share of truth below the median, base vs calibrated, by calendar month of
 #' the reference date. `share` is the month's share of the season's base WIS.
 #' Groups by `config` too when present. Used by the E16/E17 notebooks.
@@ -194,9 +194,9 @@ ws_report <- function(disease, res) {
   for (g in names(WS_GEOS)) {
     cat("\n\n## ", disease, ", ", g, " locations\n", sep = "")
     for (spec in list(
-      c("wis", "WIS (2 x mean pinball)", 1), c("wis_pct", "WIS change % vs base (positive is better)", 1),
+      c("wis", "WIS (2 x mean pinball)", 1), c("wis_pct", "WIS reduction % (positive = calibrated WIS lower than base)", 1),
       c("cov50", "50% interval coverage", 3), c("cov90", "90% interval coverage", 3),
-      c("cal_err", "L1 coverage bias", 3)
+      c("cal_err", "L1 coverage bias (lower is better)", 3)
     )) {
       cat("\n### ", spec[2], "\n\n", sep = "")
       print(knitr::kable(wide(spec[1], as.integer(spec[3]), g)))

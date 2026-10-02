@@ -53,15 +53,15 @@ which it found indistinguishable from 20 and Inf; it is dropped here. With
 no burn-in there is one summer to cross (2025 into 2025-26), so the season
 policy only changes 2025-26.
 
-"WIS change %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so **positive
-is better**. "L1 coverage bias" is the mean over the 23 levels of
-|empirical coverage − level|. Each season is scored on its own rounds.
+"WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so
+**positive = calibrated WIS lower than base**. "L1 coverage bias" (lower is
+better) is the mean over the 23 levels of |empirical coverage − level|. Each season is scored on its own rounds.
 Results lead with states only (US excluded).
 
 # Findings
 
-Numbers are from the render of 1 October 2026, states only, WIS change %
-(positive is better) / L1 coverage bias, h0/h1/h2/h3, both seasons pooled
+Numbers are from the render of 1 October 2026, states only, WIS reduction %
+(positive = calibrated WIS lower than base) / L1 coverage bias (lower is better), h0/h1/h2/h3, both seasons pooled
 unless stated. All-locations numbers point the same way.
 
 - **The multiplier is the setting that matters.** Changing it moves WIS by
@@ -160,7 +160,7 @@ curve_plot <- function(g) {
     scale_linetype_manual(values = c(carry = "solid", reset = "22"), name = "season policy") +
     facet_grid(season ~ h) +
     coord_cartesian(ylim = c(max(-15, min(d$wis_pct)), max(d$wis_pct) + 0.5)) +
-    labs(x = "L1 coverage bias", y = "WIS change % (positive is better)", title = g) +
+    labs(x = "L1 coverage bias (lower is better)", y = "WIS reduction % (positive = calibrated WIS lower than base)", title = g) +
     theme(legend.position = "bottom")
 }
 ```
@@ -179,7 +179,7 @@ curve_plot(GEOS[["all"]])
 
 # 2. Which setting matters?
 
-For each season and horizon, how far WIS change % moves when one setting
+For each season and horizon, how far WIS reduction % moves when one setting
 changes and the other two stay fixed: the range over the four multipliers,
 over the three windows, and the carry-vs-reset gap, each averaged over the
 settings held fixed. States only. The policy gap is zero in 2024-25 by
@@ -199,25 +199,25 @@ spread %>%
   transmute(setting = factor(setting, levels = c("multiplier", "window", "season policy")), col = paste(season, h), v = round(v, 1)) %>%
   tidyr::pivot_wider(names_from = col, values_from = v) %>%
   arrange(setting) %>%
-  knitr::kable(caption = "Mean range of WIS change % (points) when one setting varies, states only")
+  knitr::kable(caption = "Mean range of WIS reduction % (points; positive = calibrated WIS lower than base) when one setting varies, states only")
 ```
 
 # 3. Each metric against the multiplier
 
-Top: WIS change %, clipped at −30% (mult 0.3 goes far below). Bottom: L1
-coverage bias, each season's base as a thin line. Carry only, states only;
+Top: WIS reduction % (positive = calibrated WIS lower than base), clipped at
+−30% (mult 0.3 goes far below). Bottom: L1 coverage bias (lower is better), each season's base as a thin line. Carry only, states only;
 colour is the window.
 
 ```{r vs-mult, fig.height=6.5}
 long <- st %>%
   filter(policy == "carry", season != "both seasons") %>%
-  transmute(h, season, mult, window_f, `WIS change %` = pmax(wis_pct, -30), `L1 coverage bias` = cal_err_cal) %>%
-  tidyr::pivot_longer(c(`WIS change %`, `L1 coverage bias`), names_to = "metric") %>%
-  mutate(metric = factor(metric, levels = c("WIS change %", "L1 coverage bias")))
+  transmute(h, season, mult, window_f, `WIS reduction % (positive = calibrated WIS lower than base)` = pmax(wis_pct, -30), `L1 coverage bias (lower is better)` = cal_err_cal) %>%
+  tidyr::pivot_longer(c(`WIS reduction % (positive = calibrated WIS lower than base)`, `L1 coverage bias (lower is better)`), names_to = "metric") %>%
+  mutate(metric = factor(metric, levels = c("WIS reduction % (positive = calibrated WIS lower than base)", "L1 coverage bias (lower is better)")))
 base_lines <- st %>%
   filter(season != "both seasons") %>%
   distinct(h, season, value = cal_err_base) %>%
-  mutate(metric = factor("L1 coverage bias", levels = levels(long$metric)))
+  mutate(metric = factor("L1 coverage bias (lower is better)", levels = levels(long$metric)))
 ggplot(long, aes(mult, value, colour = window_f, linetype = season)) +
   geom_hline(data = base_lines, aes(yintercept = value, linetype = season), colour = "grey40", linewidth = 0.3) +
   geom_line() +
@@ -225,15 +225,15 @@ ggplot(long, aes(mult, value, colour = window_f, linetype = season)) +
   scale_x_log10(breaks = MULTS) +
   scale_colour_manual(values = WINDOW_COLS, name = "lr_window") +
   scale_linetype_manual(values = c(`2024-2025` = "solid", `2025-2026` = "22"), name = NULL) +
-  facet_grid(metric ~ h, scales = "free_y") +
+  facet_grid(metric ~ h, scales = "free_y", labeller = labeller(metric = label_wrap_gen(28))) +
   labs(x = "lr_mult", y = NULL) +
   theme(legend.position = "bottom")
 ```
 
 # 4. Tables
 
-WIS change % / L1 coverage bias per config (rows) and season × horizon
-(columns). The base row shows the base's coverage bias; the count-scale
+WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage
+bias (lower is better) per config (rows) and season × horizon (columns). The base row shows the base's coverage bias; the count-scale
 run is last.
 
 ```{r tables}
