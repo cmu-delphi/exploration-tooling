@@ -83,6 +83,15 @@ Numbers are from the render of 1 October 2026, states only, WIS reduction %
   toward zero by the calendar is not a free fix. The gradual decay as built
   here loses because it also wipes the offset the next season starts from.
   `off_after` in March is the better WIS choice and the worse coverage choice.
+- **Month view (2026-10-01):** scored within each month, the coverage
+  costs nearly vanish. Month-avg L1 coverage bias, both seasons,
+  h0/h1/h2/h3, sqrt 0.018: no decay 0.094/0.116/0.143/0.169, decay 0.85
+  0.103/0.123/0.149/0.173, off after 1 Mar 0.104/0.121/0.150/0.170, base
+  0.112/0.127/0.153/0.177. No decay is still lowest, but by 0.001–0.010,
+  not the season-pooled 0.03–0.04. In 2025-26 the decays raise it by
+  0.002–0.015 (decay 0.85: 0.084/0.108/0.127/0.140 vs
+  0.075/0.098/0.119/0.138), not threefold. For rate 0.032, off after 1 Mar
+  ties no decay (0.112/0.128/0.156/0.173 vs 0.108/0.127/0.155/0.177).
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))

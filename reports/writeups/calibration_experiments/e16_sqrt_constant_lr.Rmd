@@ -99,6 +99,17 @@ point the same way.
   trackers make it worse. Part of the season-level coverage gain comes from
   under-prediction on the ramp and over-prediction after the peak cancelling
   out.
+- **Month view (2026-10-01):** scored within each month, sqrt 0.018 is
+  better calibrated than rate 0.032, not equal. Month-avg L1 coverage bias in
+  2025-26 (h0/h1/h2/h3): sqrt 0.018 0.075/0.098/0.119/0.138, rate 0.032
+  0.104/0.123/0.147/0.161, base 0.097/0.112/0.130/0.146; both seasons
+  0.094/0.116/0.143/0.169 vs 0.108/0.127/0.155/0.177 (base
+  0.112/0.127/0.153/0.177). Rate 0.032's low 2025-26 season-pooled bias is
+  cancellation; by month it is worse than the base. Larger sqrt rates rise
+  above the base at h1–h3 too (0.1: 0.095/0.129/0.157/0.182).
+- **Month view (2026-10-01), median error:** the March losses are about twice as large
+  on the median as on WIS (h2, 2025-26: sqrt 0.018 −52% vs −28%, REF-op cold
+  −52% vs −24%).
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))

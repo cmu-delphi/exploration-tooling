@@ -77,6 +77,15 @@ same way.
 - **The 50% interval.** At 0.018–0.032 the 50% interval covers 0.47–0.51
   at h0/h2, close to nominal; 0.1 and above under-cover it in 2024-25
   (0.39–0.45 at h2).
+- **Month view (2026-10-01):** scored within each month, coverage bias
+  does not keep falling with the rate. Month-avg L1 coverage bias (both
+  seasons, h0/h1/h2/h3) is lowest near 0.01 (0.099/0.115/0.144/0.170; base
+  0.112/0.127/0.153/0.177) and is above the base at h1–h3 from 0.056
+  (0.112/0.135/0.164/0.191) up (0.32: 0.113/0.145/0.178/0.207). In 2024-25
+  it bottoms at 0.032 at h1–h3 (0.131/0.164/0.196), not 0.3; in 2025-26 at
+  0.0056–0.01, and 0.032 is already worse than the base there
+  (0.104/0.123/0.147/0.161 vs 0.097/0.112/0.130/0.146). Above about 0.03,
+  the season-pooled coverage gain is ramp and post-peak errors cancelling.
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))
