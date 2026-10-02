@@ -22,7 +22,7 @@ All forecasters follow the signature `function(epi_data, outcome, ahead = 1, ...
 - **data_validation.R** — `validate_forecast_output` and related shape/key checks.
 - **epipredict_utilities.R** — Helpers that wrap epipredict internals.
 - **formatters.R** — Output formatting to hub submission format.
-- **ensemble_average.R**, **ensemble_linear_climate.R** — Ensemble combination methods.
+- **ensemble_linear_climate.R** — `ensemble_climate_linear`: climate/linear mix with ahead- and quantile-dependent weights. The weighted ensemble is in `R/ensemble_weights.R`.
 - **default_epipredict_args.R** — `default_args_list`, `default_flatline_args`: ARX / flatline parameter constructors.
 
 ## Inter-file dependencies

@@ -87,8 +87,9 @@ code), executed by `run_ensemble()` (`R/targets/ensemble_runner.R`): component
 presence asserted loudly, method dispatch (`climate_linear`/`mean`/`weighted`),
 geo-exclusion filtering, id stamping, output validation. The hand-edited
 `pipelines/*_geo_exclusions.csv` weights files are schema-validated inside
-`parse_prod_weights()` (`R/utils.R`; retired-but-inert forecaster ids are
-whitelisted via `LEGACY_PROD_WEIGHT_FORECASTER_IDS`).
+`parse_prod_weights()` (`R/ensemble_weights.R`; retired-but-inert forecaster ids are
+whitelisted via `LEGACY_PROD_WEIGHT_FORECASTER_IDS`). The `weighted` method,
+`ensemble_weighted()`, lives in the same file.
 
 Contracts guard the boundaries: `make_forecast_snapshot()` asserts version
 faithfulness (no as-of row observed after the generation date), and

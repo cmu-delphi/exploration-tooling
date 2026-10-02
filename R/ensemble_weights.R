@@ -158,3 +158,92 @@ stamp_default_weights <- function(filename, forecast_date) {
   )
   invisible(NULL)
 }
+
+#' Add `ahead` in weeks to a prod forecast tibble.
+#'
+#' All prod forecasters use ahead_multiplier = 7 and target_date_shift = 3, so
+#' week = (target_end_date - forecast_date - 3) / 7.
+add_week_ahead <- function(tbl) {
+  mutate(tbl, ahead = as.integer(target_end_date - forecast_date - 3L) %/% 7L)
+}
+
+#' Expand a weights table to one row per (forecaster, geo, ahead).
+#'
+#' Weights with a specific `ahead` apply only to that ahead; general weights
+#' (`ahead` NA or absent) apply to every ahead in `forecaster_aheads` for that
+#' forecaster. A forecaster with any ahead-specific row uses only those rows.
+#' @param weights prod weights (`forecaster`, `geo_value`, `weight`, optional `ahead`).
+#' @param forecaster_aheads tibble of (`forecaster`, `ahead`) pairs, aheads in weeks.
+expand_weights_by_ahead <- function(weights, forecaster_aheads) {
+  if ("ahead" %in% names(weights) && any(!is.na(weights$ahead))) {
+    specific_forecasters <- unique(weights$forecaster[!is.na(weights$ahead)])
+    w_specific <- weights %>%
+      filter(forecaster %in% specific_forecasters, !is.na(ahead)) %>%
+      mutate(ahead = as.integer(ahead))
+    w_general <- weights %>%
+      filter(forecaster %nin% specific_forecasters) %>%
+      select(-ahead) %>%
+      left_join(forecaster_aheads, by = "forecaster", relationship = "many-to-many")
+    bind_rows(w_general, w_specific)
+  } else {
+    weights %>%
+      select(-any_of("ahead")) %>%
+      left_join(forecaster_aheads, by = "forecaster", relationship = "many-to-many")
+  }
+}
+
+#' Resolve prod weights to the ensemble weight of each component at each (geo, ahead).
+#'
+#' Keeps only the weights of components that forecast a (geo, ahead), and
+#' renormalizes them to sum to 1 there. Thus the weight of a missing component
+#' is spread over the components that are present.
+#' @param forecasts component forecasts (`forecaster`, `geo_value`,
+#'   `forecast_date`, `target_end_date`).
+#' @param other_weights prod weights, as from [parse_prod_weights].
+#' @return the weights rows with `ahead` in weeks, one per present
+#'   (forecaster, geo, ahead).
+resolve_ensemble_weights <- function(forecasts, other_weights) {
+  forecasters <- unique(forecasts$forecaster)
+  filtered_weights <- other_weights %>%
+    filter(forecaster %in% forecasters) %>%
+    inner_join(
+      forecasts %>% distinct(forecaster, geo_value),
+      by = c("forecaster", "geo_value"),
+    )
+  forecast_aheads <- forecasts %>%
+    add_week_ahead() %>%
+    distinct(forecaster, ahead)
+  full_weights <- expand_weights_by_ahead(filtered_weights, forecast_aheads)
+  # Keep only weights whose forecaster actually forecast that (geo, ahead), so a
+  # component missing at one ahead has its weight spread over the rest there.
+  full_weights <- full_weights %>%
+    inner_join(
+      forecasts %>% add_week_ahead() %>% distinct(forecaster, geo_value, ahead),
+      by = c("forecaster", "geo_value", "ahead")
+    )
+  grouping_cols <- c("geo_value", "ahead")
+  renorm <-
+    full_weights %>%
+    group_by(across(all_of(grouping_cols))) %>%
+    summarize(mass = sum(weight), .groups = "drop")
+  full_weights %>%
+    left_join(renorm, by = grouping_cols) %>%
+    mutate(weight = weight / mass) %>%
+    select(-mass)
+}
+
+ensemble_weighted <- function(forecasts, other_weights) {
+  full_weights <- resolve_ensemble_weights(forecasts, other_weights)
+  weighted_forecasts <-
+    forecasts %>%
+    add_week_ahead() %>%
+    left_join(
+      full_weights,
+      by = c("forecaster", "forecast_date", "geo_value", "ahead")
+    ) %>%
+    mutate(value = weight * value) %>%
+    group_by(geo_value, forecast_date, target_end_date, quantile) %>%
+    summarize(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+    sort_by_quantile()
+  return(weighted_forecasts)
+}

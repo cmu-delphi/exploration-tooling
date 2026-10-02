@@ -16,6 +16,6 @@ Shared R codebase for all pipeline projects. Sourced wholesale via `load_all.R` 
 - **imports.R** — `library()` calls for all shared dependencies.
 - **looping.R** — Sliding forecast loop: `slide_forecaster`, `epix_slide_simple`, `make_forecast_snapshot`, `make_forecast_archive_snapshot`.
 - **forecaster_config.R** — Forecaster grid machinery: `forecaster_lookup`, `add_id`, `get_single_id`, `make_forecaster_grid`, `FORECASTER_SPEC_DEFAULTS`, `data_substitutions`.
-- **ensemble_weights.R** — Prod weight CSV parsing and validation: `parse_prod_weights`, `validate_prod_weights_*`, `exclude_geos`, `LEGACY_PROD_WEIGHT_FORECASTER_IDS`.
+- **ensemble_weights.R** — Prod weight CSV parsing and validation (`parse_prod_weights`, `validate_prod_weights_*`, `exclude_geos`, `LEGACY_PROD_WEIGHT_FORECASTER_IDS`), and the weighted ensemble that applies them: `ensemble_weighted` (via `resolve_ensemble_weights`, `expand_weights_by_ahead`, `add_week_ahead`).
 - **submission.R** — Output writing: `write_submission_file`, `get_forecast_reference_date`, `update_site`.
 - **utils.R** — General utilities: `%nin%`, `sort_by_quantile`, `get_targets_errors`, `retry_fn`, `validate_epi_data`, `get_unique`, `filter_shared_geo_dates`, `get_file_hash`.
