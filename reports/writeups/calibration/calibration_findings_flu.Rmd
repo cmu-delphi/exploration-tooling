@@ -27,7 +27,7 @@ ggplot2::theme_set(ggplot2::theme_bw())
 ```
 
 This notebook collects the main findings of the MultiQT calibration work
-(`notes/CALIBRATION.md` has the full record and the method). In short: per
+(`notes/calibration-ledger.md` has the full record and the method). In short: per
 (location, horizon) series, an additive offset over the 23 hub quantile levels
 is learned online from past coverage misses and added to the base forecast.
 The questions:
@@ -376,7 +376,7 @@ fan_plot(fans, truth_rows, ylab = "ILI+ (%)") +
 ```
 
 An earlier version of this replay was wrong at every horizon, and the ILI+
-results in `notes/CALIBRATION.md` dated before 2026-09-23 came from it (the
+results in `notes/calibration-ledger.md` dated before 2026-09-23 came from it (the
 "bias flips sign on ILI+" reading, the ILI+ burn-in and setup C). The cause
 was epipredict's `extend_lags` latency adjustment. It pushes every lag back
 by the worst latency of any state, and some ILI+ state series end years

@@ -75,7 +75,7 @@ hub_series_matrix <- function(series, round_date, n_levels) {
 #'   first version use the first version. The warm start then uses the vintage
 #'   as of the first live round. A table without `version` is used as-is for
 #'   learning, which is how [calibrate_hub_forecasts_exact()] passes one
-#'   snapshot per round. See "Learning truth" in `notes/CALIBRATION.md`.
+#'   snapshot per round. See E00 in `notes/calibration-ledger.md`.
 #' @param settle_days how long after `target_end_date` the outcome is trusted.
 #'   14 gives exactly `horizon + 2` rounds of delay on hub coordinates.
 #' @param burn_in_seasons season labels (as produced by [hub_label_seasons()])

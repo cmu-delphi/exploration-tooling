@@ -2,14 +2,14 @@
 
 Repo-wide tasks, TODOs and tech debt, roughly in priority order within each
 section. Calibration-specific threads live under "Open threads" in
-`notes/CALIBRATION.md`; refactor designs (E2 ensemble sweep, snapshot
+`notes/calibration-ledger.md`; refactor designs (E2 ensemble sweep, snapshot
 validator, simplification inventory) live in `notes/refactor-ideas.md`.
 
 ## Forecast evaluation
 
 1. **Use the evaluation project as the calibration testbed** (parked
    2026-10-01 as validation for after the operating point is chosen; the
-   operating-point work runs on the hub harness, `notes/CALIBRATION.md`).
+   operating-point work runs on the hub harness, `notes/calibration-ledger.md`).
    Done so far: a1–a4, b1–b4 (E12, E13). Calibrating needs full quantile forecasts over many rounds,
    not just scores. The evaluation project (`flu_hosp_evaluation` /
    `covid_hosp_evaluation`) replays the current prod components and
@@ -55,7 +55,7 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
         `scripts/calibration/calibration_harness.R` reads forecasts from
         the clean store (decision: read the store, backfill only for spec
         changes; the two paths match exactly on 5 dates per disease).
-        Results are E12 in `notes/CALIBRATION.md`. The two diseases'
+        Results are E12 in `notes/calibration-ledger.md`. The two diseases'
         replays differ on 2024-11-20: flu generates on 11-21, covid on
         11-20 (NHSN's bad release; the hub-round filter drops that round).
         Decision (2026-10-01): calibrate h0 and up only. h−1 belongs to
@@ -109,7 +109,7 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
       - Done 2026-10-01 in the harness, not the pipeline: HHS back to
         2020-08 (issues before 2023-07 collapse to one version), stitched
         before NHSN's first version; a 2024-12-04 control matches the
-        store exactly. Results: E13 in `notes/CALIBRATION.md`.
+        store exactly. Results: E13 in `notes/calibration-ledger.md`.
    c. *The ensemble with fixed weights.* The geo-exclusions CSVs carry the
       ensemble weights as well as exclusions, so "no hand edits" for
       `ensemble_mix` means one fixed weight block for every date. Decide
@@ -190,7 +190,7 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
 3. **Revision-method backtests.** `revision_aware` against the
    `revision_ratio` baseline at h−1 (explore h−1 families plus
    `nowcast_notebook`, both diseases), then choose prod's h−1 component.
-   Calibrating h−1 waits on this (`notes/CALIBRATION.md`).
+   Calibrating h−1 waits on this (`notes/calibration-ledger.md`).
 4. **Flu explore has no current scores for the revision families.** In the
    flu explore store on S3 (`joined_scores_2024_2026`, 2026-09-19), none of
    `revision_aware`, `revision_aware_augmented`, `revision_aware_nssp`,
@@ -226,13 +226,13 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
 
 ## Parked (2026-10-01, not on the calibration path)
 
-- Covid `windowed_seasonal_extra_sources` calibration (CALIBRATION open
-  thread 7). It is ~86% of covid `ensemble_mix` but has no 2023-24 NSSP, so
+- Covid `windowed_seasonal_extra_sources` calibration (calibration-ledger open
+  threads). It is ~86% of covid `ensemble_mix` but has no 2023-24 NSSP, so
   no burn-in.
 - CMU-climate_baseline US forecast is too low (item 2b).
 - `us_method` spec column and removing the `usa` alias (item 2b).
 - Calibration WIS summaries pool raw counts over all locations, so US is
-  about half of every "WIS change %" in CALIBRATION.md. b4 reports states
+  about half of every "WIS change %" in calibration-ledger.md. b4 reports states
   only as well; re-reading the older ledger waits.
 
 ## Tech debt

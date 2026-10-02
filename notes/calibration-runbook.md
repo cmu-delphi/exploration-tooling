@@ -173,7 +173,7 @@ It renders the settings sweep itself, so it takes ~5 min (32 full calibration ru
 ## 5. The gallery notebook
 
 Fixed operating point (`lr_mult = 0.03`, `lr_window = 20`, carry) plus a
-ranked per-forecast panel gallery; see `notes/CALIBRATION.md` for the design.
+ranked per-forecast panel gallery; see `notes/calibration-ledger.md` for the design.
 
 ```sh
 cd ~/allHail/delphi/exploration-tooling
@@ -183,7 +183,7 @@ distrobox enter rocker -- Rscript -e \
 
 As-of vintages come from `cache/calibration/nhsn_archive_flu.parquet` (a copy
 of an oracle-capture NHSN archive; provenance and staleness caveats in
-`notes/CALIBRATION.md`). `n_panels` is a YAML param (default 150).
+`notes/calibration-ledger.md`). `n_panels` is a YAML param (default 150).
 
 ## 6. The seasons notebook
 
@@ -205,7 +205,7 @@ Output: `reports/calibration_qt_seasons.html`.
 
 Runs flu prod's `windowed_seasonal` forecaster over the ILI+ state history and
 caches hub-schema forecasts and truth for multi-season calibration burn-in
-(design and caveats in `notes/CALIBRATION.md`, "ILI+ burn-in").
+(the `scales` option of `calibrate_hub_forecasts()` handles the scale mismatch).
 
 ```sh
 cd ~/allHail/delphi/exploration-tooling

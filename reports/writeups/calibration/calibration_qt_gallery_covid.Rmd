@@ -59,7 +59,7 @@ cal <- calibrate_hub_forecasts(
 ```
 
 Per-forecast panel gallery for COVID hub submissions at the chosen operating point
-(`calibration_qt_covid.Rmd` has the parameter sweeps; see `notes/CALIBRATION.md`
+(`calibration_qt_covid.Rmd` has the parameter sweeps; see `notes/calibration-ledger.md`
 for project state).
 
 Parameters:

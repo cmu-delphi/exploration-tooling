@@ -5,7 +5,7 @@
 # Forecasts come straight from the evaluation stores through the harness
 # (ch_use() + ch_read_store()); truth and vintages from the same store's NHSN
 # archive. Rounds are the hub's CMU-TimeSeries submission rounds, so the round
-# axis matches the hub-based experiments in notes/CALIBRATION.md. The E12
+# axis matches the hub-based experiments in notes/calibration-ledger.md. The E12
 # configs use no burn-in season.
 #
 # With `burn_in`, warm-started configs also run with 2023-24 as a burn-in
@@ -34,7 +34,7 @@ season_of <- function(d) {
 # E11's constant rate (0.1 admissions per 100k per step, rate scale) and the
 # covid prod config (REF-op without its warm start), both with no burn-in. With
 # `burn_in`, also E05's sqrt single term cold and warm, REF-op with its warm
-# start, and E11's constant rate warm-started (CALIBRATION open thread 1).
+# start, and E11's constant rate warm-started.
 ws_configs <- function(rate_scales, burn_in = BURN_IN) {
   no_burn_in <- list(burn_in_seasons = character(0), slow_init = NULL)
   warm <- list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile")

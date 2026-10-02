@@ -587,7 +587,7 @@ combined_targets <- build_combined_targets(external_forecast_targets)
 # burn-in for free), appends the current week's ensemble_mix if not yet
 # submitted, and runs calibrate_hub_forecasts() over the full history. The
 # current round's value_cal is then written as the CMU-TimeSeries-Calibrated
-# submission. Skipped in cache/evaluation mode. See notes/CALIBRATION.md for
+# submission. Skipped in cache/evaluation mode. See notes/calibration-ledger.md for
 # the parameter choices.
 calibration_targets <- list(
   tar_target(

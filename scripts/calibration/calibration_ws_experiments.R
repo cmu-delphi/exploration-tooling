@@ -2,7 +2,7 @@
 # behave the same on the ILI+ decade (2011-2023, percent scale, no revisions)
 # as on the NHSN seasons (2023-2026, counts, real vintages), and how does that
 # compare with calibrating the submitted ensemble? Prints markdown tables;
-# results are recorded in notes/CALIBRATION.md.
+# results are recorded in notes/calibration-ledger.md.
 #
 # Inputs (all cached in cache/calibration/):
 #   scripts/calibration/calibration_ili_backfill.R  -> windowed_seasonal on ILI+, 2010-2024

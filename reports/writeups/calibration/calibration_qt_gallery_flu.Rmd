@@ -58,7 +58,7 @@ cal <- calibrate_hub_forecasts(
 ```
 
 This document contains a gallery of forecasts that were adjusted the most (in mean absolute deviation, see below) (`calibration_qt_flu.Rmd` has the parameter-sweeps, this notebook gets more granular about forecast adjustments; see
-`notes/CALIBRATION.md` for the project state).
+`notes/calibration-ledger.md` for the project state).
 
 The parameters for the calibration method are fixed:
 - `lr_mult = `r params$lr_mult`` (the learning rate multiplier, which was found to be too slow at 0.01 and too fast at 0.1),
