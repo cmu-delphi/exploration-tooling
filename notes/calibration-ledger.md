@@ -88,6 +88,7 @@ base WIS, and pick within strata (season phase × location size).
 | E01 (rebuilt) | which adaptive-eta settings? | mult {0.3, 0.1, 0.03, 0.01} × window {8, 20, Inf} × season policy; count bridge | REF-paper at sqrt, cold | flu (clean replay) | post-fix | exact | V-curve, V-head | `e01_eta_settings.Rmd` | done |
 | E02 (rebuilt) | cutoff and eta variants | `off_after` {04-01, 03-01, 02-15}, per-level eta, seasonal window carry/reset (HHS burn-in) + burn-in bridge; geo-pool removed | E01 center (sqrt, 0.03, 20, carry) | flu (clean replay) | post-fix | exact | V-head, V-month | `e02_eta_variants.Rmd` | done |
 | E07 (rebuilt) | one forecaster across eras | forecaster (A hub ensemble / B clean replay) on identical rows, each with its own 2023-24 burn-in | single, leaky, REF-op | flu | post-fix | exact | V-head, base bias | `e07_across_eras.Rmd` | done |
+| E18 | which piece of REF-op does the work | bridge, one setting per step: −warm start, −slow term, −leak, −burn-in season, per-100k units, constant 0.018 | REF-op → E16 sqrt 0.018 | flu (clean replay) | post-fix | exact | V-head, V-month | `e18_ref_op_bridge.Rmd` | done |
 
 E09 bridge rows, each one axis from the previous: REF-paper → rate scale →
 constant lr (sweep) → `settle_days` (sweep).
