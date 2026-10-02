@@ -29,6 +29,34 @@ All of these are flu only, except E12 and E13, which cover covid as well.
 "WIS change" is % against the uncalibrated forecast, positive is better.
 "Coverage bias" is the mean |coverage − nominal| over quantile levels.
 
+## Read this first: coverage claims and the month view
+
+Coverage bias pooled over a whole season lets under-prediction on the ramp
+cancel over-prediction after the peak. Scored within each month and then
+averaged over months, the coverage gains from calibration mostly disappear:
+calibrated configs that beat the base by 0.03 vs 0.10 season-pooled come
+within 0-0.02 of the base month by month, and some are worse than the base.
+A month holds only 1-5 rounds, so month-level bias has a noise floor above
+zero; differences under about 0.01 between configs shouldn't be read as
+real.
+
+So every coverage statement below that comes from season-pooled numbers is
+weaker than it looks. WIS and median-error statements are unaffected. What
+holds month by month:
+
+- REF-op (warm, leaky) has the lowest month-level coverage bias of the
+  hub-ensemble configs.
+- Constant rates above about 0.03 per 100k are worse than the base at
+  h1-h3 month by month; sqrt 0.018 beats rate 0.032.
+- Switching calibration off from March costs little coverage month by
+  month (and helps at h3), so its coverage cost was mostly an artifact.
+- In March 2025-26 the median-error losses are about twice the WIS losses
+  (sqrt 0.018 at h2: −52% vs −28%).
+
+Each notebook now has a "Month view: WIS, coverage, median error" section
+and, where a coverage claim changed, a "Month view (2026-10-01)" line at the
+end of its Findings.
+
 ## Findings
 
 **1. A constant learning rate on the sqrt scale is the best simple

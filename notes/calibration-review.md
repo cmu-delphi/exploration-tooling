@@ -25,6 +25,35 @@ for), **not reviewed**.
 3. Experiments before E07's re-run (E03–E05, E09–E11) used the submitted
    ensemble; E01, E02 (new versions) and E12–E17 use the clean replay.
 
+## Month view (added 2026-10-01)
+
+Every notebook now has a "Month view: WIS, coverage, median error" section
+(WIS reduction %, within-month L1 coverage bias, median absolute-error
+reduction %, per month and horizon, states only) and a month-average
+coverage column next to its season-pooled one. Season-pooled coverage
+claims mostly don't survive: where one changed, the notebook's Findings end
+with a "**Month view (2026-10-01):**" line. Verdicts:
+
+| notebook | coverage claim | verdict |
+|---|---|---|
+| E00 | exact ≈ final; vintage +0 weeks worse at h−1 | holds |
+| E01 | 0.03 is the coverage elbow; carry beats reset | reversed: 0.01 lowest month by month; carry ≈ reset |
+| E02 | switching off costs coverage | weakened: mostly an artifact; better at h3 |
+| E02 | per-level eta, seasonal window coverage | reversed (small differences) |
+| E03 | sqrt ≈ count on coverage | holds; sqrt better at h2–h3 |
+| E04 | the leak nearly triples coverage bias | reversed: no difference month by month |
+| E05 | warm + single best calibrated; warm start cuts bias a third | reversed / weakened: REF-op lowest; warm start −5 to −15% |
+| E07 | coverage ranks the same on A and B | reversed: rankings differ by month |
+| E09 | knee beats REF-paper on coverage | reversed: REF-op lowest; knee worse than base at h1–h3 |
+| E10 | covid base already calibrated at h1–h3 | weakened |
+| E11 | constant rate better coverage everywhere | reversed: worst of five, worse than base at h1–h3 |
+| E14 | coverage keeps improving with lr | reversed: minimum near 0.01–0.032; ≥0.056 worse than base at h1–h3 |
+| E15 | REF-op width changes buy coverage | holds, smaller |
+| E16 | sqrt 0.018 ≈ rate 0.032 on coverage | reversed: sqrt better; rate worse than base in 2025-26 |
+| E17 | decay / off-after give back coverage | weakened: small effect month by month |
+
+Differences under about 0.01 are within the month-level noise floor.
+
 ## Notebooks
 
 | exp | forecaster | status | comments | done |
