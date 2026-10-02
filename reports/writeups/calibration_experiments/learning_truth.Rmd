@@ -1,5 +1,5 @@
 ---
-title: "E00: learning from vintages instead of finalized truth"
+title: "Learning truth (E00): learning from vintages instead of finalized truth"
 date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
 output:
   html_document:
