@@ -33,14 +33,14 @@ if (!is.null(get0("mv_plot_cfgs"))) {
   mv_plot_month <- mv_plot_month %>% filter(config %in% mv_plot_cfgs) %>% mutate(config = droplevels(config))
 }
 for (s in sort(unique(mv_plot_month$season))) {
-  cat("\n\n## ", s, "\n\n", sep = "")
+  cat("\n\n", cal_h(2), " ", s, "\n\n", sep = "")
   print(cal_month_plot(mv_plot_month, s, colours = get0("mv_cols"), linetype = get0("mv_linetype"), colour_by = get0("mv_colour_by") %||% "config"))
 }
 ```
 
 ```{r mview-table, results="asis"}
 if (!isFALSE(get0("mv_show_table"))) {
-  cat("\n\n## Coverage bias: season-pooled and month-average\n\n")
+  cat("\n\n", cal_h(2), " Coverage bias: season-pooled and month-average\n\n", sep = "")
   print(knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION))
 }
 ```
@@ -58,7 +58,7 @@ if (mv_one_base) {
   mv_abs_base <- mv_abs %>% distinct(season, month, h = paste0("h", horizon), base = sprintf("%.3f", cov_base))
   mv_abs_tbl <- mv_abs_tbl %>% left_join(mv_abs_base, by = c("season", "month", "h"))
 }
-cat("\n\n## Monthly L1 coverage bias, absolute (h0 and h2)\n\n")
+cat("\n\n", cal_h(2), " Monthly L1 coverage bias, absolute (h0 and h2)\n\n", sep = "")
 print(knitr::kable(
   mv_abs_tbl %>% arrange(h, season, month),
   caption = if (mv_one_base) {

@@ -99,7 +99,7 @@ fan starts.
 
 ```{r v-state, results="asis", fig.height=4}
 for (nm in names(CAL_STATES)) {
-  cat("\n\n### ", nm, "\n\n", sep = "")
+  cat("\n\n", cal_h(3), " ", nm, "\n\n", sep = "")
   for (s in LIVE) print(cal_state_panel(cals[[focus]], CAL_STATES[[nm]], s, truth, vintages, title = paste(nm, s)))
 }
 ```
@@ -118,7 +118,7 @@ picks <- cal_gallery_pick(cals[[focus]], population)
 abbrev <- setNames(toupper(get_population_data()$state_id), get_population_data()$state_code)
 for (i in seq_len(nrow(picks))) {
   p <- picks[i, ]
-  if (i == 1L || p$phase != picks$phase[i - 1L]) cat("\n\n### ", as.character(p$phase), "\n\n", sep = "")
+  if (i == 1L || p$phase != picks$phase[i - 1L]) cat("\n\n", cal_h(3), " ", as.character(p$phase), "\n\n", sep = "")
   sub <- sprintf("%s (%s), %s, %s: WIS reduction %+.1f%% (%+.1f%% of its season's base WIS; positive = calibrated WIS lower)", abbrev[[p$location]], p$size, p$reference_date, p$kind, p$wis_pct, p$share)
   print(cal_gallery_panel(cals[[focus]], p$location, p$reference_date, truth, vintages, subtitle = sub))
 }

@@ -1,0 +1,36 @@
+---
+title: "Finalists"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 3
+params:
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 11, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+```
+
+The two operating-point candidates, REF-op (prod) and sqrt constant 0.018. E18 steps from one to the other one setting at a time on the clean flu replay, adds sqrt 0.018 with a warm start, and counts the states each one wins. E07b ranks the wider candidate set on the submitted ensemble and the replay. E15 shows where the WIS gains come from. Each section is a self-contained experiment with its own runs;
+the ids match `notes/calibration-ledger.md`.
+
+```{r e18, results="asis"}
+cal_section("_e18_ref_op_bridge.Rmd", list(workers = params$workers))
+```
+
+```{r e07b, results="asis"}
+cal_section("_e07b_candidates.Rmd", list(workers = params$workers))
+```
+
+```{r e15, results="asis"}
+cal_section("_e15_wis_sources.Rmd", list(workers = params$workers))
+```

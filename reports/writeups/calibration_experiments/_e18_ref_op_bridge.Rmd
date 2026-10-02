@@ -52,8 +52,10 @@ learning rate's window, so eta is sized from the first live round (step 4
 removes this). Burn-in outcomes never step the offsets. Step 5 changes only
 units, so that step 6 changes only the learning rate.
 
-Two rate-scale constant rates are shown as references outside the chain:
-rate 0.032 (E14) and rate 0.056 (E09's knee).
+Outside the chain: two rate-scale constant rates as references, rate 0.032
+(E14) and rate 0.056 (E09's knee), and a branch, sqrt 0.018 warm, which is
+step 6 with the 2023-24 season present and `slow_init =
+"burn_in_quantile"` (the warm start of step 0, here on the single term).
 
 Steps 0, 3, 4 and 6 are the cached runs of E13 (REF-op warm), E02
 (`reference + burn-in`), E01/E02 (`reference`) and E16 (sqrt 0.018), so they
@@ -87,7 +89,8 @@ STEPS <- list(
 e14_const <- ws_configs(wi$rate_scales, burn_in = TRUE)[["E11 constant 0.1"]]
 REFS <- list(
   `ref: rate 0.032 (E14)` = list(cfg = utils::modifyList(e14_const, list(lr = 0.032)), burn_in = FALSE),
-  `ref: rate 0.056 (E09 knee)` = list(cfg = utils::modifyList(e14_const, list(lr = 0.056)), burn_in = FALSE)
+  `ref: rate 0.056 (E09 knee)` = list(cfg = utils::modifyList(e14_const, list(lr = 0.056)), burn_in = FALSE),
+  `branch: sqrt 0.018 warm` = list(cfg = utils::modifyList(STEPS[[7]]$cfg, list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile")), burn_in = TRUE)
 )
 run <- function(spec) {
   fc <- if (spec$burn_in) fc_burn_in else wi$fc
@@ -98,7 +101,7 @@ cals <- purrr::map(c(STEPS, REFS), run)
 
 ```{r metrics}
 SEASONS <- c(LIVE, "both")
-STEP_COLS <- setNames(c("#000000", "#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#D55E00", "#999999", "#882255"), names(c(STEPS, REFS)))
+STEP_COLS <- setNames(c("#000000", "#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#D55E00", "#999999", "#882255", "#AA4499"), names(c(STEPS, REFS)))
 step_m <- purrr::imap(cals, function(cal, nm) {
   fc <- cal$forecasts %>% mutate(season = season_of(reference_date)) %>% filter(location != "US")
   ws_scores(fc) %>%
@@ -199,7 +202,44 @@ ggplot(delta_long, aes(value, step, fill = step)) +
   labs(x = "change from the previous step (both seasons, states only)", y = NULL)
 ```
 
+# 3. State by state: REF-op against sqrt 0.018
+
+How many of the 52 states (50 states, DC and PR) each config of a pair has
+the lower WIS in, per season and horizon. States share the national wave,
+so the counts are not independent tests; they show whether a pooled gap
+comes from most states or from a few large ones.
+
+```{r state-wins}
+PAIRS <- list(
+  c("0 REF-op", "6 sqrt constant 0.018 (E16)"),
+  c("0 REF-op", "branch: sqrt 0.018 warm"),
+  c("branch: sqrt 0.018 warm", "6 sqrt constant 0.018 (E16)")
+)
+state_wis <- cal_state_wis(cals[unique(unlist(PAIRS))])
+knitr::kable(cal_pair_wins(state_wis, PAIRS), caption = CAL_PAIR_WINS_CAPTION)
+```
+
+Per state, pooled over h0–h3: WIS reduction % of REF-op against sqrt 0.018
+(above the line, REF-op is better).
+
+```{r state-scatter, fig.height=5}
+state_pct <- state_wis %>%
+  filter(config %in% PAIRS[[1]]) %>%
+  group_by(config, season, location) %>%
+  summarize(pct = 100 * (sum(wis_base) - sum(wis_cal)) / sum(wis_base), .groups = "drop") %>%
+  tidyr::pivot_wider(names_from = config, values_from = pct)
+ggplot(state_pct, aes(.data[[PAIRS[[1]][2]]], .data[[PAIRS[[1]][1]]])) +
+  geom_abline(slope = 1, intercept = 0, colour = "grey50") +
+  geom_hline(yintercept = 0, colour = "grey85") +
+  geom_vline(xintercept = 0, colour = "grey85") +
+  geom_point(alpha = 0.8) +
+  facet_wrap(~season) +
+  labs(x = "sqrt 0.018: WIS reduction %, h0–h3", y = "REF-op: WIS reduction %, h0–h3")
+```
+
 ```{r month-view-cfgs}
+# Five configs, so the month plots stay readable; every config is in the tables above.
+mv_plot_cfgs <- c("0 REF-op", "1 no warm start", "4 no burn-in season", "6 sqrt constant 0.018 (E16)", "branch: sqrt 0.018 warm")
 mv_cols <- STEP_COLS
 ```
 

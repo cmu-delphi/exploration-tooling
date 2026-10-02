@@ -481,3 +481,146 @@ cal_month_plot <- function(month_tbl, season, colours = NULL, linetype = NULL, c
       axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
     )
 }
+
+
+CAL_NOTEBOOK_DIR <- "reports/writeups/calibration_experiments"
+
+#' Markdown heading marks for a heading written by `cat()` inside a section:
+#' level `n`, pushed down by the section's shift.
+#' @export
+cal_h <- function(n) strrep("#", n + getOption("cal.hshift", 0L))
+
+#' Knit a section notebook (`_eNN_*.Rmd`) into a combined notebook.
+#'
+#' The section's title becomes a heading with id `#eNN`, its own headings
+#' (and those of the children it includes) move down `shift` levels, and it
+#' runs in its own environment with `params` from its YAML, overridden by
+#' `params`. Call from a chunk with `results = "asis"`. See
+#' notes/calibration-ledger.md, "Notebooks".
+#' @export
+cal_section <- function(file, params = list(), shift = 1L, envir = parent.frame()) {
+  path <- here::here(CAL_NOTEBOOK_DIR, file)
+  yaml <- rmarkdown::yaml_front_matter(path)
+  id <- sub("^_", "", tools::file_path_sans_ext(file))
+  lines <- cal_shift_headings(cal_expand_children(readLines(path)), shift)
+  env <- new.env(parent = envir)
+  env$params <- utils::modifyList(yaml$params %||% list(), params)
+  old <- options(cal.hshift = shift, knitr.duplicate.label = "allow")
+  old_chunk <- knitr::opts_chunk$get()
+  on.exit({
+    options(old)
+    knitr::opts_chunk$restore(old_chunk)
+  })
+  out <- knitr::knit_child(
+    text = lines, envir = env, quiet = TRUE,
+    options = list(fig.path = paste0(knitr::opts_chunk$get("fig.path"), id, "-"))
+  )
+  cat("\n\n", strrep("#", shift), " ", yaml$title, " {#", sub("_.*", "", id), "}\n\n", out, "\n\n", sep = "")
+}
+
+# Drop the YAML header and the root.dir setting (the combined notebook sets
+# it), and inline `child=` chunks, recursively, so their headings can be
+# shifted with the rest.
+cal_expand_children <- function(lines) {
+  if (length(lines) > 0 && lines[[1]] == "---") {
+    end <- which(lines == "---")[2]
+    lines <- lines[-seq_len(end)]
+  }
+  lines <- lines[!grepl("^knitr::opts_knit\\$set\\(root.dir", lines)]
+  out <- character(0)
+  i <- 1L
+  while (i <= length(lines)) {
+    m <- regmatches(lines[[i]], regexec("^```\\{r child=(.*)\\}\\s*$", lines[[i]]))[[1]]
+    if (length(m) == 2) {
+      out <- c(out, cal_expand_children(readLines(eval(parse(text = m[[2]])))))
+      i <- i + 2L
+    } else {
+      out <- c(out, lines[[i]])
+      i <- i + 1L
+    }
+  }
+  out
+}
+
+# Add `shift` levels to every markdown heading outside code chunks.
+cal_shift_headings <- function(lines, shift) {
+  in_code <- FALSE
+  for (i in seq_along(lines)) {
+    if (grepl("^```", lines[[i]])) {
+      in_code <- !in_code
+    } else if (!in_code && grepl("^#+ ", lines[[i]])) {
+      lines[[i]] <- paste0(strrep("#", shift), lines[[i]])
+    }
+  }
+  lines
+}
+
+#' Per-state WIS (summed pinball) of the base and each run, per (season,
+#' location, horizon), live seasons, states only. Seasons run August to July.
+#' @export
+cal_state_wis <- function(cals, seasons = c("2024-2025", "2025-2026")) {
+  pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
+  purrr::imap(cals, function(cal, nm) {
+    cal$forecasts %>%
+      mutate(season = cal_season_of(.data$reference_date)) %>%
+      filter(.data$location != "US", .data$season %in% seasons, !is.na(.data$truth), !is.na(.data$value_base)) %>%
+      group_by(across(all_of(c("season", "location", "horizon")))) %>%
+      summarize(
+        wis_base = sum(pinball(.data$truth, .data$value_base, .data$level)),
+        wis_cal = sum(pinball(.data$truth, .data$value_cal, .data$level)), .groups = "drop"
+      ) %>%
+      mutate(config = nm)
+  }) %>% bind_rows()
+}
+
+#' For each pair `c(a, b)` of runs in `state_wis`: per (season, horizon), the
+#' number of states where `a` has the lower WIS, and the median per-state gap
+#' in WIS reduction points (positive = `a` better). A table for `knitr::kable()`.
+#' @export
+cal_pair_wins <- function(state_wis, pairs) {
+  labels <- purrr::map_chr(pairs, \(pr) paste(pr[1], "vs", pr[2]))
+  purrr::map2(pairs, labels, function(pr, lab) {
+    state_wis %>%
+      filter(.data$config %in% pr) %>%
+      select("season", "location", "horizon", "config", "wis_cal", "wis_base") %>%
+      tidyr::pivot_wider(names_from = "config", values_from = "wis_cal") %>%
+      transmute(
+        season = .data$season, horizon = .data$horizon, pair = lab,
+        a_wins = .data[[pr[1]]] < .data[[pr[2]]],
+        gap = 100 * (.data[[pr[2]]] - .data[[pr[1]]]) / .data$wis_base
+      )
+  }) %>%
+    bind_rows() %>%
+    mutate(pair = factor(.data$pair, levels = labels)) %>%
+    mutate(h = paste0("h", .data$horizon)) %>%
+    group_by(across(all_of(c("pair", "season", "h")))) %>%
+    summarize(cell = sprintf("%d of %d (median %+.1f)", sum(.data$a_wins), n(), stats::median(.data$gap)), .groups = "drop") %>%
+    tidyr::pivot_wider(names_from = "h", values_from = "cell") %>%
+    arrange(.data$pair, .data$season)
+}
+
+CAL_PAIR_WINS_CAPTION <- "States where the first config of the pair has the lower WIS, of the states scored, and the median per-state gap in WIS reduction points (positive = first config better)"
+
+# August-July season label, as `season_of()` in the replay scripts.
+cal_season_of <- function(d) {
+  y <- as.integer(format(d, "%Y")) - (as.integer(format(d, "%m")) < 8)
+  paste0(y, "-", y + 1)
+}
+
+#' Knit the month view (`_month_view.Rmd`) in the calling environment under
+#' its own heading, `level` levels below the section's top. For notebooks that
+#' show more than one month view; uses `mv` and the optional `mv_*` settings
+#' from `envir`. Call from a chunk with `results = "asis"`.
+#' @export
+cal_month_section <- function(title, level = 2L, envir = parent.frame()) {
+  lines <- readLines(here::here(CAL_NOTEBOOK_DIR, "_month_view.Rmd"))
+  lines[grep("^# Month view", lines)] <- paste("#", title)
+  shift <- getOption("cal.hshift", 0L) + level - 1L
+  old <- options(cal.hshift = shift)
+  on.exit(options(old))
+  slug <- gsub("[^a-z0-9]+", "-", tolower(title))
+  cat(knitr::knit_child(
+    text = cal_shift_headings(lines, shift), envir = envir, quiet = TRUE,
+    options = list(fig.path = paste0(knitr::opts_chunk$get("fig.path"), slug, "-"))
+  ))
+}

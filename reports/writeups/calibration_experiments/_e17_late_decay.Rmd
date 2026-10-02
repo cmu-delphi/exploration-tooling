@@ -132,7 +132,7 @@ month_m <- ws_month_scores(fc %>% mutate(config = interaction(rate, decay, sep =
   tidyr::separate(config, c("rate", "decay"), sep = "[|]") %>%
   mutate(decay = factor(decay, levels = names(DECAYS)), h = factor(paste0("h", horizon), levels = paste0("h", 0:3)))
 for (r in names(RATES)) {
-  cat("\n\n## ", r, "\n\n", sep = "")
+  cat("\n\n", cal_h(2), " ", r, "\n\n", sep = "")
   d <- month_m %>% filter(rate == r)
   share <- d %>% filter(decay == "no decay")
   print(

@@ -110,9 +110,19 @@ seasons, not more single-run comparisons.
 
 Both are `cal_ref_args()` in `R/calibration/views.R`; notebooks run them via
 `cal_run()`, which also picks the learning truth (`"exact"`: re-run from
-scratch each round on that round's data, as prod does). Notebooks live in
-`reports/writeups/calibration_experiments/` and render to
-`reports/calibration_experiments/` with `just calibration-experiments`.
+scratch each round on that round's data, as prod does).
+
+**Notebooks.** Six notebooks in `reports/writeups/calibration_experiments/`
+(`finalists`, `flu_covid`, `learning_rate`, `tracker_structure`,
+`late_season`, `learning_truth`), rendered to `reports/calibration_experiments/`
+with `just calibration-experiments [name]`. Each experiment is a section
+file `_eNN_*.Rmd`; a notebook knits its sections with `cal_section()`
+(`R/calibration/views.R`), which gives each its own environment, YAML
+`params` and figure prefix, and shifts its headings down one level (headings
+written with `cat()` use `cal_h()` so they shift too). The index links each
+experiment as `<notebook>.html#eNN`. `learning_truth` is E00 rendered on its
+own, so that its knitr chunk cache (keyed on chunk options, including the
+figure path) still hits.
 
 Standard views (`_standard_views.Rmd`, `_month_view.Rmd`): V-head (WIS and
 coverage by horizon × season), V-month (by month of reference date, with
@@ -128,23 +138,23 @@ gating), exact learning truth, spoiled submissions excluded.
 
 | id | notebook | base | question | what the numbers show | caveats |
 |---|---|---|---|---|---|
-| E00 | `e00_vintage_backtest` | ensemble | learn from final, vintage or exact data? | exact ≈ final within 0.6 points except REF-op h−1 (2.2, 2024-25 only). Vintage at settle 7 loses the h−1 gain. Settle 7 vs 14: REF-paper +1 to +3 at every horizon; REF-op tie (flips by season) | |
-| E01 | `e01_eta_settings` | replay, cold | adaptive eta settings | mult ≥ 0.1 costs 7–81 at h1–h3. 0.01 beats 0.03 by 0.5–2.4 at h1–h3 in both seasons; 0.03 better at h0 in 2024-25 (0.8). Window and carry vs reset: ≤ 2.4, mostly < 1. Count is 2–5 worse than sqrt | month-avg coverage of 0.01 vs 0.03 within noise |
-| E02 | `e02_eta_variants` | replay, cold | `off_after`, per-level eta, seasonal window | off 1 Mar / 15 Feb +2 to +4 at h1–h3 over the 0.03 reference, both seasons, no month-avg coverage cost. Per-level +1. Seasonal window, burn-in, off 1 Apr: < 1 | dates in-sample; half the 2025-26 gain is December carry-over; "seasonal window" also changes `lr_window` 20 → 10 |
-| E03 | `e03_scale` | ensemble | count vs sqrt vs rate | sqrt +1.4 to +3.9 over count pooled, mostly 2025-26. Coverage: neither better (sqrt worse per season pooled, better month-avg only in 2024-25) | rate identical to count in every cell (adaptive rate is scale invariant) |
-| E04 | `e04_offset_structure` | ensemble | leak, slow term | leak +2.5 to +5.6 at h1–h3 in 2025-26, −0.4 to −1.3 in 2024-25; month-avg coverage flips the same way (±0.015). Slow term without warm start: ≤ 0.5 | |
-| E05 | `e05_warm_start` | ensemble | warm start from burn-in | warm +1.7 to +3.2 at h2–h3 in 2024-25, ±0.4 in 2025-26, for every tracker. REF-op ≈ warm + leak (≤ 0.4). Month-avg coverage: all within 0.01 of each other | |
-| E07 | `e07_across_eras` | both, same rows | do results transfer between ensemble and replay? | Same direction on both; ensemble gains about 1 point more with REF-op warm. Replay base 5–7% worse pooled, 10–33% worse at h0–h1 in 2025-26. Candidate order flips by season on both; rank correlation of coverage in 2025-26 is 0.31 | |
-| E09 | `e09_lr_delay` | ensemble | constant rate × revision delay | knee 0.056: +3 to +5.5 over REF-paper at h1–h3; REF-op +1.2 to +2.4 over knee. Extra delay costs about 1 h−1 point per week. Above 0.1 loses steeply | month-avg: no constant rate beats base at h1–h3 |
-| E10 | `e10_covid` | covid ensemble | REF-paper and REF-op on covid | h−1 +10 to +11. REF-op h1–h3: +1.9 to +2.8 in 2024-25, −3.0 to −4.3 in 2025-26. REF-paper −10 to −19 at h1–h3 in 2025-26 | headline and month tables run to 2026-09-19, including the 2026 summer wave |
-| E11 | `e11_constant_lr` | ensemble | constant 0.1 vs adaptive | REF-op best pooled WIS at every horizon (up to 2 over warm + sqrt). Constant 0.1 gives up 1.5–2.3 at h−1/h0 vs adaptive sqrt | constant 0.1 is effectively cold; its coverage edge is season-pooled only |
+| E00 | `learning_truth` | ensemble | learn from final, vintage or exact data? | exact ≈ final within 0.6 points except REF-op h−1 (2.2, 2024-25 only). Vintage at settle 7 loses the h−1 gain. Settle 7 vs 14: REF-paper +1 to +3 at every horizon; REF-op tie (flips by season) | |
+| E01 | `learning_rate` | replay, cold | adaptive eta settings | mult ≥ 0.1 costs 7–81 at h1–h3. 0.01 beats 0.03 by 0.5–2.4 at h1–h3 in both seasons; 0.03 better at h0 in 2024-25 (0.8). Window and carry vs reset: ≤ 2.4, mostly < 1. Count is 2–5 worse than sqrt | month-avg coverage of 0.01 vs 0.03 within noise |
+| E02 | `late_season` | replay, cold | `off_after`, per-level eta, seasonal window | off 1 Mar / 15 Feb +2 to +4 at h1–h3 over the 0.03 reference, both seasons, no month-avg coverage cost. Per-level +1. Seasonal window, burn-in, off 1 Apr: < 1 | dates in-sample; half the 2025-26 gain is December carry-over; "seasonal window" also changes `lr_window` 20 → 10 |
+| E03 | `tracker_structure` | ensemble | count vs sqrt vs rate | sqrt +1.4 to +3.9 over count pooled, mostly 2025-26. Coverage: neither better (sqrt worse per season pooled, better month-avg only in 2024-25) | rate identical to count in every cell (adaptive rate is scale invariant) |
+| E04 | `tracker_structure` | ensemble | leak, slow term | leak +2.5 to +5.6 at h1–h3 in 2025-26, −0.4 to −1.3 in 2024-25; month-avg coverage flips the same way (±0.015). Slow term without warm start: ≤ 0.5 | |
+| E05 | `tracker_structure` | ensemble | warm start from burn-in | warm +1.7 to +3.2 at h2–h3 in 2024-25, ±0.4 in 2025-26, for every tracker. REF-op ≈ warm + leak (≤ 0.4). Month-avg coverage: all within 0.01 of each other | |
+| E07 | `flu_covid` (E07), `finalists` (E07b, the candidates) | both, same rows | do results transfer between ensemble and replay? | Same direction on both; ensemble gains about 1 point more with REF-op warm. Replay base 5–7% worse pooled, 10–33% worse at h0–h1 in 2025-26. Candidate order flips by season on both; rank correlation of coverage in 2025-26 is 0.31 | |
+| E09 | `learning_rate` | ensemble | constant rate × revision delay | knee 0.056: +3 to +5.5 over REF-paper at h1–h3; REF-op +1.2 to +2.4 over knee. Extra delay costs about 1 h−1 point per week. Above 0.1 loses steeply | month-avg: no constant rate beats base at h1–h3 |
+| E10 | `flu_covid` | covid ensemble | REF-paper and REF-op on covid | h−1 +10 to +11. REF-op h1–h3: +1.9 to +2.8 in 2024-25, −3.0 to −4.3 in 2025-26. REF-paper −10 to −19 at h1–h3 in 2025-26 | headline and month tables run to 2026-09-19, including the 2026 summer wave |
+| E11 | `tracker_structure` | ensemble | constant 0.1 vs adaptive | REF-op best pooled WIS at every horizon (up to 2 over warm + sqrt). Constant 0.1 gives up 1.5–2.3 at h−1/h0 vs adaptive sqrt | constant 0.1 is effectively cold; its coverage edge is season-pooled only |
 | E12 | none (`calibration_ws_replay.R`) | replay, cold, flu + covid | first look at the clean replay | flu: REF-op cold leads constant 0.1 by 0–2.5. Covid: REF-op cold h0 +1.3 states, losses at h1–h3 in 2025-26 | **all locations** (US is 47% of WIS); covid h0 gains are mostly US |
 | E13 | none (`calibration_ws_replay.R burn_in`) | replay, flu + covid | 2023-24 HHS burn-in | flu warm +1 to +2.6 in 2024-25, ≤ 0 in 2025-26. Covid: warm worse at h0–h1, better at h2–h3 (+1.3, +4.4); constant 0.1 warm −8 to −27 | HHS used as-is (3–9% below NHSN); coverage is season-pooled only |
-| E14 | `e14_lr_by_season` | replay, cold | constant rate grid by season | every rate 0.0032–0.056 is ≥ 0 in both seasons and within 1.2 of each other; 0.018 vs 0.032 ≤ 0.3. Above 0.1 loses | month-avg: no rate ≤ 0.032 beats base beyond 0.01 |
-| E15 | `e15_wis_sources` | replay, cold | where the WIS gain comes from | offsets a few % of interval width; REF-op gain from the lower half and the median shift | width-only variant's coverage not measured; split is not additive |
-| E16 | `e16_sqrt_constant_lr` | replay, cold | constant rate on sqrt scale | sqrt 0.018 about +1 over rate constants at h0; at h1–h3 within 0.2 pooled, up to +0.7 in 2025-26. vs REF-op cold: behind in 2024-25 h0–h1, ahead elsewhere; month-avg coverage tie | 0.018 picked in-sample |
-| E17 | `e17_late_decay` | replay, cold | shrink or stop offsets from 1 Mar | `late_decay` fixes March but costs about 0.5 at h0, otherwise ±0.2. Off 1 Mar +0.4 to +0.7 at h1–h3 for sqrt 0.018 (mostly 2025-26), ≤ 0 for rate 0.018 | `late_decay` shrinks the stored offset, so it carries into the next season |
-| E18 | `e18_ref_op_bridge` | replay | which piece of REF-op matters | REF-op vs sqrt 0.018 within 0.6 pooled; REF-op ahead in 2024-25 by 1.3–1.5, behind in 2025-26 by 0.8–1.3. Warm start +0.9 to +2.0 in 2024-25, −0.2 to −0.7 in 2025-26. No step moves month-avg coverage beyond 0.008 | steps 0 and 4 are the same cached runs as E13; steps 4 and 5 identical (scale invariance) |
+| E14 | `learning_rate` | replay, cold | constant rate grid by season | every rate 0.0032–0.056 is ≥ 0 in both seasons and within 1.2 of each other; 0.018 vs 0.032 ≤ 0.3. Above 0.1 loses | month-avg: no rate ≤ 0.032 beats base beyond 0.01 |
+| E15 | `finalists` | replay, cold | where the WIS gain comes from | offsets a few % of interval width; REF-op gain from the lower half and the median shift | width-only variant's coverage not measured; split is not additive |
+| E16 | `learning_rate` | replay, cold | constant rate on sqrt scale | sqrt 0.018 about +1 over rate constants at h0; at h1–h3 within 0.2 pooled, up to +0.7 in 2025-26. vs REF-op cold: behind in 2024-25 h0–h1, ahead elsewhere; month-avg coverage tie | 0.018 picked in-sample |
+| E17 | `late_season` | replay, cold | shrink or stop offsets from 1 Mar | `late_decay` fixes March but costs about 0.5 at h0, otherwise ±0.2. Off 1 Mar +0.4 to +0.7 at h1–h3 for sqrt 0.018 (mostly 2025-26), ≤ 0 for rate 0.018 | `late_decay` shrinks the stored offset, so it carries into the next season |
+| E18 | `finalists` | replay | which piece of REF-op matters | REF-op vs sqrt 0.018 within 0.6 pooled; REF-op ahead in 2024-25 by 1.3–1.5, behind in 2025-26 by 0.8–1.3. Warm start +0.9 to +2.0 in 2024-25, −0.2 to −0.7 in 2025-26. No step moves month-avg coverage beyond 0.008 | steps 0 and 4 are the same cached runs as E13; steps 4 and 5 identical (scale invariance) |
 
 E06 (ILI+ burn-in) and E08 (old covid) were run on code or data later found
 broken and were not rebuilt.
@@ -253,7 +263,7 @@ learning rate; `test-qt.R` pins `eta` against a hand-built residual matrix.
 
 ```sh
 just calibration-experiments              # all notebooks and the index
-just calibration-experiments e03_scale    # one notebook and the index
+just calibration-experiments finalists    # one notebook and the index
 Rscript scripts/calibration/calibration_ws_replay.R 12           # E12 (12 workers)
 Rscript scripts/calibration/calibration_ws_replay.R 12 burn_in   # E13
 ```
