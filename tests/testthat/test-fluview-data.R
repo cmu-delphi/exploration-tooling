@@ -64,6 +64,8 @@ test_that("combine_ili_plus uses the latest vintage of each input at each versio
 })
 
 test_that("read_fluview_positivity_csv maps regions and stops before the cutover", {
+  # The FluView CSVs are not in git, so CI does not have them.
+  skip_on_ci()
   cutover <- as.Date("2016-10-02")
   result <- read_fluview_positivity_csv(before = cutover)
   expect_true(all(result$time_value < cutover))
