@@ -30,8 +30,8 @@ for), **not reviewed**.
 | exp | forecaster | status | comments | done |
 |---|---|---|---|---|
 | E00 vintage backtest | ensemble | verified | Finalized data exaggerates h−1/h0 gains a little; use vintages, no more work. | — |
-| E01 eta settings | clean replay | commented | (1) Curve axis looked flipped vs E09. (2) x/o markers unlabeled. (3) "Rebuilds the original" is misleading: it re-asks the question on a new setup. | (1) E09 flipped to match; (2) legend added; (3) intro reworded with a what-changed table |
-| E02 eta variants | clean replay | not reviewed | | intro reworded (same issue as E01) |
+| E01 eta settings | clean replay | verified | Recap of the August sweep: carry slightly better, window 20 as good as larger, the multiplier has an elbow. Note: on this replay 0.03 is the coverage elbow and 0.01 the WIS-safe choice. Earlier: (1) Curve axis looked flipped vs E09. (2) x/o markers unlabeled. (3) "Rebuilds the original" is misleading: it re-asks the question on a new setup. | (1) E09 flipped to match; (2) legend added; (3) intro reworded with a what-changed table |
+| E02 eta variants | clean replay | commented | Headline: switching off in Feb/Mar recovers WIS, loses coverage. (1) Coverage numbers hard to find in the WIS / bias cells. (2) Month plot: unclear whether positive % is good; the sign convention must be labeled explicitly in every notebook. | intro reworded; (1)–(2) in progress |
 | E03 scale | ensemble | not reviewed | | |
 | E04 offset structure | ensemble | not reviewed | | |
 | E05 warm start | ensemble | not reviewed | | |
