@@ -48,6 +48,7 @@ for (f in src) {
 | E15 | Why does WIS improve when the calibrated intervals barely move? | The offsets are small (2–5% of the 90% interval width) and point up. The gain comes from shifting the forecast up, mostly at the central levels below the median; width changes cost WIS. |
 | E16 | Does a constant learning rate work better on the square-root scale, and do the offsets go stale late in the season? | sqrt 0.018 improves WIS at every horizon in both seasons, more than the rate scale at h0 and in 2025-26, with similar coverage. Every tracker loses WIS in March, after the peak, when the base already over-predicts and the offsets still push up. |
 | E17 | Does shrinking the offset from 1 March fix the March losses? | It fixes March but wipes the offset the next season starts from, so it is worse overall. Switching calibration off from 1 March (`off_after`) gains WIS at h1–h3 but gives back most of the coverage gain. |
+| E18 | Which part of prod's tracker (REF-op) does the work, stepping one setting at a time to E16's sqrt constant 0.018? | The warm start from the 2023-24 season adds 0.5–1 point of WIS (mostly in 2024-25) and the leak about a point at h1–h3 (both seasons); the burn-in season's learning-rate warm-up adds about half a point at h2–h3, the slow term nothing on its own. Switching to the constant rate adds 1–2 points at h1–h3. No step changes month-level coverage beyond noise. |
 
 # How to read the results
 
