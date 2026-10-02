@@ -23,54 +23,37 @@ ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplo
 ```{r child=here::here("reports/writeups/calibration_experiments/_load.Rmd")}
 ```
 
-One axis: whether the persistent offset starts from the burn-in season's
-conformal offset (per horizon and level, the level-quantile of the burn-in
-season's errors pooled over locations, on the sqrt scale) or from zero. Everything else is REF-paper on the sqrt scale, learning from vintages
-the way prod does (E00). Each warm-started run is paired with its cold twin
-from E04:
+Question: does starting the persistent offset from the burn-in season's
+errors, rather than from zero, change WIS and coverage for each tracker?
 
-- **warm only**: the warm start, then no tracking (learning rate ≈ 0).
-- **single** / **warm + single**: the paper's tracker.
-- **leak 0.1** / **warm + leak 0.1**.
-- **slow + leak** / **warm + slow + leak**: the second is REF-op, the
-  operating point in prod.
+**Setup.**
 
-# Findings
+- Flu, the submitted hub ensemble (`CMU-TimeSeries`), horizons h−1 to h3.
+- 2023-24 is the burn-in season; 2024-25 and 2025-26 are scored. Burn-in
+  outcomes never move the offsets, so a cold run plays the base forecast
+  until its first live outcomes arrive.
+- Square-root scale, REF-paper otherwise (adaptive learning rate, mult
+  0.03, floor 0.001, window 20, offsets carried across seasons).
+- Learning truth: NHSN data as published each week, re-run from scratch
+  each week (prod's design, E00). Scoring: finalized truth.
+- Headline tables cover all hub locations; the month view and its tables
+  cover states only.
+- The warm start sets the slow offset, per horizon and level, to the
+  level-quantile of the burn-in season's errors pooled over locations, on
+  the sqrt scale.
 
-Numbers are from the render of 30 September 2026, pooled over both live
-seasons and all locations. WIS reduction % is 100 × (base − calibrated) / base,
-so positive = calibrated WIS lower than base; the absolute-error change of the
-median is defined the same way. L1 coverage bias: lower is better.
+| config | warm start | tracking after the start |
+|---|---|---|
+| `warm only` | yes | none (learning rate ≈ 0) |
+| `single` | no | REF-paper tracker |
+| `warm + single` | yes | REF-paper tracker |
+| `leak 0.1` | no | fast offset shrinks 10% per round |
+| `warm + leak 0.1` | yes | as `leak 0.1` |
+| `slow + leak` | no | leak 0.1 plus a slow offset (mult 0.003) |
+| `warm + slow + leak (REF-op)` | yes | as `slow + leak`; prod's config |
 
-- **The warm start helps every tracker, and never hurts.** Each warm run is
-  at least as good as its cold twin on WIS at every horizon, and better on
-  coverage: `single` +5.1/+4.0/+0.7/−1.3/−1.4 → `warm + single`
-  +5.1/+4.7/+1.3/−0.2/+0.3, coverage bias 0.049–0.026 → 0.046–0.014.
-- **`warm + single` is the best-calibrated config so far.** Its coverage bias
-  is 0.013–0.020 at h0–h3, a fifth of the base's, with WIS within 0.2 points
-  of the base or better at every horizon. REF-op (`warm + slow + leak`) has
-  the best WIS (+5.4/+4.9/+2.4/+1.7/+2.2) at about three times the coverage
-  bias (0.074–0.041). These two mark the ends of the WIS/coverage trade-off.
-- **The warm start's gain is in the first live season.** In 2024-25 it adds
-  1.7–3.2 points at h2/h3 to every tracker; in 2025-26 warm and cold runs are
-  within 0.5 points, since by then the tracker has learned the level itself.
-  `warm + single` still loses 1.8–4.3% at h1–h3 in 2025-26; only the leaky
-  variants gain there.
-- **The warm start alone** (no tracking) gains 0.5–2.1% WIS and cuts
-  coverage bias by about a third at h0–h3 (12% at h−1): the persistent low
-  bias is real and cheap to correct.
-- **Where REF-op loses** is unchanged from the finalized-truth runs: at h3,
-  October (−30%) and March (−29%), 6% of the base WIS between them;
-  December–January (71% of it) gain about 5%.
-- **Month view (2026-10-01):** scored within each month (states only),
-  `warm + single` is not the best-calibrated config. Month-avg L1 coverage
-  bias at h−1…h3: `warm + single` 0.107/0.100/0.116/0.128/0.146, REF-op
-  0.107/0.091/0.111/0.125/0.136, base 0.134/0.116/0.123/0.137/0.151. REF-op
-  is lowest at h0–h3, so the two do not mark opposite ends of a coverage
-  trade-off; `warm + single`'s low season-pooled bias is largely ramp and
-  post-peak errors cancelling (in March 2025-26 it loses 71/83% of WIS at
-  h2/h3 with bias 0.25/0.27 vs the base's 0.15/0.18). The warm start alone
-  cuts month-avg bias by 5–15% at h0–h3, not a third.
+WIS reduction % is `100 × (WIS_base − WIS_cal) / WIS_base`, so positive =
+calibrated WIS lower than base. L1 coverage bias: lower is better.
 
 ```{r runs}
 sqrt_args <- list("paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3))
@@ -91,3 +74,35 @@ mv_plot_cfgs <- c("warm only", "single", "warm + single", "slow + leak", "warm +
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_standard_views.Rmd")}
 ```
+
+# Findings
+
+WIS reduction % (positive = calibrated WIS lower than base) differences are
+in points. L1 coverage bias (lower is better) leads with the month-avg,
+states only.
+
+- **Warm start, WIS: depends on the season.** In 2024-25 it adds 1.7–3.2
+  points at h2/h3 and 0.1–1.2 at h−1…h1 to every tracker. In 2025-26 warm
+  and cold differ by −0.4 to +0.4 at every horizon: no clear difference.
+  Part of the 2024-25 gain is against cold runs that play the base
+  forecast for the first live rounds.
+- **Warm start, coverage.** In 2024-25 month-avg bias is 0.007–0.012 lower
+  for `warm + single` than `single`, and 0.011–0.017 lower for REF-op than
+  `slow + leak`, at h0–h3. In 2025-26 the pairs are within 0.008 in either
+  direction (`warm + single` is 0.002–0.004 higher than `single`): no clear
+  difference. Season-pooled bias makes `warm + single` look lowest
+  (0.013–0.020 at h0–h3, all locations), but pooling lets ramp
+  under-prediction cancel post-peak over-prediction.
+- **Leak vs plain tracker.** In 2025-26 at h1–h3, `single` is
+  −1.8/−4.6/−3.5 and `leak 0.1` +1.5/+1.0/+0.9, 3.3–5.6 points apart.
+  In 2024-25 `single` is ahead by 1.3 points at h−1 and by under 1 point
+  elsewhere. Month-avg bias, both seasons: within 0.007 at every horizon.
+- **Slow term (REF-op vs `warm + leak 0.1`).** No strong result: WIS within
+  0.4 points at every horizon (`warm + leak 0.1` ahead at h2/h3),
+  month-avg bias within 0.003.
+- **Warm start alone.** Pooled WIS +0.5 to +2.1 (2024-25 +0.7 to +3.5,
+  2025-26 +0.1 to +1.3). Month-avg bias 0.007–0.017 below the base at
+  h−1…h3.
+- **By month, h3, both seasons.** Every config loses in October (−12 to
+  −49%) and March (−11 to −51%), months holding 0.3% and 5.4% of the base
+  WIS; December–January (71% of it) gain 1–6%.

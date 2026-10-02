@@ -19,84 +19,35 @@ knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
 ```
 
-The paper's tracker sets its learning rate from recent errors:
+Question: how do the adaptive learning-rate settings change WIS and
+coverage? The paper's tracker sets
 `eta = mult × 90th percentile of |outcome − forecast|` over the last
-`lr_window` observed rounds. Three settings: the multiplier (`lr_mult`), the
-window (`lr_window`), and what happens to the offsets over the summer
-(`season_policy`: carry them into the next season, or reset them to zero).
-**Which settings should we use, and which of the three matters?**
+`lr_window` observed rounds; the settings are the multiplier (`lr_mult`), the
+window (`lr_window`), and the summer policy (`season_policy`: carry offsets
+into the next season, or reset them to zero).
 
-This asks the original E01's question (`calibration_qt_flu.Rmd`) on the
-current setup. It is a new experiment, not a reproduction: four things
-changed at once, so it can't say which change matters.
+This re-asks the original E01 (a pre-fix, count-scale sweep on the submitted
+ensemble with finalized truth, since deleted) on the current setup.
 
-| | original E01 | this notebook |
-|---|---|---|
-| forecaster | submitted ensemble | clean `windowed_seasonal` replay |
-| scale | count | sqrt |
-| learning truth | finalized | as published each week |
-| tracker code | before the 2026-09-17 fixes | after |
+Setup:
 
-**Setup.** As E14–E17: flu, the clean `windowed_seasonal` replay (all 53
-locations, the 55 hub rounds, h0–h3), learning from data as published each
-week and re-run from scratch each week as prod does, one week of extra
-revision delay, no burn-in season. The tracker is the plain single-term one
-with the adaptive learning rate (REF-paper), **on the square-root scale**
-with an eta floor of 0.001: that is the scale prod's tracker (REF-op) runs
-on, and E03 found it better than counts at every horizon. One count-scale
-run at the original operating point (mult 0.03, window 20, carry) links to
-the old sweep.
+- Disease: flu. Base forecaster: the clean `windowed_seasonal` replay (all 53
+  locations, the 55 hub rounds; 27 in 2024-25, 28 in 2025-26). Horizons h0–h3.
+- Learning truth: exact (re-run at every round on the data published by then;
+  E00), one week of extra delay.
+- Cold start: no burn-in season, offsets start at zero in November 2024. With
+  no burn-in there is one summer to cross (2025), so the season policy only
+  changes 2025-26.
+- Tracker: REF-paper (single term, adaptive rate) on the square-root scale,
+  learning-rate floor 0.001.
+- Grid: `lr_mult` {0.3, 0.1, 0.03, 0.01} × `lr_window` {8, 20, Inf} ×
+  `season_policy` {carry, reset}, 24 runs, plus one count-scale run at mult
+  0.03, window 20, carry.
+- Tables lead with states only (US excluded). Each season is scored on its
+  own rounds.
 
-Grid: `lr_mult` {0.3, 0.1, 0.03, 0.01} × `lr_window` {8, 20, Inf} ×
-`season_policy` {carry, reset}, 24 runs. The old sweep also had window 50,
-which it found indistinguishable from 20 and Inf; it is dropped here. With
-no burn-in there is one summer to cross (2025 into 2025-26), so the season
-policy only changes 2025-26.
-
-"WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so
-**positive = calibrated WIS lower than base**. "L1 coverage bias" (lower is
-better) is the mean over the 23 levels of |empirical coverage − level|. Each season is scored on its own rounds.
-Results lead with states only (US excluded).
-
-# Findings
-
-Numbers are from the render of 1 October 2026, states only, WIS reduction %
-(positive = calibrated WIS lower than base) / L1 coverage bias (lower is better), h0/h1/h2/h3, both seasons pooled
-unless stated. All-locations numbers point the same way.
-
-- **The multiplier is the setting that matters.** Changing it moves WIS by
-  16–81 points (pooled, averaged over the other settings); changing the
-  window moves it by 1–2 points and the season policy by 0.3–1.7.
-- **On the sqrt scale, 0.1 and 0.3 are far too large.** 0.1 loses WIS at
-  every horizon (−1.3/−6.8/−11.3/−16.7 at window 20, carry) and 0.3 loses
-  14–77%. **0.03** (REF-paper's value) gains at h0 and loses a little at
-  h1–h3 (+1.9/−0.2/−1.1/−1.7), with coverage bias 0.032–0.045 against the
-  base's 0.105–0.127. **0.01** is the only multiplier that never loses more
-  than 0.2 (+1.7/+0.7/+0.5/+0.5), but from a cold start it barely moves
-  2024-25's coverage (0.107–0.129 vs base 0.127–0.169). It catches up in
-  2025-26 (0.015–0.041).
-- **Window: keep 20.** It changes nothing in 2024-25 (under 0.2 points). In
-  2025-26, Inf is up to a point worse than 20 at h1–h3 for mult ≤ 0.03; 8
-  and 20 are within half a point.
-- **Season policy: carry.** Reset only acts at the 2025 summer, and there it
-  restarts the tracker from zero: at mult 0.03, window 20, 2025-26 goes from
-  +2.2/−0.6/−0.7/−0.2 (carry) to +0.7/−0.9/−1.3/−1.6 (reset), and coverage
-  bias from 0.008–0.016 to 0.039–0.050.
-- **Count scale** at the same point loses more (−0.4/−2.5/−4.9/−7.0), as E03
-  found.
-- **Against the old E01** (count scale, ensemble, finalized truth, pre-fix):
-  the same answer. The multiplier is the knob, the window is immaterial, 0.1
-  overpays and 0.01 is near WIS parity but slow. One change: carry vs reset
-  was "minor" before; here carry is clearly better in 2025-26.
-- **Month view (2026-10-01):** scored within each month, the coverage
-  ranking changes. Month-avg L1 coverage bias (both seasons, h0/h1/h2/h3,
-  window 20, carry): base 0.112/0.127/0.153/0.177, mult 0.01
-  0.093/0.114/0.142/0.168, 0.03 0.095/0.120/0.150/0.176, 0.1
-  0.097/0.130/0.161/0.190. So 0.01, not 0.03, has the lowest month-level
-  bias, and at h2–h3 0.03 is level with the base: most of its season-pooled
-  coverage gain is ramp and post-peak errors cancelling. Carry vs reset
-  flips slightly in 2025-26: reset 0.076/0.103/0.122/0.138, carry
-  0.078/0.105/0.130/0.143.
+WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
+WIS lower than base. L1 coverage bias: lower is better.
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))
@@ -310,3 +261,29 @@ mv_plot_cfgs <- c(
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
+
+# Findings
+
+There are no uncertainty estimates; a WIS gap under 1 point or a month-avg
+coverage gap under 0.01 is read as no clear difference. The cold start leaves
+Nov–Dec 2024 (about 38% of 2024-25's base WIS at h2) equal to the base for
+every config. States only, window 20, carry unless stated.
+
+- **Large multipliers:** 0.1 is −1.3/−6.8/−11.3/−16.7 pooled at h0–h3 and
+  0.3 loses 14–77. Across multipliers WIS moves 16–81 points; across windows
+  0.8–2.4; across season policies 0.3–1.7.
+- **0.01 vs 0.03:** 0.01 is ahead at h1–h3 in both seasons (by 0.5–2.4);
+  0.03 is ahead at h0 in 2024-25 (by 0.8). Pooled: 0.01
+  +1.7/+0.7/+0.5/+0.5, 0.03 +1.9/−0.2/−1.1/−1.7.
+- **Month-avg coverage (both seasons, h0…h3):** base 0.112/0.127/0.153/0.177;
+  0.01 0.093/0.114/0.142/0.168; 0.03 0.095/0.120/0.150/0.176; 0.1
+  0.097/0.130/0.161/0.190. 0.01 vs 0.03: no clear difference. 0.1 is worse
+  than the base at h1–h3. Season-pooled, 0.03 and 0.1 look much better than
+  the base (0.017–0.045), but pooling lets ramp and post-peak errors cancel.
+- **Window:** no strong result (under 1 point in most cells; up to 2.4 at h3,
+  2025-26, driven by mult 0.3).
+- **Carry vs reset (2025-26 only):** at mult ≤ 0.03 carry is 0.3–1.9 points
+  ahead on WIS; at 0.1 and 0.3 the order is mixed. Month-avg coverage: no
+  clear difference (reset lower by 0.002–0.008).
+- **Count scale** (mult 0.03): −0.4/−2.5/−4.9/−7.0 pooled, 2–5 points below
+  sqrt at h1–h3 in both seasons.

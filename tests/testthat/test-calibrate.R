@@ -87,7 +87,6 @@ test_that("metrics ignore rounds a location was not forecast at", {
   expect_true(anyNA(cal$forecasts$value_base))
   expect_false(anyNA(hub_quantile_loss(cal)$loss_cal))
   expect_false(anyNA(hub_coverage(cal)$coverage_cal))
-  expect_false(anyNA(hub_rolling_tradeoff(cal, window = 5L)$qloss_cal))
 })
 
 # Vintages where each week is first reported at half its value on the

@@ -19,17 +19,22 @@ knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
 ```
 
-REF-op (prod's tracker) and sqrt constant 0.018 (E16's best) differ in
-several settings at once. This notebook walks from one to the other,
-changing one setting per step, to see which piece of REF-op does the work.
+Question: REF-op (prod's tracker) and sqrt constant 0.018 (E16) differ in
+several settings. How do WIS and coverage change as one setting at a time is
+changed from one to the other?
 
-**Setup.** As E13/E16: the clean `windowed_seasonal` replay for flu (53
-locations, the 55 hub rounds, h0–h3), learning from data as published each
-week and re-run from scratch each week as prod does, one week of extra
-revision delay. Scores are over the two live seasons; results are states
-only (US excluded).
+Setup:
 
-**The steps.** Each row changes one setting from the row above.
+- Disease: flu. Base forecaster: the clean `windowed_seasonal` replay (53
+  locations, the 55 hub rounds). Horizons h0–h3.
+- Learning truth: exact (re-run at every round on the data published by then;
+  E00), one week of extra delay.
+- Steps 0–3 run with the 2023-24 season present (the HHS-stitched backfill
+  from E13); steps 4–6 and the references are cold.
+- Scores over the two live seasons, each on its own rounds; states only (US
+  excluded).
+
+Each row changes one setting from the row above:
 
 | step | change | config after the change |
 |---|---|---|
@@ -39,88 +44,24 @@ only (US excluded).
 | 3 no leak | `fast_decay = 0` | sqrt, adaptive, mult 0.03, window 20, carry, with the 2023-24 season present |
 | 4 no burn-in season | drop the 2023-24 rounds | as 3, cold: the eta pool starts empty |
 | 5 per-100k units | `scales` = population / 100k | as 4, on the square root of admissions per 100k |
-| 6 sqrt constant 0.018 (E16) | `lr = 0.018` | E16's best: sqrt per 100k, constant 0.018 |
+| 6 sqrt constant 0.018 (E16) | `lr = 0.018` | sqrt per 100k, constant 0.018 |
 
-**Why steps 4 and 5.** The 2023-24 burn-in season does two things. With
-`slow_init` it sets the slow term's starting value (the warm start). Without
-it, its residuals still fill the adaptive learning rate's window, so eta is
-sized from the first live round instead of growing from an empty pool; the
-offsets themselves stay at zero, since burn-in outcomes never step. So the
-burn-in season stays present through step 3, and dropping it is step 4: step
-1 isolates the warm start, step 4 the eta warm-up (E13 follow-up 2). E16's
-constant rate runs on the square root of the per-100k rate. The adaptive
-rate is almost unchanged by that rescaling (it scales with the residuals;
-only the 1e-3 floor does not), but it is still a change, so it is step 5,
-and step 6 changes only the learning rate.
+The 2023-24 season does two things: with `slow_init` it sets the slow term's
+starting value (step 1 removes this), and its residuals fill the adaptive
+learning rate's window, so eta is sized from the first live round (step 4
+removes this). Burn-in outcomes never step the offsets. Step 5 changes only
+units, so that step 6 changes only the learning rate.
+
+Two rate-scale constant rates are shown as references outside the chain:
+rate 0.032 (E14) and rate 0.056 (E09's knee).
 
 Steps 0, 3, 4 and 6 are the cached runs of E13 (REF-op warm), E02
-("reference + burn-in"), E01/E02 ("reference") and E16 (sqrt 0.018). Step 3
-is written as E02 writes it (REF-paper with sqrt and the 1e-3 floor), which
-equals REF-op with `slow_init`, `lr_slow` and the leak removed.
+(`reference + burn-in`), E01/E02 (`reference`) and E16 (sqrt 0.018), so they
+are not independent checks of those notebooks.
 
-"WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so
-**positive = calibrated WIS lower than base**. "L1 coverage bias" (lower is
-better) is the mean over the 23 levels of |empirical coverage − level|.
-"Month-avg" coverage bias is computed within each calendar month and then
-averaged, so errors on the ramp and after the peak cannot cancel.
-
-# Findings
-
-Numbers are from the render of 1 October 2026, states only, both seasons
-pooled unless named, h0/h1/h2/h3. WIS is WIS reduction % (positive =
-calibrated WIS lower than base); coverage is L1 coverage bias (lower is
-better).
-
-- **Endpoints.** REF-op +2.8/+1.1/+0.9/+1.1, sqrt constant 0.018
-  +2.2/+0.8/+0.6/+0.6. REF-op is ahead overall because of 2024-25
-  (+3.2/+1.9/+1.6/+1.6 vs +1.7/+0.6/+0.3/+0.1); sqrt 0.018 is ahead in
-  2025-26 (+3.0/+1.0/+1.1/+1.5 vs +2.2/−0.1/−0.0/+0.2). Month-avg coverage
-  bias is about the same: 0.095/0.121/0.150/0.175 vs 0.094/0.116/0.143/0.169.
-- **WIS: the learning rate moves it most at h1–h3, the warm start at h0.**
-  Switching the adaptive rate to constant 0.018 (step 6) adds
-  +0.3/+1.0/+1.7/+2.3. Inside REF-op, three pieces each add about a point:
-  the warm start (step 1 costs −0.9/−0.5/−0.6/−1.0, nearly all of it in
-  2024-25: h3 goes from +1.6 to −0.4), the leak (step 3 costs
-  −0.6/−1.0/−1.2 at h1–h3 and gains +0.4 at h0) and, smaller, the burn-in
-  season's eta warm-up (step 4 costs −0.1/−0.2/−0.5/−0.7, again in
-  2024-25). Without the warm start, the slow term does nothing (step 2:
-  within ±0.2).
-- **Warm start vs eta warm-up (E13 follow-up 2).** Both matter only in
-  2024-25, the first live season. The warm start is worth about twice as
-  much WIS as the eta warm-up and shows from the first rounds (the month
-  view gains at h2–h3 in Nov–Feb 2024-25). The eta warm-up is about half a
-  point at h2–h3 and nothing in 2025-26.
-- **Month-level coverage: no step moves it beyond noise.** Every step
-  changes month-avg coverage bias by 0.008 or less, under the ~0.01 noise
-  floor. The largest are dropping the warm start at h3 (−0.008) and the
-  constant rate at h1–h3 (−0.005/−0.007/−0.007).
-- **Season-pooled coverage moves a lot, and it is cancellation.** Dropping
-  the warm start worsens pooled bias by +0.024/+0.032/+0.044/+0.052,
-  dropping the leak improves it by −0.040/−0.042/−0.051/−0.060, and the
-  constant rate worsens it by +0.014/+0.023/+0.034/+0.047. None of these
-  shows up month by month, so they come from ramp and post-peak errors
-  cancelling differently, not from better-calibrated months.
-- **Where the WIS steps act: March and April.** The month view shows the
-  WIS steps mostly as spring losses at h2–h3. In 2024-25 at h2, March costs
-  about −13% with the leak and no slow term (step 2), −23% without the leak
-  (step 3) and −31% without the burn-in season (steps 4–5); constant 0.018
-  costs about −7%. April is worse for the adaptive trackers without the leak
-  (down to the −40% clip). In 2025-26 every step loses 27–40% in March at
-  h1–h2, constant 0.018 slightly less.
-- **Per-100k units change nothing (step 5).** The adaptive rate scales with
-  the residuals, so on the square-root scale only the 1e-3 floor sees the
-  units. Calibrated values differ by at most 1.6 admissions and every score
-  matches step 4 to the reported digits.
-- **Rate-scale constant rates (references, outside the chain).** Rate
-  0.032 (E14's best) and 0.056 (E09's knee) give +1.3/+0.7/+0.5/+0.4 and
-  +1.3/+0.5/+0.3/0.0, below sqrt 0.018 (+2.2/+0.8/+0.6/+0.6) and REF-op
-  (+2.8/+1.1/+0.9/+1.1). Month-avg coverage bias is about the base's
-  (0.108–0.177 and 0.112–0.191 vs base 0.112–0.177; 0.056 is worse at
-  h2–h3). Both sit at zero through the ramp. On the ensemble (E09) the knee
-  looked good after the 2024-25 peak because the ensemble was still
-  under-predicting that spring (E07); `windowed_seasonal` over-predicts
-  after the peak, so here the same upward offsets cost WIS and coverage in
-  March–April.
+WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
+WIS lower than base. L1 coverage bias: lower is better. "Month-avg" coverage
+bias is computed within each calendar month and then averaged.
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))
@@ -264,3 +205,35 @@ mv_cols <- STEP_COLS
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
+
+# Findings
+
+There are no uncertainty estimates; a WIS gap under 1 point or a month-avg
+coverage gap under 0.01 is read as no clear difference. The cold steps equal
+the base through Nov–Dec 2024; only the warm steps act there. States only,
+h0/h1/h2/h3, both seasons pooled unless stated.
+
+- **Endpoints:** REF-op +2.8/+1.1/+0.9/+1.1, sqrt constant 0.018
+  +2.2/+0.8/+0.6/+0.6 (0.3–0.6 apart, no clear difference). The order flips
+  by season: REF-op is ahead in 2024-25 (+3.2/+1.9/+1.6/+1.6 vs
+  +1.7/+0.6/+0.3/+0.1), sqrt 0.018 in 2025-26 (+3.0/+1.0/+1.1/+1.5 vs
+  +2.2/−0.1/−0.0/+0.2).
+- **Warm start (step 1):** −0.9/−0.5/−0.6/−1.0 pooled when removed. In
+  2024-25 it is worth 0.9–2.0 points; in 2025-26 removing it gains 0.2–0.7
+  at h1–h3.
+- **Slow term without warm start (step 2):** within ±0.2. No strong result.
+- **Leak (step 3):** removing it costs 0.6–1.2 at h1–h3 and gains 0.4 at h0.
+- **Burn-in season's eta warm-up (step 4):** −0.1 to −0.7, in 2024-25 only.
+  No strong result.
+- **Per-100k units (step 5):** identical to step 4 in every reported digit.
+  The adaptive rate is scale invariant when the 1e-3 floor doesn't bind; a
+  direct check (2026-10-02) confirmed `scales` is applied.
+- **Constant 0.018 vs cold adaptive (step 6):** +0.3/+1.0/+1.7/+2.3, ahead at
+  h2–h3 in both seasons.
+- **Month-avg coverage:** no step changes it by more than 0.008. REF-op
+  0.095/0.121/0.150/0.175, sqrt 0.018 0.094/0.116/0.143/0.169, base
+  0.112/0.127/0.153/0.177. Season-pooled bias moves by up to 0.06 per step,
+  but pooling lets ramp and post-peak errors cancel.
+- **References:** rate 0.032 +1.3/+0.7/+0.5/+0.4 and rate 0.056
+  +1.3/+0.5/+0.3/+0.0 pooled. Month-avg coverage: rate 0.032 equals the base;
+  rate 0.056 is 0.008–0.014 above it.

@@ -23,50 +23,31 @@ ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplo
 ```{r child=here::here("reports/writeups/calibration_experiments/_load.Rmd")}
 ```
 
-One axis: the scale the tracker works on. Everything else is REF-paper (one
-offset per level, adaptive learning rate of 0.03 × the 90th percentile of the
-last 20 rounds' absolute errors, offsets carried across seasons, 2023-24
-burn-in, one week of extra delay), learning from vintages the way prod does
-(re-run each week; E00).
+Question: does the scale the tracker works on (count, sqrt, rate) change
+WIS and coverage?
 
-- **count**: REF-paper itself; additive offsets in admissions.
-- **sqrt**: offsets on the square root of admissions, mapped back.
-- **rate**: offsets in admissions per 100k, so one location's step size is
-  comparable to another's.
+Setup:
 
-The adaptive learning rate has a floor (0.1 by default) in the tracker's
-working units, so the sqrt and rate variants use a floor of 0.001; that floor
-change goes with the scale.
+- Disease: flu. Base forecaster: the submitted hub ensemble (spoiled
+  submissions dropped).
+- Reference: REF-paper. One offset per level; adaptive learning rate of 0.03
+  × the 90th percentile of the last 20 rounds' absolute errors; offsets
+  carried across seasons; one week of extra delay (`settle_days = 14`).
+- Burn-in: 2023-24, used only to warm up the learning rate. Offsets start at
+  zero at the first 2024-25 round (cold start).
+- Learning truth: exact (re-run at every round on the data published by then,
+  as prod does; E00). Scores against finalized truth.
+- Seasons scored: 2024-25 and 2025-26. Horizons h−1 to h3. Headline tables:
+  all hub locations including US; month view: states only.
 
-# Findings
+| config | change from REF-paper |
+|---|---|
+| `count` | none (additive offsets in admissions) |
+| `sqrt` | offsets on the square root of admissions, mapped back; learning-rate floor 0.001 |
+| `rate` | offsets in admissions per 100k; learning-rate floor 0.001 |
 
-Numbers are from the render of 30 September 2026, pooled over both live
-seasons and all locations. WIS reduction % is 100 × (base − calibrated) / base,
-so positive = calibrated WIS lower than base; the absolute-error change of the
-median is defined the same way. L1 coverage bias: lower is better.
-
-- **sqrt beats count at every horizon.** WIS +5.1/+4.0/+0.7/−1.3/−1.4 vs
-  +3.2/+1.9/−2.0/−2.7/−5.3 at h−1…h3, with similar coverage bias
-  (0.049–0.026 vs 0.044–0.032). The median improves too: absolute error
-  +9.5/+7.3/+2.4/−0.6/+1.2 vs +5.0/+4.7/+0.2/−1.3/−4.9.
-- **The gain is in the spring.** At h3, count loses 122% of April's and 63% of
-  May's base WIS; sqrt loses 20% and gains 18%. An offset learned at the peak
-  is sized in admissions, so in count space it is far too large for the tail.
-- **sqrt is worse at the start of the season and in March.** At h3 it loses
-  35% in October and 42% in March, against 27% and 26% for count. These
-  months carry little of the base WIS (0.3% and 5.4%), so the spring gain
-  dominates.
-- **rate equals count with the adaptive learning rate.** The adaptive rate is
-  a quantile of the location's own residuals, so dividing a location by its
-  population rescales steps and offsets together. The rate scale matters only
-  with a constant learning rate (E09).
-- **2025-26 is harder for both.** sqrt loses 1.8–4.6% at h1–h3 there (count
-  6.9–7.9%), against gains in 2024-25.
-- **Month view (2026-10-01):** scored within each month (states only),
-  sqrt's coverage edge is clearer than "similar": month-avg L1 coverage bias
-  0.108/0.102/0.117/0.130/0.150 at h−1…h3 vs count
-  0.115/0.102/0.120/0.143/0.168, base 0.134/0.116/0.123/0.137/0.151. Count
-  is worse than the base at h2–h3 month by month.
+The learning-rate floor (0.1 by default) is in the tracker's working units,
+so the sqrt and rate configs use 0.001.
 
 ```{r runs}
 cals <- list(
@@ -79,3 +60,32 @@ focus <- "sqrt"
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_standard_views.Rmd")}
 ```
+
+# Findings
+
+WIS reduction % is positive = calibrated WIS lower than base; coverage bias is
+lower-is-better. A WIS gap under 1 point or a month-avg coverage gap under
+0.01 is read as no clear difference.
+
+- **sqrt vs count, WIS.** sqrt is 1.4 to 3.9 points higher pooled at h−1…h3
+  (+5.1/+4.0/+0.7/−1.3/−1.4 vs +3.2/+1.9/−2.0/−2.7/−5.3). In 2025-26 the gap
+  is 1.5–6.8 points at every horizon. In 2024-25 it is 2.2 at h−1 and 3.5 at
+  h3, and under 1 point at h0–h2.
+- **sqrt vs count, h3 by month.** The largest gaps are in months with little
+  base WIS: April −20.0 vs −122.2 and May +17.7 vs −63.4 (1.3% and 1.2% of
+  base WIS); sqrt is lower in October (−35.1 vs −26.9) and March (−42.1 vs
+  −26.0). Weighted by base WIS share, April–May and November–January each
+  account for about half of the 3.9-point h3 gap; March takes back about 0.9.
+- **sqrt vs count, coverage.** Month-avg bias (states): sqrt is 0.013 and
+  0.018 lower at h2 and h3, from 2024-25 only (h3 0.181 vs 0.223); in 2025-26
+  there is no clear difference (h3 0.122 vs 0.120). At h3 neither is below the
+  base month-avg (sqrt 0.150, count 0.168, base 0.151). Season-pooled per
+  season, sqrt is higher than count (2024-25 by 0.02–0.05); pooled over both
+  seasons the two look alike, because pooling lets errors cancel across
+  seasons as well as within one.
+- **rate vs count.** Identical in every table. With the adaptive learning rate,
+  dividing a location by its population rescales steps and offsets together.
+  A direct check (2026-10-02) confirmed `scales` is applied: with a constant
+  learning rate the two differ by up to 300 admissions.
+- Offsets start from zero in November 2024, so 2024-25 includes several
+  rounds where every config equals the base.

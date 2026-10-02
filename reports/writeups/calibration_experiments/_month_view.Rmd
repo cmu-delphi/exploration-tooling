@@ -48,14 +48,23 @@ if (!isFALSE(get0("mv_show_table"))) {
 ```{r mview-abs, results="asis"}
 # Absolute within-month coverage bias behind the plot's reduction %, at h0 and h2.
 mv_abs <- mv_plot_month %>% filter(horizon %in% c(0, 2))
-mv_abs_base <- mv_abs %>% distinct(season, month, horizon, cov_base) %>% group_by(season, month, horizon) %>% slice(1) %>% ungroup()
+# Configs on different base forecasters (E07) have different bases, so each cell then carries its own base.
+mv_one_base <- mv_abs %>% distinct(season, month, horizon, cov_base) %>% count(season, month, horizon) %>% pull(n) %>% max() == 1L
+mv_abs_tbl <- mv_abs %>%
+  transmute(season, month, h = paste0("h", horizon), config,
+            v = if (mv_one_base) sprintf("%.3f", cov_cal) else sprintf("%.3f (base %.3f)", cov_cal, cov_base)) %>%
+  tidyr::pivot_wider(names_from = config, values_from = v)
+if (mv_one_base) {
+  mv_abs_base <- mv_abs %>% distinct(season, month, h = paste0("h", horizon), base = sprintf("%.3f", cov_base))
+  mv_abs_tbl <- mv_abs_tbl %>% left_join(mv_abs_base, by = c("season", "month", "h"))
+}
 cat("\n\n## Monthly L1 coverage bias, absolute (h0 and h2)\n\n")
 print(knitr::kable(
-  mv_abs %>%
-    transmute(season, month, h = paste0("h", horizon), config, v = sprintf("%.3f", cov_cal)) %>%
-    tidyr::pivot_wider(names_from = config, values_from = v) %>%
-    left_join(mv_abs_base %>% transmute(season, month, h = paste0("h", horizon), base = sprintf("%.3f", cov_base)), by = c("season", "month", "h")) %>%
-    arrange(h, season, month),
-  caption = "Within-month L1 coverage bias (lower is better), calibrated configs and the uncalibrated base."
+  mv_abs_tbl %>% arrange(h, season, month),
+  caption = if (mv_one_base) {
+    "Within-month L1 coverage bias (lower is better), calibrated configs and the uncalibrated base."
+  } else {
+    "Within-month L1 coverage bias (lower is better) of each config, with its own uncalibrated base in parentheses."
+  }
 ))
 ```

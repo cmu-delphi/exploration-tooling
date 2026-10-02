@@ -19,23 +19,26 @@ knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
 ```
 
-In the fan and vintage plots the calibrated intervals look almost the same
-as the base ones, yet WIS improves. This notebook asks where that WIS
-change comes from.
+Question: how does the WIS change split across quantile levels, how large
+are the offsets next to the base forecast's spread, and how much of the
+change comes from moving the median versus changing widths?
 
-**Setup.** The clean `windowed_seasonal` replay for flu (E12: substitutions
-off, all 53 locations, the 55 hub rounds, h0–h3), learning from data as
-published each week and re-run from scratch each week as prod does, no
-burn-in season. Two calibrated configs, both from E12:
+Setup:
 
-- **REF-op cold**: prod's tracker without its warm start.
-- **E11 constant 0.1**: the plain tracker on the rate scale (per 100k)
-  with a constant learning rate of 0.1.
+- Disease: flu. Base forecaster: the clean `windowed_seasonal` replay (E12:
+  substitutions off, all 53 locations, the 55 hub rounds). Horizons h0–h3.
+- Learning truth: exact (re-run at every round on the data published by then;
+  E00), one week of extra delay. Cold start, no burn-in season.
+- Scores against finalized truth over 2024-25 and 2025-26, pooled; states
+  only first (US excluded), then all locations.
+- Configs, both from E12:
+  - **REF-op cold**: prod's tracker (sqrt, adaptive rate, slow term, leak)
+    without its warm start.
+  - **E11 constant 0.1**: the plain tracker on the rate scale (per 100k),
+    constant learning rate 0.1.
 
-Scores are against finalized truth over 2024-25 and 2025-26. "WIS reduction %"
-is `100 × (WIS_base − WIS_cal) / WIS_base`: **positive = calibrated WIS lower than base**.
-Results lead with states only (US excluded), since US alone is about 45% of
-the all-locations WIS.
+WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
+WIS lower than base. L1 coverage bias: lower is better.
 
 **Three ways to cut the WIS reduction.**
 
@@ -58,48 +61,8 @@ the all-locations WIS.
      median sits on the base median. The calibrated widths and shape are
      kept, the base centre is kept.
 
-   If the two parts did not interact, their WIS reductions would add up to the
-   full change. Both parts are floored at zero, as the calibrated forecast
-   is.
-
-# Findings
-
-Numbers are from the render of 1 October 2026, states only, h0/h1/h2/h3,
-WIS reduction % (positive = calibrated WIS lower than base). All-locations numbers point the same way.
-
-- **The offsets are small, and that is why the fans look unchanged.** The
-  typical (median) offset is 2–5% of the base forecast's 90% interval width
-  at every level and horizon, or 7–19% of its 50% interval width. The median
-  calibrated 90% width is 1.00–1.04 times the base width. Gains of 1–2% of
-  WIS need only shifts this size, which are hard to see on a fan plot.
-- **The offsets nearly always point up.** The median offset is positive at
-  every level and horizon, and fewer than one forecast in ten is moved down
-  by more than about 3% of its 90% width. The tracker moves the whole
-  forecast up a little, which matches a base that under-predicts (E12).
-- **The gain is in the centre and shoulders, not the tails.** The six tail
-  levels (0.01–0.05 and 0.95–0.99) add at most 0.1 point at any horizon.
-  REF-op's +2.0 at h0 is +1.0 from the centre (0.35–0.65) and +0.9 from the
-  shoulders (0.1–0.3, 0.7–0.9).
-- **The lower half gains; the upper half loses beyond h0.** For REF-op the
-  levels below the median give +1.4/+0.7/+0.6/+0.6 and those above give
-  +0.5/−0.1/−0.5/−0.8. Raising the lower quantiles helps when the outcome
-  comes in above them. At h2–h3 the offsets grow with the level, so the upper
-  quantiles move up further and stretch the upper side past where outcomes
-  land. E11 shows the same pattern with a weaker lower-half gain
-  (+1.0/+0.4/+0.1/0.0) and a larger upper-half loss (−0.3 to −0.9).
-- **For REF-op, shifting the median is the whole gain.** Moving every base
-  quantile by the median offset alone gives +2.3/+0.8/+0.5/+0.4, more than
-  the full calibration (+2.0/+0.6/+0.1/−0.2). Changing only the widths and
-  shape, around the base median, costs −0.6/−0.7/−0.9/−1.1. The two parts do
-  not add up: the full change is 0.3–0.6 points better than their sum. So
-  REF-op's width changes buy coverage at a WIS cost, and its WIS gain is a
-  small upward shift.
-- **For E11 the median shift helps only at h0** (+0.9, then
-  −0.4/−1.2/−1.7), and the width change costs −0.2 to −0.8. Its typical
-  offset is about REF-op's size, but it has a long tail: in one forecast in
-  ten the offset exceeds 0.26–0.55 of the 90% width (REF-op 0.08–0.20). A
-  fixed step per 100k is large for a forecast whose interval is narrow, as in
-  small states or off-season weeks.
+   The interaction is the full change minus the two parts. Both parts are
+   floored at zero, as the calibrated forecast is.
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))
@@ -190,9 +153,7 @@ knitr::kable(group_tbl(GEOS[["all"]]), caption = "All locations: WIS reduction %
 ```
 
 Change in pinball loss at each level relative to that level's own base
-loss (not a share of WIS), states only. Tail levels carry little of the
-WIS, so a large relative change there can still be a small piece of the
-total.
+loss (not a share of WIS), states only.
 
 ```{r level-pct}
 knitr::kable(
@@ -333,3 +294,33 @@ mv <- cal_month_view(cals, seasons = LIVE)
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
+
+# Findings
+
+There are no uncertainty estimates; a WIS gap under 1 point or a month-avg
+coverage gap under 0.01 is read as no clear difference. Both configs are cold
+and equal the base through December 2024 (about a third of 2024-25's base
+WIS), so the pooled gains are diluted. There is no per-season split here.
+States only, both seasons pooled, h0/h1/h2/h3.
+
+- **WIS:** REF-op +2.03/+0.59/+0.09/−0.17, E11 +0.73/−0.21/−0.70/−1.03.
+  REF-op is 1.3 points ahead at h0; at h1–h3 the gap is 0.8–0.9 (no clear
+  difference).
+- **By level:** the six tail levels (0.01–0.05, 0.95–0.99) add at most 0.1
+  point. REF-op's levels below the median give +1.36/+0.72/+0.59/+0.58 and
+  those above +0.54/−0.14/−0.48/−0.76. E11: below +1.00/+0.39/+0.12/−0.02,
+  above −0.31/−0.55/−0.73/−0.91.
+- **Offset size:** median |offset| is 2–5% of the base 90% width at levels
+  0.25–0.95, and 0.4–2.1% at the 0.05 level. The median calibrated 90% width
+  is 1.00–1.04 times the base. The 90th percentile of |offset| ÷ 90% width
+  (levels 0.25–0.95) is 0.07–0.20 for REF-op and 0.24–0.55 for E11.
+- **Median shift vs width change:** for REF-op, median shift only gives
+  +2.29/+0.80/+0.47/+0.39 (0.2–0.6 above the full calibration) and width
+  change only −0.59 to −1.14. The interaction is +0.33 to +0.57 (E11: +0.43
+  to +0.86), so the split is not additive. The coverage of the width-only
+  variant is not measured.
+- **Month-avg coverage:** base 0.112/0.127/0.153/0.177; REF-op
+  0.098/0.119/0.146/0.167 (0.007–0.014 lower); E11 0.116/0.143/0.174/0.203
+  (0.004–0.026 higher than the base). Season-pooled, E11 looks lowest
+  (0.020–0.025, REF-op 0.077–0.085, base 0.105–0.127), but pooling lets ramp
+  and post-peak errors cancel.

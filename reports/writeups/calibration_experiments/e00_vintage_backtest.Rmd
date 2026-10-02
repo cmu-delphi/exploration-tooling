@@ -25,54 +25,35 @@ knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw())
 ```
 
-Every result before this notebook trained the tracker on finalized NHSN
-values. Only the *timing* of each reveal was realistic (when the tracker
-learns from an outcome). This notebook varies one thing, the data the tracker
-learns from, at both reference configs (REF-paper and REF-op; see the index):
+Question: how do results change when the tracker learns from NHSN data as
+published, rather than from finalized values?
 
-- **final**: the latest vintage, as in all earlier results.
-- **exact**: what prod does. Prod re-runs the tracker from the first round
-  each week on that week's data, so at round `t` every revealed outcome has
-  its value as published by `t`. We replay that by re-running the tracker
-  once per round.
-- **vintage**: one run in which each outcome keeps the value it had at the
-  round that revealed it. This was meant as a cheap stand-in for exact, but
-  it is also a deployment design in its own right: a stateful tracker that
-  steps once per outcome and never revisits it.
+Setup:
 
-A round with reference date `d` sees data published by `d - 3` (the Wednesday
-submission). Vintages start 2024-11-19; earlier as-of dates use that first
-vintage. Scores are always against finalized truth, over both live seasons,
-all hub locations, with burn-in rounds excluded. "WIS reduction %" is
-100 × (base WIS − calibrated WIS) / base WIS, so positive = calibrated WIS
-lower than base. "L1 coverage bias" is lower-is-better.
+- Disease: flu. Base forecaster: the submitted hub ensemble (spoiled
+  submissions dropped).
+- References: REF-paper (count scale, one offset per level) and REF-op (sqrt
+  scale, leak 0.1, slow term with a burn-in-quantile warm start); see the index.
+- Burn-in: 2023-24, used only to warm up the learning rate. Offsets start at
+  zero at the first 2024-25 round (REF-op's slow term starts from its warm
+  start).
+- Seasons scored: 2024-25 and 2025-26, burn-in rounds excluded. Horizons
+  h−1 to h3. Headline tables: all hub locations including US; month view:
+  states only.
+- Scores are always against finalized truth.
 
-Questions: (1) how much did learning from finalized values flatter the
-earlier results, and (2) is the cheap mode close enough to exact to use in
-sweeps?
+Configs are `ref/settle_days/learn`:
 
-# Findings
+| axis | values |
+|---|---|
+| `ref` | `paper`, `op` |
+| `settle_days` | `14` (one week of extra delay, the reference) or `7` (none) |
+| `learn` | `final`: latest vintage. `exact`: re-run from the first round at every round on the data published by then, as prod does. `vintage`: one run where each outcome keeps the value it had at the round that revealed it (a stateful tracker that never revisits a step) |
 
-Numbers below are from the render of 30 September 2026.
-
-- **Finalized truth flattered the earlier results only a little.** At REF-op
-  with one week of extra delay, exact vs final WIS reduction is +5.4 vs +7.6 at
-  h−1, within 0.5 points at h0–h3, and the h−1 coverage bias is 0.074 vs
-  0.067. At REF-paper, exact is within 0.6 points of final at every horizon:
-  slightly better at h2/h3, slightly worse at h1. Earlier conclusions stand;
-  the h−1 gain was overstated by about 2 points.
-- **The cheap mode is not a usable stand-in.** It drifts from exact as the
-  season goes on (figure below). With no extra delay it learns once from the
-  first report, which under-reports and is never corrected: REF-op h−1 falls
-  to 0.0 (exact +6.1) and coverage bias rises to 0.121 (exact 0.076). Every
-  later experiment uses exact.
-- **Under prod's re-run design, a shorter delay is better.** Exact with no
-  extra delay beats or ties one week of extra delay at every horizon, at both
-  references (REF-op +6.1/+5.1/+2.6/+1.8/+2.2 vs +5.4/+4.9/+2.4/+1.7/+2.2),
-  with nearly the same coverage bias. Learning early from a first report costs
-  little when next week's run replaces it with the revised value. A stateful
-  tracker (the vintage mode) shows the opposite. So the value of an extra
-  revision delay depends on the deployment design, and E09 reports both.
+A round with reference date `d` sees data published by `d - 3`. Vintages
+start 2024-11-19; earlier as-of dates use that first vintage. "WIS reduction
+%" is 100 × (base WIS − calibrated WIS) / base WIS, so positive = calibrated
+WIS lower than base. "L1 coverage bias" is lower-is-better.
 
 ```{r libs, cache=FALSE}
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))
@@ -147,10 +128,10 @@ knitr::kable(
 )
 ```
 
-# How far the cheap mode drifts from exact
+# Vintage vs exact: difference in the calibrated median
 
-Median over locations of |cheap − exact| in the played median, relative to
-the base median, by month:
+Median over locations of |vintage − exact| in the calibrated median,
+relative to the base median, by month, one panel per `ref/settle_days`:
 
 ```{r drift, fig.height=6}
 drift <- purrr::map(unique(paste(grid$ref, grid$settle_days, sep = "/")), function(cfg) {
@@ -170,13 +151,45 @@ ggplot(drift, aes(month, 100 * rel, colour = factor(horizon), group = horizon)) 
   geom_line() +
   geom_point(size = 0.8) +
   facet_wrap(~config) +
-  labs(x = NULL, y = "median |cheap − exact| / base median (%)", colour = "horizon")
+  labs(x = NULL, y = "median |vintage − exact| / base median (%)", colour = "horizon")
 ```
 
 ```{r month-view-cfgs}
-# The runs the Findings compare: final vs exact at one week of delay, and the cheap (vintage) mode vs exact with none.
+# Runs drawn in the month view.
 mv_plot_cfgs <- c("op/14/final", "op/14/exact", "op/7/vintage", "op/7/exact", "paper/14/final", "paper/14/exact")
 ```
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
+
+# Findings
+
+WIS reduction % is positive = calibrated WIS lower than base; coverage bias is
+lower-is-better. A WIS gap under 1 point or a month-avg coverage gap under
+0.01 is read as no clear difference.
+
+- **final vs exact.** REF-op at settle 14: h−1 +7.6 (final) vs +5.4 (exact),
+  a 2.2-point gap that comes from 2024-25 (11.2 vs 7.7; 2025-26 2.4 vs 2.1).
+  At h0–h3 the gap is 0.5 points or less. REF-paper: under 1 point at every
+  horizon (0.3–0.6). Month-avg coverage bias: no clear difference (REF-op
+  0.106 vs 0.107 at h−1; REF-paper 0.122 vs 0.115). Season-pooled bias is
+  higher under exact (REF-paper h−1 0.044 vs 0.030), but pooling lets ramp
+  and post-peak errors cancel.
+- **vintage vs exact.** At settle 7 the vintage mode loses most of the h−1
+  gain: REF-op 0.0 vs +6.1, REF-paper −1.1 vs +4.5. Its month-avg coverage
+  bias at h−1 is worse than the base (REF-op 0.136, REF-paper 0.149, base
+  0.134; exact 0.107 and 0.110). At settle 14 the gaps are smaller (REF-op h−1
+  +4.9 vs +5.4). At REF-paper h1–h3 the vintage mode has higher WIS reduction
+  than exact (settle 14: −0.9/−1.6/−4.2 vs −2.0/−2.7/−5.3).
+- **settle 7 vs 14 under exact.** REF-paper: settle 7 is 1.3–2.8 points
+  higher at every horizon, in both seasons. REF-op: no clear difference
+  pooled (0.0–0.7); in 2025-26 settle 14 is 0.5–0.6 points higher at h1–h3.
+  Month-avg coverage: no clear difference at either reference.
+- **settle 7 vs 14 under vintage.** settle 14 is higher at h−1/h0 (REF-op
+  +4.9/+4.5 vs 0.0/+3.0). At REF-paper h1–h3 the order is the other way
+  (−0.1/−0.4/−2.3 at settle 7 vs −0.9/−1.6/−4.2 at settle 14).
+- **Month-avg coverage at h2–h3.** Every REF-paper config is at or above the
+  base (h3 0.160–0.170 vs 0.151); every REF-op config is below it (h3
+  0.135–0.137).
+- Offsets start from zero in November 2024 (the burn-in only warms the
+  learning rate), so early 2024-25 rounds of the REF-paper runs equal the base.

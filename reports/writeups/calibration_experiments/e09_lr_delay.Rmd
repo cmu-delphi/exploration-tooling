@@ -25,123 +25,54 @@ knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
 ```
 
-The question: for the plain quantile tracker applied on the **rate scale**
-(admissions per 100k) with a **constant** learning rate, how do coverage and
-WIS trade off across learning rates, and how does that change with the
-**extra delay** before the tracker learns from an outcome?
+Question: for the plain quantile tracker on the rate scale (admissions per
+100k) with a constant learning rate, how do WIS and coverage change with
+the learning rate and with the extra delay before an outcome is learned?
 
-**The tracker.** For each location, horizon and quantile level, the tracker
-keeps an additive offset that is added to the submitted quantile. When an
-outcome is learned, each offset moves by `lr × (1{y > q} − (1 − τ))`: up by
-`lr × τ` if the outcome landed above the played quantile `q`, down by
-`lr × (1 − τ)` if below. `lr` is the learning rate (the step size).
+**Setup.**
 
-- **Constant learning rate** (the sweep in this notebook): `lr` is a fixed
-  number, the same for every location and round, and does not depend on the
-  forecast errors. On the rate scale it is in admissions per 100k, so one
-  step moves an offset by at most `lr` per 100k. The curves below trace this
-  one number from 0.001 to about 3.2.
-- **Adaptive learning rate** (the paper's default, used by both reference
-  configs): `lr` is recomputed every round as 0.03 × the 90th percentile of
-  the base forecast's absolute errors over the location's last 20 observed
-  rounds. The paper uses 0.1 and 50 rounds; an earlier sweep found 0.03 gives
-  similar coverage at a much smaller WIS cost, and that the window length
-  (8, 20, 50 or all history) barely matters. The window has no role with a
-  constant learning rate, so it is not varied here; the reference marks use
-  20.
+| | |
+|---|---|
+| disease, base | flu, the submitted hub ensemble (`CMU-TimeSeries`) |
+| seasons | 2023-24 burn-in (its outcomes take no steps; offsets start at zero); 2024-25 and 2025-26 scored |
+| locations, horizons | all 53 hub locations, h−1 to h3; the month view is states only |
+| scoring truth | finalized NHSN |
+| tracker | REF-paper (one offset per level, carried across seasons) on the rate scale |
+| learning rate | constant, 0.001 to about 3.2 per 100k per step (15 values, a quarter-decade apart) |
+| extra delay | 0, 1, 2 or 3 weeks (`settle_days` 7/14/21/28) |
+| learning truth | two designs, below |
 
-**Extra delay.** The first NHSN report of the week ending on Saturday `X` is
-published on Wednesday `X + 4`, in time for the round with reference date
-`X + 7`. Learning from it at that round is zero extra delay. Each further
-week of waiting is one week of extra delay, giving later revisions time to
-come in. The reference configs wait one extra week; the sweep covers 0–3.
+**The tracker.** For each location, horizon and quantile level, the offset
+moves by `lr × (1{y > q} − (1 − τ))` when an outcome is learned. With a
+constant `lr` the step does not depend on the forecast errors. The
+reference configs use the adaptive rate instead: 0.03 × the 90th
+percentile of the location's absolute base errors over its last 20
+observed rounds.
 
-**What the tracker learns from.** At each round the tracker learns from the
-NHSN data as published by then (a "vintage"), not from finalized values,
-because finalized values are not available in real time (see E00). There are
-two ways to deploy that, and E00 found they respond to the delay in opposite
-directions, so both are shown:
+**Extra delay.** The first NHSN report of the week ending Saturday `X` is
+published Wednesday `X + 4`, in time for the round with reference date
+`X + 7`. Learning from it at that round is zero extra delay; each further
+week of waiting is one week of extra delay. The reference configs use one
+week.
 
-- **re-run** (what prod does): each week the tracker is run again from the
-  first round over the whole history, on that week's vintage. An outcome
-  first learned from its early report is learned from its revised value in
-  every later week's run.
-- **stateful**: the tracker runs once, stepping forward a round at a time,
-  and learns each outcome once, from the value published at the round it
-  becomes available. It never sees later revisions of that outcome.
+**Learning truth designs.**
 
-This is a separate choice from what happens to the offsets between seasons.
-In both designs the offsets carry over the summer off-season rather than
-resetting to zero.
-
-**Other settings.** Everything else follows the REF-paper reference config:
-one offset per level, carried across seasons, and a 2023-24 burn-in season
-whose outcomes take no steps (the adaptive rate uses it to warm up; the
-constant rate needs no warm-up). Scores are on counts against finalized
-truth, over the two live seasons (2024-25 and 2025-26), all 53 hub
-locations. "WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so
-positive = calibrated WIS lower than base, as in the other notebooks. "L1
-coverage bias" (lower is better) is the mean over the 23 quantile levels of
-|empirical coverage − level|.
+- **re-run** (prod): each week the tracker is re-run from the first round
+  on that week's vintage, so an outcome is learned from its latest value.
+- **stateful**: the tracker runs once and learns each outcome from the
+  value published at the round it becomes available.
 
 **Reference configs** (marked on the plots):
 
-- **REF-paper**: the paper's tracker on counts, adaptive learning rate as
-  above.
-- **REF-op**: the configuration running in prod. REF-paper on the
-  square-root scale, plus a 10% per-round shrink of the offset toward zero, a
-  second slow-moving offset, and a starting offset taken from the burn-in
-  season's errors (E03–E05).
+- **REF-paper**: the paper's tracker on counts, adaptive learning rate.
+- **rate, adaptive**: REF-paper on the rate scale (floor 0.001 per 100k).
+- **REF-op**: prod's config: REF-paper on the sqrt scale, plus a 10%
+  per-round leak, a slow offset and a warm start from the burn-in season.
 
-# Findings
-
-Numbers are from the render of 30 September 2026, pooled over locations.
-WIS reduction %: positive = calibrated WIS lower than base. L1 coverage bias:
-lower is better.
-"Knee" below means a constant learning rate of 0.056 admissions per 100k per
-step.
-
-- **The trade-off is L-shaped.** Raising the constant learning rate cuts the
-  coverage bias from about 0.10 to 0.03 at almost no WIS cost, up to a knee
-  near 0.05–0.1. Past the knee WIS worsens steeply and coverage barely
-  improves. At the reference delay, h−1 has its best WIS at 0.1 (at 0.32
-  with no extra delay). The per-location lines spread widely: past 0.3 many
-  locations lose 20% of WIS or more.
-- **On the rate scale, the knee matches or beats the paper's adaptive
-  tracker at every horizon.** At the reference delay (+1 week, re-run
-  design), the knee gives WIS reduction +3.2/+2.5/+1.1/+0.5/+0.2% and coverage
-  bias 0.040/0.031/0.026/0.027/0.027 at h−1…h3. REF-paper gives
-  +3.2/+1.9/−2.0/−2.7/−5.3% and 0.044/0.030/0.032/0.034/0.032: the same WIS
-  at h−1, worse WIS from h0 on, and worse coverage at h−1 and h1–h3.
-- **The rate scale only matters with a constant learning rate.** "rate,
-  adaptive" matches REF-paper exactly. The adaptive rate is a quantile of the
-  location's own residuals, so dividing a location by its population rescales
-  the steps and the offsets together.
-- **REF-op makes a different trade.** Its WIS gain (+5.4/+4.9/+2.4/+1.7/+2.2%)
-  is larger than any constant rate reaches at h0–h3, but at about twice the
-  coverage bias (0.074/0.054/0.045/0.046/0.041). The leak and the warm start
-  buy WIS; the plain tracker buys coverage.
-- **Extra delay, re-run design (prod): shorter is better, but it matters only
-  at h−1/h0.** At a learning rate of 0.1, h−1 WIS reduction is +5.3/+3.6/+1.0%
-  at +0/+1/+2 weeks. At h1–h3 the curves nearly coincide, and coverage bias
-  barely moves with delay. A value learned early is replaced by its revision
-  in the next week's run, so waiting only delays the signal.
-- **Extra delay, stateful design: one week is needed.** At +0 weeks the
-  tracker learns once from the first report, which under-reports, so the
-  offsets are pushed down: at the knee, h−1 coverage bias is 0.142, worse than
-  the uncalibrated 0.111, and h−1 WIS is 0.9% worse than the base. +1 week
-  recovers most of it (0.066); +2 and +3 weeks change little at h1–h3 and
-  lose WIS at h−1.
-- **Month view (2026-10-01):** scored within each month (states only, +1
-  week, re-run), the knee does not beat REF-paper on coverage and REF-op has
-  the lowest bias, not twice it. Month-avg L1 coverage bias at h−1…h3: knee
-  0.122/0.117/0.129/0.142/0.164, 0.1 0.118/0.114/0.127/0.147/0.172,
-  REF-paper 0.115/0.102/0.120/0.143/0.168, REF-op
-  0.107/0.091/0.111/0.125/0.136, base 0.134/0.116/0.123/0.137/0.151. At
-  h1–h3 the knee and 0.1 are worse than the base month by month, so the
-  L-shaped drop in season-pooled bias is ramp and post-peak errors
-  cancelling. The delay results hold: stateful +0 weeks is worse than the
-  base at h−1 (0.151 vs 0.134) and +1 week recovers (0.118).
+"WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so positive =
+calibrated WIS lower than base. "L1 coverage bias" (lower is better) is the
+mean over the 23 quantile levels of |empirical coverage − level|. "Knee"
+below is the constant rate 0.056.
 
 ```{r libs, cache=FALSE}
 suppressPackageStartupMessages(source(here::here("R/load_all.R")))
@@ -259,12 +190,12 @@ best_const <- sweep_m %>%
   group_by(horizon) %>%
   slice_max(wis_pct, n = 1, with_ties = FALSE) %>%
   ungroup() %>%
-  mutate(ref = "rate, constant lr (best WIS per horizon)")
+  mutate(ref = "rate, constant lr (highest WIS per horizon)")
 bridge <- bind_rows(
   ref_m %>% filter(learn == "exact", settle_days == 14L),
   best_const
 ) %>%
-  mutate(ref = factor(ref, levels = c("REF-paper (count, adaptive)", "rate, adaptive", "rate, constant lr (best WIS per horizon)", "REF-op")))
+  mutate(ref = factor(ref, levels = c("REF-paper (count, adaptive)", "rate, adaptive", "rate, constant lr (highest WIS per horizon)", "REF-op")))
 base_row <- bridge %>% filter(ref == "REF-paper (count, adaptive)") %>% mutate(ref = "base", wis_pct = 0, bias_cal = bias_base)
 tbl <- bind_rows(base_row, bridge) %>%
   transmute(config = ref, horizon, cell = sprintf("%+.1f%% / %.3f", wis_pct, bias_cal)) %>%
@@ -311,8 +242,7 @@ triangles are the reference configs at the same delay.
 
 Per-location coverage comes from about 50 forecasts per horizon, so a
 location's L1 bias has a noise floor of a few points even for a perfectly
-calibrated forecaster. Read the shape of the pooled line; the grey lines show
-spread.
+calibrated forecaster. The grey lines show the spread across locations.
 
 ```{r curve-fn}
 ACCENT <- "#1f5fa8"
@@ -422,3 +352,41 @@ mv_plot_cfgs <- c(
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
+
+# Findings
+
+WIS reduction % (positive = calibrated WIS lower than base) differences
+are in points. L1 coverage bias is lower-is-better; month-avg is states
+only, season-pooled is all locations. Unless stated, +1 week, re-run.
+
+- **Constant rate.** WIS rises with the rate up to about 0.056–0.1 (knee:
+  +3.2/+2.5/+1.1/+0.5/+0.2 at h−1…h3) and falls fast past 0.3 (at 1.0:
+  −12 to −23 at h0–h3). The rate with the highest WIS per horizon is
+  0.1/0.056/0.056/0.018/0.018, picked on the scored seasons; at h2,
+  0.018–0.056 are within 0.1 point.
+- **Knee vs REF-paper.** WIS: knee ahead by 3.1–5.5 points at h1–h3, 0.6 at
+  h0, tied at h−1. Coverage: no clear difference season-pooled (within
+  0.007); month-avg REF-paper is lower at h−1…h1 by 0.007/0.015/0.009 and
+  the knee at h2/h3 by 0.001/0.004.
+- **Month-avg coverage vs base.** Against the base
+  (0.134/0.116/0.123/0.137/0.151 at h−1…h3), the knee differs by
+  −0.012/+0.001/+0.006/+0.005/+0.013 and 0.1 by
+  −0.016/−0.002/+0.004/+0.010/+0.021: no lower than the base at h1–h3. REF-op is 0.012–0.027 below the base at every horizon. REF-op
+  differs from the sweep in scale, leak, slow offset and warm start, so
+  the comparison does not isolate any one of them. Season-pooled, the
+  knee's bias (0.026–0.040) is about half REF-op's (0.041–0.074), but
+  pooling lets ramp and post-peak errors cancel.
+- **Extra delay, re-run.** At the knee, h−1 WIS is +4.1/+3.2/+2.1/+1.0 at
+  +0/+1/+2/+3 weeks and h0 +2.9/+2.5/+2.0/+1.5; at h1–h3 the delays are
+  within 1 point. Month-avg bias at the knee moves by under 0.01 between
+  +0 and +2 weeks.
+- **Extra delay, stateful.** At +0 weeks the knee makes h−1 worse than the
+  base: WIS −0.9, season-pooled bias 0.142 vs 0.111, month-avg 0.151 vs
+  0.134. At +1 week h−1 is +3.7, 0.066 pooled, 0.118 month-avg. At h0–h3,
+  +0 weeks has WIS within 0.6 points of +1 week.
+- **Known issues.** `rate, adaptive` matches REF-paper to every printed
+  digit because the adaptive rate is scale invariant (`scales` is applied;
+  checked 2026-10-02). Runs are cached
+  by name, not by inputs or code (clear `cache/calibration/experiments/e09/`
+  after changes). In October 2025 (one round) the knee and 0.1 carry spring
+  offsets forward: h0 month bias 0.232/0.218 vs the base's 0.053.
