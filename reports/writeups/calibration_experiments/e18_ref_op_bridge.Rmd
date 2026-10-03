@@ -1,0 +1,295 @@
+---
+title: "E18: a bridge from REF-op to sqrt constant 0.018"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 11, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+Question: REF-op (prod's tracker) and sqrt constant 0.018 (E16) differ in
+several settings. How do WIS and coverage change as one setting at a time is
+changed from one to the other?
+
+Setup:
+
+- Disease: flu. Base forecaster: the clean `windowed_seasonal` replay (53
+  locations, the 55 hub rounds). Horizons h0–h3.
+- Learning truth: exact (re-run at every round on the data published by then;
+  E00), one week of extra delay.
+- Steps 0–3 run with the 2023-24 season present (the HHS-stitched backfill
+  from E13); steps 4–6 and the references are cold.
+- Scores over the two live seasons, each on its own rounds; states only (US
+  excluded).
+
+Each row changes one setting from the row above:
+
+| step | change | config after the change |
+|---|---|---|
+| 0 REF-op | — | sqrt, adaptive mult 0.03 floor 1e-3, window 20, carry; slow term (mult 0.003) warm-started from the 2023-24 burn-in; leak 0.1 on the fast term |
+| 1 no warm start | `slow_init = NULL` | the slow term starts at zero |
+| 2 no slow term | `lr_slow = NULL` | single fast term with the leak |
+| 3 no leak | `fast_decay = 0` | sqrt, adaptive, mult 0.03, window 20, carry, with the 2023-24 season present |
+| 4 no burn-in season | drop the 2023-24 rounds | as 3, cold: the eta pool starts empty |
+| 5 per-100k units | `scales` = population / 100k | as 4, on the square root of admissions per 100k |
+| 6 sqrt constant 0.018 (E16) | `lr = 0.018` | sqrt per 100k, constant 0.018 |
+
+The 2023-24 season does two things: with `slow_init` it sets the slow term's
+starting value (step 1 removes this), and its residuals fill the adaptive
+learning rate's window, so eta is sized from the first live round (step 4
+removes this). Burn-in outcomes never step the offsets. Step 5 changes only
+units, so that step 6 changes only the learning rate.
+
+Outside the chain: two rate-scale constant rates as references, rate 0.032
+(E14) and rate 0.056 (E09's knee), and a branch, sqrt 0.018 warm, which is
+step 6 with the 2023-24 season present and `slow_init =
+"burn_in_quantile"` (the warm start of step 0, here on the single term).
+
+Steps 0, 3, 4 and 6 are the cached runs of E13 (REF-op warm), E02
+(`reference + burn-in`), E01/E02 (`reference`) and E16 (sqrt 0.018), so they
+are not independent checks of those notebooks.
+
+WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
+WIS lower than base. L1 coverage bias: lower is better. "Month-avg" coverage
+bias is computed within each calendar month and then averaged.
+
+```{r load}
+source(here::here("scripts/calibration/calibration_ws_replay.R"))
+wi <- ws_inputs("flu")
+fc_burn_in <- bind_rows(ws_burn_in_forecasts("flu"), wi$fc)
+# Each config is written as the experiment that first ran it writes it, so cached runs are reused.
+refop_warm <- ws_configs(wi$rate_scales, burn_in = TRUE)[["REF-op warm"]]
+sqrt_adaptive <- list(
+  ref = "paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3),
+  burn_in_seasons = character(0), slow_init = NULL, lr_window = 20, season_policy = "carry"
+)
+const_cfg <- ws_configs(wi$rate_scales, burn_in = FALSE)[["E11 constant 0.1"]]
+STEPS <- list(
+  `0 REF-op` = list(cfg = refop_warm, burn_in = TRUE),
+  `1 no warm start` = list(cfg = list(ref = "op", burn_in_seasons = "2023-2024", slow_init = NULL), burn_in = TRUE),
+  `2 no slow term` = list(cfg = list(ref = "op", burn_in_seasons = "2023-2024", slow_init = NULL, lr_slow = NULL), burn_in = TRUE),
+  `3 no leak` = list(cfg = utils::modifyList(sqrt_adaptive, list(burn_in_seasons = "2023-2024")), burn_in = TRUE),
+  `4 no burn-in season` = list(cfg = sqrt_adaptive, burn_in = FALSE),
+  `5 per-100k units` = list(cfg = c(sqrt_adaptive, list(scales = wi$rate_scales)), burn_in = FALSE),
+  `6 sqrt constant 0.018 (E16)` = list(cfg = utils::modifyList(const_cfg, list(lr = 0.018, transform = "sqrt")), burn_in = FALSE)
+)
+# Rate-scale constant rates for comparison, outside the chain: E14's best and E09's knee, as E14 runs them.
+e14_const <- ws_configs(wi$rate_scales, burn_in = TRUE)[["E11 constant 0.1"]]
+REFS <- list(
+  `ref: rate 0.032 (E14)` = list(cfg = utils::modifyList(e14_const, list(lr = 0.032)), burn_in = FALSE),
+  `ref: rate 0.056 (E09 knee)` = list(cfg = utils::modifyList(e14_const, list(lr = 0.056)), burn_in = FALSE),
+  `branch: sqrt 0.018 warm` = list(cfg = utils::modifyList(STEPS[[7]]$cfg, list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile")), burn_in = TRUE)
+)
+run <- function(spec) {
+  fc <- if (spec$burn_in) fc_burn_in else wi$fc
+  do.call(cal_run_cached, c(list(fc, wi$truth), spec$cfg, list(learn = "exact", vintages = wi$vintages, workers = params$workers)))
+}
+cals <- purrr::map(c(STEPS, REFS), run)
+```
+
+```{r metrics}
+SEASONS <- c(LIVE, "both")
+STEP_COLS <- setNames(c("#000000", "#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#D55E00", "#999999", "#882255", "#AA4499"), names(c(STEPS, REFS)))
+step_m <- purrr::imap(cals, function(cal, nm) {
+  fc <- cal$forecasts %>% mutate(season = season_of(reference_date)) %>% filter(location != "US")
+  ws_scores(fc) %>%
+    select(season, horizon, which, wis, cal_err) %>%
+    tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err)) %>%
+    mutate(step = nm, wis_pct = 100 * (wis_base - wis_cal) / wis_base)
+}) %>%
+  bind_rows() %>%
+  mutate(
+    step = factor(step, levels = names(c(STEPS, REFS))),
+    season = factor(season, levels = SEASONS, labels = c(LIVE, "both seasons")),
+    h = factor(paste0("h", horizon), levels = paste0("h", 0:3))
+  )
+mv <- cal_month_view(cals, seasons = LIVE)
+step_table <- function(col, fmt, base_col = NULL) {
+  rows <- step_m %>% mutate(step = as.character(step), v = .data[[col]])
+  if (!is.null(base_col)) {
+    rows <- bind_rows(step_m %>% filter(step == names(STEPS)[1]) %>% mutate(step = "base", v = .data[[base_col]]), rows)
+  }
+  rows %>%
+    mutate(step = factor(step, levels = unique(step))) %>%
+    arrange(season, h) %>%
+    transmute(step, col = paste(season, h), cell = sprintf(fmt, v)) %>%
+    tidyr::pivot_wider(names_from = col, values_from = cell) %>%
+    arrange(step)
+}
+```
+
+# 1. Season scores per step
+
+States only. Each season is scored on its own rounds; "both seasons" pools
+them. The tracker runs over both seasons, so 2025-26 starts from the offsets
+2024-25 left behind.
+
+## WIS reduction % (positive = calibrated WIS lower than base)
+
+```{r table-wis}
+knitr::kable(step_table("wis_pct", "%+.1f"), caption = "WIS reduction % (positive = calibrated WIS lower than base), states only")
+```
+
+## L1 coverage bias (lower is better), season-pooled
+
+```{r table-cov}
+knitr::kable(step_table("cal_err_cal", "%.3f", base_col = "cal_err_base"), caption = "L1 coverage bias (lower is better), season-pooled, states only")
+```
+
+## L1 coverage bias (lower is better), season-pooled and month-average
+
+```{r table-month-cov}
+mv_show_table <- FALSE
+knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
+```
+
+# 2. What each step changes
+
+The change each step makes to the step before it, both seasons pooled,
+states only. WIS: change in WIS reduction % (positive = the step lowers
+WIS). Coverage: change in L1 coverage bias, season-pooled and month-average
+(negative = the step improves coverage).
+
+```{r deltas}
+wis_both <- step_m %>%
+  filter(season == "both seasons", step %in% names(STEPS)) %>%
+  transmute(step, h, v = wis_pct)
+cov_both <- mv$cov %>%
+  filter(season == "both") %>%
+  transmute(step = config, h = factor(paste0("h", horizon), levels = paste0("h", 0:3)), pooled = pooled_cal, mavg = mavg_cal)
+delta <- wis_both %>%
+  left_join(cov_both, by = c("step", "h")) %>%
+  arrange(h, step) %>%
+  group_by(h) %>%
+  mutate(d_wis = v - lag(v), d_pooled = pooled - lag(pooled), d_mavg = mavg - lag(mavg)) %>%
+  ungroup() %>%
+  filter(step != names(STEPS)[1])
+knitr::kable(
+  delta %>%
+    transmute(step, h, cell = sprintf("%+.1f / %+.3f / %+.3f", d_wis, d_pooled, d_mavg)) %>%
+    tidyr::pivot_wider(names_from = h, values_from = cell) %>%
+    arrange(step),
+  caption = "Both seasons, states only: change from the previous step in WIS reduction % / season-pooled L1 coverage bias / month-avg L1 coverage bias"
+)
+```
+
+```{r delta-plot, fig.height=6.5}
+delta_long <- delta %>%
+  transmute(step, h,
+    `WIS reduction %, change\n(positive = step lowers WIS)` = d_wis,
+    `month-avg L1 coverage bias,\nchange (negative = better)` = d_mavg,
+    `season-pooled L1 coverage bias,\nchange (negative = better)` = d_pooled
+  ) %>%
+  tidyr::pivot_longer(-c(step, h), names_to = "metric") %>%
+  mutate(metric = factor(metric, levels = unique(metric)), step = factor(step, levels = rev(names(STEPS)[-1])))
+ggplot(delta_long, aes(value, step, fill = step)) +
+  geom_vline(xintercept = 0, colour = "grey50", linewidth = 0.3) +
+  geom_col(width = 0.7, show.legend = FALSE) +
+  scale_fill_manual(values = STEP_COLS) +
+  facet_grid(h ~ metric, scales = "free_x") +
+  labs(x = "change from the previous step (both seasons, states only)", y = NULL)
+```
+
+# 3. State by state: REF-op against sqrt 0.018
+
+How many of the 52 states (50 states, DC and PR) each config of a pair has
+the lower WIS in, per season and horizon. States share the national wave,
+so the counts are not independent tests; they show whether a pooled gap
+comes from most states or from a few large ones.
+
+```{r state-wins}
+PAIRS <- list(
+  c("0 REF-op", "6 sqrt constant 0.018 (E16)"),
+  c("0 REF-op", "branch: sqrt 0.018 warm"),
+  c("branch: sqrt 0.018 warm", "6 sqrt constant 0.018 (E16)")
+)
+state_wis <- cal_state_wis(cals[unique(unlist(PAIRS))])
+knitr::kable(cal_pair_wins(state_wis, PAIRS), caption = CAL_PAIR_WINS_CAPTION)
+```
+
+Per state, pooled over h0–h3: WIS reduction % of REF-op against sqrt 0.018
+(above the line, REF-op is better).
+
+```{r state-scatter, fig.height=5}
+state_pct <- state_wis %>%
+  filter(config %in% PAIRS[[1]]) %>%
+  group_by(config, season, location) %>%
+  summarize(pct = 100 * (sum(wis_base) - sum(wis_cal)) / sum(wis_base), .groups = "drop") %>%
+  tidyr::pivot_wider(names_from = config, values_from = pct)
+ggplot(state_pct, aes(.data[[PAIRS[[1]][2]]], .data[[PAIRS[[1]][1]]])) +
+  geom_abline(slope = 1, intercept = 0, colour = "grey50") +
+  geom_hline(yintercept = 0, colour = "grey85") +
+  geom_vline(xintercept = 0, colour = "grey85") +
+  geom_point(alpha = 0.8) +
+  facet_wrap(~season) +
+  labs(x = "sqrt 0.018: WIS reduction %, h0–h3", y = "REF-op: WIS reduction %, h0–h3")
+```
+
+```{r month-view-cfgs}
+# Five configs, so the month plots stay readable; every config is in the tables above.
+mv_plot_cfgs <- c("0 REF-op", "1 no warm start", "4 no burn-in season", "6 sqrt constant 0.018 (E16)", "branch: sqrt 0.018 warm")
+mv_cols <- STEP_COLS
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
+```
+
+# Findings
+
+There are no uncertainty estimates; a WIS gap under 1 point or a month-avg
+coverage gap under 0.01 is read as no clear difference. The cold steps equal
+the base through Nov–Dec 2024; only the warm steps act there. States only,
+h0/h1/h2/h3, both seasons pooled unless stated.
+
+- **Endpoints:** REF-op +2.8/+1.1/+0.9/+1.1, sqrt constant 0.018
+  +2.2/+0.8/+0.6/+0.6 (0.3–0.6 apart, no clear difference). The order flips
+  by season: REF-op is ahead in 2024-25 (+3.2/+1.9/+1.6/+1.6 vs
+  +1.7/+0.6/+0.3/+0.1), sqrt 0.018 in 2025-26 (+3.0/+1.0/+1.1/+1.5 vs
+  +2.2/−0.1/−0.0/+0.2).
+- **Warm start (step 1):** −0.9/−0.5/−0.6/−1.0 pooled when removed. In
+  2024-25 it is worth 0.9–2.0 points; in 2025-26 removing it gains 0.2–0.7
+  at h1–h3.
+- **Slow term without warm start (step 2):** within ±0.2. No strong result.
+- **Leak (step 3):** removing it costs 0.6–1.2 at h1–h3 and gains 0.4 at h0.
+- **Burn-in season's eta warm-up (step 4):** −0.1 to −0.7, in 2024-25 only.
+  No strong result.
+- **Per-100k units (step 5):** identical to step 4 in every reported digit.
+  The adaptive rate is scale invariant when the 1e-3 floor doesn't bind; a
+  direct check (2026-10-02) confirmed `scales` is applied.
+- **Constant 0.018 vs cold adaptive (step 6):** +0.3/+1.0/+1.7/+2.3, ahead at
+  h2–h3 in both seasons.
+- **Month-avg coverage:** no step changes it by more than 0.008. REF-op
+  0.095/0.121/0.150/0.175, sqrt 0.018 0.094/0.116/0.143/0.169, base
+  0.112/0.127/0.153/0.177. Season-pooled bias moves by up to 0.06 per step,
+  but pooling lets ramp and post-peak errors cancel.
+- **References:** rate 0.032 +1.3/+0.7/+0.5/+0.4 and rate 0.056
+  +1.3/+0.5/+0.3/+0.0 pooled. Month-avg coverage: rate 0.032 equals the base;
+  rate 0.056 is 0.008–0.014 above it.
+- **Branch, sqrt 0.018 warm:** +3.4/+1.6/+1.6/+2.5 pooled, the highest of
+  any config here, 0.5–1.4 above REF-op and 0.8–1.9 above sqrt 0.018 cold.
+  In 2024-25 +3.4/+2.1/+2.2/+3.3 (above REF-op by 0.2–1.7); in 2025-26
+  +3.4/+0.9/+0.8/+1.2 (above REF-op by 1.0–1.2, within 0.3 of sqrt 0.018
+  cold at h1–h3). Only the h3 gap to REF-op exceeds 1 point pooled.
+- **Branch coverage costs month-avg:** 0.098/0.126/0.164/0.195 pooled
+  against base 0.112/0.127/0.153/0.177 and REF-op 0.095/0.121/0.150/0.175,
+  so 0.011–0.018 worse than the base at h2–h3. In 2025-26 it is 0.026–0.029
+  above the base at h2–h3. Season-pooled it looks best at h0–h2
+  (0.040/0.034/0.032), which is the ramp/post-peak cancellation.
+- **State by state:** in 2024-25 REF-op beats sqrt 0.018 cold in 41–45 of
+  52 states at every horizon (median gap +1.5 to +1.7); in 2025-26 in only
+  14–18 (median −0.4 to −2.0). So the season flip is broad, not a few large
+  states. The warm branch beats sqrt 0.018 cold in 37–50 states in 2024-25
+  and 20–30 in 2025-26. Against REF-op it wins 19/21/26/41 of 52 states
+  in 2024-25 and 33/36/36/41 in 2025-26 (h0/h1/h2/h3).

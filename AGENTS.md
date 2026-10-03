@@ -110,8 +110,9 @@ directly on the shared stack whenever it is picked up.
 
 History lives in `notes/`: the annotated commit log
 (`notes/2026-07-22-ds-refactor2-annotated-commit-log.md`) is the source of
-truth for what was done and how it was verified; `notes/refactor-ideas.md`
-holds all open threads and future refactor designs; the remaining dated
+truth for what was done and how it was verified; `notes/ROADMAP.md` lists
+open tasks and tech debt, `notes/refactor-ideas.md` holds the refactor
+designs behind them; the remaining dated
 files are experiment records. CLAUDE.md describes only the current state.
 
 ## Refactoring practice
@@ -129,6 +130,19 @@ whole grid a dependency of every branch); `tar_target`'s default
 `tidy_eval = TRUE` splices a bare `!!!params` at build time (set
 `tidy_eval = FALSE` to defer); `rlang::syms` on the trainer column is
 load-bearing.
+
+## Working incrementally
+
+Most work here is a chain of small decisions about data, edge cases and
+forecasters, and full runs (explore sweeps, evaluation replays, exact
+calibration sweeps) take hours, so a wrong early choice is expensive to find.
+Build up from the cheapest check that can answer the current question: a
+standalone script on one geo and a few dates, then one forecaster on a few
+dates (`EVALUATION_N_DATES`, a filtered grid), then one forecaster on all
+dates, and only last the full run. Look at each stage's output (plots, a
+diff against a known value) before scaling up, and write each data or
+edge-case decision into the relevant note when it is made, so it can be
+revisited.
 
 ## Conventions
 

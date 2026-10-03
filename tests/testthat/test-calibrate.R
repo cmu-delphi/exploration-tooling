@@ -87,5 +87,53 @@ test_that("metrics ignore rounds a location was not forecast at", {
   expect_true(anyNA(cal$forecasts$value_base))
   expect_false(anyNA(hub_quantile_loss(cal)$loss_cal))
   expect_false(anyNA(hub_coverage(cal)$coverage_cal))
-  expect_false(anyNA(hub_rolling_tradeoff(cal, window = 5L)$qloss_cal))
+})
+
+# Vintages where each week is first reported at half its value on the
+# Wednesday after it ends and revised to the final value three weeks later.
+make_synthetic_vintages <- function(truth) {
+  bind_rows(
+    truth %>% mutate(version = target_end_date + 4L, truth = 0.5 * truth),
+    truth %>% mutate(version = target_end_date + 25L)
+  )
+}
+
+test_that("vintage learning truth is the value as of the reveal round", {
+  hub <- make_synthetic_hub()
+  vintages <- make_synthetic_vintages(hub$truth)
+  learned <- function(settle_days) {
+    cal <- calibrate_hub_forecasts(
+      hub$forecasts, hub$truth, learn_truth = vintages, settle_days = settle_days,
+      burn_in_seasons = "2023-2024", progress = FALSE
+    )
+    cal$forecasts %>% filter(level == 0.5, !is.na(truth_learned))
+  }
+  # settle_days = 7 reveals each week at its first report; 28 after the revision.
+  # Burn-in weeks at the end of a season are revealed after the off-season gap,
+  # when they have already been revised, so only live rounds are checked.
+  first <- learned(7L) %>% filter(!is_burn_in)
+  expect_gt(nrow(first), 0)
+  expect_equal(first$truth_learned, 0.5 * first$truth)
+  settled <- learned(28L)
+  expect_equal(settled$truth_learned, settled$truth)
+})
+
+test_that("with no revisions, vintage and exact modes match learning from final truth", {
+  hub <- make_synthetic_hub()
+  vintages <- hub$truth %>% mutate(version = target_end_date + 4L)
+  args <- list(
+    burn_in_seasons = "2023-2024", transform = "sqrt", lr_window = 20,
+    lr_args = list(mult = 0.03, floor = 1e-3), slow_init = "burn_in_quantile",
+    lr_slow = list(mult = 0.003), fast_decay = 0.1
+  )
+  run <- function(f, ...) {
+    do.call(f, c(list(hub$forecasts, hub$truth, ...), args))$forecasts %>%
+      filter(!is_burn_in) %>%
+      arrange(location, horizon, round_index, level_index)
+  }
+  final <- run(calibrate_hub_forecasts, progress = FALSE)
+  cheap <- run(calibrate_hub_forecasts, learn_truth = vintages, progress = FALSE)
+  expect_equal(cheap$value_cal, final$value_cal)
+  exact <- run(calibrate_hub_forecasts_exact, vintages = vintages)
+  expect_equal(exact$value_cal, final$value_cal)
 })

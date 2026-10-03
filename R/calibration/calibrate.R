@@ -64,7 +64,18 @@ hub_series_matrix <- function(series, round_date, n_levels) {
 #' Online-calibrate a hub model's submitted forecasts, per (location, horizon).
 #'
 #' @param forecasts [hub_read_forecasts()] output.
-#' @param truth tibble with columns `target_end_date`, `location` (FIPS), `truth` (raw count).
+#' @param truth tibble with columns `target_end_date`, `location` (FIPS), `truth`
+#'   (raw count). Always used for scoring (the `truth` column of the output);
+#'   also used for learning when `learn_truth` is `NULL`.
+#' @param learn_truth what the tracker learns from. `NULL` learns from `truth`
+#'   (finalized values, not a realistic backtest). A [nhsn_read_vintages()]
+#'   table (has a `version` column) learns each outcome from its value as of the
+#'   round it is revealed at, where round `t` sees the data published by
+#'   `round_date[t] - 3` (the Wednesday submission); as-of dates before the
+#'   first version use the first version. The warm start then uses the vintage
+#'   as of the first live round. A table without `version` is used as-is for
+#'   learning, which is how [calibrate_hub_forecasts_exact()] passes one
+#'   snapshot per round. See E00 in `notes/calibration-ledger.md`.
 #' @param settle_days how long after `target_end_date` the outcome is trusted.
 #'   14 gives exactly `horizon + 2` rounds of delay on hub coordinates.
 #' @param burn_in_seasons season labels (as produced by [hub_label_seasons()])
@@ -85,6 +96,12 @@ hub_series_matrix <- function(series, round_date, n_levels) {
 #'   still step when revealed inside the off window. The hidden offsets carry
 #'   unchanged into the next season. `"04-01"` switches calibration off for the
 #'   spring tail, where the peak-tuned offsets are out of regime.
+#' @param late_decay `NULL`, or `list(from = "MM-DD", factor = )`. At each round
+#'   whose reference date falls on or after `from` (and before July), the stored
+#'   fast offset is multiplied by `factor` in `[0, 1]`, so the shrink persists:
+#'   later rounds, and the next season under `carry`, start from the shrunk
+#'   value. Learning continues as usual. The slow term is not decayed. Mutually
+#'   exclusive with `off_after`.
 #' @param lr_seasonal `NULL`, or `list(half_width_weeks = 5)`. Pools into the
 #'   eta residual window the rounds of every earlier season that fall within
 #'   `half_width_weeks` of the same point in the season (same calendar date
@@ -138,6 +155,7 @@ hub_series_matrix <- function(series, round_date, n_levels) {
 calibrate_hub_forecasts <- function(
   forecasts,
   truth,
+  learn_truth = NULL,
   settle_days = 14L,
   burn_in_seasons = character(0),
   season_policy = c("carry", "reset", "shrink"),
@@ -148,6 +166,7 @@ calibrate_hub_forecasts <- function(
   projection = c("isotonic", "sort", "none"),
   nonneg = TRUE,
   off_after = NULL,
+  late_decay = NULL,
   lr_seasonal = NULL,
   transform = c("identity", "log1p", "sqrt", "quartic_root"),
   scales = NULL,
@@ -178,6 +197,15 @@ calibrate_hub_forecasts <- function(
   if (!is.null(off_after) && fast_decay > 0) {
     cli::cli_abort("{.arg off_after} and {.arg fast_decay} cannot be combined; choose one way of retiring stale offsets.")
   }
+  if (!is.null(late_decay)) {
+    if (!is.null(off_after)) {
+      cli::cli_abort("{.arg off_after} and {.arg late_decay} cannot be combined.")
+    }
+    f <- late_decay$factor
+    if (!is.character(late_decay$from) || !(is.numeric(f) && length(f) == 1L && f >= 0 && f <= 1)) {
+      cli::cli_abort("{.arg late_decay} must be {.code list(from = \"MM-DD\", factor = <0..1>)}.")
+    }
+  }
 
   rounds <- hub_label_seasons(unique(forecasts$reference_date))
   round_date <- rounds$round_date
@@ -196,6 +224,12 @@ calibrate_hub_forecasts <- function(
     reset = 0,
     shrink = shrink_factor
   )
+
+  if (!is.null(late_decay)) {
+    mmdd <- format(round_date, "%m-%d")
+    late <- mmdd >= late_decay$from & mmdd < "07-01"
+    hidden_scale[late] <- hidden_scale[late] * late_decay$factor
+  }
 
   # The slow term may train through burn-in; the fast term never does.
   slow_update_from <- if (burn_in_learns_slow) rep(TRUE, n) else update_from
@@ -224,9 +258,17 @@ calibrate_hub_forecasts <- function(
      season gap policy {.val {season_policy}}."
   )
 
-  truth_lookup <- stats::setNames(
-    truth$truth, paste(truth$location, truth$target_end_date)
-  )
+  truth_lookup <- hub_truth_lookup(truth)
+  vintage_mode <- !is.null(learn_truth) && "version" %in% names(learn_truth)
+  learn_lookup <- if (is.null(learn_truth)) {
+    truth_lookup
+  } else if (!vintage_mode) {
+    hub_truth_lookup(learn_truth)
+  }
+  if (vintage_mode) {
+    vintages_by_loc <- split(learn_truth, learn_truth$location)
+    first_version <- min(learn_truth$version)
+  }
 
   grid <- forecasts %>%
     distinct(.data$location, .data$horizon) %>%
@@ -244,8 +286,14 @@ calibrate_hub_forecasts <- function(
     if (!any(rounds$season %in% burn_in_seasons)) {
       cli::cli_abort("{.arg slow_init} needs at least one burn-in season.")
     }
+    warm_lookup <- if (vintage_mode) {
+      first_live <- round_date[which(update_from)[1L]]
+      hub_truth_lookup(hub_vintage_snapshot(learn_truth, hub_round_asof(first_live)))
+    } else {
+      learn_lookup
+    }
     init_slow_by_h <- hub_burn_in_offsets(
-      chunks, keys, round_date, m, levels, truth_lookup,
+      chunks, keys, round_date, m, levels, warm_lookup,
       burn = rounds$season %in% burn_in_seasons, scales = scales, fwd = fwd
     )
   }
@@ -266,13 +314,19 @@ calibrate_hub_forecasts <- function(
     # truth yet (the live tail of a season), or no base forecast at that round
     # (nothing was played, so there is no coverage). A round pruned here is not
     # "revealed late", it is never learned from at all.
-    learnable <- !is.na(Y) & !apply(is.na(Yhat), 2, any)
     delay <- qt_delay_from_dates(round_date, target_end_date, settle_days)
+    Y_learn <- if (vintage_mode) {
+      hub_vintage_at_reveal(vintages_by_loc[[loc]], target_end_date, round_date, delay, first_version)
+    } else {
+      unname(learn_lookup[paste(loc, target_end_date)])
+    }
+    learnable <- !is.na(Y_learn) & !apply(is.na(Yhat), 2, any)
     delay <- lapply(delay, function(idx) idx[learnable[idx]])
+    revealed <- seq_len(n) %in% unlist(delay)
 
     s_t <- hub_round_scales(scales, loc, round_date)
     res <- qt_track(
-      Y = fwd(Y / s_t), Yhat = fwd(sweep(Yhat, 2L, s_t, "/")), levels = levels, delay = delay,
+      Y = fwd(Y_learn / s_t), Yhat = fwd(sweep(Yhat, 2L, s_t, "/")), levels = levels, delay = delay,
       lr = lr, lr_window = lr_window, lr_args = lr_args, projection = projection,
       nonneg = FALSE,
       update_from = update_from, hidden_scale = hidden_scale,
@@ -298,7 +352,8 @@ calibrate_hub_forecasts <- function(
       slow = as.vector(res$slow),
       fast = as.vector(res$fast),
       lr_level = as.vector(res$lr_levels),
-      truth = rep(Y, each = m)
+      truth = rep(Y, each = m),
+      truth_learned = rep(ifelse(revealed, Y_learn, NA_real_), each = m)
     )
     diagnostics[[i]] <- tibble(
       location = loc,
@@ -326,7 +381,7 @@ calibrate_hub_forecasts <- function(
       "location", "horizon", "reference_date", "target_end_date", "season",
       "season_round", "round_index", "level_index", "level",
       "value_base", "value_cal", "offset", "hidden", "slow", "fast", "lr_level",
-      "truth", "is_burn_in"
+      "truth", "truth_learned", "is_burn_in"
     )
 
   list(
@@ -420,61 +475,116 @@ hub_quantile_loss <- function(cal, drop_burn_in = TRUE, by = character(0)) {
 }
 
 
-#' Rolling calibration error against rolling quantile loss, the trade-off curve.
+#' Calibrate as prod does: re-run the tracker at every round on that round's
+#' vintage and keep only the forecast it plays at that round.
 #'
-#' Both quantities are rolling averages over the last `window` rounds of one
-#' series (or of a geo-pooled set of series):
-#'   calibration error = mean over levels of |rolling coverage at a - a|
-#'   quantile loss     = mean over levels and rounds of the pinball loss
-#' Plotting one against the other shows whether calibration is being bought at
-#' the cost of sharpness, which is the thing a tracker can quietly get wrong.
+#' Prod re-runs [calibrate_hub_forecasts()] from scratch each week on the
+#' latest data, so at round `t` every revealed outcome carries its value as of
+#' `t`. Passing a vintage table as `learn_truth` to [calibrate_hub_forecasts()]
+#' instead fixes each outcome at its value as of the round it was revealed at;
+#' this function is the reference that approximation is checked against. It
+#' costs one full run per round.
 #'
-#' @param cal [calibrate_hub_forecasts()] output.
-#' @param window number of rounds in the rolling window.
-#' @param by grouping columns; `character(0)` pools all locations, which is the
-#'   default because per-series rolling coverage over 20 rounds is mostly noise.
+#' @param forecasts,truth as in [calibrate_hub_forecasts()]; `truth` is used for
+#'   scoring only.
+#' @param vintages [nhsn_read_vintages()] output.
+#' @param ... passed to [calibrate_hub_forecasts()].
+#' @param workers number of forked processes (rounds are independent runs).
+#' @return list with `forecasts` (one round from each run) and `rounds` (from
+#'   the last run), which the metric functions accept.
 #' @export
-hub_rolling_tradeoff <- function(cal, window = 20L, by = character(0), drop_burn_in = TRUE) {
-  fc <- if (is.list(cal) && !is.data.frame(cal)) cal$forecasts else cal
-  # Rounds a location was not forecast at are all-NA in value_base/value_cal.
-  fc <- fc %>% filter(!is.na(.data$truth), !is.na(.data$value_base))
-  if (drop_burn_in) fc <- fc %>% filter(!.data$is_burn_in)
-  pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
-
-  # Per (round, level) within each group: coverage indicator and pinball loss,
-  # pooled over whatever `by` does not name (locations, by default).
-  per_round <- fc %>%
-    group_by(across(all_of(c(by, "horizon", "round_index", "reference_date", "level")))) %>%
-    summarize(
-      cov_base = mean(.data$truth <= .data$value_base),
-      cov_cal = mean(.data$truth <= .data$value_cal),
-      loss_base = mean(pinball(.data$truth, .data$value_base, .data$level)),
-      loss_cal = mean(pinball(.data$truth, .data$value_cal, .data$level)),
-      .groups = "drop"
+calibrate_hub_forecasts_exact <- function(forecasts, truth, vintages, ..., workers = 1L) {
+  rounds <- hub_label_seasons(unique(forecasts$reference_date))
+  # A run needs at least one live round, and burn-in rounds are not scored, so
+  # burn-in rounds are taken from the first live round's run.
+  burn <- rounds$season %in% (list(...)$burn_in_seasons %||% character(0))
+  live <- which(!burn)
+  run_at <- function(t) {
+    snapshot <- hub_vintage_snapshot(vintages, hub_round_asof(rounds$round_date[t]))
+    # Later rounds cannot affect what is played at t, so they are dropped to
+    # save time; the round axis up to t is unchanged.
+    cal <- suppressMessages(calibrate_hub_forecasts(
+      forecasts %>% filter(.data$reference_date <= rounds$round_date[t]),
+      truth,
+      learn_truth = snapshot, progress = FALSE, ...
+    ))
+    keep <- if (t == live[1L]) c(which(burn), t) else t
+    list(
+      forecasts = cal$forecasts %>% filter(.data$round_index %in% keep),
+      rounds = cal$rounds
     )
+  }
+  # Later rounds are the slowest runs, so they are started first.
+  order <- rev(seq_along(live))
+  runs <- parallel::mclapply(live[order], run_at, mc.cores = workers, mc.preschedule = FALSE)
+  failed <- purrr::map_lgl(runs, inherits, "try-error")
+  if (any(failed)) {
+    cli::cli_abort("Exact calibration failed at round{?s} {.val {live[order][failed]}}: {runs[[which(failed)[1]]]}")
+  }
+  runs <- runs[order(order)]
+  list(
+    forecasts = bind_rows(purrr::map(runs, "forecasts")),
+    rounds = runs[[length(runs)]]$rounds
+  )
+}
 
-  roll <- function(x) slider::slide_dbl(x, mean, .before = window - 1L, .complete = TRUE)
-  per_round %>%
-    group_by(across(all_of(c(by, "horizon", "level")))) %>%
-    arrange(.data$round_index, .by_group = TRUE) %>%
-    mutate(
-      roll_cov_base = roll(.data$cov_base),
-      roll_cov_cal = roll(.data$cov_cal),
-      roll_loss_base = roll(.data$loss_base),
-      roll_loss_cal = roll(.data$loss_cal)
-    ) %>%
+
+#' The as-of date of a hub round: the Wednesday submission before the Saturday
+#' reference date.
+#' @keywords internal
+hub_round_asof <- function(round_date) round_date - 3L
+
+
+#' Named lookup of `truth` by `"location target_end_date"`.
+#' @keywords internal
+hub_truth_lookup <- function(truth) {
+  stats::setNames(truth$truth, paste(truth$location, truth$target_end_date))
+}
+
+
+#' Values as of one date from a [nhsn_read_vintages()] table; dates before the
+#' first version use the first version.
+#' @keywords internal
+hub_vintage_snapshot <- function(vintages, as_of) {
+  as_of <- max(as_of, min(vintages$version))
+  vintages %>%
+    filter(.data$version <= as_of) %>%
+    group_by(.data$location, .data$target_end_date) %>%
+    slice_max(.data$version, n = 1L, with_ties = FALSE) %>%
     ungroup() %>%
-    filter(!is.na(.data$roll_cov_base)) %>%
-    # Now collapse the level axis: calibration error is the mean over levels of
-    # |rolling coverage - nominal|.
-    group_by(across(all_of(c(by, "horizon", "round_index", "reference_date")))) %>%
-    summarize(
-      cal_error_base = mean(abs(.data$roll_cov_base - .data$level)),
-      cal_error_cal = mean(abs(.data$roll_cov_cal - .data$level)),
-      qloss_base = mean(.data$roll_loss_base),
-      qloss_cal = mean(.data$roll_loss_cal),
-      .groups = "drop"
+    filter(!is.na(.data$truth)) %>%
+    select("location", "target_end_date", "truth")
+}
+
+
+#' Each round's outcome as of the round that reveals it, for one location.
+#'
+#' @param vintages one location's rows of a [nhsn_read_vintages()] table.
+#' @param delay from [qt_delay_from_dates()], before pruning.
+#' @return numeric of length `length(round_date)`; `NA` for rounds that are
+#'   never revealed or whose value was not yet published at the reveal round.
+#' @keywords internal
+hub_vintage_at_reveal <- function(vintages, target_date, round_date, delay, first_version) {
+  n <- length(round_date)
+  out <- rep(NA_real_, n)
+  if (is.null(vintages)) {
+    return(out)
+  }
+  reveal_at <- rep(NA_integer_, n)
+  for (t in seq_len(n)) reveal_at[delay[[t]]] <- t
+  i <- which(!is.na(reveal_at))
+  queries <- tibble(
+    i = i,
+    target_end_date = target_date[i],
+    as_of = pmax(hub_round_asof(round_date[reveal_at[i]]), first_version)
+  )
+  hits <- queries %>%
+    left_join(
+      vintages %>% select("target_end_date", "version", "truth"),
+      by = dplyr::join_by("target_end_date", closest("as_of" >= "version"))
     )
+  out[hits$i] <- hits$truth
+  out
 }
 
 

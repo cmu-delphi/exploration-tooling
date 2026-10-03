@@ -1,0 +1,70 @@
+# Month view: WIS, coverage, median error
+
+<!-- Expects `mv` from cal_month_view(). Optional: `mv_plot_cfgs` (configs to plot), `mv_cols` (colours), `mv_colour_by` (a column of mv$month mapped to colour), `mv_linetype` (a column of mv$month mapped to linetype), `mv_show_table` (FALSE when the table already sits next to the headline). -->
+
+The same scores split by calendar month of the reference date, one figure
+per season, **states only (US excluded)**. Rows are the three metrics,
+columns the horizons:
+
+- **WIS reduction %**: `100 × (WIS_base − WIS_cal) / WIS_base` within the
+  month, so positive = calibrated WIS lower than base. Grey bars are the
+  month's share of the season's base WIS, so a large swing in a month with a
+  small bar costs little overall.
+- **L1 coverage bias reduction %**: `100 × (bias_base − bias_cal) /
+  bias_base`, so positive = calibrated coverage bias lower than base. The
+  bias is computed within the month: the mean over the 23 levels of |share
+  of outcomes at or below the quantile − level|. A season-pooled bias lets
+  under-prediction on the ramp cancel over-prediction after the peak; the
+  monthly one does not. The absolute monthly values are in the table below
+  the plots: when the base's bias is already small, a small absolute change
+  shows as a large percentage.
+- **Median AE reduction %**: the same as WIS reduction % for the absolute
+  error of the 0.5 quantile, so positive = calibrated median closer to the
+  outcome.
+
+A month holds one to five rounds of about 52 states, and outcomes in the
+same round move together, so a single month's coverage bias is noisy and
+sits above zero even for a calibrated forecaster. That's why the plot shows
+it relative to the base.
+
+```{r mview-plots, results="asis", fig.height=7.5}
+mv_plot_month <- mv$month
+if (!is.null(get0("mv_plot_cfgs"))) {
+  mv_plot_month <- mv_plot_month %>% filter(config %in% mv_plot_cfgs) %>% mutate(config = droplevels(config))
+}
+for (s in sort(unique(mv_plot_month$season))) {
+  cat("\n\n", cal_h(2), " ", s, "\n\n", sep = "")
+  print(cal_month_plot(mv_plot_month, s, colours = get0("mv_cols"), linetype = get0("mv_linetype"), colour_by = get0("mv_colour_by") %||% "config"))
+}
+```
+
+```{r mview-table, results="asis"}
+if (!isFALSE(get0("mv_show_table"))) {
+  cat("\n\n", cal_h(2), " Coverage bias: season-pooled and month-average\n\n", sep = "")
+  print(knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION))
+}
+```
+
+```{r mview-abs, results="asis"}
+# Absolute within-month coverage bias behind the plot's reduction %, at h0 and h2.
+mv_abs <- mv_plot_month %>% filter(horizon %in% c(0, 2))
+# Configs on different base forecasters (E07) have different bases, so each cell then carries its own base.
+mv_one_base <- mv_abs %>% distinct(season, month, horizon, cov_base) %>% count(season, month, horizon) %>% pull(n) %>% max() == 1L
+mv_abs_tbl <- mv_abs %>%
+  transmute(season, month, h = paste0("h", horizon), config,
+            v = if (mv_one_base) sprintf("%.3f", cov_cal) else sprintf("%.3f (base %.3f)", cov_cal, cov_base)) %>%
+  tidyr::pivot_wider(names_from = config, values_from = v)
+if (mv_one_base) {
+  mv_abs_base <- mv_abs %>% distinct(season, month, h = paste0("h", horizon), base = sprintf("%.3f", cov_base))
+  mv_abs_tbl <- mv_abs_tbl %>% left_join(mv_abs_base, by = c("season", "month", "h"))
+}
+cat("\n\n", cal_h(2), " Monthly L1 coverage bias, absolute (h0 and h2)\n\n", sep = "")
+print(knitr::kable(
+  mv_abs_tbl %>% arrange(h, season, month),
+  caption = if (mv_one_base) {
+    "Within-month L1 coverage bias (lower is better), calibrated configs and the uncalibrated base."
+  } else {
+    "Within-month L1 coverage bias (lower is better) of each config, with its own uncalibrated base in parentheses."
+  }
+))
+```
