@@ -46,7 +46,7 @@ Six notebooks, each with one section per experiment. The ids match
 
 | | base | question | what the numbers show |
 |---|---|---|---|
-| `r link("E18", "finalists", "e18")` | replay | Stepping from REF-op to sqrt constant 0.018 one setting at a time | REF-op vs sqrt 0.018: no strong result (0.3–0.6 points pooled, order flips by season). The warm start helps in 2024-25 only. Constant 0.018 is 1.7–2.3 points above cold adaptive at h2–h3. No step moves month-avg coverage by more than 0.008. |
+| `r link("E18", "finalists", "e18")` | replay | Stepping from REF-op to sqrt constant 0.018 one setting at a time | REF-op vs sqrt 0.018: no strong result (0.3–0.6 points pooled, order flips by season). The warm start helps in 2024-25 only. Constant 0.018 is 1.7–2.3 points above cold adaptive at h2–h3. No step moves month-avg coverage by more than 0.008. sqrt 0.018 warm (branch) is the best pooled (+3.4/+1.6/+1.6/+2.5) but 0.011–0.018 worse than the base on month-avg coverage at h2–h3. REF-op beats sqrt 0.018 cold in 41–45 of 52 states in 2024-25 and 14–18 in 2025-26. |
 | `r link("E07b", "finalists", "e07b")` | both | Do the operating-point candidates rank the same way on both bases? | The candidate order flips between seasons on both. |
 | `r link("E15", "finalists", "e15")` | replay, cold | Where does the WIS change come from? | Offsets are 2–5% of the 90% interval width. REF-op's gain (+2.0 at h0, about 0 by h3) comes from raising the lower quantiles; a median shift alone matches it within 0.6 points. |
 
@@ -54,7 +54,7 @@ Six notebooks, each with one section per experiment. The ids match
 
 | | base | question | what the numbers show |
 |---|---|---|---|
-| `r link("E10", "flu_covid", "e10")` | both diseases, both bases | How do the finalists do on flu and covid? (Part 2: covid ensemble at h−1–h3 with REF-paper.) | Part 2: h−1 improves about 10–11% in both seasons. REF-paper loses 10–19% at h1–h3 in 2025-26. REF-op at h1–h3 is −4 to +3, sign depending on the season. Part 1: not yet read. |
+| `r link("E10", "flu_covid", "e10")` | both diseases, both bases | How do the finalists do on flu and covid? (Part 2: covid ensemble at h−1–h3 with REF-paper.) | Part 2: h−1 improves about 10–11% in both seasons. REF-paper loses 10–19% at h1–h3 in 2025-26. REF-op at h1–h3 is −4 to +3, sign depending on the season. Part 1: covid, nothing beats REF-op cold at h0–h3 and sqrt 0.018 loses 3–4 points at h1–h3; flu, sqrt 0.018 warm leads on both bases by 1–2 points at h1–h3, all in 2024-25 on the ensemble. sqrt 0.018 has the largest covid h−1 gain (+14.9). |
 | `r link("E07", "flu_covid", "e07")` | both | Does calibration act the same on the ensemble and the clean replay? | Same direction on both; REF-op gains 0.7–1.1 points more on the ensemble. |
 
 ## `r nb_link("Learning rate", "learning_rate")`
