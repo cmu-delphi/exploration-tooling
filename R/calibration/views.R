@@ -485,62 +485,10 @@ cal_month_plot <- function(month_tbl, season, colours = NULL, linetype = NULL, c
 
 CAL_NOTEBOOK_DIR <- "reports/writeups/calibration_experiments"
 
-#' Markdown heading marks for a heading written by `cat()` inside a section:
-#' level `n`, pushed down by the section's shift.
+#' Markdown heading marks for a heading written by `cat()`: level `n`, pushed
+#' down when knit inside `cal_month_section()`.
 #' @export
 cal_h <- function(n) strrep("#", n + getOption("cal.hshift", 0L))
-
-#' Knit a section notebook (`_eNN_*.Rmd`) into a combined notebook.
-#'
-#' The section's title becomes a heading with id `#eNN`, its own headings
-#' (and those of the children it includes) move down `shift` levels, and it
-#' runs in its own environment with `params` from its YAML, overridden by
-#' `params`. Call from a chunk with `results = "asis"`. See
-#' notes/calibration-ledger.md, "Notebooks".
-#' @export
-cal_section <- function(file, params = list(), shift = 1L, envir = parent.frame()) {
-  path <- here::here(CAL_NOTEBOOK_DIR, file)
-  yaml <- rmarkdown::yaml_front_matter(path)
-  id <- sub("^_", "", tools::file_path_sans_ext(file))
-  lines <- cal_shift_headings(cal_expand_children(readLines(path)), shift)
-  env <- new.env(parent = envir)
-  env$params <- utils::modifyList(yaml$params %||% list(), params)
-  old <- options(cal.hshift = shift, knitr.duplicate.label = "allow")
-  old_chunk <- knitr::opts_chunk$get()
-  on.exit({
-    options(old)
-    knitr::opts_chunk$restore(old_chunk)
-  })
-  out <- knitr::knit_child(
-    text = lines, envir = env, quiet = TRUE,
-    options = list(fig.path = paste0(knitr::opts_chunk$get("fig.path"), id, "-"))
-  )
-  cat("\n\n", strrep("#", shift), " ", yaml$title, " {#", sub("_.*", "", id), "}\n\n", out, "\n\n", sep = "")
-}
-
-# Drop the YAML header and the root.dir setting (the combined notebook sets
-# it), and inline `child=` chunks, recursively, so their headings can be
-# shifted with the rest.
-cal_expand_children <- function(lines) {
-  if (length(lines) > 0 && lines[[1]] == "---") {
-    end <- which(lines == "---")[2]
-    lines <- lines[-seq_len(end)]
-  }
-  lines <- lines[!grepl("^knitr::opts_knit\\$set\\(root.dir", lines)]
-  out <- character(0)
-  i <- 1L
-  while (i <= length(lines)) {
-    m <- regmatches(lines[[i]], regexec("^```\\{r child=(.*)\\}\\s*$", lines[[i]]))[[1]]
-    if (length(m) == 2) {
-      out <- c(out, cal_expand_children(readLines(eval(parse(text = m[[2]])))))
-      i <- i + 2L
-    } else {
-      out <- c(out, lines[[i]])
-      i <- i + 1L
-    }
-  }
-  out
-}
 
 # Add `shift` levels to every markdown heading outside code chunks.
 cal_shift_headings <- function(lines, shift) {
@@ -608,7 +556,7 @@ cal_season_of <- function(d) {
 }
 
 #' Knit the month view (`_month_view.Rmd`) in the calling environment under
-#' its own heading, `level` levels below the section's top. For notebooks that
+#' its own heading, `level` levels below the notebook's top. For notebooks that
 #' show more than one month view; uses `mv` and the optional `mv_*` settings
 #' from `envir`. Call from a chunk with `results = "asis"`.
 #' @export
