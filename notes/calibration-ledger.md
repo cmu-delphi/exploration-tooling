@@ -226,7 +226,7 @@ reviewed.
   `cache/calibration/ws_replay_scores_*.csv`.
 - `scripts/calibration/calibration_ili_backfill.R`: replays
   `windowed_seasonal` over the ILI+ state history (2010–2024) into
-  hub-schema parquets in `cache/calibration/`, for the ILI+ burn-in thread.
+  hub-schema parquets in `cache/calibration/`, for an ILI+ burn-in (thread closed 2026-10-02, unused).
 - The pre-experiment notebooks (`reports/writeups/calibration/`) and the old
   E07 scripts were deleted on 2026-10-02; they are in VCS history. Their
   only analyses not in the current suite are the staleness lagged
