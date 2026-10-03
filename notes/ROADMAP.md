@@ -8,10 +8,11 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
 ## Forecast evaluation
 
 1. **Use the evaluation project as the calibration testbed.** The
-   operating-point work (hub harness, `notes/calibration-ledger.md`) is down
-   to two finalists, REF-op and sqrt constant 0.018, which no single-run
-   comparison separates (E18). Done so far: a1–a4, b1–b4 (E12, E13). Next:
-   c, then item 1f. Calibrating needs full quantile forecasts over many rounds,
+   operating-point work (hub harness, `notes/calibration-ledger.md`,
+   "Finalists") is down to a disease-specific choice: covid stays on REF-op
+   cold (sqrt 0.018 loses 3–4 points at h1–h3), flu is REF-op warm or sqrt
+   0.018 warm (ahead by 1–2 points, all in 2024-25). Done so far: a1–a4,
+   b1–b4 (E12, E13). Next: c, then item 1f. Calibrating needs full quantile forecasts over many rounds,
    not just scores. The evaluation project (`flu_hosp_evaluation` /
    `covid_hosp_evaluation`) replays the current prod components and
    ensemble weekly since 2024-11-20, which is what calibration would see in
