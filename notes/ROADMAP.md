@@ -9,10 +9,11 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
 
 1. **Use the evaluation project as the calibration testbed.** The
    operating-point work (hub harness, `notes/calibration-ledger.md`,
-   "Finalists") is down to a disease-specific choice: covid stays on REF-op
-   cold (sqrt 0.018 loses 3–4 points at h1–h3), flu is REF-op warm or sqrt
-   0.018 warm (ahead by 1–2 points, all in 2024-25). Done so far: a1–a4,
-   b1–b4 (E12, E13). Next: c, then item 1f. Calibrating needs full quantile forecasts over many rounds,
+   "Finalists") is down to a disease-specific choice. Provisional
+   (2026-10-02, to confirm after the notebook review, not implemented):
+   covid REF-op cold (sqrt 0.018 loses 3–4 points at h1–h3), flu REF-op warm
+   or sqrt 0.018 warm (ahead by 1–2 points, all in 2024-25). Done so far:
+   a1–a4, b1–b4 (E12, E13). Next: item 1f, in its own thread. Calibrating needs full quantile forecasts over many rounds,
    not just scores. The evaluation project (`flu_hosp_evaluation` /
    `covid_hosp_evaluation`) replays the current prod components and
    ensemble weekly since 2024-11-20, which is what calibration would see in
@@ -114,13 +115,6 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
         2020-08 (issues before 2023-07 collapse to one version), stitched
         before NHSN's first version; a 2024-12-04 control matches the
         store exactly. Results: E13 in `notes/calibration-ledger.md`.
-   c. *The ensemble with fixed weights.* The geo-exclusions CSVs carry the
-      ensemble weights as well as exclusions, so "no hand edits" for
-      `ensemble_mix` means one fixed weight block for every date. Decide
-      which block (the default one at the top of the file, or the current
-      one), check the resolved weights on one date, then replay. Needed
-      now: the finalists are chosen on the single component, and what we
-      submit is the ensemble.
    f. *Calibration in the evaluation pipeline.* The calibration targets in
       `pipelines/{flu,covid}_hosp_prod.R` run in evaluation mode too, but
       there they calibrate the submitted `CMU-TimeSeries` history from the
@@ -135,6 +129,15 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
 
    **Later (not needed to evaluate calibration):**
 
+   c. *The ensemble with fixed weights.* The geo-exclusions CSVs carry the
+      ensemble weights as well as exclusions, so "no hand edits" for
+      `ensemble_mix` means one fixed weight block for every date. Decide
+      which block (the default one at the top of the file, or the current
+      one), check the resolved weights on one date, then replay. Not needed
+      to choose the operating point: E10 already scores the finalists on
+      the submitted ensemble, and E07 shows calibration acts the same way
+      on the ensemble and the single-component replay. Revisit if 1f needs
+      a clean ensemble history.
    d. *Hand edits on vs off as its own question.* A separate evaluation
       project (like the `_regr` ones) replaying with the edits, to measure
       whether the weekly substitutions and weight changes help. The only
