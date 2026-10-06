@@ -8,9 +8,10 @@ and projected to be monotone. Dropped hub rounds are in
 "Running things".
 
 Every number below was re-read from the rendered notebook (or, for E12/E13,
-the score CSV) on 2026-10-02. Older notes, pre-fix tables and the
-summary-of-reviews layers were removed; they are in VCS history at change
-`uxposooz` (`notes/CALIBRATION.md`, `notes/calibration-review.md`,
+the score CSV) on 2026-10-02; E19's come from its CSVs on 2026-10-06.
+Older notes, pre-fix tables and the summary-of-reviews layers were
+removed; they are in VCS history at change `uxposooz`
+(`notes/CALIBRATION.md`, `notes/calibration-review.md`,
 `notes/calibration-summary-2026-10-01.md`).
 
 ## How to read the numbers
@@ -35,7 +36,7 @@ summary-of-reviews layers were removed; they are in VCS history at change
   `off_after` dates were picked on the same two seasons they are scored on.
 - **Two base forecasters.** E00, E03–E05 and E09–E11 calibrate the
   submitted ensemble (h−1…h3, all locations in headline tables). E01, E02,
-  E07 and E12–E18 calibrate the clean `windowed_seasonal` replay (h0–h3,
+  E07 and E12–E19 calibrate the clean `windowed_seasonal` replay (h0–h3,
   states only, except E12).
 
 ## What the numbers support
@@ -72,6 +73,18 @@ Small, or dependent on season (0–3 points):
   a 3–5 point loss at h1–h3 in 2025-26 and costs 0.4–1.3 in 2024-25 (E04,
   E05). On the clean replay it adds 0.5–1.3 at h1–h3 in both seasons and
   costs 0.4 at h0 (E18).
+- **Why the leak and a small constant rate land close (E19).** Both limit
+  the adaptive step's late-season overreaction, in different ways. The
+  adaptive eta comes from base residuals, so the leak does not change it;
+  relative to interval width it rises from about 0.015 in January to 0.10
+  at h3 in May 2025, 3–4× the constant rate's. Without the leak the offset
+  keeps growing into March–April, when the base over-predicts (h3 median
+  offset 0.24 of width in April 2025 vs REF-op 0.11). REF-op tracks the
+  ramp as fast (0.045 in February) and the leak empties it by May. Constant
+  0.018 barely corrects the ramp (0.013 in February) and has little to
+  overshoot with. In April–May 2026 the base under-predicted and the leak
+  dropped an offset that was still right (0.01 vs 0.14 at h3), which fits
+  sqrt 0.018 leading in 2025-26. The link to WIS is inferred, not scored.
 - **Switching off from 1 Mar or 15 Feb.** On the clean replay: +2 to +4 at
   h1–h3 over sqrt adaptive 0.03 (E02), +0.4 to +0.7 over sqrt constant 0.018
   (E17). The date was chosen after seeing the March losses. About half of
@@ -167,6 +180,7 @@ gating), exact learning truth, spoiled submissions excluded.
 | E16 | `e16_sqrt_constant_lr` | replay, cold | constant rate on sqrt scale | sqrt 0.018 about +1 over rate constants at h0; at h1–h3 within 0.2 pooled, up to +0.7 in 2025-26. vs REF-op cold: behind in 2024-25 h0–h1, ahead elsewhere; month-avg coverage tie | 0.018 picked in-sample |
 | E17 | `e17_late_decay` | replay, cold | shrink or stop offsets from 1 Mar | `late_decay` fixes March but costs about 0.5 at h0, otherwise ±0.2. Off 1 Mar +0.4 to +0.7 at h1–h3 for sqrt 0.018 (mostly 2025-26), ≤ 0 for rate 0.018 | `late_decay` shrinks the stored offset, so it carries into the next season |
 | E18 | `e18_ref_op_bridge` | replay | which piece of REF-op matters | REF-op vs sqrt 0.018 within 0.6 pooled; REF-op ahead in 2024-25 by 1.3–1.5, behind in 2025-26 by 0.8–1.3. Warm start +0.9 to +2.0 in 2024-25, −0.2 to −0.7 in 2025-26. No step moves month-avg coverage beyond 0.008. Branch sqrt 0.018 warm: +3.4/+1.6/+1.6/+2.5 pooled, best of all, but month-avg coverage 0.011–0.018 worse than base at h2–h3 | steps 0 and 4 are the same cached runs as E13; steps 4 and 5 identical (scale invariance) |
+| E19 | none (`calibration_tracker_internals.R`) | replay, cold, final truth | why do the leak and constant 0.018 score alike? | REF-op cold and no-leak eta identical; adaptive eta / width peaks Apr–May (h3 0.10) vs constant ≤ 0.03. h3 median offset / width, Feb/Mar/Apr/May 2025: REF-op 0.045/0.078/0.114/0.009, no leak 0.048/0.109/0.237/0.199, constant 0.013/0.026/0.057/0.074; Apr/May 2026: 0.093/0.013, 0.165/0.149, 0.101/0.143. Share of truths above the base median at h3: Mar 0.27–0.43, Apr–May 2026 0.62–0.71 | final truth, not exact; h1–h3; median-level offset only; no WIS by month in the script |
 
 E06 (ILI+ burn-in) and E08 (old covid) were run on code or data later found
 broken and were not rebuilt.
@@ -224,6 +238,8 @@ reviewed.
 - `R/calibration/views.R`: reference configs, cached runs, standard views.
 - `scripts/calibration/calibration_ws_replay.R`: E12/E13. Scores in
   `cache/calibration/ws_replay_scores_*.csv`.
+- `scripts/calibration/calibration_tracker_internals.R`: E19. Per-round
+  eta and offsets in `cache/calibration/tracker_internals/`.
 - `scripts/calibration/calibration_ili_backfill.R`: replays
   `windowed_seasonal` over the ILI+ state history (2010–2024) into
   hub-schema parquets in `cache/calibration/`, for an ILI+ burn-in (thread closed 2026-10-02, unused).
