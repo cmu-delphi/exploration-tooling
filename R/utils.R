@@ -67,7 +67,7 @@ retry_fn <- function(max_attempts = 10, wait_seconds = 1, fn, ...) {
       },
       error = function(e) {
         if (attempt == max_attempts) {
-          stop("Maximum retry attempts reached. Last error: ", e$message)
+          cli::cli_abort("Maximum retry attempts reached.", parent = e)
         }
         message(sprintf("Attempt %d failed. Retrying in %d second(s)...", attempt, wait_seconds))
         Sys.sleep(wait_seconds)
