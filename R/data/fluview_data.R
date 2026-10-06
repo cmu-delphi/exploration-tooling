@@ -88,7 +88,7 @@ read_fluview_positivity_csv <- function(before) {
         region_type == "HHS Regions" ~ str_remove(region, "^Region "),
         region_type == "States" ~ unname(state_abb[region])
       ),
-      time_value = MMWRweek2Date(as.integer(epiyear), as.integer(epiweek), 1L),
+      time_value = MMWRweek::MMWRweek2Date(as.integer(epiyear), as.integer(epiweek), 1L),
       version = time_value,
       value = suppressWarnings(as.numeric(value))
     ) %>%
@@ -215,7 +215,7 @@ generate_flusurv_adjusted <- function(day_of_week = 1) {
     flusurv_all %>%
     mutate(
       epiyear = epiyear(time_value),
-      epiweek = MMWRweek(time_value)$MMWRweek
+      epiweek = MMWRweek::MMWRweek(time_value)$MMWRweek
     ) %>%
     left_join(
       (.) %>%
@@ -223,7 +223,7 @@ generate_flusurv_adjusted <- function(day_of_week = 1) {
         mutate(season = convert_epiweek_to_season(epiyear, epiweek)) %>%
         mutate(
           season_week = convert_epiweek_to_season_week(epiyear, epiweek),
-          time_value = MMWRweek2Date(epiyear, epiweek, day_of_week)
+          time_value = MMWRweek::MMWRweek2Date(epiyear, epiweek, day_of_week)
         )
     ) %>%
     as_epi_archive(compactify = TRUE)
