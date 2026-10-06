@@ -211,7 +211,12 @@ create_joined_targets <- function() {
           family_scores <- joined_scores %>%
             filter(forecaster %in% forecaster_ids, target_end_date >= forecast_date) %>%
             mutate(season_slug = season_of_date(forecast_date))
-          for (slug in sort(unique(family_forecasts$season_slug))) {
+          # Skip seasons where the family itself has no forecasts (e.g. its data
+          # source starts after the season).
+          family_slugs <- family_forecasts %>%
+            filter(forecaster %in% params_subset$id) %>%
+            pull(season_slug)
+          for (slug in sort(unique(family_slugs))) {
             rmarkdown::render(
               "pipelines/templates/comparison-notebook.Rmd",
               params = list(
