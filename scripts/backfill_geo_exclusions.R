@@ -27,6 +27,10 @@ keep_current <- as.Date(list(
   "pipelines/covid_geo_exclusions.csv" = c(
     "2024-11-20", "2025-02-19", "2025-07-30", "2025-08-06", "2025-08-20",
     "2025-09-03", "2025-12-31", "2026-08-26"
+  ),
+  "pipelines/covid_nssp_geo_exclusions.csv" = c(
+    "2025-06-25", "2025-07-23", "2025-07-30", "2025-08-06", "2025-08-13",
+    "2025-08-20", "2026-08-26"
   )
 )[[filename]])
 
@@ -36,18 +40,25 @@ git <- function(...) {
   out
 }
 
-# One row per commit that touched the file, with the path of the file at that commit.
+# One row per commit that touched the file, with the path of the file at that
+# commit. `--follow` also follows copies, so the history stops at the commit
+# that added or copied the file.
 file_commits <- function(filename) {
-  log_lines <- git("log", "--follow", "--name-only", "--format=@@%H %aI", "--", filename)
+  log_lines <- git("log", "--follow", "--name-status", "--format=@@%H %aI", "--", filename)
   log_lines <- log_lines[log_lines != ""]
   header_idx <- which(startsWith(log_lines, "@@"))
   headers <- strsplit(sub("^@@", "", log_lines[header_idx]), " ")
-  tibble(
+  status_fields <- strsplit(log_lines[header_idx + 1], "\t")
+  commits <- tibble(
     sha = vapply(headers, `[[`, character(1), 1),
     commit_date = as.Date(substr(vapply(headers, `[[`, character(1), 2), 1, 10)),
-    path = log_lines[header_idx + 1]
-  ) %>%
-    slice(rev(row_number()))
+    status = substr(vapply(status_fields, `[[`, character(1), 1), 1, 1),
+    path = vapply(status_fields, \(fields) fields[[length(fields)]], character(1))
+  )
+  created_idx <- which(commits$status %in% c("A", "C"))[[1]]
+  commits %>%
+    slice(rev(seq_len(created_idx))) %>%
+    select(-status)
 }
 
 read_weights <- function(text) {
