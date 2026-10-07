@@ -52,21 +52,27 @@ cal_run <- function(forecasts, truth, ref = "paper", ..., learn = c("final", "vi
 
 #' [cal_run()], cached on disk under a hash of its inputs.
 #'
-#' Keeps only the forecast columns the views use. Clear `cache_dir` after
+#' Keeps only the forecast columns the views use, plus the tracker's per-row
+#' state (`offset`, `fast`, `slow`, `lr_level`) when `internals` is set; a
+#' cached run without them is re-run and overwritten. Clear `cache_dir` after
 #' changing code in `R/calibration/`: the key covers the arguments and data,
 #' not the code.
 #' @export
 cal_run_cached <- function(forecasts, truth, ref = "paper", ..., learn = "exact", vintages = NULL, workers = 1L,
-                           cache_dir = here::here("cache/calibration/experiments/runs")) {
+                           internals = FALSE, cache_dir = here::here("cache/calibration/experiments/runs")) {
   key <- rlang::hash(list(forecasts, truth, ref, list(...), learn, if (learn != "final") vintages))
   path <- file.path(cache_dir, paste0(key, ".rds"))
+  internal_cols <- c("offset", "fast", "slow", "lr_level")
   if (file.exists(path)) {
-    return(readRDS(path))
+    cal <- readRDS(path)
+    if (!internals || all(internal_cols %in% names(cal$forecasts))) {
+      return(cal)
+    }
   }
   cal <- cal_run(forecasts, truth, ref, ..., learn = learn, vintages = vintages, workers = workers)
   cal <- list(forecasts = cal$forecasts %>% select(
     "location", "horizon", "reference_date", "target_end_date", "season", "level",
-    "value_base", "value_cal", "truth", "is_burn_in"
+    "value_base", "value_cal", "truth", "is_burn_in", any_of(if (internals) internal_cols else character(0))
   ))
   dir.create(cache_dir, showWarnings = FALSE, recursive = TRUE)
   saveRDS(cal, path)

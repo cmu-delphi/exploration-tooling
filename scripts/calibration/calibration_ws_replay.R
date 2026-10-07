@@ -94,10 +94,11 @@ ws_prod_specs <- function(rate_scales) {
 }
 
 #' Run one spec (`list(cfg, burn_in)`) through the cache, with the burn-in
-#' rounds prepended when the spec asks for them.
-ws_run_spec <- function(spec, wi, fc_burn_in, workers) {
+#' rounds prepended when the spec asks for them. `internals` keeps the
+#' tracker's per-row state (E19).
+ws_run_spec <- function(spec, wi, fc_burn_in, workers, internals = FALSE) {
   fc <- if (spec$burn_in) fc_burn_in else wi$fc
-  do.call(cal_run_cached, c(list(fc, wi$truth), spec$cfg, list(learn = "exact", vintages = wi$vintages, workers = workers)))
+  do.call(cal_run_cached, c(list(fc, wi$truth), spec$cfg, list(learn = "exact", vintages = wi$vintages, workers = workers, internals = internals)))
 }
 
 #' WIS reduction % and L1 coverage bias per config, season (live seasons and
