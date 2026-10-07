@@ -91,10 +91,16 @@ run_logged_r <- function(log_path, expr) {
 }
 
 #' Run an external command, appending its combined stdout/stderr to
-#' `log_path`. Returns the command's exit status.
+#' `log_path`. Returns the command's exit status, or 127 if the command cannot
+#' run (for example, it is not on PATH).
 run_logged <- function(command, args, log_path) {
   dir.create(dirname(log_path), recursive = TRUE, showWarnings = FALSE)
-  output <- system2(command, args, stdout = TRUE, stderr = TRUE)
+  output <- tryCatch(
+    system2(command, args, stdout = TRUE, stderr = TRUE),
+    error = function(cond) {
+      structure(sprintf("%s: %s (PATH=%s)", command, conditionMessage(cond), Sys.getenv("PATH")), status = 127L)
+    }
+  )
   cat(output, sep = "\n", file = log_path, append = TRUE)
   status <- attr(output, "status")
   if (is.null(status)) 0L else status
@@ -116,8 +122,9 @@ publish_steps <- list(
     name = "sync reports to S3",
     run = function() {
       log_path <- here::here("cache", "logs", "update_site_log.txt")
-      run_logged("aws", c("s3", "sync", "rendered_reports/", "s3://forecasting-team-data/2024/reports/"), log_path)
-      run_logged("aws", c("s3", "sync", "s3://forecasting-team-data/2024/reports/", "rendered_reports/"), log_path)
+      upload <- run_logged("aws", c("s3", "sync", "rendered_reports/", "s3://forecasting-team-data/2024/reports/"), log_path)
+      download <- run_logged("aws", c("s3", "sync", "s3://forecasting-team-data/2024/reports/", "rendered_reports/"), log_path)
+      max(upload, download)
     }
   ),
   list(

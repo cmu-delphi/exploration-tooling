@@ -4,5 +4,4 @@ Description=Run flu/covid prod forecasts once NHSN/NSSP data is fresh
 [Service]
 Type=oneshot
 WorkingDirectory=%h/prod/exploration-tooling
-Environment=PATH=/home/forecaster/.nvm/versions/node/v23.3.0/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/bin/bash -c 'source ~/.profile && Rscript scripts/run_prod_if_fresh.R'
+ExecStart=/bin/bash -c 'export PATH="$$HOME/.nvm/versions/node/v23.3.0/bin:$$PATH" && source ~/.profile && Rscript scripts/run_prod_if_fresh.R'
