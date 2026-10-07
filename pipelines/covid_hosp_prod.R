@@ -614,8 +614,10 @@ calibration_targets <- list(
           by = c("geo_value" = "state_id")
         ) %>%
         select("target_end_date", "location", truth = "true_value")
+      # REF-op cold: see "Operating point" in notes/calibration-ledger.md.
       calibrate_hub_forecasts(
         historical_fc, truth,
+        settle_days = 14L,
         burn_in_seasons = character(0),
         transform = "sqrt",
         lr_args = list(mult = 0.03, floor = 1e-3),
