@@ -41,9 +41,9 @@ when it was last rendered. The ids match `notes/calibration-ledger.md`.
 
 | | base | question |
 |---|---|---|
+| `r link("E10", "e10_covid")` | both diseases, both bases | How do the finalists do on flu and covid, and do they rank the same way on the ensemble and the replay? (Part 2: covid ensemble at h−1–h3.) |
 | `r link("E18", "e18_ref_op_bridge")` | replay | Which setting accounts for the gap between REF-op and sqrt constant 0.018, stepping from one to the other a setting at a time? |
-| `r link("E07b", "e07b_candidates")` | both | Do the operating-point candidates rank the same way on both bases? |
-| `r link("E15", "e15_wis_sources")` | replay, cold | Where does the WIS change come from? |
+| `r link("E15", "e15_wis_sources")` | replay, both diseases | Where does each finalist's WIS change come from? |
 
 ## Prod configs
 
@@ -51,11 +51,10 @@ when it was last rendered. The ids match `notes/calibration-ledger.md`.
 of the largest gains and losses, for flu REF-op warm and covid REF-op cold
 on the submitted ensemble.
 
-## Flu and covid
+## Bases
 
 | | base | question |
 |---|---|---|
-| `r link("E10", "e10_covid")` | both diseases, both bases | How do the finalists do on flu and covid? (Part 2: covid ensemble at h−1–h3 with REF-paper.) |
 | `r link("E07", "e07_across_eras")` | both | Does calibration act the same on the ensemble and the clean replay? |
 
 ## Learning rate
@@ -64,8 +63,7 @@ on the submitted ensemble.
 |---|---|---|
 | `r link("E01", "e01_eta_settings")` | replay, cold | How do the adaptive learning-rate settings (multiplier, window, carry or reset) change WIS and coverage? |
 | `r link("E09", "e09_lr_delay")` | ensemble | With a constant learning rate on the rate scale, how do WIS and coverage change with the rate and with extra learning delay? |
-| `r link("E14", "e14_lr_by_season")` | replay, cold | How do WIS and coverage change with a constant learning rate, season by season? |
-| `r link("E16", "e16_sqrt_constant_lr")` | replay, cold | How does a constant learning rate on the square-root scale compare with the rate scale? |
+| `r link("E16", "e16_sqrt_constant_lr")` | replay, cold | How do WIS and coverage change with a constant learning rate, season by season, on the square-root and rate scales? |
 
 ## Tracker structure
 
@@ -90,7 +88,8 @@ on the submitted ensemble.
 | `r link("E00", "e00_vintage_backtest")` | ensemble | Should the tracker learn from finalized data or from data as published? |
 
 E12 and E13 (the clean replay without and with a 2023-24 burn-in) have no
-notebook; they are `scripts/calibration/calibration_ws_replay.R`.
+notebook; they are `scripts/calibration/calibration_ws_replay.R`. E14 is
+part of E16, and E07b's ranking is part of E10.
 
 # How to read the results
 
