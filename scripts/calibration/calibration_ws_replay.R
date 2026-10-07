@@ -54,6 +54,110 @@ ws_configs <- function(rate_scales, burn_in = BURN_IN) {
   ))
 }
 
+#' The structure grid (E19, E20): two learning-rate anchors, each cold or
+#' warm-started, each with or without the leak. Anchors: `adaptive 0.03` is
+#' E01's sqrt adaptive rate (E18 step 4); `constant 0.018` is E16's constant
+#' rate on sqrt per 100k. Each spec is `list(cfg, burn_in)` as the E18 steps
+#' are, named `"<anchor> | <start> | <leak>"`. The no-leak cold and warm specs
+#' are written as E16 and E18 wrote them, so their cached runs are reused.
+ws_grid_configs <- function(rate_scales) {
+  anchors <- list(
+    `adaptive 0.03` = list(
+      ref = "paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3),
+      burn_in_seasons = character(0), slow_init = NULL, lr_window = 20, season_policy = "carry"
+    ),
+    `constant 0.018` = utils::modifyList(ws_configs(rate_scales, burn_in = FALSE)[["E11 constant 0.1"]], list(lr = 0.018, transform = "sqrt"))
+  )
+  starts <- list(cold = NULL, warm = list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile"))
+  leaks <- list(`no leak` = NULL, `leak 0.1` = list(fast_decay = 0.1))
+  specs <- list()
+  for (a in names(anchors)) {
+    for (s in names(starts)) {
+      for (l in names(leaks)) {
+        cfg <- anchors[[a]]
+        if (!is.null(starts[[s]])) cfg <- utils::modifyList(cfg, starts[[s]])
+        if (!is.null(leaks[[l]])) cfg <- utils::modifyList(cfg, leaks[[l]])
+        specs[[paste(a, s, l, sep = " | ")]] <- list(cfg = cfg, burn_in = s == "warm")
+      }
+    }
+  }
+  specs
+}
+
+#' Prod's two configs as grid-style specs: REF-op warm (flu prod) and REF-op
+#' cold (covid prod).
+ws_prod_specs <- function(rate_scales) {
+  list(
+    `REF-op warm` = list(cfg = ws_configs(rate_scales, burn_in = TRUE)[["REF-op warm"]], burn_in = TRUE),
+    `REF-op cold` = list(cfg = ws_configs(rate_scales, burn_in = FALSE)[["REF-op cold"]], burn_in = FALSE)
+  )
+}
+
+#' Run one spec (`list(cfg, burn_in)`) through the cache, with the burn-in
+#' rounds prepended when the spec asks for them.
+ws_run_spec <- function(spec, wi, fc_burn_in, workers) {
+  fc <- if (spec$burn_in) fc_burn_in else wi$fc
+  do.call(cal_run_cached, c(list(fc, wi$truth), spec$cfg, list(learn = "exact", vintages = wi$vintages, workers = workers)))
+}
+
+#' WIS reduction % and L1 coverage bias per config, season (live seasons and
+#' "both") and horizon, states only, as a long tibble with `config`, `season`,
+#' `h` ("h0".."h3"), `wis_pct`, `cal_err_base`, `cal_err_cal`.
+ws_wis_by_season <- function(cals) {
+  purrr::imap(cals, function(cal, nm) {
+    fc <- cal$forecasts %>% mutate(season = season_of(reference_date)) %>% filter(location != "US")
+    ws_scores(fc) %>%
+      select(season, horizon, which, wis, cal_err) %>%
+      tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err)) %>%
+      mutate(config = nm, wis_pct = 100 * (wis_base - wis_cal) / wis_base)
+  }) %>%
+    bind_rows() %>%
+    mutate(
+      config = factor(config, levels = names(cals)),
+      season = factor(season, levels = c(LIVE, "both")),
+      h = factor(paste0("h", horizon), levels = paste0("h", 0:3))
+    )
+}
+
+#' Per-round tracker internals from an exact run, states only, h0–h3: the
+#' learning rate and the median-level offsets relative to the base 90% interval
+#' width (in the config's working units, so configs with and without `scales`
+#' compare), plus the share of truths above the base median. Under exact
+#' learning each round's rows come from that round's own re-run, so the state
+#' is the one that played. Medians over states per (horizon, reference_date).
+ws_internals <- function(cal, cfg, rate_scales) {
+  fc <- cal$forecasts %>%
+    filter(location != "US", !is_burn_in, horizon >= 0, !is.na(value_base))
+  s <- if (is.null(cfg$scales)) fc %>% distinct(location) %>% mutate(scale = 1) else rate_scales %>% select(location, scale)
+  tf <- if (identical(cfg$transform, "sqrt")) sqrt else identity
+  fc %>%
+    left_join(s, by = "location") %>%
+    group_by(location, horizon, reference_date) %>%
+    summarize(
+      width_count = value_base[level == 0.95] - value_base[level == 0.05],
+      width_work = tf(value_base[level == 0.95] / scale[1]) - tf(value_base[level == 0.05] / scale[1]),
+      eta = mean(lr_level),
+      offset_mid = offset[level == 0.5],
+      offset_abs = mean(abs(offset)),
+      truth = truth[1],
+      base_mid = value_base[level == 0.5],
+      .groups = "drop"
+    ) %>%
+    mutate(
+      eta_rel = ifelse(eta == 0, NA_real_, eta) / width_work,
+      offset_rel = offset_mid / width_count,
+      offset_abs_rel = offset_abs / width_count
+    ) %>%
+    group_by(horizon, reference_date) %>%
+    summarize(
+      eta_rel = median(eta_rel, na.rm = TRUE),
+      offset_rel = median(offset_rel, na.rm = TRUE),
+      offset_abs_rel = median(offset_abs_rel, na.rm = TRUE),
+      above_base_median = mean(truth > base_mid, na.rm = TRUE),
+      .groups = "drop"
+    )
+}
+
 # 2023-24 burn-in rounds, backfilled on the HHS-stitched archive (cached).
 ws_burn_in_forecasts <- function(disease) {
   sched <- ch_schedule(through = BURN_IN_DATES[["through"]], from = as.Date(BURN_IN_DATES[["from"]]))
