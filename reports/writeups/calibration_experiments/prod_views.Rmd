@@ -1,0 +1,105 @@
+---
+title: "Prod configs: forecasts by state"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  flu_hub_dir: "../FluSight-forecast-hub"
+  covid_hub_dir: "../covid19-forecast-hub"
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 10, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+What the calibrated forecasts look like next to the submitted ones, for the
+configs running in prod:
+
+- **Flu**: REF-op warm (warm start from the 2023-24 burn-in season).
+- **Covid**: REF-op cold (no burn-in season; covid submissions start
+  2024-11-23).
+
+Both calibrate the submitted `CMU-TimeSeries` ensemble, learn from NHSN data
+as published (re-run every round, as prod does; E00), and are drawn against
+finalized truth. Spoiled submissions are dropped. Seasons run August–July;
+only the two live seasons (2024-25 and 2025-26) are shown.
+
+```{r load}
+suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+LIVE <- c("2024-2025", "2025-2026")
+# Same inputs and arguments as the E05/E11 (flu) and E10 (covid) runs, so the cached runs are reused.
+load_prod <- function(disease, hub_dir, run_args) {
+  archive <- get_nhsn_data_archive(disease)
+  truth <- nhsn_read_truth(disease, archive)
+  vintages <- nhsn_read_vintages(disease, archive)
+  hub_target <- c(flu = HUB_FLU_TARGET, covid = HUB_COVID_TARGET)[[disease]]
+  hub_fc <- suppressMessages(hub_read_forecasts(hub_dir = here::here(hub_dir), target = hub_target))
+  population <- get_population_data() %>%
+    distinct(state_code, .keep_all = TRUE) %>%
+    filter(state_code %in% unique(hub_fc$location)) %>%
+    select(location = state_code, population)
+  cal <- do.call(cal_run_cached, c(list(hub_fc, truth, "op"), run_args, list(vintages = vintages, workers = params$workers)))
+  cal$forecasts <- cal$forecasts %>% mutate(season = cal_season_of(reference_date))
+  list(cal = cal, truth = truth, vintages = vintages, population = population)
+}
+PROD <- list(
+  flu = load_prod("flu", params$flu_hub_dir, list()),
+  covid = load_prod("covid", params$covid_hub_dir, list(burn_in_seasons = character(0), slow_init = NULL))
+)
+abbrev <- setNames(toupper(get_population_data()$state_id), get_population_data()$state_code)
+```
+
+```{r sections, results="asis", fig.height=4}
+for (d in names(PROD)) {
+  p <- PROD[[d]]
+  cat("\n\n# ", d, "\n\n", sep = "")
+
+  cat("\n\n## Fixed states {.tabset}\n\n")
+  cat(
+    "The same states (US, CA, GA, MN, VT) for both diseases. Every other",
+    "round's fan at h−1–h3: blue ribbon and line are the base 80% band and",
+    "median, orange lines the calibrated 10/50/90% quantiles, grey the",
+    "finalized truth. The black line is the last two reported weeks of NHSN",
+    "data as published when that round was forecast; its dot is normally the",
+    "round's h−1 week, where its fan starts. Black sits below grey where first",
+    "reports were later revised up. A black line with no fan in front of it is",
+    "a round with no submission.\n\n"
+  )
+  for (nm in names(CAL_STATES)) {
+    cat("\n\n### ", nm, "\n\n", sep = "")
+    for (s in LIVE) print(cal_state_panel(p$cal, CAL_STATES[[nm]], s, p$truth, p$vintages, title = paste(d, nm, s)))
+  }
+
+  cat("\n\n## Gallery {.tabset}\n\n")
+  cat(
+    "For each season phase and location size (population above or below the",
+    "median), the forecast with the largest WIS gain and the one with the",
+    "largest loss, each from a different location. Forecasts are ranked by",
+    "their WIS reduction as a share of their own location-season's base WIS,",
+    "so small states late in the season, where the base is tiny, do not crowd",
+    "the gallery. Ribbons are the 50% and 90% bands, the dashed line is the",
+    "forecast date.\n\n"
+  )
+  cal_live <- p$cal
+  cal_live$forecasts <- cal_live$forecasts %>% filter(season %in% LIVE)
+  picks <- cal_gallery_pick(cal_live, p$population)
+  for (i in seq_len(nrow(picks))) {
+    pk <- picks[i, ]
+    if (i == 1L || pk$phase != picks$phase[i - 1L]) cat("\n\n### ", as.character(pk$phase), "\n\n", sep = "")
+    sub <- sprintf(
+      "%s (%s), %s, %s: WIS reduction %+.1f%% (%+.1f%% of its season's base WIS; positive = calibrated WIS lower)",
+      abbrev[[pk$location]], pk$size, pk$reference_date, pk$kind, pk$wis_pct, pk$share
+    )
+    print(cal_gallery_panel(p$cal, pk$location, pk$reference_date, p$truth, p$vintages, subtitle = sub))
+  }
+}
+```
