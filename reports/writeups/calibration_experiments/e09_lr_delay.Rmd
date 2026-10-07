@@ -1,0 +1,282 @@
+---
+title: "E09: constant learning rate × revision delay (rate scale)"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+params:
+  hub_dir: "../FluSight-forecast-hub"
+  workers: 14
+  wis_max: 20
+  smoke: false
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(
+  fig.align = "center", fig.width = 11, fig.height = 11,
+  message = FALSE, warning = FALSE,
+  cache.path = here::here("cache/calibration/experiments/knitr_e09/")
+)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+Question: for the plain quantile tracker on the rate scale (admissions per
+100k) with a constant learning rate, how do WIS and coverage change with
+the learning rate and with the extra delay before an outcome is learned?
+
+**Setup.**
+
+| | |
+|---|---|
+| disease, base | flu, the submitted hub ensemble (`CMU-TimeSeries`) |
+| seasons | 2023-24 burn-in (its outcomes take no steps; offsets start at zero); 2024-25 and 2025-26 scored |
+| locations, horizons | learns on all 53 hub locations; scores are states only (US excluded), h−1 to h3 |
+| scoring truth | finalized NHSN |
+| tracker | REF-paper (one offset per level, carried across seasons) on the rate scale |
+| learning rate | constant, 0.001 to about 3.2 per 100k per step (15 values, a quarter-decade apart) |
+| extra delay | 0, 1, 2 or 3 weeks (`settle_days` 7/14/21/28) |
+| learning truth | two designs, below |
+
+**The tracker.** For each location, horizon and quantile level, the offset
+moves by `lr × (1{y > q} − (1 − τ))` when an outcome is learned. With a
+constant `lr` the step does not depend on the forecast errors. The
+reference configs use the adaptive rate instead: 0.03 × the 90th
+percentile of the location's absolute base errors over its last 20
+observed rounds.
+
+**Extra delay.** The first NHSN report of the week ending Saturday `X` is
+published Wednesday `X + 4`, in time for the round with reference date
+`X + 7`. Learning from it at that round is zero extra delay; each further
+week of waiting is one week of extra delay. The reference configs use one
+week.
+
+**Learning truth designs.**
+
+- **re-run** (prod): each week the tracker is re-run from the first round
+  on that week's vintage, so an outcome is learned from its latest value.
+- **stateful**: the tracker runs once and learns each outcome from the
+  value published at the round it becomes available.
+
+**Reference configs** (marked on the plots):
+
+- **REF-paper**: the paper's tracker on counts, adaptive learning rate.
+- **REF-op**: prod's config: REF-paper on the sqrt scale, plus a 10%
+  per-round leak, a slow offset and a warm start from the burn-in season.
+
+"WIS reduction %" is `100 × (WIS_base − WIS_cal) / WIS_base`, so positive =
+calibrated WIS lower than base. "L1 coverage bias" (lower is better) is the
+mean over the 23 quantile levels of |empirical coverage − level|. "Knee"
+below is the constant rate 0.056.
+
+```{r libs, cache=FALSE}
+suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+LRS <- 10^seq(-3, 0.5, by = 0.25)
+SETTLE <- c(7L, 14L, 21L, 28L)
+# smoke = TRUE checks the notebook end to end in a few minutes: a small grid,
+# and the re-run design computed with the fast stateful mode.
+if (params$smoke) {
+  LRS <- LRS[c(1, 9, 13)]
+  SETTLE <- c(7L, 14L)
+}
+LEARN_LABELS <- c(exact = "re-run (prod)", vintage = "stateful")
+```
+
+```{r load, cache=TRUE}
+archive <- get_nhsn_data_archive("flu")
+truth <- nhsn_read_truth("flu", archive)
+vintages <- nhsn_read_vintages("flu", archive)
+hub_fc <- hub_read_forecasts(hub_dir = here::here(params$hub_dir))
+rate_scales <- get_population_data() %>%
+  distinct(state_code, .keep_all = TRUE) %>%
+  filter(state_code %in% unique(hub_fc$location)) %>%
+  transmute(location = state_code, from = as.Date("2000-01-01"), scale = population / 1e5)
+stopifnot(setequal(rate_scales$location, unique(hub_fc$location)))
+```
+
+```{r runs, cache=FALSE}
+# Each run is cached to its own file, so a change to the grid only computes the
+# new runs. Clear cache/calibration/experiments/e09/ after changing R/calibration/.
+run_dir <- here::here("cache/calibration/experiments", if (params$smoke) "e09_smoke" else "e09")
+dir.create(run_dir, showWarnings = FALSE, recursive = TRUE)
+cached_run <- function(key, ..., learn) {
+  path <- file.path(run_dir, paste0(key, ".rds"))
+  if (file.exists(path)) return(readRDS(path))
+  if (params$smoke) learn <- "vintage"
+  cal <- cal_run(hub_fc, truth, ..., learn = learn, vintages = vintages, workers = params$workers)
+  # Only what the metrics need, to keep the cache small.
+  cal <- list(forecasts = cal$forecasts %>%
+    select(location, horizon, reference_date, season, level, value_base, value_cal, truth, is_burn_in))
+  saveRDS(cal, path)
+  cal
+}
+rate <- list(transform = "identity", scales = rate_scales)
+
+sweep_grid <- tidyr::expand_grid(learn = c("exact", "vintage"), settle_days = SETTLE, lr = LRS)
+sweep <- purrr::pmap(sweep_grid, function(learn, settle_days, lr) {
+  key <- sprintf("sweep_%s_s%d_lr%.4f", learn, settle_days, lr)
+  do.call(cached_run, c(list(key, "paper", settle_days = settle_days, lr = lr, learn = learn), rate))
+})
+
+# Reference points per (learn, settle_days).
+ref_grid <- tidyr::expand_grid(learn = c("exact", "vintage"), settle_days = SETTLE)
+refs <- purrr::pmap(ref_grid, function(learn, settle_days) {
+  s <- sprintf("%s_s%d", learn, settle_days)
+  list(
+    `REF-paper (count, adaptive)` = cached_run(paste0("paper_", s), "paper", settle_days = settle_days, learn = learn),
+    `REF-op` = cached_run(paste0("op_", s), "op", settle_days = settle_days, learn = learn)
+  )
+})
+```
+
+```{r metrics, cache=FALSE}
+pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
+# Per (location, horizon) and pooled over states: WIS reduction % and L1
+# coverage bias, for the calibrated forecast and the base.
+metrics <- function(cal) {
+  fc <- cal$forecasts %>% filter(!is_burn_in, !is.na(truth), !is.na(value_base), location != "US")
+  one <- function(df, by) {
+    df %>%
+      group_by(across(all_of(c(by, "horizon", "level")))) %>%
+      summarize(
+        cov_base = mean(truth <= value_base), cov_cal = mean(truth <= value_cal),
+        wis_base = sum(pinball(truth, value_base, level)), wis_cal = sum(pinball(truth, value_cal, level)),
+        .groups = "drop"
+      ) %>%
+      group_by(across(all_of(c(by, "horizon")))) %>%
+      summarize(
+        bias_base = mean(abs(cov_base - level)), bias_cal = mean(abs(cov_cal - level)),
+        wis_pct = 100 * (1 - sum(wis_cal) / sum(wis_base)),
+        .groups = "drop"
+      )
+  }
+  bind_rows(one(fc, "location"), one(fc, character(0)) %>% mutate(location = "pooled"))
+}
+sweep_m <- purrr::map2(sweep, seq_along(sweep), function(cal, i) metrics(cal) %>% bind_cols(sweep_grid[i, ])) %>%
+  bind_rows()
+ref_m <- purrr::map2(refs, seq_along(refs), function(r, i) {
+  purrr::imap(r, function(cal, nm) metrics(cal) %>% mutate(ref = nm)) %>% bind_rows() %>% bind_cols(ref_grid[i, ])
+}) %>%
+  bind_rows() %>%
+  filter(location == "pooled")
+label_panels <- function(df) {
+  df %>% mutate(
+    extra = factor(sprintf("+%d wk extra delay", (settle_days - 7L) %/% 7L)),
+    horizon = factor(paste0("h", horizon), levels = paste0("h", -1:3))
+  )
+}
+sweep_m <- label_panels(sweep_m)
+ref_m <- label_panels(ref_m)
+```
+
+# Coverage bias vs WIS, per location
+
+Each thin grey line is one location traced across learning rates; the bold
+line is the pooled result, labelled with the learning rate at each decade. Learning rates whose pooled WIS is more than
+`r params$wis_max`% worse than the base in a panel are dropped from that panel; the axes are
+clipped to the bulk of the per-location points, so a few location lines run
+off the edge. The open circle is the base forecast (no calibration) and the
+triangles are the reference configs at the same delay.
+
+Per-location coverage comes from about 50 forecasts per horizon, so a
+location's L1 bias has a noise floor of a few points even for a perfectly
+calibrated forecaster. The grey lines show the spread across locations.
+
+```{r curve-fn}
+ACCENT <- "#1f5fa8"
+curve_plot <- function(which_learn) {
+  d <- sweep_m %>% filter(learn == which_learn)
+  keep <- d %>%
+    filter(location == "pooled", wis_pct >= -params$wis_max) %>%
+    select(horizon, extra, lr)
+  d <- d %>% semi_join(keep, by = c("horizon", "extra", "lr")) %>% arrange(lr)
+  pooled <- d %>% filter(location == "pooled")
+  locs <- d %>% filter(location != "pooled")
+  base <- pooled %>% distinct(horizon, extra, bias_base)
+  marks <- ref_m %>% filter(learn == which_learn, ref %in% c("REF-paper (count, adaptive)", "REF-op"))
+  lab <- pooled %>% filter(abs(log10(lr) - round(log10(lr))) < 1e-9)
+  xlim <- c(0, max(stats::quantile(locs$bias_cal, 0.97), base$bias_base) * 1.05)
+  ylim <- range(stats::quantile(locs$wis_pct, c(0.03, 0.97)), pooled$wis_pct, marks$wis_pct, 0)
+  ggplot() +
+    geom_hline(yintercept = 0, colour = "grey60", linewidth = 0.3) +
+    geom_path(data = locs, aes(bias_cal, wis_pct, group = location), colour = "grey45", alpha = 0.25, linewidth = 0.3) +
+    geom_path(data = pooled, aes(bias_cal, wis_pct), colour = ACCENT, linewidth = 1.1) +
+    geom_point(data = pooled, aes(bias_cal, wis_pct), colour = ACCENT, size = 1.2) +
+    geom_text(data = lab, aes(bias_cal, wis_pct, label = format(lr, scientific = FALSE, drop0trailing = TRUE)),
+      colour = "grey15", size = 2.6, vjust = -0.9) +
+    geom_point(data = base, aes(bias_base, 0), shape = 21, fill = "white", colour = "black", size = 2.2) +
+    geom_point(data = marks, aes(bias_cal, wis_pct, shape = ref), colour = "black", size = 2) +
+    scale_shape_manual(values = c(`REF-paper (count, adaptive)` = 2, `REF-op` = 17), name = NULL) +
+    facet_grid(horizon ~ extra) +
+    coord_cartesian(xlim = xlim, ylim = ylim) +
+    labs(x = "L1 coverage bias (lower is better)", y = "WIS reduction % (positive = calibrated WIS lower than base)") +
+    theme(legend.position = "bottom")
+}
+```
+
+## Re-run design (prod)
+
+```{r curve-exact}
+curve_plot("exact")
+```
+
+## Stateful design
+
+```{r curve-vintage}
+curve_plot("vintage")
+```
+
+# Pooled curves by delay
+
+The bold lines from above, one colour per extra delay (darker is longer), so
+the delays can be compared directly. Solid is the re-run design, dashed the
+stateful one.
+
+```{r pooled-overlay, fig.height=6}
+DELAY_COLS <- setNames(RColorBrewer::brewer.pal(9, "Blues")[c(4, 6, 8, 9)], levels(sweep_m$extra))
+pooled_all <- sweep_m %>%
+  filter(location == "pooled") %>%
+  semi_join(sweep_m %>% filter(location == "pooled", wis_pct >= -params$wis_max) %>% select(horizon, extra, lr, learn),
+    by = c("horizon", "extra", "lr", "learn")) %>%
+  arrange(lr) %>%
+  mutate(design = factor(LEARN_LABELS[learn], levels = LEARN_LABELS))
+ggplot(pooled_all, aes(bias_cal, wis_pct, colour = extra, linetype = design, group = interaction(extra, design))) +
+  geom_hline(yintercept = 0, colour = "grey60", linewidth = 0.3) +
+  geom_path(linewidth = 0.8) +
+  geom_point(data = pooled_all %>% distinct(horizon, bias_base), aes(bias_base, 0), inherit.aes = FALSE,
+    shape = 21, fill = "white", colour = "black", size = 2) +
+  scale_colour_manual(values = DELAY_COLS, name = NULL) +
+  scale_linetype_manual(values = c(`re-run (prod)` = "solid", stateful = "22"), name = NULL) +
+  facet_wrap(~horizon, nrow = 1) +
+  labs(x = "L1 coverage bias (lower is better)", y = "WIS reduction % (positive = calibrated WIS lower than base)") +
+  theme(legend.position = "bottom", legend.box = "vertical")
+```
+
+```{r month-view-cfgs}
+sweep_run <- function(learn, settle_days, lr) {
+  sweep[[which(sweep_grid$learn == learn & sweep_grid$settle_days == settle_days & abs(log10(sweep_grid$lr / lr)) < 1e-6)]]
+}
+ref_run <- function(learn, settle_days, nm) refs[[which(ref_grid$learn == learn & ref_grid$settle_days == settle_days)]][[nm]]
+mv_cals <- list(
+  `REF-paper, re-run +1 wk` = ref_run("exact", 14L, "REF-paper (count, adaptive)"),
+  `REF-op, re-run +1 wk` = ref_run("exact", 14L, "REF-op"),
+  `0.032, re-run +1 wk` = sweep_run("exact", 14L, 10^-1.5),
+  `knee 0.056, re-run +0 wk` = sweep_run("exact", 7L, 10^-1.25),
+  `knee 0.056, re-run +1 wk` = sweep_run("exact", 14L, 10^-1.25),
+  `knee 0.056, re-run +2 wk` = sweep_run("exact", 21L, 10^-1.25),
+  `0.1, re-run +1 wk` = sweep_run("exact", 14L, 10^-1),
+  `0.18, re-run +1 wk` = sweep_run("exact", 14L, 10^-0.75),
+  `knee 0.056, stateful +0 wk` = sweep_run("vintage", 7L, 10^-1.25),
+  `knee 0.056, stateful +1 wk` = sweep_run("vintage", 14L, 10^-1.25)
+)
+mv <- cal_month_view(mv_cals, seasons = c("2024-2025", "2025-2026"), horizons = NULL)
+# The plots show REF-op and the constant rates around the knee at one week of delay; the tables also cover the other delays and designs.
+mv_plot_cfgs <- c("REF-op, re-run +1 wk", "0.032, re-run +1 wk", "knee 0.056, re-run +1 wk", "0.1, re-run +1 wk", "0.18, re-run +1 wk")
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
+```

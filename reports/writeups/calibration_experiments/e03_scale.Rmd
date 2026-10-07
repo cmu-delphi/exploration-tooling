@@ -1,0 +1,65 @@
+---
+title: "E03: working scale (count, sqrt, rate)"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  hub_dir: "../FluSight-forecast-hub"
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 10, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_load.Rmd")}
+```
+
+Question: does the scale the tracker works on (count, sqrt, rate) change
+WIS and coverage?
+
+Setup:
+
+- Disease: flu. Base forecaster: the submitted hub ensemble (spoiled
+  submissions dropped).
+- Reference: REF-paper. One offset per level; adaptive learning rate of 0.03
+  × the 90th percentile of the last 20 rounds' absolute errors; offsets
+  carried across seasons; one week of extra delay (`settle_days = 14`).
+- Burn-in: 2023-24, used only to warm up the learning rate. Offsets start at
+  zero at the first 2024-25 round (cold start).
+- Learning truth: exact (re-run at every round on the data published by then,
+  as prod does; E00). Scores against finalized truth.
+- Seasons scored: 2024-25 and 2025-26. Horizons h−1 to h3. States only
+  (US excluded).
+
+| config | change from REF-paper |
+|---|---|
+| `count` | none (additive offsets in admissions) |
+| `sqrt` | offsets on the square root of admissions, mapped back; learning-rate floor 0.001 |
+| `rate` | offsets in admissions per 100k; learning-rate floor 0.001 |
+
+The learning-rate floor (0.1 by default) is in the tracker's working units,
+so the sqrt and rate configs use 0.001.
+
+```{r runs}
+cals <- list(
+  count = run("paper"),
+  sqrt = run("paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3)),
+  rate = run("paper", scales = rate_scales, lr_args = list(mult = 0.03, floor = 1e-3))
+)
+```
+
+```{r month-view-data}
+mv <- cal_month_view(cals, seasons = LIVE, horizons = NULL)
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
+```

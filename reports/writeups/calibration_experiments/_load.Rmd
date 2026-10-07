@@ -1,0 +1,19 @@
+```{r load-data, cache=FALSE}
+# Shared by the experiment notebooks: hub submissions, finalized truth for
+# scoring, NHSN vintages for learning, and population for rates. The disease
+# comes from `params$disease` (default flu).
+suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+disease <- params$disease %||% "flu"
+archive <- get_nhsn_data_archive(disease)
+truth <- nhsn_read_truth(disease, archive)
+vintages <- nhsn_read_vintages(disease, archive)
+hub_target <- c(flu = HUB_FLU_TARGET, covid = HUB_COVID_TARGET)[[disease]]
+hub_fc <- suppressMessages(hub_read_forecasts(hub_dir = here::here(params$hub_dir), target = hub_target))
+population <- get_population_data() %>%
+  distinct(state_code, .keep_all = TRUE) %>%
+  filter(state_code %in% unique(hub_fc$location)) %>%
+  select(location = state_code, population)
+rate_scales <- population %>% transmute(location, from = as.Date("2000-01-01"), scale = population / 1e5)
+LIVE <- c("2024-2025", "2025-2026")
+run <- function(...) cal_run_cached(hub_fc, truth, ..., vintages = vintages, workers = params$workers)
+```

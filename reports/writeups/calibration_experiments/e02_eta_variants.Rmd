@@ -1,0 +1,99 @@
+---
+title: "E02: switch-off date and learning-rate variants"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 11, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+Question: how do three variants of the adaptive tracker, each changed alone
+from a reference, change WIS and coverage?
+
+- **Switch off in spring** (`off_after`): from a calendar date until July,
+  play the base forecast and stop learning; the offsets carry unchanged into
+  the next season. Dates: 1 April, 1 March, 15 February.
+- **Per-level learning rate** (`lr_args$per_level`): each of the 23 quantile
+  levels gets its own eta, instead of one eta pooled over levels.
+- **Seasonal window** (`lr_seasonal`): eta is sized from the last 10 rounds
+  plus the rounds within 5 weeks of the same point in earlier seasons. Run
+  with carry and with reset at the summer. This also shortens the window
+  from 20 to 10, so it changes two things at once.
+
+This re-asks the original E02 (a pre-fix, count-scale comparison on the
+submitted ensemble with finalized truth, since deleted) on the current setup.
+
+Setup:
+
+- Disease: flu. Base forecaster: the clean `windowed_seasonal` replay (all 53
+  locations, the 55 hub rounds). Horizons h0–h3.
+- Learning truth: exact (re-run at every round on the data published by then;
+  E00), one week of extra delay.
+- Reference: E01's center point, the sqrt single-term tracker with the
+  adaptive rate (mult 0.03, floor 0.001, window 20, carry), cold start (no
+  burn-in).
+- The seasonal window needs an earlier season to look back on, so it runs
+  with the 2023-24 burn-in (the HHS-stitched backfill from E13), which only
+  warms eta. The reference is re-run with the same burn-in
+  (`reference + burn-in`) for comparison.
+- Scores: states only (US excluded).
+
+WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
+WIS lower than base. L1 coverage bias: lower is better.
+
+```{r load}
+source(here::here("scripts/calibration/calibration_ws_replay.R"))
+wi <- ws_inputs("flu")
+fc_burn_in <- bind_rows(ws_burn_in_forecasts("flu"), wi$fc)
+# Same builder as E01, so the reference run is shared.
+sqrt_cfg <- function(mult = 0.03, window = 20, policy = "carry") {
+  list(
+    ref = "paper", transform = "sqrt", lr_args = list(mult = mult, floor = 1e-3),
+    burn_in_seasons = character(0), slow_init = NULL, lr_window = window, season_policy = policy
+  )
+}
+ref <- sqrt_cfg()
+burn <- list(burn_in_seasons = "2023-2024")
+seasonal <- list(lr_window = 10, lr_seasonal = list(half_width_weeks = 5))
+CFGS <- list(
+  reference = list(cfg = ref),
+  `off after 1 Apr` = list(cfg = c(ref, list(off_after = "04-01"))),
+  `off after 1 Mar` = list(cfg = c(ref, list(off_after = "03-01"))),
+  `off after 15 Feb` = list(cfg = c(ref, list(off_after = "02-15"))),
+  `per-level eta` = list(cfg = utils::modifyList(ref, list(lr_args = list(mult = 0.03, floor = 1e-3, per_level = TRUE)))),
+  `reference + burn-in` = list(cfg = utils::modifyList(ref, burn), burn_in = TRUE),
+  `seasonal window, carry` = list(cfg = utils::modifyList(ref, c(burn, seasonal)), burn_in = TRUE),
+  `seasonal window, reset` = list(cfg = utils::modifyList(ref, c(burn, seasonal, list(season_policy = "reset"))), burn_in = TRUE)
+)
+run <- function(spec) {
+  fc <- if (isTRUE(spec$burn_in)) fc_burn_in else wi$fc
+  do.call(cal_run_cached, c(list(fc, wi$truth), spec$cfg, list(learn = "exact", vintages = wi$vintages, workers = params$workers)))
+}
+cals <- purrr::map(CFGS, run)
+```
+
+```{r month-view-cfgs}
+CFG_COLS <- setNames(c("black", "#56B4E9", "#0072B2", "#003F6B", "#CC79A7", "grey55", "#E69F00", "#D55E00"), names(CFGS))
+mv <- cal_month_view(cals, seasons = LIVE)
+# The plots leave out the burn-in configs except the seasonal window with reset; the tables keep every config.
+mv_plot_cfgs <- c("reference", "off after 1 Mar", "off after 15 Feb", "per-level eta", "seasonal window, reset")
+mv_cols <- CFG_COLS
+```
+
+The seasonal-window configs compare with "reference + burn-in", the others
+with "reference".
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
+```

@@ -1,0 +1,117 @@
+---
+title: "E00: learning from vintages instead of finalized truth"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+params:
+  hub_dir: "../FluSight-forecast-hub"
+  workers: 12
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+# cache = TRUE chunks are keyed on chunk code, not on functions in R/. After
+# changing calibration code, clear cache/calibration/experiments/knitr_e00/.
+knitr::opts_chunk$set(
+  fig.align = "center", fig.width = 10, fig.height = 5,
+  message = FALSE, warning = FALSE,
+  cache.path = here::here("cache/calibration/experiments/knitr_e00/")
+)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+Question: how do results change when the tracker learns from NHSN data as
+published, rather than from finalized values?
+
+Setup:
+
+- Disease: flu. Base forecaster: the submitted hub ensemble (spoiled
+  submissions dropped).
+- References: REF-paper (count scale, one offset per level) and REF-op (sqrt
+  scale, leak 0.1, slow term with a burn-in-quantile warm start); see the index.
+- Burn-in: 2023-24, used only to warm up the learning rate. Offsets start at
+  zero at the first 2024-25 round (REF-op's slow term starts from its warm
+  start).
+- Seasons scored: 2024-25 and 2025-26, burn-in rounds excluded. Horizons
+  h−1 to h3. States only (US excluded).
+- Scores are always against finalized truth.
+
+Configs are `ref/settle_days/learn`:
+
+| axis | values |
+|---|---|
+| `ref` | `paper`, `op` |
+| `settle_days` | `14` (one week of extra delay, the reference) or `7` (none) |
+| `learn` | `final`: latest vintage. `exact`: re-run from the first round at every round on the data published by then, as prod does. `vintage`: one run where each outcome keeps the value it had at the round that revealed it (a stateful tracker that never revisits a step) |
+
+A round with reference date `d` sees data published by `d - 3`. Vintages
+start 2024-11-19; earlier as-of dates use that first vintage. "WIS reduction
+%" is 100 × (base WIS − calibrated WIS) / base WIS, so positive = calibrated
+WIS lower than base. "L1 coverage bias" is lower-is-better.
+
+```{r libs, cache=FALSE}
+suppressPackageStartupMessages(source(here::here("R/load_all.R")))
+```
+
+```{r load, cache=TRUE}
+archive <- get_nhsn_data_archive("flu")
+truth <- nhsn_read_truth("flu", archive)
+vintages <- nhsn_read_vintages("flu", archive)
+hub_fc <- hub_read_forecasts(hub_dir = here::here(params$hub_dir))
+```
+
+```{r runs, cache=TRUE, dependson="load"}
+grid <- tidyr::expand_grid(ref = c("paper", "op"), settle_days = c(7L, 14L), learn = c("final", "vintage", "exact"))
+cals <- purrr::pmap(grid, function(ref, settle_days, learn) {
+  cal_run(hub_fc, truth, ref, settle_days = settle_days, learn = learn, vintages = vintages, workers = params$workers)
+})
+names(cals) <- with(grid, paste(ref, settle_days, learn, sep = "/"))
+```
+
+```{r headline}
+LIVE <- c("2024-2025", "2025-2026")
+first_version <- min(vintages$version)
+n_clamped <- sum(unique(hub_fc$reference_date) - 3L < first_version &
+  hub_label_seasons(unique(hub_fc$reference_date))$season %in% LIVE)
+mv <- cal_month_view(cals, seasons = LIVE, horizons = NULL)
+# Runs drawn in the month view; the tables keep all twelve.
+mv_plot_cfgs <- c("op/14/final", "op/14/exact", "op/7/vintage", "op/7/exact", "paper/14/final", "paper/14/exact")
+```
+
+`r n_clamped` live rounds are issued before the first vintage (2024-11-19); only
+burn-in rounds use that vintage in place of their own. Configs are
+`ref/settle_days/learn`.
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
+```
+
+# Vintage vs exact: difference in the calibrated median
+
+Median over locations of |vintage − exact| in the calibrated median,
+relative to the base median, by month, one panel per `ref/settle_days`:
+
+```{r drift, fig.height=6}
+drift <- purrr::map(unique(paste(grid$ref, grid$settle_days, sep = "/")), function(cfg) {
+  pick <- function(mode) {
+    cals[[paste(cfg, mode, sep = "/")]]$forecasts %>%
+      filter(level == 0.5, !is_burn_in, !is.na(value_base)) %>%
+      select(location, horizon, reference_date, value_base, value_cal)
+  }
+  inner_join(pick("vintage"), pick("exact"), by = c("location", "horizon", "reference_date", "value_base"), suffix = c("_cheap", "_exact")) %>%
+    mutate(config = cfg)
+}) %>%
+  bind_rows() %>%
+  mutate(month = lubridate::floor_date(reference_date, "month")) %>%
+  group_by(config, horizon, month) %>%
+  summarize(rel = median(abs(value_cal_cheap - value_cal_exact) / pmax(value_base, 1)), .groups = "drop")
+ggplot(drift, aes(month, 100 * rel, colour = factor(horizon), group = horizon)) +
+  geom_line() +
+  geom_point(size = 0.8) +
+  facet_wrap(~config) +
+  labs(x = NULL, y = "median |vintage − exact| / base median (%)", colour = "horizon")
+```

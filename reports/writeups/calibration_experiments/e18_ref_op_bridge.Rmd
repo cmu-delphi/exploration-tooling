@@ -1,0 +1,207 @@
+---
+title: "E18: a bridge from REF-op to sqrt constant 0.018"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 11, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+Question: REF-op (prod's tracker) and sqrt constant 0.018 (E16) differ in
+several settings. How do WIS and coverage change as one setting at a time is
+changed from one to the other?
+
+Setup:
+
+- Disease: flu. Base forecaster: the clean `windowed_seasonal` replay (53
+  locations, the 55 hub rounds). Horizons h0–h3.
+- Learning truth: exact (re-run at every round on the data published by then;
+  E00), one week of extra delay.
+- Steps 0–3 run with the 2023-24 season present (the HHS-stitched backfill
+  from E13); steps 4–6 and the references are cold.
+- Scores over the two live seasons, each on its own rounds; states only (US
+  excluded).
+
+Each row changes one setting from the row above:
+
+| step | change | config after the change |
+|---|---|---|
+| 0 REF-op | — | sqrt, adaptive mult 0.03 floor 1e-3, window 20, carry; slow term (mult 0.003) warm-started from the 2023-24 burn-in; leak 0.1 on the fast term |
+| 1 no warm start | `slow_init = NULL` | the slow term starts at zero |
+| 2 no slow term | `lr_slow = NULL` | single fast term with the leak |
+| 3 no leak | `fast_decay = 0` | sqrt, adaptive, mult 0.03, window 20, carry, with the 2023-24 season present |
+| 4 no burn-in season | drop the 2023-24 rounds | as 3, cold: the eta pool starts empty |
+| 5 per-100k units | `scales` = population / 100k | as 4, on the square root of admissions per 100k |
+| 6 sqrt constant 0.018 (E16) | `lr = 0.018` | sqrt per 100k, constant 0.018 |
+
+The 2023-24 season does two things: with `slow_init` it sets the slow term's
+starting value (step 1 removes this), and its residuals fill the adaptive
+learning rate's window, so eta is sized from the first live round (step 4
+removes this). Burn-in outcomes never step the offsets. Step 5 changes only
+units, so that step 6 changes only the learning rate.
+
+Outside the chain: a branch, sqrt 0.018 warm, which is step 6 with the 2023-24 season present and `slow_init =
+"burn_in_quantile"` (the warm start of step 0, here on the single term); and
+REF-op cold (prod's covid config: step 0 without the warm start or the
+2023-24 season), so the state scatters below can pair warm with warm and
+cold with cold.
+
+Steps 0, 3, 4 and 6 are the cached runs of E13 (REF-op warm), E02
+(`reference + burn-in`), E01/E02 (`reference`) and E16 (sqrt 0.018), so they
+are not independent checks of those notebooks.
+
+WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
+WIS lower than base. L1 coverage bias: lower is better. "Month-avg" coverage
+bias is computed within each calendar month and then averaged.
+
+```{r load}
+source(here::here("scripts/calibration/calibration_ws_replay.R"))
+wi <- ws_inputs("flu")
+fc_burn_in <- bind_rows(ws_burn_in_forecasts("flu"), wi$fc)
+# Each config is written as the experiment that first ran it writes it, so cached runs are reused.
+refop_warm <- ws_configs(wi$rate_scales, burn_in = TRUE)[["REF-op warm"]]
+sqrt_adaptive <- list(
+  ref = "paper", transform = "sqrt", lr_args = list(mult = 0.03, floor = 1e-3),
+  burn_in_seasons = character(0), slow_init = NULL, lr_window = 20, season_policy = "carry"
+)
+const_cfg <- ws_configs(wi$rate_scales, burn_in = FALSE)[["E11 constant 0.1"]]
+STEPS <- list(
+  `0 REF-op` = list(cfg = refop_warm, burn_in = TRUE),
+  `1 no warm start` = list(cfg = list(ref = "op", burn_in_seasons = "2023-2024", slow_init = NULL), burn_in = TRUE),
+  `2 no slow term` = list(cfg = list(ref = "op", burn_in_seasons = "2023-2024", slow_init = NULL, lr_slow = NULL), burn_in = TRUE),
+  `3 no leak` = list(cfg = utils::modifyList(sqrt_adaptive, list(burn_in_seasons = "2023-2024")), burn_in = TRUE),
+  `4 no burn-in season` = list(cfg = sqrt_adaptive, burn_in = FALSE),
+  `5 per-100k units` = list(cfg = c(sqrt_adaptive, list(scales = wi$rate_scales)), burn_in = FALSE),
+  `6 sqrt constant 0.018 (E16)` = list(cfg = utils::modifyList(const_cfg, list(lr = 0.018, transform = "sqrt")), burn_in = FALSE)
+)
+# Outside the chain: step 6 with a warm start, and REF-op without one (E16's cached run).
+REFS <- list(
+  `branch: sqrt 0.018 warm` = list(cfg = utils::modifyList(STEPS[[7]]$cfg, list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile")), burn_in = TRUE),
+  `REF-op cold` = list(cfg = ws_configs(wi$rate_scales, burn_in = FALSE)[["REF-op cold"]], burn_in = FALSE)
+)
+run <- function(spec) {
+  fc <- if (spec$burn_in) fc_burn_in else wi$fc
+  do.call(cal_run_cached, c(list(fc, wi$truth), spec$cfg, list(learn = "exact", vintages = wi$vintages, workers = params$workers)))
+}
+cals <- purrr::map(c(STEPS, REFS), run)
+```
+
+```{r metrics}
+SEASONS <- c(LIVE, "both")
+STEP_COLS <- setNames(c("#000000", "#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#D55E00", "#AA4499", "#999999"), names(c(STEPS, REFS)))
+step_m <- purrr::imap(cals, function(cal, nm) {
+  fc <- cal$forecasts %>% mutate(season = season_of(reference_date)) %>% filter(location != "US")
+  ws_scores(fc) %>%
+    select(season, horizon, which, wis, cal_err) %>%
+    tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err)) %>%
+    mutate(step = nm, wis_pct = 100 * (wis_base - wis_cal) / wis_base)
+}) %>%
+  bind_rows() %>%
+  mutate(
+    step = factor(step, levels = names(c(STEPS, REFS))),
+    season = factor(season, levels = SEASONS, labels = c(LIVE, "both seasons")),
+    h = factor(paste0("h", horizon), levels = paste0("h", 0:3))
+  )
+mv <- cal_month_view(cals, seasons = LIVE)
+```
+
+```{r month-view-cfgs}
+# Five configs, so the month plots stay readable; the tables below them cover every config.
+mv_plot_cfgs <- c("0 REF-op", "1 no warm start", "4 no burn-in season", "6 sqrt constant 0.018 (E16)", "branch: sqrt 0.018 warm")
+mv_cols <- STEP_COLS
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
+```
+
+# What each step changes
+
+The change each step makes to the step before it, both seasons pooled,
+states only. WIS: change in WIS reduction % (positive = the step lowers
+WIS). Coverage: change in L1 coverage bias, season-pooled and month-average
+(negative = the step improves coverage).
+
+```{r deltas}
+wis_both <- step_m %>%
+  filter(season == "both seasons", step %in% names(STEPS)) %>%
+  transmute(step, h, v = wis_pct)
+cov_both <- mv$cov %>%
+  filter(season == "both") %>%
+  transmute(step = config, h = factor(paste0("h", horizon), levels = paste0("h", 0:3)), pooled = pooled_cal, mavg = mavg_cal)
+delta <- wis_both %>%
+  left_join(cov_both, by = c("step", "h")) %>%
+  arrange(h, step) %>%
+  group_by(h) %>%
+  mutate(d_wis = v - lag(v), d_pooled = pooled - lag(pooled), d_mavg = mavg - lag(mavg)) %>%
+  ungroup() %>%
+  filter(step != names(STEPS)[1])
+knitr::kable(
+  delta %>%
+    transmute(step, h, cell = sprintf("%+.1f / %+.3f / %+.3f", d_wis, d_pooled, d_mavg)) %>%
+    tidyr::pivot_wider(names_from = h, values_from = cell) %>%
+    arrange(step),
+  caption = "Both seasons, states only: change from the previous step in WIS reduction % / season-pooled L1 coverage bias / month-avg L1 coverage bias"
+)
+```
+
+# State by state: REF-op against sqrt 0.018, matched on the warm start
+
+Per state, pooled over h0–h3: WIS reduction % of REF-op against sqrt 0.018
+(above the line, REF-op is better). Three pairs: the chain's ends (REF-op
+warm vs sqrt 0.018 cold), then warm vs warm and cold vs cold. Cold configs
+play the base through Nov–Dec 2024 (35–40% of that season's base WIS), so
+only the matched pairs compare the trackers rather than the start.
+
+```{r state-scatter, fig.height=4.5}
+PAIRS <- list(
+  `chain ends: REF-op warm vs sqrt 0.018 cold` = c("0 REF-op", "6 sqrt constant 0.018 (E16)"),
+  `warm vs warm` = c("0 REF-op", "branch: sqrt 0.018 warm"),
+  `cold vs cold` = c("REF-op cold", "6 sqrt constant 0.018 (E16)")
+)
+state_pct <- cal_state_wis(cals[unique(unlist(PAIRS))]) %>%
+  group_by(config, season, location) %>%
+  summarize(pct = 100 * (sum(wis_base) - sum(wis_cal)) / sum(wis_base), .groups = "drop")
+pair_pts <- purrr::imap(PAIRS, function(p, nm) {
+  state_pct %>%
+    filter(config %in% p) %>%
+    mutate(which = ifelse(config == p[1], "refop", "sqrt")) %>%
+    select(-config) %>%
+    tidyr::pivot_wider(names_from = which, values_from = pct) %>%
+    mutate(pair = nm)
+}) %>%
+  bind_rows() %>%
+  mutate(pair = factor(pair, levels = names(PAIRS)))
+ggplot(pair_pts, aes(sqrt, refop)) +
+  geom_abline(slope = 1, intercept = 0, colour = "grey50") +
+  geom_hline(yintercept = 0, colour = "grey85") +
+  geom_vline(xintercept = 0, colour = "grey85") +
+  geom_point(alpha = 0.8) +
+  facet_grid(season ~ pair) +
+  labs(x = "sqrt 0.018: WIS reduction %, h0–h3", y = "REF-op: WIS reduction %, h0–h3")
+```
+
+States where REF-op has the lower WIS, out of the states scored, per pair
+and season.
+
+```{r state-counts}
+knitr::kable(
+  pair_pts %>%
+    group_by(pair, season) %>%
+    summarize(refop_better = sum(refop > sqrt), states = n(), .groups = "drop") %>%
+    transmute(pair, season, cell = sprintf("%d / %d", refop_better, states)) %>%
+    tidyr::pivot_wider(names_from = season, values_from = cell),
+  caption = "States (of those scored) where REF-op beats sqrt 0.018, h0–h3 pooled"
+)
+```

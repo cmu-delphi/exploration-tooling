@@ -17,8 +17,12 @@
 # submitted ensemble) renormalizes to ~86% windowed_seasonal_extra_sources,
 # ~14% windowed_seasonal, ~0.03% climate_linear.
 #
+# Other targets: ch_use("flu_windowed_seasonal") or ch_use("covid_windowed_seasonal")
+# switch every CH_* setting to that forecaster's clean evaluation replay (see
+# CH_CONFIGS); ch_read_store() then reads its forecasts instead of backfilling.
+#
 # Usage, from the repo root:
-#   source("scripts/calibration_harness.R")
+#   source("scripts/calibration/calibration_harness.R")
 #   inp <- ch_inputs()               # archives, geos dropped
 #   raw <- ch_backfill(inp)          # ~6 min cold, instant warm (cached)
 #   ch_verify_against_store(raw)     # prove the harness == the DAG
@@ -72,6 +76,87 @@ CH_SPEC <- list(
   join_extra_data = TRUE,
   sort_quantiles = TRUE
 )
+# What the store's forecasts were built with, for ch_verify_against_store(): the
+# substitutions csv (NULL for a replay run with EVALUATION_SUBSTITUTIONS=false)
+# and the grid row's output-level `excluded_geos`.
+CH_STORE_SUBSTITUTIONS <- here::here("pipelines/covid_data_substitutions.csv")
+CH_EXCLUDED_GEOS <- c("mo", "wy")
+# Holiday/outage weeks where the evaluation replay ran after the nominal date,
+# from the schedule in pipelines/<disease>_hosp_prod.R.
+CH_SCHEDULE_DELAYS <- c(
+  "2024-12-25" = "2024-12-26",
+  "2025-01-01" = "2025-01-02",
+  "2025-12-24" = "2025-12-29"
+)
+
+# Alternative targets for ch_use(). Each entry overrides the CH_* globals above
+# (names are the globals without the prefix); spec values are copied from the
+# grid row in pipelines/<disease>_hosp_prod.R, split as make_forecaster_grid()
+# splits it. The replays they point at were run with substitutions off, and
+# windowed_seasonal excludes no geos, so nothing is dropped.
+# windowed_seasonal is calibrated at h0 and up; h−1 is left to the revision-aware methods.
+CH_CONFIGS <- list(
+  flu_windowed_seasonal = list(
+    STORE = "flu_hosp_evaluation",
+    DISEASE = "flu",
+    TARGET = "wk inc flu hosp",
+    FORECASTER_ID = "windowed_seasonal",
+    AHEADS = 0:3,
+    DROP_GEOS = character(0),
+    EXCLUDED_GEOS = NULL,
+    STORE_SUBSTITUTIONS = NULL,
+    SCHEDULE_DELAYS = c("2024-11-20" = "2024-11-21", CH_SCHEDULE_DELAYS),
+    SPEC = list(
+      forecaster = "scaled_pop_seasonal",
+      params = list(
+        outcome = "value",
+        trainer = epipredict::quantile_reg(),
+        seasonal_method = "window",
+        pop_scaling = FALSE,
+        lags = c(0, 7),
+        keys_to_ignore = list(list(c("source"), c("flusurv", "ILI+")))
+      ),
+      ahead_multiplier = 7L,
+      target_date_shift = 3L,
+      join_extra_data = FALSE,
+      sort_quantiles = TRUE
+    )
+  ),
+  covid_windowed_seasonal = list(
+    STORE = "covid_hosp_evaluation",
+    DISEASE = "covid",
+    TARGET = "wk inc covid hosp",
+    FORECASTER_ID = "windowed_seasonal",
+    AHEADS = 0:3,
+    DROP_GEOS = character(0),
+    EXCLUDED_GEOS = NULL,
+    STORE_SUBSTITUTIONS = NULL,
+    SCHEDULE_DELAYS = CH_SCHEDULE_DELAYS,
+    SPEC = list(
+      forecaster = "scaled_pop_seasonal",
+      params = list(
+        outcome = "value",
+        trainer = epipredict::quantile_reg(),
+        seasonal_method = "none",
+        drop_non_seasons = TRUE,
+        pop_scaling = FALSE,
+        lags = c(0, 7)
+      ),
+      ahead_multiplier = 7L,
+      target_date_shift = 3L,
+      join_extra_data = FALSE,
+      sort_quantiles = TRUE
+    )
+  )
+)
+
+#' Point every CH_* setting at one entry of CH_CONFIGS.
+ch_use <- function(name) {
+  config <- CH_CONFIGS[[rlang::arg_match(name, names(CH_CONFIGS))]]
+  for (nm in names(config)) assign(paste0("CH_", nm), config[[nm]], envir = globalenv())
+  cli::cli_alert_info("Harness target: {.field {CH_FORECASTER_ID}} ({CH_DISEASE}), store {.path {CH_STORE}}")
+  invisible(config)
+}
 
 
 # ================================ INPUTS ==================================
@@ -119,6 +204,32 @@ ch_inputs <- function(store = CH_STORE, drop_geos = CH_DROP_GEOS) {
   inputs
 }
 
+#' ch_inputs() with the HHS weekly archive stitched in before NHSN's first version.
+#'
+#' HHS rows (from scripts/one_offs/hhs_2023_24_archive.R, run from 2020-08) are
+#' relabelled `source = "nhsn"` and kept only at versions before NHSN's first,
+#' so a 2023-24 snapshot sees HHS alone and later snapshots see only NHSN.
+#' HHS levels are used as-is (ROADMAP 1b).
+ch_inputs_with_burn_in <- function(
+  hhs_path = file.path(CH_CACHE_DIR, "hhs_weekly_archive_2020_2024.rds"),
+  inputs = ch_inputs()
+) {
+  train <- as_tibble(inputs$nhsn_train$DT)
+  nhsn <- train %>% filter(source == "nhsn")
+  first_version <- min(nhsn$version)
+  hhs <- as_tibble(readRDS(hhs_path)[[CH_DISEASE]]) %>%
+    filter(version < first_version, geo_value %in% nhsn$geo_value) %>%
+    mutate(source = "nhsn") %>%
+    select(all_of(names(train)))
+  # Every HHS key must be overwritten at NHSN's first version, or HHS would leak past it.
+  stray <- anti_join(hhs, nhsn %>% filter(version == first_version), by = c("geo_value", "time_value"))
+  if (nrow(stray) > 0) cli::cli_abort("{nrow(stray)} HHS row{?s} have no NHSN row at {first_version}.")
+  inputs$nhsn_train <- bind_rows(train, hhs) %>%
+    as_epi_archive(other_keys = "source", compactify = TRUE)
+  cli::cli_alert_success("Stitched {nrow(hhs)} HHS rows before NHSN version {.val {format(first_version)}}")
+  inputs
+}
+
 #' Truth as it was published at `version`, on the forecasts' target_end_date key.
 #'
 #' This is the honest input for an online update at time `version`: it contains
@@ -138,13 +249,7 @@ ch_truth_asof <- function(truth_archive, version) {
 #' than as the two parallel seq.Date() vectors prod uses. That is exactly
 #' equivalent for the dates prod covers but can't silently misalign the two
 #' columns if the window is changed.
-ch_schedule <- function(through, from = as.Date("2024-11-20")) {
-  # Holiday/outage weeks where the forecast actually ran after its nominal date.
-  delays <- c(
-    "2024-12-25" = "2024-12-26",
-    "2025-01-01" = "2025-01-02",
-    "2025-12-24" = "2025-12-29"
-  )
+ch_schedule <- function(through, from = as.Date("2024-11-20"), delays = CH_SCHEDULE_DELAYS) {
   through <- as.Date(through)
   # Back up to the last Wednesday so the weekly sequence stays on schedule.
   through <- through - ((as.integer(format(through, "%u")) - 3) %% 7)
@@ -227,7 +332,7 @@ ch_backfill <- function(
             params = CH_SPEC$params,
             id = CH_FORECASTER_ID,
             target_date_shift = CH_SPEC$target_date_shift,
-            join_extra_data = CH_SPEC$join_extra_data,
+            join_extra_data = CH_SPEC$join_extra_data %||% FALSE,
             extra_data = extra,
             excluded_geos = excluded_geos,
             sort_quantiles = CH_SPEC$sort_quantiles
@@ -269,6 +374,42 @@ ch_backfill <- function(
      ({.val {nrow(out)}} rows) -> {.path {cache_file}}"
   )
   out
+}
+
+
+#' Read this forecaster's forecasts straight from the store's `forecast_nhsn_full`.
+#'
+#' Same shape as ch_backfill() output. Only equivalent to a backfill when the
+#' store was built the way the backfill runs (CH_STORE_SUBSTITUTIONS NULL, no
+#' DROP_GEOS), which is the case for the CH_CONFIGS replays;
+#' ch_verify_against_store() checks the plumbing on a few dates.
+ch_read_store <- function(store = CH_STORE, aheads = CH_AHEADS) {
+  fc <- targets::tar_read(forecast_nhsn_full, store = store) %>%
+    filter(forecaster == CH_FORECASTER_ID) %>%
+    mutate(ahead = as.integer(target_end_date - forecast_date - CH_SPEC$target_date_shift) %/%
+      CH_SPEC$ahead_multiplier) %>%
+    filter(ahead %in% aheads)
+  if (nrow(fc) == 0) cli::cli_abort("No {.field {CH_FORECASTER_ID}} forecasts in {.path {store}}.")
+  fc %>%
+    select(geo_value, forecast_date, target_end_date, quantile, value, ahead) %>%
+    left_join(ch_schedule(through = max(fc$forecast_date)), by = "forecast_date") %>%
+    arrange(forecast_date, ahead, geo_value, quantile)
+}
+
+#' Harness forecasts in hub schema, for calibrate_hub_forecasts() and cal_run().
+ch_to_hub <- function(forecasts, disease = CH_DISEASE) {
+  out <- internal_to_hub_forecasts(forecasts, disease)
+  if (anyNA(out$location)) cli::cli_abort("Some geos have no hub location code.")
+  out
+}
+
+#' Finalized truth and every vintage of the store's NHSN archive, on hub
+#' coordinates: the `truth` and `vintages` arguments of cal_run().
+ch_hub_truth <- function(inputs, disease = CH_DISEASE) {
+  list(
+    truth = nhsn_read_truth(disease, inputs$truth),
+    vintages = nhsn_read_vintages(disease, inputs$truth)
+  )
 }
 
 
@@ -422,8 +563,10 @@ ch_summarize <- function(scores) {
 
 #' Forecast dates for which the store has a cached prod forecast target.
 ch_cached_prod_dates <- function(store = CH_STORE) {
+  # The date must follow the id directly, so `windowed_seasonal` does not also
+  # match `windowed_seasonal_extra_sources`.
   prefix <- glue::glue("forecast_nhsn_{CH_FORECASTER_ID}_")
-  list.files(file.path(store, "objects"), pattern = glue::glue("^{prefix}")) %>%
+  list.files(file.path(store, "objects"), pattern = glue::glue("^{prefix}\\d{{4}}\\.")) %>%
     stringr::str_extract("\\d{4}\\.\\d{2}\\.\\d{2}") %>%
     unique() %>%
     stats::na.omit() %>%
@@ -445,7 +588,9 @@ ch_cached_prod_dates <- function(store = CH_STORE) {
 #' configuration (all geos in the archive, prod's substitutions, output-level geo
 #' exclusion) over a couple of the cached dates and requires exact equality
 #' there. What it proves is that the plumbing is identical; the configured
-#' deviations are then the only difference that remains.
+#' deviations are then the only difference that remains. The store's own
+#' substitutions and output-level exclusions come from CH_STORE_SUBSTITUTIONS
+#' and CH_EXCLUDED_GEOS.
 ch_verify_against_store <- function(store = CH_STORE, n_dates = 2, tolerance = 0) {
   dates <- ch_cached_prod_dates(store)
   if (length(dates) == 0) {
@@ -455,14 +600,13 @@ ch_verify_against_store <- function(store = CH_STORE, n_dates = 2, tolerance = 0
   cli::cli_alert_info("Verifying against prod on {.val {format(dates)}}")
 
   faithful <- ch_inputs(store = store, drop_geos = character(0))
-  # Prod's aheads are -1:3; overlap on the non-negative ones is enough, and the
-  # harness does not model ahead -1 (see CH_AHEADS).
+  # Prod's aheads are -1:3; compare on the ones the harness also models.
   mine <- ch_backfill(
     faithful,
-    aheads = intersect(CH_AHEADS, 0:3),
+    aheads = intersect(CH_AHEADS, -1:3),
     schedule = ch_schedule(through = max(dates)) %>% filter(forecast_date %in% dates),
-    substitutions = here::here("pipelines/covid_data_substitutions.csv"),
-    excluded_geos = CH_DROP_GEOS,
+    substitutions = CH_STORE_SUBSTITUTIONS,
+    excluded_geos = CH_EXCLUDED_GEOS,
     cache_dir = file.path(CH_CACHE_DIR, "verify")
   )
 
@@ -484,7 +628,7 @@ ch_verify_against_store <- function(store = CH_STORE, n_dates = 2, tolerance = 0
     cli::cli_abort(
       "Harness diverges from the prod DAG: max abs diff {.val {worst}} over
        {.val {nrow(joined)}} overlapping rows. CH_SPEC is out of sync with
-       scripts/covid_hosp_prod.R, or the shared runner changed."
+       pipelines/{CH_DISEASE}_hosp_prod.R, or the shared runner changed."
     )
   }
   cli::cli_alert_success(

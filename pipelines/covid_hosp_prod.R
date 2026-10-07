@@ -587,7 +587,7 @@ joined_targets <- list2(
 combined_targets <- build_combined_targets(external_forecast_targets)
 
 # ============================== CALIBRATION TARGETS ============================
-# Same design as flu; see flu_hosp_prod.R and notes/CALIBRATION.md. No 2023-24
+# Same design as flu; see flu_hosp_prod.R and notes/calibration-ledger.md. No 2023-24
 # burn-in for covid (hub started 2024-11-23), so slow_init is NULL.
 calibration_targets <- list(
   tar_target(
@@ -614,8 +614,10 @@ calibration_targets <- list(
           by = c("geo_value" = "state_id")
         ) %>%
         select("target_end_date", "location", truth = "true_value")
+      # REF-op cold: see "Operating point" in notes/calibration-ledger.md.
       calibrate_hub_forecasts(
         historical_fc, truth,
+        settle_days = 14L,
         burn_in_seasons = character(0),
         transform = "sqrt",
         lr_args = list(mult = 0.03, floor = 1e-3),

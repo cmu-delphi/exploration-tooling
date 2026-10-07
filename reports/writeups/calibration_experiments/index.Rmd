@@ -1,0 +1,160 @@
+---
+title: "Calibration experiments"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = here::here())
+```
+
+These notebooks test a post-hoc calibration step for our FluSight and covid
+hub submissions. The step adjusts each submitted quantile forecast by an
+additive offset that an online quantile tracker (MultiQT; Ding, Gibbs &
+Tibshirani, 2025) learns from past coverage misses. Each notebook changes one
+setting of that tracker and compares the result with the uncalibrated
+forecast.
+
+There are no uncertainty estimates, so a WIS gap under 1 point or a
+month-avg coverage gap under 0.01 is read as no clear difference.
+Conclusions are kept in `notes/calibration-ledger.md`.
+
+```{r rows, include=FALSE}
+out_dir <- here::here("reports/calibration_experiments")
+link <- function(id, file) {
+  html <- paste0(file, ".html")
+  if (!file.exists(file.path(out_dir, html))) return(paste(id, "(not rendered)"))
+  stamp <- format(file.mtime(file.path(out_dir, html)), "%m-%d", tz = "America/Los_Angeles")
+  sprintf("[%s](%s) (%s)", id, html, stamp)
+}
+```
+
+# Notebooks
+
+One notebook per experiment, grouped by topic; the date after each link is
+when it was last rendered. The ids match `notes/calibration-ledger.md`.
+
+## Finalists
+
+| | base | question |
+|---|---|---|
+| `r link("E10", "e10_covid")` | both diseases, both bases | How do the finalists do on flu and covid, and do they rank the same way on the ensemble and the replay? (Part 2: covid ensemble at h−1–h3.) |
+| `r link("E18", "e18_ref_op_bridge")` | replay | Which setting accounts for the gap between REF-op and sqrt constant 0.018, stepping from one to the other a setting at a time? |
+| `r link("E15", "e15_wis_sources")` | replay, both diseases | Where does each finalist's WIS change come from? |
+
+## Prod configs
+
+`r link("Prod views", "prod_views")`: per-state forecast fans and a gallery
+of the largest gains and losses, for flu REF-op warm and covid REF-op cold
+on the submitted ensemble.
+
+## Bases
+
+| | base | question |
+|---|---|---|
+| `r link("E07", "e07_across_eras")` | both | Does calibration act the same on the ensemble and the clean replay? |
+
+## Learning rate
+
+| | base | question |
+|---|---|---|
+| `r link("E01", "e01_eta_settings")` | replay, cold | How do the adaptive learning-rate settings (multiplier, window, carry or reset) change WIS and coverage? |
+| `r link("E09", "e09_lr_delay")` | ensemble | With a constant learning rate on the rate scale, how do WIS and coverage change with the rate and with extra learning delay? |
+| `r link("E16", "e16_sqrt_constant_lr")` | replay, cold | How do WIS and coverage change with a constant learning rate, season by season, on the square-root and rate scales? |
+| `r link("E19", "e19_tracker_internals")` | replay | Month by month, how large a step does each tracker take, how large an offset does it play, and does the month's WIS change follow from those and the base's bias? How much of 2025-26 is the offset carried in from 2024-25? |
+
+The two learning-rate anchors used by the structure notebooks are E01's
+adaptive multiplier 0.03 and E16's constant 0.018 on the sqrt per-100k
+scale.
+
+## Tracker structure
+
+E20 asks the warm-start and leak questions on both anchors and both
+diseases, on the replay. E03 is the only scale comparison: every E20 cell
+runs on the square-root scale. (E04, E05 and E11 asked the leak, warm-start
+and constant-rate questions on the ensemble with the adaptive rate; E20
+reproduces their directions on the replay, so they were retired on
+2026-10-07. Their numbers stay in the ledger.)
+
+| | base | question |
+|---|---|---|
+| `r link("E20", "e20_structure_grid")` | replay, both diseases | Do the warm start and the leak change WIS and coverage in the same way on the adaptive and the constant learning rate, for flu and for covid? State by state, which anchor wins at the same start and leak? |
+| `r link("E03", "e03_scale")` | ensemble | Which scale should the offsets live on: counts, square root, or rate per 100k? |
+
+## Late season
+
+| | base | question |
+|---|---|---|
+| `r link("E02", "e02_eta_variants")` | replay, cold | Do a spring switch-off, a per-level learning rate or a seasonal window change WIS and coverage? |
+| `r link("E17", "e17_late_decay")` | replay, cold | Does shrinking or switching off the offset from 1 March change WIS and coverage? |
+
+## Learning truth
+
+| | base | question |
+|---|---|---|
+| `r link("E00", "e00_vintage_backtest")` | ensemble | Should the tracker learn from finalized data or from data as published? |
+
+## Data
+
+| | base | question |
+|---|---|---|
+| `r link("E21", "e21_data_by_season")` | replay data | How do 2024-25 and 2025-26 differ as data: season shape, revisions, the gap between the value the tracker learns from and the final one, and the HHS-stitched 2023-24 burn-in against NHSN? |
+
+E12 and E13 (the clean replay without and with a 2023-24 burn-in) have no
+notebook; they are `scripts/calibration/calibration_ws_replay.R`. E14 is
+part of E16, and E07b's ranking is part of E10.
+
+# How to read the results
+
+- **Horizons** h−1 to h3 are weeks relative to the forecast's reference date.
+  h−1 is the latest week NHSN has reported, still open to revision; h0 and
+  later have not been reported yet.
+- **WIS reduction %** is `100 × (WIS_base − WIS_cal) / WIS_base`, the
+  calibrated forecast's weighted interval score against the uncalibrated
+  forecast's, pooled over locations. Positive = calibrated WIS lower than
+  base.
+- **L1 coverage bias** (lower is better) is the mean over the 23 quantile
+  levels of |empirical coverage − level|. **Month-avg** computes it within
+  each calendar month and averages; season-pooled lets under-prediction on
+  the ramp cancel over-prediction after the peak, and usually looks much
+  better. Month-level noise is about 0.01.
+- **Two bases.** "Ensemble" notebooks calibrate our submitted forecasts
+  (h−1 to h3). "Replay" notebooks calibrate a clean weekly replay of
+  `windowed_seasonal` with no hand edits (h0–h3).
+- **Scoring.** Every score is states only (US excluded), against finalized
+  NHSN data over the live seasons (2024-25 and 2025-26). A burn-in season (2023-24 for flu) only warms
+  up the learning rate and is not scored.
+- **Cold start.** Without a warm start, offsets start at zero, and every
+  config equals the base through Nov–Dec 2024, so 2024-25 gains are diluted.
+- **In-sample choices.** The constant rates and switch-off dates in later
+  notebooks were picked on the same two seasons they are scored on.
+- **Excluded submissions.** A few submissions were broken by pipeline bugs
+  or bad data and are left out, both from what the tracker learns and from
+  the scores. Flu: h−1 of the 2025-11-22 round (every quantile was 0) and
+  the US forecasts of the 2024-12-14, 2024-12-21 and 2025-01-04 rounds
+  (about half the sum of the states). Covid: the whole 2024-11-23 round
+  (made from a bad NHSN release that was corrected the next day) and h−1 of
+  the 2026-04-25 round (near zero in many states, most likely from a stale
+  data fetch).
+- **Extra delay.** The tracker can learn from a week's outcome as soon as
+  NHSN first reports it (zero extra delay) or wait for revisions. The
+  reference configs wait one extra week.
+- **Re-run vs stateful.** Prod re-runs the tracker from the first round each
+  week on that week's data, so early reports are replaced by their revisions.
+  A stateful tracker instead learns each outcome once, from the first value
+  it sees. All notebooks use the re-run design; E00 and E09 also show the
+  stateful one.
+
+## Reference configs
+
+- **REF-paper**: the paper's tracker on counts. One offset per quantile level,
+  updated with an adaptive learning rate (0.03 × the 90th percentile of the
+  last 20 rounds' absolute errors), carried across seasons, with one week of
+  extra delay.
+- **REF-op**: the configuration running in prod. REF-paper on the
+  square-root scale, with the offset shrinking 10% per round, a second
+  slow-moving offset, and a starting offset taken from the burn-in season's
+  errors.

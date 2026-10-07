@@ -587,7 +587,7 @@ combined_targets <- build_combined_targets(external_forecast_targets)
 # burn-in for free), appends the current week's ensemble_mix if not yet
 # submitted, and runs calibrate_hub_forecasts() over the full history. The
 # current round's value_cal is then written as the CMU-TimeSeries-Calibrated
-# submission. Skipped in cache/evaluation mode. See notes/CALIBRATION.md for
+# submission. Skipped in cache/evaluation mode. See notes/calibration-ledger.md for
 # the parameter choices.
 calibration_targets <- list(
   tar_target(
@@ -614,16 +614,19 @@ calibration_targets <- list(
           by = c("geo_value" = "state_id")
         ) %>%
         select("target_end_date", "location", truth = "true_value")
+      # sqrt constant 0.018 per 100k, cold: see "Operating point" in
+      # notes/calibration-ledger.md (chosen 2026-10-07 on month-avg coverage).
+      rate_scales <- get_population_data() %>%
+        distinct(.data$state_code, .keep_all = TRUE) %>%
+        transmute(location = .data$state_code, from = as.Date("2000-01-01"), scale = .data$population / 1e5)
       calibrate_hub_forecasts(
         historical_fc, truth,
-        burn_in_seasons = "2023-2024",
+        settle_days = 14L,
+        burn_in_seasons = character(0),
         transform = "sqrt",
-        lr_args = list(mult = 0.03, floor = 1e-3),
-        lr_window = 20,
-        season_policy = "carry",
-        slow_init = "burn_in_quantile",
-        lr_slow = list(mult = 0.003),
-        fast_decay = 0.1
+        scales = rate_scales,
+        lr = 0.018,
+        season_policy = "carry"
       )
     },
     cue = tar_cue("always")

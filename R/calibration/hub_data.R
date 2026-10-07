@@ -29,6 +29,18 @@ HUB_QUANTILE_LEVELS <- c(
 HUB_FLU_TARGET <- "wk inc flu hosp"
 HUB_COVID_TARGET <- "wk inc covid hosp"
 
+# Submitted forecasts broken by a pipeline bug rather than by the model; see
+# notes/spoiled-submissions.md. `NA` location or horizon matches all of them.
+HUB_SPOILED_SUBMISSIONS <- tibble::tribble(
+  ~model, ~target, ~reference_date, ~location, ~horizon,
+  "CMU-TimeSeries", HUB_FLU_TARGET, "2025-11-22", NA, -1L,
+  "CMU-TimeSeries", HUB_FLU_TARGET, "2024-12-14", "US", NA,
+  "CMU-TimeSeries", HUB_FLU_TARGET, "2024-12-21", "US", NA,
+  "CMU-TimeSeries", HUB_FLU_TARGET, "2025-01-04", "US", NA,
+  "CMU-TimeSeries", HUB_COVID_TARGET, "2024-11-23", NA, NA,
+  "CMU-TimeSeries", HUB_COVID_TARGET, "2026-04-25", NA, -1L
+) %>% dplyr::mutate(reference_date = as.Date(.data$reference_date))
+
 
 # Parent directory containing the flu hub checkout. Override with DELPHI_HUB_PARENT_DIR
 # or HUB_FLU_DIR to point at a different layout.
@@ -67,13 +79,14 @@ hub_level_index <- function(x, levels = HUB_QUANTILE_LEVELS, tol = 1e-8) {
 #' Read one model's quantile forecasts for one target out of a hub checkout.
 #'
 #' @param hub_dir local hub checkout. For flu, use `HUB_FLU_DIR`
-#'   (cdcepi/FluSight-forecast-hub); for covid, use `HUB_COVID_DIR`
-#'   (cdcepi/covid19-forecast-hub). Only the model-output directory is needed.
+#'   (cdcepi/FluSight-forecast-hub); for covid, pass a checkout of
+#'   cdcepi/covid19-forecast-hub. Only the model-output directory is needed.
 #' @param model model-output subdirectory.
 #' @param target hub target string. 2023-24 files also carry
 #'   `wk flu hosp rate change` pmf rows, so both `target` and
 #'   `output_type == "quantile"` are filtered.
 #' @param locations optionally restrict to these hub location codes.
+#' @param drop_spoiled drop the rows listed in `HUB_SPOILED_SUBMISSIONS`.
 #' @return long tibble: `reference_date`, `horizon`, `target_end_date`,
 #'   `location`, `level_index`, `level`, `value`.
 #' @export
@@ -81,7 +94,8 @@ hub_read_forecasts <- function(
   hub_dir = HUB_FLU_DIR,
   model = "CMU-TimeSeries",
   target = HUB_FLU_TARGET,
-  locations = NULL
+  locations = NULL,
+  drop_spoiled = TRUE
 ) {
   model_dir <- file.path(path.expand(hub_dir), "model-output", model)
   files <- list.files(model_dir, pattern = "\\.csv$", full.names = TRUE)
@@ -122,6 +136,17 @@ hub_read_forecasts <- function(
   if (!is.null(locations)) {
     out <- out %>% filter(.data$location %in% locations)
   }
+  if (drop_spoiled) {
+    spoiled <- HUB_SPOILED_SUBMISSIONS %>% filter(.data$model == !!model, .data$target == !!target)
+    for (i in seq_len(nrow(spoiled))) {
+      sp <- spoiled[i, ]
+      out <- out %>% filter(!(
+        .data$reference_date == sp$reference_date &
+          (is.na(sp$location) | .data$location == sp$location) &
+          (is.na(sp$horizon) | .data$horizon == sp$horizon)
+      ))
+    }
+  }
 
   # The hub's own invariant: target_end_date is determined by the other two.
   bad <- out %>% filter(.data$target_end_date != .data$reference_date + 7L * .data$horizon)
@@ -133,6 +158,54 @@ hub_read_forecasts <- function(
     )
   }
   out %>% arrange(.data$reference_date, .data$horizon, .data$location, .data$level_index)
+}
+
+
+#' Latest-vintage NHSN admissions as calibration truth, on hub coordinates.
+#'
+#' NHSN `time_value` is the Saturday week end, the same grid as the hub's
+#' `target_end_date`.
+#' @param archive an NHSN `epi_archive`, by default [get_nhsn_data_archive()].
+#' @return tibble with `target_end_date`, `location` (FIPS), `truth`.
+#' @export
+nhsn_read_truth <- function(disease = "flu", archive = get_nhsn_data_archive(disease)) {
+  archive %>%
+    epix_as_of(archive$versions_end) %>%
+    as_tibble() %>%
+    nhsn_to_hub_locations() %>%
+    select(target_end_date = "time_value", "location", truth = "value") %>%
+    filter(!is.na(.data$truth)) %>%
+    arrange(.data$location, .data$target_end_date)
+}
+
+
+#' Every NHSN vintage, on hub coordinates, for vintage-aware calibration.
+#'
+#' One row per (location, week, version) at which the value changed (the
+#' archive is compactified), so the value as of a date is the row with the
+#' latest `version` at or before it. `NA` rows mean the value was absent in
+#' that version.
+#' @inheritParams nhsn_read_truth
+#' @return tibble with `target_end_date`, `location` (FIPS), `version`, `truth`.
+#' @export
+nhsn_read_vintages <- function(disease = "flu", archive = get_nhsn_data_archive(disease)) {
+  archive$DT %>%
+    as_tibble() %>%
+    nhsn_to_hub_locations() %>%
+    select(target_end_date = "time_value", "location", "version", truth = "value") %>%
+    arrange(.data$location, .data$target_end_date, .data$version)
+}
+
+
+#' Map NHSN `geo_value` (state abbreviations, `usa`) to hub FIPS `location`.
+#' @keywords internal
+nhsn_to_hub_locations <- function(df) {
+  df %>%
+    mutate(geo_value = ifelse(.data$geo_value == "usa", "us", .data$geo_value)) %>%
+    inner_join(
+      get_population_data() %>% distinct(.data$state_id, .keep_all = TRUE) %>% select("state_id", location = "state_code"),
+      by = c("geo_value" = "state_id")
+    )
 }
 
 

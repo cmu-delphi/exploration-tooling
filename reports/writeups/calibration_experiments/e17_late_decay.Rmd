@@ -1,0 +1,113 @@
+---
+title: "E17: shrinking the offset late in the season"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 11, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+Question: does shrinking the offset from 1 March, or switching calibration
+off from 1 March, change WIS and coverage compared with the same tracker
+without it?
+
+Setup:
+
+- Disease: flu. Base forecaster: the clean `windowed_seasonal` replay (all 53
+  locations, the 55 hub rounds). Horizons h0–h3.
+- Learning truth: exact (re-run at every round on the data published by then;
+  E00), one week of extra delay. Cold start, no burn-in season. States only.
+- Three constant-rate trackers: rate 0.018 and rate 0.032 per 100k (E16),
+  and sqrt 0.018 (E16). Each crossed with five settings:
+  - **no decay**.
+  - **`late_decay`** with factor 0.85, 0.7 or 0.5: from 1 March to 30 June
+    the stored offset is multiplied by the factor at each round before it is
+    played. Learning continues, and because offsets carry across seasons,
+    the shrink carries into the next season.
+  - **`off_after = "03-01"`**: from 1 March to 30 June the base is played,
+    those rounds produce no updates, and the offset carries unchanged into
+    the next season.
+- The 1 March date was chosen after E16, on these same seasons.
+  (`fast_decay` and `season_policy` are other ways to shrink offsets; they
+  are not run here.)
+
+WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
+WIS lower than base. L1 coverage bias: lower is better.
+
+```{r load}
+source(here::here("scripts/calibration/calibration_ws_replay.R"))
+wi <- ws_inputs("flu")
+base_cfg <- ws_configs(wi$rate_scales, burn_in = FALSE)[["E11 constant 0.1"]]
+SQRT_BEST <- 0.018
+RATES <- list(
+  `rate 0.018` = list(lr = 0.018),
+  `rate 0.032` = list(lr = 0.032),
+  sqrt = list(lr = SQRT_BEST, transform = "sqrt")
+)
+names(RATES)[3] <- paste("sqrt", SQRT_BEST)
+DECAYS <- list(
+  `no decay` = list(),
+  `decay 0.85` = list(late_decay = list(from = "03-01", factor = 0.85)),
+  `decay 0.7` = list(late_decay = list(from = "03-01", factor = 0.7)),
+  `decay 0.5` = list(late_decay = list(from = "03-01", factor = 0.5)),
+  `off after 1 Mar` = list(off_after = "03-01")
+)
+grid <- tidyr::expand_grid(rate = names(RATES), decay = names(DECAYS))
+# Cached under cache/calibration/experiments/runs; the no-decay runs are E16's.
+cals <- purrr::pmap(grid, function(rate, decay) {
+  cfg <- c(utils::modifyList(base_cfg, RATES[[rate]]), DECAYS[[decay]])
+  do.call(cal_run_cached, c(list(wi$fc, wi$truth), cfg, list(learn = "exact", vintages = wi$vintages, workers = params$workers)))
+})
+fc <- purrr::map2(cals, seq_len(nrow(grid)), function(cal, i) {
+  cal$forecasts %>% mutate(rate = grid$rate[i], decay = grid$decay[i])
+}) %>%
+  bind_rows() %>%
+  mutate(season = season_of(reference_date), rate = factor(rate, levels = names(RATES)), decay = factor(decay, levels = names(DECAYS))) %>%
+  filter(season %in% LIVE, location != "US")
+DECAY_COLS <- setNames(c("black", "#56B4E9", "#0072B2", "#D55E00", "#009E73"), names(DECAYS))
+```
+
+```{r month-view-cfgs}
+mv <- cal_month_view(setNames(cals, paste(grid$rate, grid$decay, sep = ", ")), seasons = LIVE)
+# The plots show sqrt 0.018 with each decay setting; the tables cover all three trackers.
+mv_plot_cfgs <- paste(names(RATES)[3], names(DECAYS), sep = ", ")
+mv_cols <- setNames(DECAY_COLS, mv_plot_cfgs)
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
+```
+
+# Mean offset at the median over time
+
+Calibrated minus base median in admissions per 100k, averaged over states at
+each round, h2.
+
+```{r offset-time, fig.height=7}
+pop <- wi$rate_scales %>% select(location, scale)
+fc %>%
+  filter(level == 0.5, horizon == 2) %>%
+  left_join(pop, by = "location") %>%
+  group_by(rate, decay, season, reference_date) %>%
+  summarize(off = mean((value_cal - value_base) / scale), .groups = "drop") %>%
+  ggplot(aes(reference_date, off, colour = decay)) +
+  geom_hline(yintercept = 0, colour = "grey60") +
+  geom_line() +
+  geom_point(size = 0.6) +
+  facet_grid(rate ~ season, scales = "free") +
+  scale_colour_manual(values = DECAY_COLS, name = NULL) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+  labs(x = "reference date", y = "mean offset at the median, per 100k") +
+  theme(legend.position = "bottom")
+```

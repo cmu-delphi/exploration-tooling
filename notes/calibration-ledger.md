@@ -1,0 +1,515 @@
+# Calibration ledger
+
+Post-hoc online calibration of our hub forecasts with MultiQT (Ding, Gibbs &
+Tibshirani 2025). Each (location, horizon) series gets an additive offset over
+the 23 quantile levels, updated by online gradient descent on pinball loss
+and projected to be monotone. Dropped hub rounds are in
+`notes/spoiled-submissions.md`; how to run the tests and notebooks is under
+"Running things".
+
+Every number below was re-read from the rendered notebook (or, for E12/E13,
+the score CSV) on 2026-10-02; E19's come from its CSVs on 2026-10-06.
+Older notes, pre-fix tables and the summary-of-reviews layers were
+removed; they are in VCS history at change `uxposooz`
+(`notes/CALIBRATION.md`, `notes/calibration-review.md`,
+`notes/calibration-summary-2026-10-01.md`).
+
+## How to read the numbers
+
+- **WIS change %** is against the uncalibrated base; positive is better.
+  **Coverage bias** is mean |coverage − nominal| over levels; lower is
+  better.
+- **Uncertainty is a round bootstrap (E10, E20; `cal_wis_boot()`).** Two
+  live seasons, 27 and 28 rounds; rounds are resampled within a season,
+  1000 draws, 90% intervals, the same draws for every config so gaps
+  between configs are paired. A single cell's interval is wide: about ±1 to
+  ±4 points per season on the adaptive anchor, ±0.5 to ±2 on the constant
+  one, and a 2025-26 cell is wider than a 2024-25 one. A paired gap between
+  two similar configs is much tighter, about ±0.5 to ±1 pooled. The old
+  convention, a gap under 1 WIS point is "no clear difference", holds for
+  pooled paired gaps and is too optimistic for single cells. The round is the
+  resampling unit, which ignores dependence between neighbouring rounds, so
+  the intervals are if anything too narrow.
+- **Coverage bias is the selection criterion; WIS is the tie-breaker
+  (2026-10-07).** Pick the config on the Pareto front where both improve,
+  and never trade month-avg coverage for WIS: WIS rewards a one-directional
+  shift when the base runs low (see "The correction is a small upward
+  shift") and is the less trusted metric. A config whose month-avg coverage
+  is worse than base in any season at h1–h3 is not a finalist, whatever its
+  WIS.
+- **Use month-avg coverage, not season-pooled.** Pooling over a season (or
+  two) lets ramp under-prediction cancel post-peak over-prediction, and lets
+  one season's error cancel the other's. Season-pooled gains of 2–5× mostly
+  vanish month by month. Month-level noise is about 0.01.
+- **Report each season.** Most rankings flip between 2024-25 and 2025-26.
+  Pooled numbers hide that.
+- **Cold starts dilute 2024-25.** Burn-in rounds warm the learning rate but
+  never step the offset, so every config without a warm start equals the
+  base through Nov–Dec 2024 (35–40% of that season's WIS). Warm-vs-cold in
+  2024-25 is "some offset vs none".
+- **Tuning is in-sample.** The constant rates (0.018, 0.032) and the
+  `off_after` dates were picked on the same two seasons they are scored on.
+- **Two base forecasters.** E00, E03–E05 and E09–E11 calibrate the
+  submitted ensemble (h−1…h3, all locations in headline tables). E01, E02,
+  E07 and E12–E19 calibrate the clean `windowed_seasonal` replay (h0–h3,
+  states only, except E12).
+
+## What the numbers support
+
+Large and consistent (several points, both seasons):
+
+- **Too-large steps hurt.** Adaptive multiplier 0.1 on sqrt costs 7–17 WIS
+  points at h1–h3, 0.3 costs 17–81 (E01). A constant per-100k rate above
+  about 0.1 loses steeply: −3 to −4 at h3 by 0.18 (E14), −12 to −23 at 1.0
+  (E09).
+- **sqrt beats count.** 2–5 points at h1–h3 on the clean replay (E01),
+  1.4–3.9 pooled on the ensemble, mostly from 2025-26 (E03).
+- **h−1 is where calibration pays.** Covid +10 to +11% WIS and about +20%
+  median absolute error, both seasons, either config (E10); flu ensemble +3
+  to +6 (E00, E03).
+- **Stateful learning needs a delay.** A tracker that learns once from the
+  first report loses all of REF-op's h−1 gain (0.0 vs +6.1) and makes h−1
+  coverage worse than base; one extra week fixes it (E00, E09). Prod re-runs
+  from scratch each week, so this does not apply to prod.
+- **Some covid configs are harmful.** REF-paper loses 10–19 points at h1–h3
+  in 2025-26 (E10); constant 0.1 with a warm start loses 8–27 (E13).
+
+Small, or dependent on season (0–3 points):
+
+- **Among reasonable trackers nothing clearly wins.** REF-op (warm or cold),
+  sqrt constant 0.018, rate constant 0.018–0.032 and sqrt adaptive 0.01 are
+  within about 1 point of each other pooled, and the order flips by season.
+  Configs with a warm start lead in 2024-25; the others lead in 2025-26
+  (E07, E16, E18).
+- **Warm start: first live season only.** +1 to +3 points at h2–h3 in
+  2024-25, −0.7 to +0.4 in 2025-26 (E05, E13, E18). Warm configs under-cover
+  the 50% interval (0.39–0.44, E13).
+- **Leak (`fast_decay` 0.1): season-dependent.** On the ensemble it avoids
+  a 3–5 point loss at h1–h3 in 2025-26 and costs 0.4–1.3 in 2024-25 (E04,
+  E05). On the clean replay it adds 0.5–1.3 at h1–h3 in both seasons and
+  costs 0.4 at h0 (E18).
+- **Why the leak and a small constant rate land close (E19).** Both limit
+  the adaptive step's late-season overreaction, in different ways. The
+  adaptive eta comes from base residuals, so the leak does not change it;
+  relative to interval width it rises from about 0.015 in January to 0.10
+  at h3 in May 2025, 3–4× the constant rate's. Without the leak the offset
+  keeps growing into March–April, when the base over-predicts (h3 median
+  offset 0.24 of width in April 2025 vs REF-op 0.11). REF-op tracks the
+  ramp as fast (0.045 in February) and the leak empties it by May. Constant
+  0.018 barely corrects the ramp (0.013 in February) and has little to
+  overshoot with. In April–May 2026 the base under-predicted and the leak
+  dropped an offset that was still right (0.01 vs 0.14 at h3), which fits
+  sqrt 0.018 leading in 2025-26. The link to WIS is inferred, not scored.
+- **Switching off from 1 Mar or 15 Feb.** On the clean replay: +2 to +4 at
+  h1–h3 over sqrt adaptive 0.03 (E02), +0.4 to +0.7 over sqrt constant 0.018
+  (E17). The date was chosen after seeing the March losses. About half of
+  the 2025-26 gain at h2 is offsets frozen in February 2025 carried into
+  December, not a spring fix. On the ensemble it is the weakest candidate in
+  2024-25 (E07).
+- **Per-level eta:** about +1 point at h1–h3 (E02).
+- **March costs every tracker.** Up to −28% WIS within March at h2, about 1
+  point of the season (E16). The base already over-predicts after the peak
+  and the offsets are still positive.
+- **The correction is a small upward shift.** Offsets are a few percent of
+  the 90% interval width; the width ratio is 1.00–1.04. REF-op's gain comes
+  from raising the lower half; the upper half loses beyond h0 (E15).
+
+Coverage:
+
+- **Month-avg, no flu config moves coverage much.** Every config is within
+  about 0.025 of base, most within 0.01. REF-op and the warm configs on the
+  ensemble are 0.012–0.025 better than base at h1–h3 (E05, E09). Constant
+  rates are no better than base, or slightly worse at h3 (E09, E14).
+- **Season-pooled coverage gains are cancellation.** For example, E11's
+  "4–5× lower bias" is about 2× per season, and nothing month by month.
+
+Finalists (E10 part 1, E18), states only, h1/h2/h3 pooled over both seasons:
+
+- **Flu: sqrt 0.018 warm + leak leads on both bases (E10, E20).**
+  Ensemble +2.8/+3.0/+4.8 vs sqrt 0.018 warm +2.5/+2.7/+4.3 and REF-op warm
+  +1.9/+1.5/+2.3; replay +1.8/+1.9/+2.9 vs +1.6/+1.5/+2.7 and +1.1/+0.8/+1.2.
+  The leak repairs the warm constant's 2025-26 on the ensemble: +0.7/−0.0/
+  −0.8 vs −0.2/−0.9/−1.7 (REF-op warm +0.1/−0.7/−0.9). Month-avg coverage on
+  the ensemble, pooled: 0.108/0.126/0.140 at h1–h3 vs REF-op warm
+  0.110/0.124/0.138 and base 0.123/0.137/0.151; in 2025-26 it is 0.004–0.007
+  below REF-op warm at h1–h2. Ranks first pooled on both bases, with REF-op
+  warm first on ensemble coverage by 0.001. **Bootstrap (2026-10-07):** the
+  paired gap to REF-op warm, pooled h1/h2/h3, is +0.9 [+0.3, +1.3] / +1.6
+  [+0.9, +2.1] / +2.4 [+1.4, +3.2] on the ensemble and +0.6 [−0.1, +1.7] /
+  +0.9 [+0.1, +2.1] / +1.9 [+1.2, +2.8] on the replay, so the interval
+  excludes zero at h2–h3 on both bases; per season it excludes zero at
+  h2–h3 in 2024-25 and only at h3 on the replay in 2025-26. The leak's own
+  gap over sqrt 0.018 warm is +0.3 [−0.4, +1.1] / +0.4 [−0.3, +1.2] / +0.5
+  [−0.1, +1.2] on the ensemble and +0.2 / +0.3 / +0.4 with the same spread
+  on the replay: for WIS the leak is a coin flip, and it is in the finalist
+  for its 2025-26 coverage (E20), not its WIS. Against the warm adaptive
+  cell at the same leak, the constant anchor's gap is +0.6 [+0.0, +1.5] /
+  +0.8 [+0.2, +1.7] / +1.6 [+1.0, +2.3] pooled (E20).
+- **Covid: no grid cell helps at h1–h3, and the warm start hurts (E20).**
+  See the E20 row; REF-op cold stays the least bad config overall. The
+  bootstrap puts constant cold leak above REF-op cold on the replay by
+  +0.5 [+0.1, +0.9] / +0.9 [+0.3, +1.4] / +1.1 [+0.2, +1.9] pooled at
+  h1–h3, all from 2025-26, and both are below the base there (−1.2 to −1.7
+  vs −2.4 to −3.2). That cell has not been run on the covid ensemble, where
+  the constant anchor without a leak loses to REF-op cold by 2.6–3.4 (next
+  bullet), so it does not change the operating point.
+- **Covid: sqrt 0.018 is worse than REF-op cold on the ensemble.**
+  −2.7/−3.7/−4.2 vs −0.1/−0.3/−0.8, from 2025-26 (−6.9 to −8.3 at h1–h3;
+  REF-op has the lower WIS in 44–45 of 52 states). At h−1 sqrt 0.018 gains
+  the most of any config, +14.9 vs REF-op +10.2 (E10 part 2). No config
+  helps covid at h1–h3 on either base.
+- **The season flip is broad, but the pair is unmatched.** REF-op warm
+  beats sqrt 0.018 cold in 41–45 of 52 flu states in 2024-25 and 14–18 in
+  2025-26 (E18). Cold configs play the base through Nov–Dec 2024, and on the
+  same replay sqrt 0.018 warm beats REF-op warm at every horizon in both
+  seasons, so the per-state flip is the start, not the tracker: matched,
+  REF-op wins 23 of 52 states in 2024-25 and 15 in 2025-26 warm vs warm,
+  17 and 15 cold vs cold (E18).
+
+- **On the replay, matched on the start, the constant rate leads (E20).**
+  Constant 0.018 beats adaptive 0.03 in 29–47 of 52 states in every cell
+  and season. Warm plus leak is the best cell for either anchor; for the
+  constant rate +3.3/+1.8/+1.9/+2.9 pooled vs REF-op warm +2.8/+1.1/+0.9/
+  +1.1, with month-avg coverage 0.012–0.017 above base at h2–h3 in
+  2025-26.
+- **The constant rate's 2025-26 lead is mostly inherited (E19).** Resetting
+  its offset at the season boundary takes 2025-26 from +3.0/+1.0/+1.1/+1.5
+  to +1.0/+0.1/+0.2/+0.3. Cold configs enter 2024-25 with nothing, so the
+  two seasons are not the same test of a tracker.
+
+Operating point (preliminary, chosen 2026-10-07 for that week's
+submission; the open threads below can still move it):
+
+- **Flu: sqrt 0.018 cold** (in `pipelines/flu_hosp_prod.R`). Chosen on
+  coverage, not WIS: it is the only flu config whose month-avg coverage is
+  better than base in both seasons on both bases (by 0.005–0.014 at h1–h3)
+  and whose WIS is never below base. It gives up the warm start's 2024-25
+  WIS (sqrt 0.018 warm + leak is +2.8/+3.0/+4.8 pooled on the ensemble vs
+  +0.6/+0.1/−0.0), because the warm configs are worse than base on
+  month-avg coverage in 2025-26 on the replay (+0.008/+0.014 at h2–h3 with
+  the leak, +0.022/+0.027 without). The rate was picked in-sample (E16).
+- **Covid: REF-op cold** (prod, unchanged). No config improves covid
+  coverage at h1–h3 on the ensemble (every one is 0.000–0.008 worse than
+  base) and every one loses WIS there; REF-op cold loses least (−2.0 to
+  −2.9 in 2025-26 vs −6.9 to −8.3 for sqrt 0.018 cold, which is only
+  competitive on the replay). Its value is h0 (+0.8) and h−1 (+10 to +15,
+  E10 part 2).
+
+## Reference configs
+
+- **REF-paper**: count scale, adaptive eta (mult 0.03, window 20), carry,
+  2023-24 burn-in, `settle_days` 14 (one extra week of revision delay),
+  single offset term.
+- **REF-op** (prod): REF-paper with sqrt, eta floor 1e-3, warm start
+  `slow_init = "burn_in_quantile"`, slow term mult 0.003, leak
+  `fast_decay = 0.1`. "REF-op cold" drops the warm start and burn-in.
+
+Both are `cal_ref_args()` in `R/calibration/views.R`; notebooks run them via
+`cal_run()`, which also picks the learning truth (`"exact"`: re-run from
+scratch each round on that round's data, as prod does).
+
+**Notebooks.** One notebook per experiment, `eNN_*.Rmd` in
+`reports/writeups/calibration_experiments/`, rendered to
+`reports/calibration_experiments/` with `just calibration-experiments [name]`.
+The index groups them by topic (finalists, flu and covid, learning rate,
+tracker structure, late season, learning truth).
+
+Each comparison notebook leads with the month view (`_month_view.Rmd`):
+WIS, coverage bias and median error by month of reference date, then
+by-horizon tables of WIS reduction % and season-pooled / month-avg coverage
+bias. All scores are states only. Sweep notebooks (E01, E09, E16) lead
+with their coverage-vs-WIS curves and follow with a month view of a few rates
+around the elbow. Per-state fan panels and the gallery of best and worst
+forecasts are only in `prod_views.Rmd`, for the prod configs. Conclusions
+live in this ledger, not in the notebooks.
+
+## Experiments
+
+All flu unless stated; all post-fix (2026-09-17 sqrt clamp and issue-round
+gating), exact learning truth, spoiled submissions excluded.
+
+| id | notebook | base | question | what the numbers show | caveats |
+|---|---|---|---|---|---|
+| E00 | `e00_vintage_backtest` | ensemble | learn from final, vintage or exact data? | exact ≈ final within 0.6 points except REF-op h−1 (2.2, 2024-25 only). Vintage at settle 7 loses the h−1 gain. Settle 7 vs 14: REF-paper +1 to +3 at every horizon; REF-op tie (flips by season) | |
+| E01 | `e01_eta_settings` | replay, cold | adaptive eta settings | mult ≥ 0.1 costs 7–81 at h1–h3. 0.01 beats 0.03 by 0.5–2.4 at h1–h3 in both seasons; 0.03 better at h0 in 2024-25 (0.8). Window and carry vs reset: ≤ 2.4, mostly < 1. Count is 2–5 worse than sqrt | month-avg coverage of 0.01 vs 0.03 within noise |
+| E02 | `e02_eta_variants` | replay, cold | `off_after`, per-level eta, seasonal window | off 1 Mar / 15 Feb +2 to +4 at h1–h3 over the 0.03 reference, both seasons, no month-avg coverage cost. Per-level +1. Seasonal window, burn-in, off 1 Apr: < 1 | dates in-sample; half the 2025-26 gain is December carry-over; "seasonal window" also changes `lr_window` 20 → 10 |
+| E03 | `e03_scale` | ensemble | count vs sqrt vs rate | sqrt +1.4 to +3.9 over count pooled, mostly 2025-26. Coverage: neither better (sqrt worse per season pooled, better month-avg only in 2024-25) | rate identical to count in every cell (adaptive rate is scale invariant) |
+| E04 | retired 2026-10-07 (superseded by E20) | ensemble | leak, slow term | leak +2.5 to +5.6 at h1–h3 in 2025-26, −0.4 to −1.3 in 2024-25; month-avg coverage flips the same way (±0.015). Slow term without warm start: ≤ 0.5 | |
+| E05 | retired 2026-10-07 (superseded by E20) | ensemble | warm start from burn-in | warm +1.7 to +3.2 at h2–h3 in 2024-25, ±0.4 in 2025-26, for every tracker. REF-op ≈ warm + leak (≤ 0.4). Month-avg coverage: all within 0.01 of each other | |
+| E07 | `e07_across_eras`; the candidate ranking (formerly E07b) is in `e10_covid` | both, same rows | do results transfer between ensemble and replay? | Same direction on both; ensemble gains about 1 point more with REF-op warm. Replay base 5–7% worse pooled, 10–33% worse at h0–h1 in 2025-26. Candidate order flips by season on both; rank correlation of coverage in 2025-26 is 0.31 | |
+| E09 | `e09_lr_delay` | ensemble | constant rate × revision delay | knee 0.056: +3 to +5.5 over REF-paper at h1–h3; REF-op +1.2 to +2.4 over knee. Extra delay costs about 1 h−1 point per week. Above 0.1 loses steeply | month-avg: no constant rate beats base at h1–h3 |
+| E10 | `e10_covid` | flu + covid, ensemble + replay | the finalists (now including sqrt 0.018 warm + leak, E20's best flu cell) on both diseases and bases, with round-bootstrap intervals and paired gaps (part 1); REF-paper, REF-op and sqrt 0.018 on the covid ensemble at h−1–h3 (part 2) | see "Finalists" above, including the bootstrap gaps. Part 2: h−1 +10 to +15 (sqrt 0.018 largest). REF-op h1–h3: +1.9 to +2.8 in 2024-25, −3.0 to −4.3 in 2025-26. REF-paper −10 to −19 and sqrt 0.018 −7.7 to −9.5 at h1–h3 in 2025-26 | part 1 is h0–h3 on rows both bases have; part 2 tables run to 2026-09-19, including the 2026 summer wave |
+| E11 | retired 2026-10-07 (superseded by E20) | ensemble | constant 0.1 vs adaptive | REF-op best pooled WIS at every horizon (up to 2 over warm + sqrt). Constant 0.1 gives up 1.5–2.3 at h−1/h0 vs adaptive sqrt | constant 0.1 is effectively cold; its coverage edge is season-pooled only |
+| E12 | none (`calibration_ws_replay.R`) | replay, cold, flu + covid | first look at the clean replay | flu: REF-op cold leads constant 0.1 by 0–2.5. Covid: REF-op cold h0 +1.3 states, losses at h1–h3 in 2025-26 | **all locations** (US is 47% of WIS); covid h0 gains are mostly US |
+| E13 | none (`calibration_ws_replay.R burn_in`) | replay, flu + covid | 2023-24 HHS burn-in | flu warm +1 to +2.6 in 2024-25, ≤ 0 in 2025-26. Covid: warm worse at h0–h1, better at h2–h3 (+1.3, +4.4); constant 0.1 warm −8 to −27 | HHS used as-is (3–9% below NHSN); coverage is season-pooled only |
+| E14 | folded into `e16_sqrt_constant_lr` | replay, cold | constant rate grid by season | every rate 0.0032–0.056 is ≥ 0 in both seasons and within 1.2 of each other; 0.018 vs 0.032 ≤ 0.3. Above 0.1 loses | month-avg: no rate ≤ 0.032 beats base beyond 0.01 |
+| E15 | `e15_wis_sources` | replay, cold | where the WIS gain comes from | offsets a few % of interval width; REF-op gain from the lower half and the median shift | width-only variant's coverage not measured; split is not additive |
+| E16 | `e16_sqrt_constant_lr` | replay, cold | constant rate on sqrt scale | sqrt 0.018 about +1 over rate constants at h0; at h1–h3 within 0.2 pooled, up to +0.7 in 2025-26. vs REF-op cold: behind in 2024-25 h0–h1, ahead elsewhere; month-avg coverage tie | 0.018 picked in-sample |
+| E17 | `e17_late_decay` | replay, cold | shrink or stop offsets from 1 Mar | `late_decay` fixes March but costs about 0.5 at h0, otherwise ±0.2. Off 1 Mar +0.4 to +0.7 at h1–h3 for sqrt 0.018 (mostly 2025-26), ≤ 0 for rate 0.018 | `late_decay` shrinks the stored offset, so it carries into the next season |
+| E18 | `e18_ref_op_bridge` | replay | which piece of REF-op matters | REF-op vs sqrt 0.018 within 0.6 pooled; REF-op ahead in 2024-25 by 1.3–1.5, behind in 2025-26 by 0.8–1.3. Warm start +0.9 to +2.0 in 2024-25, −0.2 to −0.7 in 2025-26. No step moves month-avg coverage beyond 0.008. Branch sqrt 0.018 warm: +3.4/+1.6/+1.6/+2.5 pooled, best of all, but month-avg coverage 0.011–0.018 worse than base at h2–h3. States where REF-op wins, 2024-25 / 2025-26: chain ends (warm vs cold) 45 / 13 of 52; warm vs warm 23 / 15; cold vs cold 17 / 15 | steps 0 and 4 are the same cached runs as E13; steps 4 and 5 identical (scale invariance). The chain-ends pair is unmatched on the start |
+| E19 | `e19_tracker_internals` | replay | why do the leak and constant 0.018 score alike? Step size, offset, base bias and WIS by month on the E20 grid; carry vs reset on both anchors | Step / width at h3 rises from 0.015–0.02 (Dec–Feb) to 0.06–0.09 (Apr–May) on the adaptive rate, 0.005–0.007 to 0.013–0.023 on the constant, in both seasons. Offset / width at h3, Mar/Apr/May 2025: adaptive cold no leak 0.105/0.218/0.186, with leak 0.064/0.078/−0.012, constant cold 0.026/0.055/0.072; Apr/May 2026: 0.160/0.150, 0.057/−0.011, 0.097/0.143. Base bias (share above the base median, h3): Mar 0.43 and 0.27, Apr–May 0.54–0.81 and 0.62–0.71. March WIS at h3: adaptive no leak −48 and −81 (2025, 2026), with leak −27 and −22, constant cold −9 and −35, with leak −5 and −8; Apr–May 2026 constant no leak +4.8/+11.0. **Carry vs reset:** resetting at the season boundary takes the constant tracker's 2025-26 from +3.0/+1.0/+1.1/+1.5 to +1.0/+0.1/+0.2/+0.3, the adaptive one's from +2.2/−0.6/−0.7/−0.2 to +0.7/−0.9/−1.3/−1.6; the carried offset is 0.01–0.025 of width. Carry's gain is Oct–Feb (h3 Nov–Dec 2025 +5.7/+3.8 vs +0.6/+0.4); reset is better after the peak | offsets from the exact runs, step sizes from one pass on final truth per config. `lr_level` for the two-term REF-op configs reports the slow term's rate (about a tenth of the fast one), so their step-size rows are not comparable; REF-op's fast step equals the adaptive anchor's by construction |
+| E20 | `e20_structure_grid` | replay | warm start and leak on both anchors: {adaptive 0.03, constant 0.018} × {cold, warm} × {no leak, leak 0.1}, plus REF-op warm and cold | Warm start: +1.0 to +2.6 (adaptive) and +1.5 to +3.8 (constant) in 2024-25, −0.5 to +0.6 in 2025-26, on both anchors at either leak. Leak: on the adaptive rate +0.7 to +2.0 at h1–h3 in both seasons; on the constant rate −0.2 to +0.7 warm and −0.6 to −1.7 in 2025-26 cold. Best cell constant warm leak: +3.3/+1.8/+1.9/+2.9 pooled vs REF-op warm +2.8/+1.1/+0.9/+1.1, but month-avg coverage 0.012–0.017 above base at h2–h3 in 2025-26 (the warm constant without leak is 0.024–0.037 above). Constant beats adaptive in 29–47 of 52 states in every cell and season. **Bootstrap (90%, rounds):** flu single cells are ±1.5 to ±4 per season on the adaptive anchor and ±0.5 to ±2 on the constant; paired gaps: best cell − REF-op warm +0.5/+0.7/+1.0/+1.8 pooled at h0–h3 with the interval excluding zero at h2–h3; best cell − warm constant without leak +0.2/+0.3/+0.4 at h1–h3, intervals include zero (2024-25 alone excludes it, +0.4 to +0.7); warm − cold on the constant with leak +1.8 to +3.8 in 2024-25 excluding zero, +0.4 to +1.6 in 2025-26 including it. **Covid:** the warm start costs 2–7 points at h0–h2 in 2024-25 (constant) and 1–3 (adaptive), and 0.01–0.04 of month-avg coverage; the leak adds 1–3 on the adaptive anchor and on the cold constant in 2024-25, costs 1–3 on the warm constant. No cell beats base at h1–h3 pooled; least bad is constant cold leak −0.5/−0.8/−0.5 vs REF-op cold −1.1/−1.7/−1.6, adaptive warm leak +3.4 at h3 but −1.9 at h1 | replaces E04, E05 and E11 on the replay (retired). Not a scale comparison: every cell runs on sqrt, so E03 stays. The slow term is left out (E18 step 2). All constant-rate configs tuned in-sample (E16) |
+| E21 | `e21_data_by_season` | replay data | how the two live seasons differ as data: shape, revisions, learning-truth gap at lags 1–4, HHS-stitched burn-in vs NHSN | 2024-25: 27 rounds from 2024-11-23, peak 2025-02-08 at 55.6k (states summed), total 559k; 2025-26: 28 rounds from 2025-10-18, peak 2026-01-03 at 42.5k, total 336k. State peaks within ±1 week of the national one: 37 vs 47 of 52. Revisions: 26% vs 40% of (state, week) keys never revised; relative spread > 10% for 48% vs 39%. Value at lag 2 (what the tracker learns from) vs final: median gap −1.1% vs 0.0%, \|gap\| > 10% for 19% vs 14% of keys; at lag 1, 44% vs 41%. HHS vs NHSN final over 2023-24: 0.957–0.978 in Nov–Apr (states summed), per-state median 1.004 | describes the data only; no tracker runs. Revision keys start at the first archive version (2024-11-19) |
+
+E06 (ILI+ burn-in) and E08 (old covid) were run on code or data later found
+broken and were not rebuilt.
+
+## Known issues
+
+- **Run cache ignores code.** `cal_run_cached()` keys on inputs and
+  arguments, not code; the E00 and E09 caches are keyed by chunk code or
+  name. Clear `cache/calibration/experiments/` after changing
+  `R/calibration/`.
+
+Checked on 2026-10-02: the whole cache was cleared and every experiment
+re-run from scratch (E12, E13 and every notebook). Every table matched
+the cached results cell for cell, so no result above came from a stale
+run.
+
+Checked and resolved on 2026-10-02:
+
+- **`scales` is applied.** `rate` equals `count` to every digit with the
+  adaptive rate (E03, E09, E18 steps 4–5) because the adaptive rate is
+  scale invariant: all 53 locations match a population scale, adaptive
+  runs agree to 1e-11 with and without it, and with a constant rate the
+  calibrated quantiles differ by up to 300 admissions.
+- **E10 pools through the 2026 summer on purpose**, to include covid's
+  summer wave; its headline and month tables run to 2026-09-19.
+- **Month-view base column** in E07 (one base shown for configs on two
+  forecasters) and the **`late_decay` docstring** (now says it shrinks the
+  stored offset) were fixed.
+
+## Review status
+
+| notebook | status |
+|---|---|
+| E00, E01 | verified |
+| E02, E07, E09 | commented; changes made, not re-verified |
+| E10 part 1, E18 | changes made (finalists runs, matched pairs), rendered 2026-10-07, not reviewed |
+| E20 (flu and covid), E10, E15 | rendered 2026-10-07 with the covid grid, the new finalist and (E10, E20) the bootstrap tables, not reviewed |
+| E19 | rendered 2026-10-07, not reviewed |
+| E21 | rendered 2026-10-06, not reviewed |
+| E03, E10, E14, E15, E16, E17 | not reviewed |
+| E04, E05, E11 | retired 2026-10-07, never reviewed |
+
+On 2026-10-02 every notebook's introduction and Findings were rewritten to
+state setup and measured sizes only; the rewritten text has not been
+reviewed.
+
+## Code, data and prod
+
+- `R/calibration/qt.R`: the tracker (`qt_track`, `qt_learning_rate`,
+  `qt_project`). A port of the authors' Python, tested against it (see
+  "Running things").
+- `R/calibration/calibrate.R`: `calibrate_hub_forecasts()` and
+  `calibrate_hub_forecasts_exact()`, plus metrics. Options beyond the
+  paper: `transform`, `scales`, `lr_slow` / `fast_decay` /
+  `burn_in_learns_slow` / `slow_init` (two-term offset and warm start),
+  `off_after`, `late_decay`, `lr_seasonal`.
+- `R/calibration/hub_data.R`: hub readers (`hub_read_forecasts()` drops
+  spoiled submissions), `nhsn_read_truth()`.
+- `R/calibration/views.R`: reference configs, cached runs, standard views,
+  and `cal_wis_boot()` (round bootstrap of WIS reduction %, shared draws
+  across configs) with `cal_wis_boot_diff()` for paired gaps.
+- `scripts/calibration/calibration_ws_replay.R`: E12/E13. Scores in
+  `cache/calibration/ws_replay_scores_*.csv`.
+- `scripts/calibration/calibration_ws_replay.R` also holds the notebook
+  helpers: `ws_grid_configs()` (the E19/E20 structure grid),
+  `ws_prod_specs()`, `ws_run_spec()`, `ws_wis_by_season()` and
+  `ws_internals()` (per-round eta and offsets from an exact run).
+- `scripts/calibration/calibration_ili_backfill.R`: replays
+  `windowed_seasonal` over the ILI+ state history (2010–2024) into
+  hub-schema parquets in `cache/calibration/`, for an ILI+ burn-in (thread closed 2026-10-02, unused).
+- The pre-experiment notebooks (`reports/writeups/calibration/`) and the old
+  E07 scripts were deleted on 2026-10-02; they are in VCS history. Their
+  only analyses not in the current suite are the staleness lagged
+  correlation, the ILI+ base-bias table, per-round tracker internals (eta,
+  offsets before and after projection) and a per-level reliability plot.
+- **Data.** Flu hub submissions 2023-10-14 … 2026-05-30, 53 locations,
+  h−1…h3. 2023-24 is burn-in. NHSN vintages from
+  `get_nhsn_data_archive()` start 2024-11-19. With `settle_days` 14 the h3
+  offset is always 5 rounds stale.
+- **Prod (2026-09-21).** Flu and covid prod write a secondary submission,
+  `CMU-TimeSeries-Calibrated`, via the targets `calibrated_ensemble_nhsn`,
+  `make_calibrated_submission_csv` and `local_calibrated_scores_nhsn`. Flu
+  runs REF-op with the 2023-24 burn-in; covid runs REF-op without burn-in
+  or warm start. The covid submission is mostly
+  `windowed_seasonal_extra_sources` at h1–h3 and `revision_aware` at h−1
+  (weights in `pipelines/covid_geo_exclusions.csv`, edited weekly).
+
+## TODO: calibration in the evaluation pipeline
+
+The evidence for the operating point comes from the harness
+(`scripts/calibration/`), which reads the evaluation store's forecasts,
+learns from per-round NHSN snapshots and scores states only. The pipeline's
+calibration targets (`pipelines/{flu,covid}_hosp_prod.R`) run in evaluation
+mode but unchanged from prod: they calibrate the hub checkout's submitted
+history plus only the current replayed round, learn from
+`hhs_evaluation_data` (final truth), hard-code REF-op, and are skipped when
+`EVALUATION_FORECASTERS` drops an ensemble component. The goal is a
+calibrated row in the store beside the other forecasters, so the score
+notebooks pick it up.
+
+Three steps, each a run and a row in "Experiments":
+
+1. **Covid, REF-op cold, on the store's ensemble.** In evaluation mode the
+   target takes `ensemble_mix` over all replayed dates from the store,
+   calls `calibrate_hub_forecasts_exact()` with truth and vintages from
+   `nhsn_archive_data` (as `ch_hub_truth()` does), and takes the config
+   from a per-disease list. No burn-in. Score it like any other forecaster;
+   states-only is a scoring filter, so keep the US row. Check against E10's
+   covid ensemble REF-op cold row, the same computation in the harness.
+2. **Flu, sqrt 0.018 warm + leak, on the store's ensemble.** Same target,
+   plus the hub checkout's 2023-24 rounds as the burn-in season (the prod
+   target already reads them). The burn-in learns from the NHSN archive's
+   first version, which carries 2023-24 as final, as E10's ensemble warm
+   runs do (`fin_inputs()`); no HHS stitch on this base. Check against
+   E10's ensemble sqrt 0.018 warm + leak row.
+3. **Prod's config beside the finalist.** REF-op warm (flu) and REF-op cold
+   (covid) through the same target as a second row, so the evaluation
+   reports show both. Then decide whether prod switches.
+
+Not in these steps: a calibrated row on the clean `windowed_seasonal` base.
+The store has nothing before 2024-11-20; the harness backfills 2023-24 by
+rerunning the forecaster on the HHS-stitched archive
+(`ws_burn_in_forecasts()`). Doing that in the pipeline needs two decisions
+already made but not implemented: ILI+/flusurv extras are folded into
+`nhsn_prod_archive` with `version = time_value`, so a 2023-24 snapshot
+would train on finalized ILI+ (version each extras row at its season's end
+and replace the archive-build `stopifnot` with a version check; dates from
+2024-11-21 on are unaffected); and NSSP has no vintages before 2024-04-18,
+so every NSSP-reading component needs an explicit skip for 2023-24 (a
+snapshot before the first vintage silently returns 0 rows). Parked unless
+the evaluation reports need the replay base.
+
+## Running things
+
+Commands run from the repo root (inside the rocker container,
+`distrobox enter rocker -- <command>`, if R isn't on the host). The hub
+checkouts are siblings of this repo: `../FluSight-forecast-hub` (sparse:
+CMU model-output only) and `../covid19-forecast-hub`.
+
+**Port tests.** `R/calibration/qt.R` ports the authors' Python
+(`projectedQT`). The oracle is `../multiQT` on branch `delphi-fixes`, which
+fixes several defects in the published code (see that branch's commit
+message); the R port implements only the fixed behavior.
+
+```sh
+# tracker tests: bit-exact oracle fixtures plus properties
+Rscript -e 'testthat::test_file("tests/testthat/test-qt.R")'
+# whole suite
+Rscript -e 'testthat::test_dir("tests/testthat")'
+
+# regenerate the fixtures (made with lr_window = 50, which test-qt.R spells out)
+(cd ../multiQT && uv run --with numpy --with scikit-learn --with matplotlib python make_r_fixtures.py)
+cp ../multiQT/r_fixtures/*.csv tests/testthat/fixtures/qt/
+
+# cross-check on real hub series; expect ALL MATCH within 1e-8
+Rscript scripts/calibration/calibration_export_series.R
+(cd ../multiQT && uv run --with numpy --with scikit-learn --with matplotlib python check_r_port_real_series.py)
+```
+
+One porting trap: numpy broadcasts `Y - Yhat` along the last axis, while R
+recycles a vector down columns. Getting it wrong silently corrupts every
+learning rate; `test-qt.R` pins `eta` against a hand-built residual matrix.
+
+**Notebooks and scripts.**
+
+```sh
+just calibration-experiments              # all notebooks and the index
+just calibration-experiments finalists    # one notebook and the index
+Rscript scripts/calibration/calibration_ws_replay.R 12           # E12 (12 workers)
+Rscript scripts/calibration/calibration_ws_replay.R 12 burn_in   # E13
+```
+
+Tracker runs are cached under `cache/calibration/` by `cal_run_cached()`,
+keyed on inputs and arguments but not code: clear the cache after changing
+`R/calibration/`. E00 and E09 keep their own caches, cleared by hand.
+
+## Open threads
+
+Checked against the code on 2026-10-02. Repo-wide items are in
+`notes/ROADMAP.md`. Add a thread only if its answer could change the
+operating point.
+
+| item | status |
+|---|---|
+| **Reorganization (2026-10-06).** The constant-rate line was never given the structure analysis (E03–E05, E11 ran the adaptive rate on the ensemble; E16 inherited "cold" from E11's framing and E13's constant 0.1 warm covid loss). Plan: (1) E18 matched-pair scatters, warm vs warm and cold vs cold; (2) E20, the {anchor} × {start} × {leak} grid on the replay; (3) E19 as a notebook on that grid with WIS by month and carry vs reset; (4) E21, the seasons as data. Then re-read E03–E05 and E11 against E20 and retire or keep them | all rendered 2026-10-07 (E21 on 2026-10-06) and read into this file; E20 covers covid too, and sqrt 0.018 warm + leak is a finalist in E10 and E15. E03–E05 and E11 re-read against E20 on 2026-10-07: E20 reproduces E04, E05 and E11's directions on the replay (warm start first-season only, leak season-dependent on the adaptive rate, slow term nothing, constant beats adaptive), so those three were deleted; their rows stay in "Experiments". E03 stays: E20 runs every cell on sqrt and never compares scales | Render with `just calibration-experiments e18_ref_op_bridge e19_tracker_internals e20_structure_grid` inside the rocker container |
+| Uncertainty for WIS differences (bootstrap over rounds) | closed 2026-10-07: `cal_wis_boot()` in every E10 and E20 season table, with paired gaps. The flu finalist's lead over REF-op warm survives at h2–h3 on both bases; the leak's WIS gain does not (its case is coverage); the constant anchor's lead over the adaptive one survives at h2–h3; the warm start's gain is 2024-25 only. See "How to read the numbers" and "Finalists" |
+| Shrink only the played offset after the peak, keep the stored state | open; `late_decay` shrinks the stored state |
+| Disease-specific operating point | preliminary choice made 2026-10-07 (see "Operating point"): flu sqrt 0.018 cold on coverage grounds, covid REF-op cold. Earlier provisional reading, WIS-led: covid REF-op cold (no grid cell helps at h1–h3, E20); flu sqrt 0.018 warm + leak (E10, E20), about 1/1.5/2.5 points over REF-op warm at h1–h3 on the ensemble, coverage within 0.002. Rate and leak picked in-sample; two seasons. The bootstrap backs the flu lead at h2–h3 on both bases but not the leak's WIS share of it. Not implemented; see "TODO: calibration in the evaluation pipeline" |
+| HHS burn-in level | closed 2026-10-07: E21 measures it at 2–4% below the NHSN final in Nov–Apr 2023-24 (states summed), per-state median ratio 1.004, within the warm start's own noise. Used as-is. The pipeline's flu step (the TODO section) calibrates the ensemble base, whose 2023-24 rounds are hub submissions and whose burn-in truth is the NHSN archive's first version, so the stitch is only needed for a replay-base burn-in |
+| `windowed_seasonal_extra_sources` retrospective | parked (ROADMAP) |
+| Re-rank the finalists coverage-first (2026-10-07) | acted on the same day: flu moved to sqrt 0.018 cold (see "Operating point"). Still open as a question, since the replay 2025-26 excess is near the noise floor. Under the coverage rule the flu finalist (sqrt 0.018 warm + leak) fails on the replay in 2025-26: month-avg coverage +0.008/+0.014 above base at h2–h3 (warm without leak +0.022/+0.027), while on the ensemble it is within 0.004 of base there and 0.024–0.028 better in 2024-25. The cold configs (sqrt 0.018, REF-op cold) improve coverage in both seasons on both bases by 0.005–0.019 but give up 2–4 WIS points at h2–h3 in 2024-25, partly because cold = base through Nov–Dec 2024. Month-level noise is about 0.01, so the replay 2025-26 excess is at the edge. To settle: a coverage bootstrap like `cal_wis_boot()`, and the E20 grid read by coverage first |
+
+**Priorities (2026-10-07).** The configs tested are within about a point
+of each other and differ only in how they handle the rise and the fall, so
+further config-vs-config distinctions are deprioritized. Order of work:
+
+1. **Mechanistic view of one tracker on one season.** The per-round view
+   (offset relative to width, base bias, truth vs base median, WIS by
+   round) for the operating config, with the real-time offsets against
+   what the finalized data later showed. The 2025-26 zigzag reads cleanly
+   this way: a one-directional offset against a base whose error changes
+   sign at the peak, the plateau and the final decline. Build this as a
+   standing notebook (E19 is the start) and run it on every new season
+   before any config comparison.
+2. **Coverage as the criterion.** A coverage bootstrap beside
+   `cal_wis_boot()`, so the replay 2025-26 excess (0.008–0.014, noise about
+   0.01) can be called. Then re-read E20 by coverage.
+3. **Covid at h1–h3.** Nothing helps; decide whether to stop calibrating
+   those horizons and keep h0/h−1.
+4. Everything else in this table and in "Ideas" waits. Do not add a config
+   unless the mechanistic view predicts where it would help; do not tune
+   for a single season's anomaly.
+
+**TODO: rewrite this ledger and the notebooks around the mechanistic view
+(noted 2026-10-07, not started).** The experiment summaries above are
+detailed, expensive to read, and mostly record that the scores are
+indifferent to the config; every session starts by triaging them. Slim the
+ledger to the data facts, the operating point and its reasoning, the
+coverage rule, and the per-season mechanistic reads; drop the E-by-E result
+prose (it stays recoverable from the commit log and the rendered
+notebooks). Decide what to keep in a dedicated session, not in passing.
+
+Closed 2026-10-02 without further work: ramp vs post-peak split (the month
+view shows it), h−1 calibration (left to the revision-aware methods,
+ROADMAP 3), ILI+ burn-in (the HHS burn-in covers it), gallery review (review
+uses the month view), speeding up exact runs.
+
+## Ideas
+
+Method ideas with no code and no notebook that would test them. None of
+E18–E21 points at any of them; they are kept so they are not re-invented.
+
+- Cross-horizon gradients as a staleness signal: the h0 offset is fresher
+  than the h3 one by three rounds, so their gap could steer the h3 step.
+- Data-driven phase gating: switch the offset off (or shrink what is
+  played) when the season's phase changes, instead of a fixed date
+  (E02, E17) or a leak.
+- A scale proxy: a per-location scale from the base's own interval width
+  rather than population, so the sqrt-per-100k transform is not needed.
+
+Housekeeping, low priority:
+
+- Rename the tracker's `slow` / `fast` terms to `init_offset` /
+  `tracked_offset` (`lr_slow`, `fast_decay`, `slow_init`, `init_slow`,
+  `burn_in_learns_slow`). The slow term's online learning never registered
+  (E04, E18); what it does is hold the warm start where the leak cannot
+  drain it, so the real split is a fixed burn-in offset plus a learned,
+  leaky one. "Constant" / "adaptive" are taken by the learning rates.
+
+Held-out data, no code yet:
+
+- **ILINet as a target**, to check the trackers on a dataset they were not
+  tuned on. `fluview` has real issue history back to about 2010 (CA wILI
+  for week 2023-50 is revised weekly through May 2024). Source checked
+  2026-10-02 (`notes/ilinet-sources.md`): v5 `fluview_ilinet` matches
+  epidatr `fluview` at every issue outside NY, version date = CDC release
+  Friday; state version history starts 2017w40 in both, so a vintage
+  backtest has 2017-18 on; use state `ili` (v5 has no state `wili`).
+  Would follow the `nssp_target_archive` + `primary_source` pattern, drop
+  the ILI+ training rows in this mode, and face the percentage-scale
+  question NSSP-target scoring has (ROADMAP 2). Prototype on one forecaster
+  and a few seasons; `calibration_ili_backfill.R` (ILI+, no vintages) is a
+  reference, not the base to extend.

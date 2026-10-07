@@ -1,0 +1,199 @@
+---
+title: "E01: adaptive learning-rate settings"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 11, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+Question: how do the adaptive learning-rate settings change WIS and
+coverage? The paper's tracker sets
+`eta = mult × 90th percentile of |outcome − forecast|` over the last
+`lr_window` observed rounds; the settings are the multiplier (`lr_mult`), the
+window (`lr_window`), and the summer policy (`season_policy`: carry offsets
+into the next season, or reset them to zero).
+
+This re-asks the original E01 (a pre-fix, count-scale sweep on the submitted
+ensemble with finalized truth, since deleted) on the current setup.
+
+Setup:
+
+- Disease: flu. Base forecaster: the clean `windowed_seasonal` replay (all 53
+  locations, the 55 hub rounds; 27 in 2024-25, 28 in 2025-26). Horizons h0–h3.
+- Learning truth: exact (re-run at every round on the data published by then;
+  E00), one week of extra delay.
+- Cold start: no burn-in season, offsets start at zero in November 2024. With
+  no burn-in there is one summer to cross (2025), so the season policy only
+  changes 2025-26.
+- Tracker: REF-paper (single term, adaptive rate) on the square-root scale,
+  learning-rate floor 0.001.
+- Grid: `lr_mult` {0.3, 0.1, 0.03, 0.01} × `lr_window` {8, 20, Inf} ×
+  `season_policy` {carry, reset}, 24 runs, plus one count-scale run at mult
+  0.03, window 20, carry.
+- Scores: states only (US excluded). Each season is scored on its
+  own rounds.
+
+WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
+WIS lower than base. L1 coverage bias: lower is better.
+
+```{r load}
+source(here::here("scripts/calibration/calibration_ws_replay.R"))
+wi <- ws_inputs("flu")
+MULTS <- c(0.3, 0.1, 0.03, 0.01)
+WINDOWS <- c(8, 20, Inf)
+POLICIES <- c("carry", "reset")
+# The sqrt single-term tracker, cold; E02 builds its configs the same way so runs are shared.
+sqrt_cfg <- function(mult = 0.03, window = 20, policy = "carry") {
+  list(
+    ref = "paper", transform = "sqrt", lr_args = list(mult = mult, floor = 1e-3),
+    burn_in_seasons = character(0), slow_init = NULL, lr_window = window, season_policy = policy
+  )
+}
+run <- function(cfg) {
+  do.call(cal_run_cached, c(list(wi$fc, wi$truth), cfg, list(learn = "exact", vintages = wi$vintages, workers = params$workers)))
+}
+grid <- tidyr::expand_grid(mult = MULTS, window = WINDOWS, policy = POLICIES)
+sweep <- purrr::pmap(grid, \(mult, window, policy) run(sqrt_cfg(mult, window, policy)))
+count_ref <- run(list(ref = "paper", burn_in_seasons = character(0), slow_init = NULL))
+```
+
+```{r metrics}
+GEOS <- c(states = "states only (US excluded)")
+SEASONS <- c(LIVE, "both")
+score <- function(cal) {
+  fc <- cal$forecasts %>% mutate(season = season_of(reference_date))
+  purrr::imap(WS_GEOS[names(GEOS)], function(keep, g) ws_scores(fc %>% filter(keep(location))) %>% mutate(geos = g)) %>%
+    bind_rows() %>%
+    select(geos, season, horizon, which, wis, cal_err) %>%
+    tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err)) %>%
+    mutate(wis_pct = 100 * (wis_base - wis_cal) / wis_base)
+}
+label <- function(df) {
+  df %>% mutate(
+    geos = factor(geos, levels = names(GEOS), labels = GEOS),
+    season = factor(season, levels = SEASONS, labels = c(LIVE, "both seasons")),
+    h = factor(paste0("h", horizon), levels = paste0("h", 0:3))
+  )
+}
+sweep_m <- purrr::map2(sweep, seq_len(nrow(grid)), \(cal, i) score(cal) %>% mutate(grid[i, ])) %>%
+  bind_rows() %>%
+  label() %>%
+  mutate(window_f = factor(as.character(window), levels = as.character(WINDOWS)), policy = factor(policy, levels = POLICIES))
+count_m <- score(count_ref) %>% label()
+WINDOW_COLS <- c(`8` = "#E69F00", `20` = "#0072B2", `Inf` = "#009E73")
+```
+
+# 1. Coverage bias vs WIS over the multiplier
+
+One line per window and season policy, tracing the multiplier from 0.01
+(near the base, the open circle) to 0.3. Labels mark the multiplier on the
+window-20 carry line. The cross is the count-scale run at mult 0.03, window
+20, carry. The y axis is clipped at −15%.
+
+```{r curve-fn}
+curve_plot <- function(g) {
+  d <- sweep_m %>% filter(geos == g) %>% arrange(mult)
+  base <- d %>% distinct(h, season, cal_err_base)
+  ggplot(d, aes(cal_err_cal, wis_pct, colour = window_f)) +
+    geom_hline(yintercept = 0, colour = "grey60", linewidth = 0.3) +
+    geom_path(aes(linetype = policy, group = interaction(window_f, policy)), linewidth = 0.7) +
+    geom_point(size = 1) +
+    geom_text(data = d %>% filter(window == 20, policy == "carry"), aes(label = mult),
+      size = 2.4, vjust = -0.8, show.legend = FALSE) +
+    geom_point(data = base, aes(cal_err_base, 0, shape = "base (uncalibrated)"), colour = "black", fill = "white", size = 2.2) +
+    geom_point(data = count_m %>% filter(geos == g), aes(cal_err_cal, wis_pct, shape = "count scale, mult 0.03"), colour = "black", size = 2.4) +
+    scale_shape_manual(values = c(`base (uncalibrated)` = 21, `count scale, mult 0.03` = 4), name = NULL) +
+    scale_colour_manual(values = WINDOW_COLS, name = "lr_window") +
+    scale_linetype_manual(values = c(carry = "solid", reset = "22"), name = "season policy") +
+    facet_grid(season ~ h) +
+    coord_cartesian(ylim = c(max(-15, min(d$wis_pct)), max(d$wis_pct) + 0.5)) +
+    labs(x = "L1 coverage bias (lower is better)", y = "WIS reduction % (positive = calibrated WIS lower than base)", title = g) +
+    theme(legend.position = "bottom")
+}
+```
+
+```{r curve-states, fig.height=8}
+curve_plot(GEOS[["states"]])
+```
+
+# 2. Which setting matters?
+
+For each season and horizon, how far WIS reduction % moves when one setting
+changes and the other two stay fixed: the range over the four multipliers,
+over the three windows, and the carry-vs-reset gap, each averaged over the
+settings held fixed. States only. The policy gap is zero in 2024-25 by
+construction (no summer crossed yet).
+
+```{r spread}
+st <- sweep_m %>% filter(geos == GEOS[["states"]])
+spread <- bind_rows(
+  st %>% group_by(season, h, window, policy) %>% summarize(r = diff(range(wis_pct)), .groups = "drop") %>%
+    group_by(season, h) %>% summarize(v = mean(r), .groups = "drop") %>% mutate(setting = "multiplier"),
+  st %>% group_by(season, h, mult, policy) %>% summarize(r = diff(range(wis_pct)), .groups = "drop") %>%
+    group_by(season, h) %>% summarize(v = mean(r), .groups = "drop") %>% mutate(setting = "window"),
+  st %>% group_by(season, h, mult, window) %>% summarize(r = diff(range(wis_pct)), .groups = "drop") %>%
+    group_by(season, h) %>% summarize(v = mean(r), .groups = "drop") %>% mutate(setting = "season policy")
+)
+spread %>%
+  transmute(setting = factor(setting, levels = c("multiplier", "window", "season policy")), col = paste(season, h), v = round(v, 1)) %>%
+  tidyr::pivot_wider(names_from = col, values_from = v) %>%
+  arrange(setting) %>%
+  knitr::kable(caption = "Mean range of WIS reduction % (points; positive = calibrated WIS lower than base) when one setting varies, states only")
+```
+
+# 3. Each metric against the multiplier
+
+Top: WIS reduction % (positive = calibrated WIS lower than base), clipped at
+−30% (mult 0.3 goes far below). Bottom: L1 coverage bias (lower is better), each season's base as a thin line. Carry only, states only;
+colour is the window.
+
+```{r vs-mult, fig.height=6.5}
+long <- st %>%
+  filter(policy == "carry", season != "both seasons") %>%
+  transmute(h, season, mult, window_f, `WIS reduction % (positive = calibrated WIS lower than base)` = pmax(wis_pct, -30), `L1 coverage bias (lower is better)` = cal_err_cal) %>%
+  tidyr::pivot_longer(c(`WIS reduction % (positive = calibrated WIS lower than base)`, `L1 coverage bias (lower is better)`), names_to = "metric") %>%
+  mutate(metric = factor(metric, levels = c("WIS reduction % (positive = calibrated WIS lower than base)", "L1 coverage bias (lower is better)")))
+base_lines <- st %>%
+  filter(season != "both seasons") %>%
+  distinct(h, season, value = cal_err_base) %>%
+  mutate(metric = factor("L1 coverage bias (lower is better)", levels = levels(long$metric)))
+ggplot(long, aes(mult, value, colour = window_f, linetype = season)) +
+  geom_hline(data = base_lines, aes(yintercept = value, linetype = season), colour = "grey40", linewidth = 0.3) +
+  geom_line() +
+  geom_point(size = 1) +
+  scale_x_log10(breaks = MULTS) +
+  scale_colour_manual(values = WINDOW_COLS, name = "lr_window") +
+  scale_linetype_manual(values = c(`2024-2025` = "solid", `2025-2026` = "22"), name = NULL) +
+  facet_grid(metric ~ h, scales = "free_y", labeller = labeller(metric = label_wrap_gen(28))) +
+  labs(x = "lr_mult", y = NULL) +
+  theme(legend.position = "bottom")
+```
+
+```{r month-view-cfgs}
+# The plots show the multipliers around the elbow and the season policy at window 20, plus the count scale; the tables cover every config.
+mv_cals <- c(
+  setNames(sweep, with(grid, sprintf("sqrt mult %s, window %s, %s", mult, as.character(window), policy))),
+  list(`count mult 0.03, window 20, carry` = count_ref)
+)
+mv <- cal_month_view(mv_cals, seasons = LIVE)
+mv_plot_cfgs <- c(
+  "sqrt mult 0.1, window 20, carry", "sqrt mult 0.03, window 20, carry", "sqrt mult 0.01, window 20, carry",
+  "sqrt mult 0.03, window 20, reset", "count mult 0.03, window 20, carry"
+)
+```
+
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
+```

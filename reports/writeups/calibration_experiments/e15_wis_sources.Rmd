@@ -1,0 +1,194 @@
+---
+title: "E15: where the WIS gains come from"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  workers: 14
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 10, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+Question: for each finalist, how does the WIS change split across quantile
+levels, how large are the offsets next to the base forecast's spread, and
+how much of the change comes from moving the median versus changing widths?
+
+Setup:
+
+- Diseases: flu and covid, one section each.
+- Base forecaster: the clean `windowed_seasonal` replay, on the (round,
+  location, horizon, level) rows the submitted ensemble also has, h0–h3
+  (E10's replay runs).
+- Learning truth: exact (re-run at every round on the data published by then;
+  E00), one week of extra delay.
+- Scores against finalized truth over 2024-25 and 2025-26, pooled; states
+  only (US excluded).
+- Configs, E10's finalists:
+  - **REF-op warm**: flu prod; warm start from the 2023-24 burn-in season.
+  - **REF-op cold**: covid prod; no burn-in season.
+  - **sqrt 0.018**: constant learning rate 0.018 on the square root of
+    admissions per 100k (E16), cold.
+  - **sqrt 0.018 warm**: the same with the burn-in season and a warm start.
+
+WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
+WIS lower than base.
+
+**Three ways to cut the WIS reduction.**
+
+1. **By quantile level.** WIS is the average pinball loss over the 23
+   quantile levels, so the total change splits exactly into one piece per
+   level. A level's piece is its change in pinball loss as a share of the
+   base WIS; the pieces add up to the total.
+2. **Offset size against the forecast's own spread.** For each forecast,
+   the offset at a level is `calibrated quantile − base quantile` (in
+   admissions, after every projection step). It is compared with the base
+   forecast's 90% interval width (q95 − q05) and 50% interval width
+   (q75 − q25). A ratio of 0.1 means the quantile moved by a tenth of the
+   interval width.
+3. **Median shift vs width change.** Each calibrated forecast is split into
+   two parts and each part is scored on its own:
+   - **median shift only**: every base quantile moves by the same amount,
+     the calibrated median minus the base median. The base forecast's
+     shape and widths are kept.
+   - **width change only**: the calibrated forecast is moved so that its
+     median sits on the base median. The calibrated widths and shape are
+     kept, the base centre is kept.
+
+   The interaction is the full change minus the two parts. Both parts are
+   floored at zero, as the calibrated forecast is.
+
+```{r load}
+source(here::here("scripts/calibration/calibration_ws_replay.R"))
+pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
+FIN_COLS <- c(`REF-op warm` = "#000000", `REF-op cold` = "#D55E00", `sqrt 0.018` = "#0072B2", `sqrt 0.018 warm` = "#56B4E9")
+fin_fc <- function(d) {
+  f <- fin_runs(d, bases = "replay", workers = params$workers)
+  purrr::imap(f$cals, \(cal, nm) cal$forecasts %>% mutate(config = sub("^replay, ", "", nm))) %>%
+    bind_rows() %>%
+    mutate(season = season_of(reference_date), config = factor(config, levels = names(FIN_COLS))) %>%
+    filter(season %in% LIVE, !is_burn_in, !is.na(truth), !is.na(value_base), location != "US")
+}
+FC <- purrr::map(c(flu = "flu", covid = "covid"), fin_fc)
+```
+
+```{r fns}
+# 1. Each level's change in pinball loss as a share of the base WIS.
+by_level <- function(fc) {
+  fc %>%
+    group_by(config, horizon, level) %>%
+    summarize(base = sum(pinball(truth, value_base, level)), cal = sum(pinball(truth, value_cal, level)), .groups = "drop") %>%
+    group_by(config, horizon) %>%
+    mutate(contrib = 100 * (base - cal) / sum(base), total = sum(contrib)) %>%
+    ungroup()
+}
+level_plot <- function(bl) {
+  d <- bl %>% mutate(panel = sprintf("h%d, total %+.1f%%", horizon, total))
+  ggplot(d, aes(factor(level), contrib, fill = config)) +
+    geom_hline(yintercept = 0, colour = "grey50") +
+    geom_col(width = 0.75) +
+    facet_wrap(~ paste(config, panel, sep = ": "), ncol = 4) +
+    scale_fill_manual(values = FIN_COLS, guide = "none") +
+    scale_x_discrete(labels = function(x) ifelse(x %in% c("0.01", "0.05", "0.25", "0.5", "0.75", "0.95", "0.99"), x, "")) +
+    labs(x = "quantile level", y = "share of WIS reduction, % of base WIS\n(positive = calibrated WIS lower than base)") +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 7))
+}
+group_tbl <- function(bl) {
+  grouped <- bl %>%
+    mutate(
+      band = case_when(level <= 0.05 | level >= 0.95 ~ "tails", level <= 0.3 | level >= 0.7 ~ "shoulders", TRUE ~ "centre"),
+      side = case_when(level < 0.5 ~ "lower", level > 0.5 ~ "upper", TRUE ~ "median")
+    )
+  bind_rows(
+    grouped %>% group_by(config, horizon, part = band) %>% summarize(v = sum(contrib), .groups = "drop"),
+    grouped %>% group_by(config, horizon, part = paste(side, "side")) %>% summarize(v = sum(contrib), .groups = "drop"),
+    grouped %>% group_by(config, horizon) %>% summarize(v = sum(contrib), .groups = "drop") %>% mutate(part = "total")
+  ) %>%
+    mutate(part = factor(part, levels = c("tails", "shoulders", "centre", "lower side", "median side", "upper side", "total"),
+      labels = c("tails", "shoulders", "centre", "below the median", "the median level", "above the median", "total"))) %>%
+    transmute(config, part, horizon = paste0("h", horizon), v = sprintf("%+.2f", v)) %>%
+    tidyr::pivot_wider(names_from = horizon, values_from = v) %>%
+    arrange(config, part)
+}
+# 2. Signed offset ÷ the base 90% interval width, per forecast and level.
+offset_plot <- function(fc) {
+  ref <- levels(droplevels(fc$config))[1]
+  widths <- fc %>%
+    filter(config == ref, level %in% c(0.05, 0.95)) %>%
+    select(location, horizon, reference_date, level, value_base) %>%
+    tidyr::pivot_wider(names_from = level, values_from = value_base, names_prefix = "q") %>%
+    transmute(location, horizon, reference_date, w90 = q0.95 - q0.05)
+  off_q <- fc %>%
+    inner_join(widths, by = c("location", "horizon", "reference_date")) %>%
+    filter(w90 > 0) %>%
+    mutate(r90 = (value_cal - value_base) / w90) %>%
+    group_by(config, horizon, level) %>%
+    summarize(med = median(r90), lo = quantile(r90, 0.1), hi = quantile(r90, 0.9), .groups = "drop")
+  ggplot(off_q, aes(level, med, colour = config, fill = config)) +
+    geom_hline(yintercept = 0, colour = "grey50") +
+    geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.12, colour = NA) +
+    geom_line() +
+    geom_point(size = 0.8) +
+    facet_wrap(~ paste0("h", horizon), nrow = 2) +
+    scale_colour_manual(values = FIN_COLS, name = NULL, aesthetics = c("colour", "fill")) +
+    labs(x = "quantile level", y = "offset / base (q95 − q05)") +
+    theme(legend.position = "bottom")
+}
+# 3. Score the median shift and the width change on their own.
+split_tbl <- function(fc) {
+  med <- fc %>%
+    filter(level == 0.5) %>%
+    select(config, location, horizon, reference_date, med_base = value_base, med_cal = value_cal)
+  scores <- fc %>%
+    left_join(med, by = c("config", "location", "horizon", "reference_date")) %>%
+    mutate(median_only = pmax(value_base + (med_cal - med_base), 0), width_only = pmax(med_base + (value_cal - med_cal), 0)) %>%
+    group_by(config, horizon) %>%
+    summarize(
+      base = sum(pinball(truth, value_base, level)),
+      full = sum(pinball(truth, value_cal, level)),
+      `median shift only` = sum(pinball(truth, median_only, level)),
+      `width change only` = sum(pinball(truth, width_only, level)),
+      .groups = "drop"
+    ) %>%
+    tidyr::pivot_longer(c(full, `median shift only`, `width change only`), names_to = "variant", values_to = "wis") %>%
+    mutate(pct = 100 * (base - wis) / base)
+  bind_rows(
+    scores %>% select(config, variant, horizon, pct),
+    scores %>%
+      group_by(config, horizon) %>%
+      summarize(pct = pct[variant == "full"] - pct[variant == "median shift only"] - pct[variant == "width change only"], .groups = "drop") %>%
+      mutate(variant = "interaction (full − the two parts)")
+  ) %>%
+    mutate(variant = factor(variant, levels = c("full", "median shift only", "width change only", "interaction (full − the two parts)"))) %>%
+    transmute(config, variant, horizon = paste0("h", horizon), pct = sprintf("%+.2f", pct)) %>%
+    tidyr::pivot_wider(names_from = horizon, values_from = pct) %>%
+    arrange(config, variant)
+}
+```
+
+```{r sections, results="asis", fig.height=9}
+for (d in names(FC)) {
+  fc <- FC[[d]]
+  bl <- by_level(fc)
+  cat("\n\n# ", d, "\n\n", sep = "")
+  cat("\n\n## WIS reduction by quantile level\n\n")
+  cat("Each bar is one level's share of the total WIS reduction %; the bars in a panel add up to the panel's total, printed in the strip.\n\n")
+  print(level_plot(bl))
+  cat("\n\nThe same pieces summed over groups of levels: **tails** are the six levels at or beyond 0.05/0.95, **shoulders** the ten levels 0.1–0.3 and 0.7–0.9, **centre** the seven levels 0.35–0.65. Below and above the median are split, to show whether the gain comes from moving the lower or the upper side.\n\n")
+  print(knitr::kable(group_tbl(bl), caption = paste0(d, ": WIS reduction % by group of levels (positive = calibrated WIS lower than base)")))
+  cat("\n\n## Offset size against the forecast's spread\n\n")
+  cat("Offsets are signed: positive means the calibrated quantile is above the base one. The line is the median over forecasts (location × round) and the band the middle 80%, offset ÷ base 90% interval width. Forecasts with a zero-width base interval are left out.\n\n")
+  print(offset_plot(fc))
+  cat("\n\n## Median shift vs width change\n\n")
+  print(knitr::kable(split_tbl(fc), caption = paste0(d, ": WIS reduction % (positive = calibrated WIS lower than base)")))
+}
+```

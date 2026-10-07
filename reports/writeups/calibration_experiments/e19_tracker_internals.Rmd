@@ -1,0 +1,242 @@
+---
+title: "E19: tracker internals by month, and carry vs reset, on both anchors"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  workers: 14
+  disease: flu
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 11, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+Question: what does each tracker do month by month? How large is its step,
+how large is the offset it plays, and does the WIS change in a month follow
+from those together with the base's bias in that month? And how much of the
+second season's result is the offset carried in from the first?
+
+Setup:
+
+- Disease: `r params$disease`. Base forecaster: the clean `windowed_seasonal`
+  replay (53 locations, the hub rounds). Horizons h0–h3.
+- Learning truth: exact (re-run at every round on the data published by then;
+  E00), one week of extra delay. Each round's offsets come from that round's
+  own re-run, so they are the state that played. The step size is taken
+  from one pass on final truth per config, because in a round's own re-run
+  that round's outcomes have not yet stepped the tracker.
+- Configs: the E20 grid ({adaptive 0.03, constant 0.018} × {cold, warm} ×
+  {no leak, leak 0.1}), prod's REF-op warm and REF-op cold, and two
+  `season_policy = "reset"` runs (each anchor, cold, no leak), which zero the
+  offsets at the start of 2025-26.
+- Scores over the two live seasons, each on its own rounds; states only (US
+  excluded).
+
+Internals are unit-free: the learning rate and the median-level offset are
+divided by the base's 90% interval width, the rate in the config's working
+units (sqrt of counts, or of counts per 100k) and the offset in counts. Each
+value is the median over states for a (horizon, round), then averaged within
+the calendar month. "Share above base median" is the fraction of state
+outcomes above the base's median, the base's own bias that month.
+
+```{r load}
+source(here::here("scripts/calibration/calibration_ws_replay.R"))
+wi <- ws_inputs(params$disease)
+fc_burn_in <- bind_rows(ws_burn_in_forecasts(params$disease), wi$fc)
+grid <- ws_grid_configs(wi$rate_scales)
+cold_no_leak <- grid[c("adaptive 0.03 | cold | no leak", "constant 0.018 | cold | no leak")]
+RESETS <- purrr::map(cold_no_leak, function(s) list(cfg = utils::modifyList(s$cfg, list(season_policy = "reset")), burn_in = FALSE))
+names(RESETS) <- sub(" \\| no leak$", " | reset", names(RESETS))
+SPECS <- c(grid, ws_prod_specs(wi$rate_scales), RESETS)
+# Internals are not in the standard cache, so cached runs without them are re-run here.
+cals <- purrr::map(SPECS, ws_run_spec, wi = wi, fc_burn_in = fc_burn_in, workers = params$workers, internals = TRUE)
+# An exact run's round-t rows come from the re-run at t, before round t's outcomes step the tracker,
+# so their step size is zero. The step size comes from one pass on final truth per config instead.
+cals_final <- purrr::map(SPECS, function(spec) {
+  fc <- if (spec$burn_in) fc_burn_in else wi$fc
+  do.call(cal_run, c(list(fc, wi$truth), spec$cfg, list(learn = "final")))
+})
+ANCHOR_COLS <- c(`adaptive 0.03` = "#E69F00", `constant 0.018` = "#0072B2", `REF-op` = "#000000")
+anchor_of <- function(config) dplyr::case_when(
+  grepl("^adaptive", config) ~ "adaptive 0.03",
+  grepl("^constant", config) ~ "constant 0.018",
+  TRUE ~ "REF-op"
+)
+```
+
+```{r internals}
+internals <- purrr::imap(SPECS, function(spec, nm) {
+  eta <- ws_internals(cals_final[[nm]], spec$cfg, wi$rate_scales) %>% select(horizon, reference_date, eta_rel)
+  ws_internals(cals[[nm]], spec$cfg, wi$rate_scales) %>%
+    select(-eta_rel) %>%
+    left_join(eta, by = c("horizon", "reference_date")) %>%
+    mutate(config = nm)
+}) %>%
+  bind_rows() %>%
+  mutate(
+    config = factor(config, levels = names(SPECS)),
+    season = season_of(reference_date),
+    month = factor(format(reference_date, "%b"), levels = month.abb[c(8:12, 1:7)]),
+    h = factor(paste0("h", horizon), levels = paste0("h", 0:3))
+  ) %>%
+  filter(season %in% LIVE)
+mv <- cal_month_view(cals, seasons = LIVE)
+by_month <- internals %>%
+  group_by(config, season, month, h, horizon) %>%
+  summarize(across(c(eta_rel, offset_rel, offset_abs_rel, above_base_median), \(x) mean(x, na.rm = TRUE)), .groups = "drop") %>%
+  left_join(mv$month %>% select(config, season, month, horizon, wis_pct, share), by = c("config", "season", "month", "horizon")) %>%
+  mutate(anchor = anchor_of(as.character(config)))
+# Internals are only shown for the no-leak grid, prod and the resets; the leak runs' offsets are in the tables.
+PLOT_CFGS <- c(names(grid)[c(1, 3, 5, 7)], "REF-op warm", "REF-op cold")
+```
+
+# Per round
+
+Median over states of the step size and the played offset, both relative to
+the base's 90% width, per round. Warm configs start with an offset; cold
+ones at zero.
+
+```{r per-round, fig.height=8}
+long <- internals %>%
+  filter(config %in% PLOT_CFGS) %>%
+  select(config, h, reference_date, `eta / width` = eta_rel, `median-level offset / width` = offset_rel, `mean |offset| / width` = offset_abs_rel) %>%
+  tidyr::pivot_longer(-c(config, h, reference_date))
+ggplot(long, aes(reference_date, value, colour = config)) +
+  geom_hline(yintercept = 0, colour = "grey60") +
+  geom_line() +
+  facet_grid(name ~ h, scales = "free_y") +
+  labs(x = NULL, y = "median over states", colour = NULL) +
+  theme(legend.position = "bottom") +
+  guides(colour = guide_legend(nrow = 2))
+```
+
+# By month
+
+One row per config, horizon and season-month: step size, offset, the base's
+bias that month, and the month's WIS change. The grey bar is the month's
+share of the season's base WIS.
+
+```{r by-month-plot, fig.height=9}
+pm <- by_month %>% filter(config %in% PLOT_CFGS)
+for (s in LIVE) {
+  d <- pm %>% filter(season == s)
+  long <- d %>%
+    select(config, h, month, `eta / width` = eta_rel, `offset / width` = offset_rel, `share above base median` = above_base_median, `WIS reduction %` = wis_pct) %>%
+    tidyr::pivot_longer(-c(config, h, month)) %>%
+    mutate(name = factor(name, levels = c("eta / width", "offset / width", "share above base median", "WIS reduction %")))
+  bars <- d %>% distinct(h, month, share) %>% mutate(name = factor("WIS reduction %", levels = levels(long$name)))
+  print(
+    ggplot(long, aes(month, value, colour = config, group = config)) +
+      geom_col(data = bars, aes(month, share), inherit.aes = FALSE, fill = "grey85", width = 0.7) +
+      geom_hline(data = tibble(name = factor("share above base median", levels = levels(long$name)), y = 0.5), aes(yintercept = y), colour = "grey60") +
+      geom_hline(data = tibble(name = factor(c("offset / width", "WIS reduction %"), levels = levels(long$name)), y = 0), aes(yintercept = y), colour = "grey60") +
+      geom_line() +
+      geom_point(size = 1) +
+      facet_grid(name ~ h, scales = "free_y") +
+      labs(title = s, x = NULL, y = NULL, colour = NULL) +
+      theme(legend.position = "bottom") +
+      guides(colour = guide_legend(nrow = 2))
+  )
+}
+```
+
+## Tables
+
+```{r by-month-tables, results="asis"}
+month_cell <- function(d, col, fmt) {
+  d %>%
+    transmute(config, h, col = paste(season, month), v = sprintf(fmt, .data[[col]])) %>%
+    tidyr::pivot_wider(names_from = col, values_from = v) %>%
+    arrange(h, config)
+}
+for (spec in list(
+  c("eta_rel", "%.3f", "Step size / base 90% width (mean over rounds of the state median)"),
+  c("offset_rel", "%+.3f", "Median-level offset / base 90% width"),
+  c("wis_pct", "%+.1f", "WIS reduction % within the month (positive = calibrated WIS lower than base)")
+)) {
+  cat("\n\n", cal_h(3), " ", spec[3], "\n\n", sep = "")
+  print(knitr::kable(month_cell(by_month, spec[1], spec[2])))
+}
+cat("\n\n", cal_h(3), " Share of state outcomes above the base median (the base's bias; same for every config)\n\n", sep = "")
+print(knitr::kable(
+  by_month %>%
+    filter(config == names(SPECS)[1]) %>%
+    transmute(h, col = paste(season, month), v = sprintf("%.2f", above_base_median)) %>%
+    tidyr::pivot_wider(names_from = col, values_from = v)
+))
+```
+
+# Offset against WIS, month by month
+
+Each point is a config in one season-month at one horizon: the median-level
+offset it played against the base's bias that month, coloured by the
+month's WIS change. If a positive offset only pays when the base
+under-predicts, the gains sit in the upper right and lower left.
+
+```{r offset-vs-bias, fig.height=4.5}
+ggplot(by_month %>% filter(config %in% names(grid)), aes(above_base_median, offset_rel, colour = wis_pct)) +
+  geom_hline(yintercept = 0, colour = "grey60") +
+  geom_vline(xintercept = 0.5, colour = "grey60") +
+  geom_point(alpha = 0.8) +
+  facet_grid(season ~ h) +
+  scale_colour_gradient2(low = "#D55E00", mid = "grey80", high = "#009E73", midpoint = 0) +
+  labs(x = "share of outcomes above the base median", y = "median-level offset / width", colour = "WIS reduction %")
+```
+
+# Carry vs reset
+
+The offset each cold, no-leak tracker brings into 2025-26, and what resetting
+it to zero at the season boundary does to the season's WIS. E01 did this for
+the adaptive rate; the constant one is new.
+
+```{r carry-reset}
+pairs <- tibble::tibble(
+  anchor = c("adaptive 0.03", "constant 0.018"),
+  carry = names(cold_no_leak),
+  reset = names(RESETS)
+)
+m <- ws_wis_by_season(cals[c(pairs$carry, pairs$reset)])
+cr <- pairs %>%
+  tidyr::pivot_longer(c(carry, reset), names_to = "policy", values_to = "config") %>%
+  left_join(m %>% mutate(config = as.character(config)), by = "config")
+knitr::kable(
+  cr %>%
+    transmute(anchor, policy, col = paste(season, h), v = sprintf("%+.1f", wis_pct)) %>%
+    tidyr::pivot_wider(names_from = col, values_from = v),
+  caption = "WIS reduction %, states only, by season and horizon"
+)
+first_live <- internals %>%
+  filter(season == LIVE[2], config %in% pairs$carry) %>%
+  group_by(config, h) %>%
+  slice_min(reference_date, n = 1, with_ties = FALSE) %>%
+  ungroup()
+knitr::kable(
+  first_live %>%
+    transmute(config, h, v = sprintf("%+.3f", offset_rel)) %>%
+    tidyr::pivot_wider(names_from = h, values_from = v),
+  caption = sprintf("Median-level offset / width at the first %s round, carried in from %s", LIVE[2], LIVE[1])
+)
+```
+
+```{r carry-reset-month, fig.height=4}
+cr_month <- by_month %>%
+  filter(config %in% c(pairs$carry, pairs$reset), season == LIVE[2]) %>%
+  mutate(policy = ifelse(config %in% pairs$reset, "reset", "carry"))
+ggplot(cr_month, aes(month, wis_pct, colour = anchor, linetype = policy, group = config)) +
+  geom_hline(yintercept = 0, colour = "grey60") +
+  geom_line() +
+  geom_point(size = 1) +
+  facet_wrap(~h, nrow = 1) +
+  scale_colour_manual(values = ANCHOR_COLS) +
+  labs(title = paste(LIVE[2], "by month"), x = NULL, y = "WIS reduction %", colour = NULL, linetype = NULL) +
+  theme(legend.position = "bottom")
+```

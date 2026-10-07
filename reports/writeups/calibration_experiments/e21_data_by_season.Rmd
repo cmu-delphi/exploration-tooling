@@ -1,0 +1,268 @@
+---
+title: "E21: the two live seasons' data"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_depth: 2
+params:
+  disease: flu
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(fig.align = "center", fig.width = 11, fig.height = 5, message = FALSE, warning = FALSE)
+knitr::opts_knit$set(root.dir = here::here())
+ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
+```
+
+Question: how do 2024-25 and 2025-26 differ as data? Most tracker rankings
+flip between the two seasons (ledger), so before reading a ranking as a
+property of the tracker, this notebook describes what each season gave the
+tracker to learn from: the shape of the season, how much the published
+values were later revised, how far the value the tracker learns from sits
+from the final one, and how the HHS-stitched 2023-24 burn-in compares with
+NHSN.
+
+Setup:
+
+- Disease: `r params$disease`. Truth and vintages are the replay's
+  (`ws_inputs()`): the NHSN archive on hub coordinates, final values for
+  scoring, every vintage for learning.
+- Seasons are August–July years. Hub rounds are the CMU-TimeSeries
+  submission rounds; states only (US excluded) unless stated.
+
+```{r load}
+source(here::here("scripts/calibration/calibration_ws_replay.R"))
+wi <- ws_inputs(params$disease)
+states <- function(d) d %>% filter(location != "US")
+truth <- states(wi$truth) %>% mutate(season = season_of(target_end_date))
+vint <- states(wi$vintages) %>% mutate(season = season_of(target_end_date))
+rounds <- wi$fc %>% distinct(reference_date) %>% mutate(season = season_of(reference_date)) %>% filter(season %in% LIVE)
+pop <- wi$rate_scales %>% select(location, scale)
+SEASON_COLS <- c(`2024-2025` = "#D55E00", `2025-2026` = "#0072B2")
+```
+
+# Season shape
+
+```{r shape-table}
+natl <- truth %>%
+  filter(season %in% LIVE) %>%
+  group_by(season, target_end_date) %>%
+  summarize(v = sum(truth, na.rm = TRUE), .groups = "drop")
+peaks <- natl %>% group_by(season) %>% slice_max(v, n = 1, with_ties = FALSE) %>% select(season, peak_week = target_end_date, peak = v)
+knitr::kable(
+  rounds %>%
+    group_by(season) %>%
+    summarize(rounds = n(), first_round = min(reference_date), last_round = max(reference_date), .groups = "drop") %>%
+    left_join(peaks, by = "season") %>%
+    left_join(natl %>% group_by(season) %>% summarize(total = sum(v), .groups = "drop"), by = "season") %>%
+    mutate(across(c(peak, total), \(x) round(x))),
+  caption = "Hub rounds, peak week and size (states summed), and season total admissions"
+)
+```
+
+```{r shape-plot, fig.height=4}
+natl_wk <- natl %>%
+  group_by(season) %>%
+  mutate(week = as.integer(target_end_date - min(target_end_date)) %/% 7L + 1L) %>%
+  ungroup()
+round_wk <- rounds %>%
+  left_join(natl %>% group_by(season) %>% summarize(start = min(target_end_date), .groups = "drop"), by = "season") %>%
+  mutate(week = as.integer(reference_date - start) %/% 7L + 1L)
+ggplot(natl_wk, aes(week, v, colour = season)) +
+  geom_rug(data = round_wk, aes(week, colour = season), inherit.aes = FALSE, sides = "b", alpha = 0.6) +
+  geom_line() +
+  scale_colour_manual(values = SEASON_COLS) +
+  labs(x = "week of the season (from the first August week)", y = "admissions, states summed", colour = NULL,
+       subtitle = "Ticks along the bottom are hub rounds") +
+  theme(legend.position = "bottom")
+```
+
+Per state: when each state peaked relative to the national peak, and how
+large the peak was per 100k.
+
+```{r state-peaks, fig.height=4}
+state_pk <- truth %>%
+  filter(season %in% LIVE) %>%
+  group_by(season, location) %>%
+  slice_max(truth, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  left_join(peaks, by = "season") %>%
+  left_join(pop, by = "location") %>%
+  mutate(weeks_from_national = as.integer(target_end_date - peak_week) %/% 7L, peak_per_100k = truth / scale)
+knitr::kable(
+  state_pk %>%
+    group_by(season) %>%
+    summarize(
+      `peak offset, weeks (10th / 50th / 90th pct)` = sprintf("%+d / %+d / %+d", quantile(weeks_from_national, 0.1) %/% 1, median(weeks_from_national) %/% 1, quantile(weeks_from_national, 0.9) %/% 1),
+      `states within ±1 week of national` = sum(abs(weeks_from_national) <= 1),
+      `peak per 100k (median)` = round(median(peak_per_100k, na.rm = TRUE), 1),
+      .groups = "drop"
+    ),
+  caption = "State peaks relative to the national peak week"
+)
+ggplot(state_pk, aes(weeks_from_national, fill = season)) +
+  geom_bar(position = "dodge") +
+  scale_fill_manual(values = SEASON_COLS) +
+  labs(x = "state peak week minus national peak week", y = "states", fill = NULL) +
+  theme(legend.position = "bottom")
+```
+
+# Revisions
+
+Every vintage of each (state, week) in the season, summarized by
+`epiprocess::revision_analysis()`: how many times the value changed, the
+spread between its smallest and largest published value relative to the
+largest, and how long it took to settle within 10% of the final value. Weeks
+before the first archive version (2024-11-19) have no revision history and
+are dropped.
+
+```{r revisions}
+archive_of <- function(d) {
+  d %>%
+    transmute(geo_value = location, time_value = target_end_date, version, value = truth) %>%
+    epiprocess::as_epi_archive(compactify = TRUE)
+}
+first_version <- min(vint$version)
+rev <- purrr::map(LIVE, function(s) {
+  a <- vint %>% filter(season == s, target_end_date >= first_version) %>% archive_of()
+  a$time_type <- "day"
+  epiprocess::revision_analysis(a, value, min_waiting_period = NULL, return_only_tibble = TRUE) %>% mutate(season = s)
+}) %>% bind_rows()
+knitr::kable(
+  rev %>%
+    group_by(season) %>%
+    summarize(
+      keys = n(),
+      `no revision` = sprintf("%.0f%%", 100 * mean(n_revisions == 0)),
+      `revisions (median / 90th pct)` = sprintf("%d / %d", median(n_revisions), quantile(n_revisions, 0.9)),
+      `rel. spread (median / 90th pct)` = sprintf("%.3f / %.3f", median(rel_spread, na.rm = TRUE), quantile(rel_spread, 0.9, na.rm = TRUE)),
+      `rel. spread > 10%` = sprintf("%.0f%%", 100 * mean(rel_spread > 0.1, na.rm = TRUE)),
+      `days to within 10% of final (median / 90th pct)` = sprintf("%s / %s", median(as.numeric(lag_near_latest), na.rm = TRUE), quantile(as.numeric(lag_near_latest), 0.9, na.rm = TRUE)),
+      .groups = "drop"
+    ),
+  caption = "Revision behaviour of (state, week) values, per season"
+)
+```
+
+```{r revisions-plot, fig.height=4}
+ggplot(rev %>% filter(!is.na(rel_spread)), aes(rel_spread, colour = season)) +
+  stat_ecdf() +
+  coord_cartesian(xlim = c(0, 0.5)) +
+  scale_colour_manual(values = SEASON_COLS) +
+  labs(x = "relative spread of published values", y = "share of (state, week) keys", colour = NULL) +
+  theme(legend.position = "bottom")
+```
+
+# The value the tracker learns from
+
+The tracker learns from the value as published, with one week of extra
+delay (`settle_days = 14`), so a week's outcome enters about two Wednesdays
+after the week ends. Here, for each (state, week), the value as of the
+Wednesday L weeks after the week end against the final value: the signed
+relative gap (negative = the early value was below the final one), per
+season and lag, and by month at L = 2.
+
+```{r learn-gap}
+as_of_lag <- function(L) {
+  vint %>%
+    filter(season %in% LIVE, version <= target_end_date + 7L * L - 3L) %>%
+    group_by(season, location, target_end_date) %>%
+    slice_max(version, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(season, location, target_end_date, early = truth) %>%
+    mutate(lag = L)
+}
+gap <- purrr::map(1:4, as_of_lag) %>%
+  bind_rows() %>%
+  inner_join(truth %>% select(location, target_end_date, final = truth), by = c("location", "target_end_date")) %>%
+  filter(target_end_date >= first_version, final > 0) %>%
+  mutate(rel = (early - final) / final, month = factor(format(target_end_date, "%b"), levels = month.abb[c(8:12, 1:7)]))
+knitr::kable(
+  gap %>%
+    group_by(season, lag) %>%
+    summarize(
+      keys = n(),
+      `not yet published` = sprintf("%.0f%%", 100 * mean(is.na(early))),
+      `signed gap (10th / 50th / 90th pct)` = sprintf("%+.3f / %+.3f / %+.3f", quantile(rel, 0.1, na.rm = TRUE), median(rel, na.rm = TRUE), quantile(rel, 0.9, na.rm = TRUE)),
+      `|gap| > 10%` = sprintf("%.0f%%", 100 * mean(abs(rel) > 0.1, na.rm = TRUE)),
+      .groups = "drop"
+    ),
+  caption = "Value as of the Wednesday L weeks after the week end, relative to the final value"
+)
+```
+
+```{r learn-gap-month, fig.height=4}
+gm <- gap %>%
+  filter(lag == 2, !is.na(rel)) %>%
+  group_by(season, month) %>%
+  summarize(p10 = quantile(rel, 0.1), p50 = median(rel), p90 = quantile(rel, 0.9), n = n(), .groups = "drop")
+ggplot(gm, aes(month, p50, colour = season, group = season)) +
+  geom_hline(yintercept = 0, colour = "grey60") +
+  geom_ribbon(aes(ymin = p10, ymax = p90, fill = season), alpha = 0.15, colour = NA) +
+  geom_line() +
+  geom_point() +
+  scale_colour_manual(values = SEASON_COLS) +
+  scale_fill_manual(values = SEASON_COLS) +
+  coord_cartesian(ylim = c(-0.3, 0.3)) +
+  labs(x = NULL, y = "(value at lag 2 − final) / final", colour = NULL, fill = NULL, subtitle = "Median with the 10th–90th percentile band over (state, week)") +
+  theme(legend.position = "bottom")
+```
+
+# The 2023-24 burn-in
+
+Warm configs read the 2023-24 season from the HHS archive stitched in before
+NHSN's first version (E13). NHSN's final values also cover 2023-24, so the
+two sources can be compared week by week: the latest HHS value against the
+NHSN final, by month (states summed) and per state.
+
+```{r burn-in}
+hhs <- readRDS(file.path(CH_CACHE_DIR, "hhs_weekly_archive_2020_2024.rds"))[[params$disease]] %>%
+  as_tibble() %>%
+  filter(!is.na(value)) %>%
+  group_by(geo_value, time_value) %>%
+  slice_max(version, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  # HHS weeks are dated by the Wednesday; NHSN by the Saturday week end.
+  transmute(geo_value, target_end_date = time_value + 3L, hhs = value) %>%
+  nhsn_to_hub_locations() %>%
+  states() %>%
+  filter(season_of(target_end_date) == "2023-2024")
+cmp <- hhs %>%
+  inner_join(truth %>% select(location, target_end_date, nhsn = truth), by = c("location", "target_end_date")) %>%
+  mutate(month = factor(format(target_end_date, "%b"), levels = month.abb[c(8:12, 1:7)]))
+knitr::kable(
+  cmp %>%
+    group_by(month) %>%
+    summarize(weeks = n_distinct(target_end_date), states = n_distinct(location), hhs = sum(hhs), nhsn = sum(nhsn), .groups = "drop") %>%
+    mutate(`hhs / nhsn` = sprintf("%.3f", hhs / nhsn), across(c(hhs, nhsn), \(x) round(x))),
+  caption = "2023-24, states summed: latest HHS value against the NHSN final"
+)
+# States with no NHSN admissions over the season have no ratio.
+state_ratio <- cmp %>%
+  group_by(location) %>%
+  summarize(ratio = sum(hhs) / sum(nhsn), .groups = "drop") %>%
+  filter(is.finite(ratio))
+knitr::kable(
+  state_ratio %>%
+    summarize(
+      `ratio (10th / 50th / 90th pct)` = sprintf("%.3f / %.3f / %.3f", quantile(ratio, 0.1), median(ratio), quantile(ratio, 0.9)),
+      `states below 0.9` = sum(ratio < 0.9),
+      `states above 1.1` = sum(ratio > 1.1)
+    ),
+  caption = "Per-state ratio of HHS to NHSN over the 2023-24 season"
+)
+```
+
+```{r burn-in-plot, fig.height=4}
+ggplot(cmp %>% group_by(target_end_date) %>% summarize(hhs = sum(hhs), nhsn = sum(nhsn), .groups = "drop") %>% tidyr::pivot_longer(-target_end_date),
+       aes(target_end_date, value, colour = name)) +
+  geom_line() +
+  scale_colour_manual(values = c(hhs = "#E69F00", nhsn = "#000000")) +
+  labs(x = NULL, y = "admissions, states summed", colour = NULL) +
+  theme(legend.position = "bottom")
+```
