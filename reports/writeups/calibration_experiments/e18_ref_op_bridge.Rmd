@@ -52,9 +52,7 @@ learning rate's window, so eta is sized from the first live round (step 4
 removes this). Burn-in outcomes never step the offsets. Step 5 changes only
 units, so that step 6 changes only the learning rate.
 
-Outside the chain: two rate-scale constant rates as references, rate 0.032
-(E14) and rate 0.056 (E09's knee), and a branch, sqrt 0.018 warm, which is
-step 6 with the 2023-24 season present and `slow_init =
+Outside the chain: a branch, sqrt 0.018 warm, which is step 6 with the 2023-24 season present and `slow_init =
 "burn_in_quantile"` (the warm start of step 0, here on the single term).
 
 Steps 0, 3, 4 and 6 are the cached runs of E13 (REF-op warm), E02
@@ -85,11 +83,8 @@ STEPS <- list(
   `5 per-100k units` = list(cfg = c(sqrt_adaptive, list(scales = wi$rate_scales)), burn_in = FALSE),
   `6 sqrt constant 0.018 (E16)` = list(cfg = utils::modifyList(const_cfg, list(lr = 0.018, transform = "sqrt")), burn_in = FALSE)
 )
-# Rate-scale constant rates for comparison, outside the chain: E14's best and E09's knee, as E14 runs them.
-e14_const <- ws_configs(wi$rate_scales, burn_in = TRUE)[["E11 constant 0.1"]]
+# Outside the chain: step 6 with a warm start.
 REFS <- list(
-  `ref: rate 0.032 (E14)` = list(cfg = utils::modifyList(e14_const, list(lr = 0.032)), burn_in = FALSE),
-  `ref: rate 0.056 (E09 knee)` = list(cfg = utils::modifyList(e14_const, list(lr = 0.056)), burn_in = FALSE),
   `branch: sqrt 0.018 warm` = list(cfg = utils::modifyList(STEPS[[7]]$cfg, list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile")), burn_in = TRUE)
 )
 run <- function(spec) {
@@ -101,7 +96,7 @@ cals <- purrr::map(c(STEPS, REFS), run)
 
 ```{r metrics}
 SEASONS <- c(LIVE, "both")
-STEP_COLS <- setNames(c("#000000", "#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#D55E00", "#999999", "#882255", "#AA4499"), names(c(STEPS, REFS)))
+STEP_COLS <- setNames(c("#000000", "#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#D55E00", "#AA4499"), names(c(STEPS, REFS)))
 step_m <- purrr::imap(cals, function(cal, nm) {
   fc <- cal$forecasts %>% mutate(season = season_of(reference_date)) %>% filter(location != "US")
   ws_scores(fc) %>%
