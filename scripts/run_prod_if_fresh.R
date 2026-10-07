@@ -3,8 +3,8 @@
 # Fired every 30 minutes, 07:00-14:00 America/Los_Angeles, on Wednesdays (see
 # prod-forecasts.timer). Runs the forecasts once the data is fresh, retries on
 # later firings if not, and gives up with an alert at the 14:00 cutoff. After
-# the pipelines it renders each disease's health notebook and publishes; a
-# pipeline error, failed health check, or failed publish step alerts on Slack
+# the pipelines it renders each disease's health notebook, publishes, and posts
+# links to the new reports on Slack; a pipeline error, failed health check, or failed publish step alerts on Slack
 # (see notes/prod-health-check.md) and leaves the day unfinished so the next
 # firing retries.
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
@@ -15,20 +15,48 @@ log_msg <- function(msg) {
   cat(sprintf("[%s] %s\n", format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"), msg), file = log_file, append = TRUE)
 }
 
-# Log a CRITICAL line and post it to Slack (SLACK_WEBHOOK_URL), once per
-# distinct message per day so the half-hourly retries don't repeat it.
-alert <- function(msg) {
-  log_msg(sprintf("CRITICAL: %s", msg))
+# Post `text` to Slack (SLACK_WEBHOOK_URL), once per distinct message per day
+# so the half-hourly retries don't repeat it. Returns FALSE if the post failed.
+post_once <- function(text) {
   sent_file <- here::here("cache", sprintf("prod_alerts_sent_%s", Sys.Date()))
   sent <- if (file.exists(sent_file)) readLines(sent_file) else character(0)
-  key <- rlang::hash(msg)
+  key <- rlang::hash(text)
   if (key %in% sent) {
-    return(invisible())
+    return(TRUE)
   }
-  if (notify_slack(sprintf(":rotating_light: prod forecasts\n%s", msg))) {
+  delivered <- notify_slack(text)
+  if (delivered) {
     cat(key, "\n", file = sent_file, append = TRUE, sep = "")
-  } else {
+  }
+  delivered
+}
+
+# Log a CRITICAL line and post it to Slack.
+alert <- function(msg) {
+  log_msg(sprintf("CRITICAL: %s", msg))
+  if (!post_once(sprintf(":rotating_light: prod forecasts\n%s", msg))) {
     log_msg("CRITICAL: the alert above was not delivered (SLACK_WEBHOOK_URL unset or the post failed).")
+  }
+}
+
+# Post links to the site and to the prod reports and health notebooks rendered
+# today, whether or not the run had failures.
+announce_reports <- function(failed) {
+  site_url <- "https://delphi-forecasting-reports.netlify.app"
+  reports <- basename(Sys.glob(here::here("rendered_reports", sprintf("*_on_%s.html", Sys.Date()))))
+  reports <- reports[grepl("_(prod|health)_on_", reports)]
+  text <- paste(
+    c(
+      sprintf(
+        ":bar_chart: prod forecasts for %s published%s: <%s|reports site>",
+        Sys.Date(), if (failed) " with failures (see alert)" else "", site_url
+      ),
+      sprintf("- <%s/%s|%s>", site_url, reports, reports)
+    ),
+    collapse = "\n"
+  )
+  if (!post_once(text)) {
+    log_msg("The report announcement was not delivered (SLACK_WEBHOOK_URL unset or the post failed).")
   }
 }
 
@@ -170,6 +198,7 @@ for (step in publish_steps) {
   }
 }
 
+announce_reports(failed = length(failures) > 0)
 if (length(failures) > 0) {
   alert(paste("-", failures, collapse = "\n"))
   quit(status = 1)

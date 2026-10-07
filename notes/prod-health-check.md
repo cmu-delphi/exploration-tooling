@@ -49,7 +49,9 @@ webhook in `SLACK_WEBHOOK_URL`, exits nonzero, and leaves the day unfinished so
 the next half-hourly firing retries. The same message is sent at most once a
 day. If the webhook isn't set or the post fails, it logs a CRITICAL line saying
 the alert was not delivered.
+After every publish, failed or not, it also posts a message with links to the
+site and to the prod reports and health notebooks rendered that day.
 
 The webhook is a Slack incoming webhook for the team channel. Set it in the
-`forecaster` user's `~/.profile` on the prod box (the service sources that
-file); never commit it.
+`forecaster` user's `~/.Renviron` on the prod box (the project `.Rprofile`
+reads that file); never commit it.
