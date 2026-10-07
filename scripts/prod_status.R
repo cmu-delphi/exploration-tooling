@@ -30,6 +30,10 @@ service <- system2(
   stdout = TRUE
 )
 cat(paste0("  ", service), sep = "\n")
+if (!"Result=success" %in% service) {
+  cat("last journal lines:\n")
+  system2("journalctl", c("--user", "-u", "prod-forecasts.service", "-n", "10", "--no-pager"))
+}
 
 cat("\n== data freshness ==\n")
 last_poll <- tail(grep("\\] Data is (fresh|stale)", log_lines, value = TRUE), 1)

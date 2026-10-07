@@ -3,7 +3,7 @@ Systemd user units replacing the `forecaster` crontab.
 These were written and validated (via `systemd-analyze calendar`) on a dev
 machine, not the production box. Review the `WorkingDirectory=` paths in each
 `.service` file before installing — they assume the repo lives at
-`~/prod/exploration-tooling-2024` and NWSS data at `~/nwss_data`, matching the
+`~/prod/exploration-tooling` and NWSS data at `~/nwss_data`, matching the
 original crontab.
 
 ## Mapping from the old crontab

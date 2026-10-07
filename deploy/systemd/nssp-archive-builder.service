@@ -3,5 +3,5 @@ Description=NSSP archive builder
 
 [Service]
 Type=oneshot
-WorkingDirectory=%h/prod/exploration-tooling-2024
+WorkingDirectory=%h/prod/exploration-tooling
 ExecStart=/bin/bash -c 'source ~/.profile && R -s -q -f scripts/data/build_nssp_archive.R >> cache/build_nssp_archive.log 2>&1'
