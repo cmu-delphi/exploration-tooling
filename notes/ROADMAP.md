@@ -7,144 +7,17 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
 
 ## Forecast evaluation
 
-1. **Use the evaluation project as the calibration testbed.** The
-   operating-point work (hub harness, `notes/calibration-ledger.md`,
-   "Finalists") is down to a disease-specific choice. Provisional
-   (2026-10-07, not implemented): covid REF-op cold (no tracker tested helps
-   at h1–h3, E20), flu sqrt 0.018 warm + leak (about 1/1.5/2.5 points over
-   REF-op warm at h1–h3 on the ensemble, coverage within 0.002, the 90%
-   round-bootstrap interval on that gap excluding zero at h2–h3; E10, E20).
-   Done so far: a1–a4, b1–b4 (E12, E13), the structure grid on both
-   anchors and diseases (E18–E21). Next: item 1f, in its own thread. Calibrating needs full quantile forecasts over many rounds,
-   not just scores. The evaluation project (`flu_hosp_evaluation` /
-   `covid_hosp_evaluation`) replays the current prod components and
-   ensemble weekly since 2024-11-20, which is what calibration would see in
-   prod from now on. The hub-submission harness stays the record of what was
-   actually submitted; the explore stores (per-forecaster quantile forecasts,
-   NHSN only, on S3) can answer "does calibrating a candidate beat picking a
-   different one" without a new project. Three gaps, below. Work them in
-   small steps (AGENTS.md, "Working incrementally"); the S3 evaluation
-   stores are empty, so even the baseline needs a run.
+1. **Calibration in the evaluation pipeline.** The operating point is a
+   provisional disease-specific choice (covid REF-op cold, flu sqrt 0.018
+   warm + leak), not yet implemented. The plan, the pipeline's current
+   state and the open decisions are in `notes/calibration-ledger.md`,
+   "TODO: calibration in the evaluation pipeline". The clean replay
+   (`EVALUATION_FORECASTERS`, `EVALUATION_SUBSTITUTIONS=false`, AGENTS.md)
+   and the harness-side 2023-24 burn-in are done; see the ledger's "Code,
+   data and prod". The fixed-weight ensemble and hand-edits-on-vs-off
+   questions (old 1c, 1d) are in Parked; ILINet as a held-out target (old
+   1e) is in the ledger's "Ideas".
 
-   **Critical path for evaluating calibration:**
-
-   a. *Clean replay, one component.* Start with `windowed_seasonal` alone
-      (the harness proxy). A single component has no ensemble weights, so
-      the only hand edit to switch off is the data substitutions
-      (`make_forecast_snapshot(substitutions = NULL)`). Steps: a way to run
-      one forecaster (e.g. an env var that filters the grid), 2–3 dates,
-      diff against the edited run (changes should appear only at the
-      substituted geo-dates), then all dates, timed. Feed it to the
-      calibration harness.
-      - a1–a2 done 2026-10-01: `EVALUATION_FORECASTERS`, `EVALUATION_DATES`,
-        `EVALUATION_SUBSTITUTIONS=false` (AGENTS.md "Key env vars"); prod
-        manifests unchanged. Filtering out any ensemble component skips all
-        ensemble, submission, report and calibration targets. On vs off,
-        the snapshot differs exactly at the CSV cells (flu 2025-01-08,
-        2025-02-12, 2026-01-28; covid 2025-02-19; control date
-        bit-identical). The forecasts move a lot at the substituted geos
-        and slightly (median ~0.1%, max ~6%) at every other geo on the
-        same date, because `windowed_seasonal` fits one model pooled
-        across geos. So the expected diff is "only on substituted dates",
-        not "only at substituted geos". Single-forecaster cost: ~40
-        CPU-s per date plus ~4 min fixed overhead per run.
-      - a3 done 2026-10-01: `EVALUATION_FORECASTERS=windowed_seasonal
-        EVALUATION_SUBSTITUTIONS=false make eval-{flu,covid}` into the
-        local stores (not pushed). Flu 11.5 min, covid 9 min, 0 errors, 98
-        dates (2024-11-20 to 2026-09-30), all 53 geos, no NAs. Forecasts
-        are in `forecast_nhsn_full`. Gaps: `local_scores_nhsn` never
-        scores `us` (52 of 53 geos, likely a geo-name mismatch with
-        `nhsn_latest_data`); NSSP inputs drop `mo` on 81 dates, `wy` on 28
-        and `nh` on 5, for both diseases.
-      - a4 done 2026-10-01: `ch_use("{flu,covid}_windowed_seasonal")` in
-        `scripts/calibration/calibration_harness.R` reads forecasts from
-        the clean store (decision: read the store, backfill only for spec
-        changes; the two paths match exactly on 5 dates per disease).
-        Results are E12 in `notes/calibration-ledger.md`. The two diseases'
-        replays differ on 2024-11-20: flu generates on 11-21, covid on
-        11-20 (NHSN's bad release; the hub-round filter drops that round).
-        Decision (2026-10-01): calibrate h0 and up only. h−1 belongs to
-        the revision-aware methods (item 3) and gets integrated with them
-        later.
-   b. *2023-24 as a burn-in season.* REF-op warm-starts from a burn-in
-      season, and the replay has none. The warm start helps only in the
-      first live season (E05, E18, E20), but the flu finalist uses it, so the
-      stitch stays on the critical path for 1f. Its level is settled (E21:
-      HHS 2–4% below the NHSN final over 2023-24). Delphi's `hhs` source
-      (`confirmed_admissions_{influenza,covid}_1d`) has real issue history
-      for 2023-24 (CA 2023-12-01: issues 12-06, 12-08, 12-20, 12-22), until
-      HHS reporting ended 2024-04-30. Steps, each checked before the next:
-      - HHS weekly archive (done 2026-10-01,
-        `scripts/one_offs/hhs_2023_24_archive.R`). Decisions: NHSN's week
-        ending Saturday S is the sum of hhs daily `time_value` S−7..S−1
-        (exact match in 71% of flu geo-weeks; other alignments 17–24%),
-        labelled `time_value = S − 3` (Wednesday). Every daily issue is a
-        version; a week's value as of v sums its 7 days at their latest
-        issue ≤ v, and a week appears only once all 7 days exist (first
-        report lag is a median of 4 days, as with NHSN). US is hhs
-        `nation`, which equals the sum of states plus territories, as NHSN
-        `us` does. The `hhs` source matches the cached healthdata.gov
-        snapshots exactly, so the gap below is between sources, not a
-        fetch problem. **Open: level.** Finalized HHS runs below finalized
-        NHSN (in-season sum ratio flu 0.968, covid 0.941, falling to ~0.91
-        by April; tx/in/ks/ar/pr 15–20% low). The gap is already there in
-        NHSN's first 2023-24 version, so it isn't an NHSN revision. Choose:
-        use as-is with a caveat, rescale per geo by the finalized ratio
-        (uses finalized data), or drop the worst geos. Also decide how to
-        stitch: NHSN's archive holds 2023-24 from version 2024-11-19, so
-        dates after that see NHSN history, a level jump from HHS;
-      - ILI+/flusurv training extras (checked 2026-10-01). They are folded
-        into `nhsn_prod_archive` (`pipelines/flu_hosp_prod.R`) with
-        `version = time_value`, and ILI+ runs to 2024-07-24. A 2023-12-06
-        snapshot would train on finalized ILI+ up to the forecast week
-        itself. The snapshot's version-faithfulness abort can't see this
-        (no row is newer than its version); only the archive-build
-        `stopifnot` catches it. Decision: version each extras row at its
-        season's end (`group_by(source, season)`,
-        `version = max(time_value)`) and replace that `stopifnot` with a
-        check on versions. Dates from 2024-11-21 on see every extras row
-        either way, so the golden diff should be empty. Covid has no
-        extras;
-      - NSSP vintages (checked 2026-10-01): none before 2024-04-18 from any
-        source (v5 API, epidatr `nssp`, the S3 Socrata snapshots, the hub
-        mirror). Decision: `windowed_seasonal_extra_sources` sits out
-        2023-24. Gotcha: an NSSP snapshot before the first vintage
-        silently returns 0 rows, so a 2023-24 replay needs an explicit skip
-        or abort for every component that reads NSSP. NHSN versions start
-        2024-11-19, so the HHS archive must supply every 2023-24 target
-        row;
-      - Done 2026-10-01 in the harness, not the pipeline: HHS back to
-        2020-08 (issues before 2023-07 collapse to one version), stitched
-        before NHSN's first version; a 2024-12-04 control matches the
-        store exactly. Results: E13 in `notes/calibration-ledger.md`.
-   f. *Calibration in the evaluation pipeline.* The calibration targets in
-      `pipelines/{flu,covid}_hosp_prod.R` run in evaluation mode too, but
-      there they calibrate the submitted `CMU-TimeSeries` history from the
-      hub checkout plus only the current replayed round; learn from
-      `hhs_evaluation_data` (the latest version, so final truth, not exact);
-      hard-code REF-op; and are skipped when `EVALUATION_FORECASTERS` drops
-      an ensemble component. To evaluate calibration there: calibrate the
-      replayed forecasts over all dates, learn from per-round snapshots
-      (`calibrate_hub_forecasts_exact()`), take the config as a parameter so
-      prod's config and the finalist (flu: sqrt 0.018 warm + leak; covid:
-      REF-op cold is prod) both run, and score states only. A burn-in for REF-op needs
-      the HHS stitching (b), which today exists only in the harness.
-
-   **Later (not needed to evaluate calibration; c and d moved to Parked):**
-
-   e. *ILINet as a target*, to check our methods on a dataset we have not
-      tuned on. `fluview` has real issue history (CA wILI for week 2023-50
-      is revised weekly through May 2024) back to about 2010. Follows the
-      `nssp_target_archive` + `primary_source` pattern; the ILI+ training
-      rows must be dropped in this mode, and wILI is a percentage, so it
-      shares the scale question with NSSP-target scoring (item 2). Prototype
-      on one forecaster and a few seasons; `calibration_ili_backfill.R`
-      (ILI+, no vintages) is a reference, not the base to extend.
-      Source (checked 2026-10-02, `notes/ilinet-sources.md`): v5
-      `fluview_ilinet` matches epidatr `fluview` at every issue outside NY
-      (99.99% of state rows), with version date = CDC release Friday. State
-      version history starts 2017w40 in both, so a vintage backtest has
-      2017-18 on; use state `ili` (v5 has no state `wili`).
 2. **NSSP-target backtesting is second-class and needs dedicated
    attention.**
    - Explore forecasts NHSN only: every family sets `outcome = "hhs"`. NSSP
@@ -251,7 +124,7 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
   one), check the resolved weights on one date, then replay. Not needed
   to choose the operating point: E10 already scores the finalists on
   the submitted ensemble, and E07 shows calibration acts the same way
-  on the ensemble and the single-component replay. Revisit if 1f needs
+  on the ensemble and the single-component replay. Revisit if the calibration pipeline plan (ledger TODO) needs
   a clean ensemble history.
 - *Hand edits on vs off as its own question* (was item 1d, parked
   2026-10-07). A separate evaluation project (like the `_regr` ones) replaying with the edits, to measure
