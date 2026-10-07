@@ -72,13 +72,14 @@ scale.
 
 ## Tracker structure
 
-E20 asks the warm-start and leak questions on both anchors, on the replay.
+E20 asks the warm-start and leak questions on both anchors and both
+diseases, on the replay.
 E03, E04, E05 and E11 asked them on the ensemble with the adaptive rate
 only; they stay until E20 has been read against them.
 
 | | base | question |
 |---|---|---|
-| `r link("E20", "e20_structure_grid")` | replay | Do the warm start and the leak change WIS and coverage in the same way on the adaptive and the constant learning rate? State by state, which anchor wins at the same start and leak? |
+| `r link("E20", "e20_structure_grid")` | replay, both diseases | Do the warm start and the leak change WIS and coverage in the same way on the adaptive and the constant learning rate, for flu and for covid? State by state, which anchor wins at the same start and leak? |
 | `r link("E03", "e03_scale")` | ensemble | Which scale should the offsets live on: counts, square root, or rate per 100k? |
 | `r link("E04", "e04_offset_structure")` | ensemble | Does a leak or a second, slow offset term change WIS and coverage? |
 | `r link("E05", "e05_warm_start")` | ensemble | Does a warm start from the burn-in season change WIS and coverage for each tracker? |

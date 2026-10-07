@@ -1,41 +1,42 @@
 ---
-title: "E20: warm start and leak on both learning-rate anchors"
+title: "E20: warm start and leak on both learning-rate anchors, flu and covid"
 date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
 output:
   html_document:
     code_folding: hide
     toc: true
     toc_float: true
-    toc_depth: 2
+    toc_depth: 3
 params:
   workers: 14
-  disease: flu
 editor_options:
   chunk_output_type: console
 ---
 
 ```{r setup, echo=FALSE}
 knitr::opts_chunk$set(fig.align = "center", fig.width = 11, fig.height = 5, message = FALSE, warning = FALSE)
+# The month view is knit once per disease, so its chunk labels repeat.
+options(knitr.duplicate.label = "allow")
 knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
 ```
 
 Question: do the warm start and the leak change WIS and coverage in the same
-way on the adaptive learning rate and on the constant one? E04 and E05 asked
-this on the ensemble with the adaptive rate only; E18 found that the leak's
-effect depends on how large the adaptive step gets late in the season, so the
-two anchors may answer differently.
+way on the adaptive learning rate and on the constant one, and on both
+diseases? E04 and E05 asked this on the flu ensemble with the adaptive rate
+only; E18 found that the leak's effect depends on how large the adaptive
+step gets late in the season, so the two anchors may answer differently.
 
 Setup:
 
-- Disease: `r params$disease`. Base forecaster: the clean `windowed_seasonal`
+- Diseases: flu and covid. Base forecaster: the clean `windowed_seasonal`
   replay (53 locations, the hub rounds). Horizons h0–h3.
 - Learning truth: exact (re-run at every round on the data published by then;
   E00), one week of extra delay.
 - Warm configs run with the 2023-24 season present (the HHS-stitched backfill
   from E13) and start the offset from that season's error quantiles; cold
   configs start at zero with no burn-in rounds, so they play the base through
-  Nov–Dec 2024.
+  the first live rounds.
 - Scores over the two live seasons, each on its own rounds; states only (US
   excluded).
 
@@ -44,7 +45,7 @@ left out), plus prod's two configs:
 
 | factor | levels |
 |---|---|
-| anchor | `adaptive 0.03`: sqrt scale, eta = 0.03 × the 90th percentile of the last 20 rounds' absolute errors, floor 0.001 (E01's elbow). `constant 0.018`: sqrt of admissions per 100k, eta = 0.018 (E16's elbow) |
+| anchor | `adaptive 0.03`: sqrt scale, eta = 0.03 × the 90th percentile of the last 20 rounds' absolute errors, floor 0.001 (E01's elbow). `constant 0.018`: sqrt of admissions per 100k, eta = 0.018 (E16's elbow, picked on flu) |
 | start | `cold`: offsets start at zero. `warm`: `slow_init = "burn_in_quantile"` from the 2023-24 season |
 | leak | `no leak`. `leak 0.1`: the offset shrinks by 10% each round |
 | references | `REF-op warm` (flu prod: adaptive, warm, leak, plus a slow term); `REF-op cold` (covid prod) |
@@ -55,34 +56,43 @@ bias is computed within each calendar month and then averaged.
 
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))
-wi <- ws_inputs(params$disease)
-fc_burn_in <- bind_rows(ws_burn_in_forecasts(params$disease), wi$fc)
-SPECS <- c(ws_grid_configs(wi$rate_scales), ws_prod_specs(wi$rate_scales))
-cals <- purrr::map(SPECS, ws_run_spec, wi = wi, fc_burn_in = fc_burn_in, workers = params$workers)
-grid_names <- names(ws_grid_configs(wi$rate_scales))
+DISEASES <- c(flu = "flu", covid = "covid")
+RUNS <- purrr::map(DISEASES, function(d) {
+  wi <- ws_inputs(d)
+  fc_burn_in <- bind_rows(ws_burn_in_forecasts(d), wi$fc)
+  specs <- c(ws_grid_configs(wi$rate_scales), ws_prod_specs(wi$rate_scales))
+  list(wi = wi, specs = specs, cals = purrr::map(specs, ws_run_spec, wi = wi, fc_burn_in = fc_burn_in, workers = params$workers))
+})
+grid_names <- names(ws_grid_configs(RUNS$flu$wi$rate_scales))
 split_name <- function(d) {
   d %>%
     mutate(config = as.character(config)) %>%
     tidyr::separate_wider_delim(config, " | ", names = c("anchor", "start", "leak"), cols_remove = FALSE, too_few = "align_start")
 }
+ANCHOR_COLS <- c(`adaptive 0.03` = "#E69F00", `constant 0.018` = "#0072B2")
+h_levels <- paste0("h", 0:3)
 ```
 
 ```{r metrics}
-m <- ws_wis_by_season(cals)
-mv <- cal_month_view(cals, seasons = LIVE)
-cov <- mv$cov %>%
-  transmute(config, season, h = factor(paste0("h", horizon), levels = paste0("h", 0:3)), pooled = pooled_cal, mavg = mavg_cal)
+M <- purrr::map(RUNS, function(r) {
+  m <- ws_wis_by_season(r$cals)
+  mv <- cal_month_view(r$cals, seasons = LIVE)
+  cov <- mv$cov %>% transmute(config, season, h = factor(paste0("h", horizon), levels = h_levels), pooled = pooled_cal, mavg = mavg_cal)
+  list(m = m, mv = mv, cov = cov)
+})
 ```
 
 # WIS by season and horizon
 
-```{r wis-table}
-knitr::kable(
-  m %>%
+```{r wis-table, results="asis"}
+for (d in names(M)) {
+  cat("\n\n", cal_h(2), " ", d, "\n\n", sep = "")
+  M[[d]]$m %>%
     transmute(config, col = paste(season, h), cell = sprintf("%+.1f", wis_pct)) %>%
-    tidyr::pivot_wider(names_from = col, values_from = cell),
-  caption = "WIS reduction % (positive = calibrated WIS lower than base), states only; `both` pools the seasons"
-)
+    tidyr::pivot_wider(names_from = col, values_from = cell) %>%
+    knitr::kable(caption = paste0(d, ": WIS reduction % (positive = calibrated WIS lower than base), states only; `both` pools the seasons")) %>%
+    print()
+}
 ```
 
 # What each factor changes, per anchor
@@ -92,12 +102,7 @@ from adding the leak (leak − no leak) at each start, per anchor. WIS: change
 in WIS reduction % (positive = the factor lowers WIS). Coverage: change in
 month-avg L1 coverage bias (negative = the factor improves coverage).
 
-```{r factor-deltas}
-g <- m %>%
-  filter(config %in% grid_names) %>%
-  select(config, season, h, wis_pct) %>%
-  left_join(cov, by = c("config", "season", "h")) %>%
-  split_name()
+```{r factor-deltas, results="asis"}
 contrast <- function(d, factor, hi, lo, held) {
   d %>%
     select(anchor, start, leak, season, h, wis_pct, mavg) %>%
@@ -109,26 +114,33 @@ contrast <- function(d, factor, hi, lo, held) {
       d_mavg = .data[[paste0("mavg_", hi)]] - .data[[paste0("mavg_", lo)]]
     )
 }
-deltas <- bind_rows(
-  contrast(g, "start", "warm", "cold", "leak"),
-  contrast(g, "leak", "leak 0.1", "no leak", "start")
-)
-knitr::kable(
-  deltas %>%
+DELTAS <- purrr::imap(M, function(x, d) {
+  g <- x$m %>%
+    filter(config %in% grid_names) %>%
+    select(config, season, h, wis_pct) %>%
+    left_join(x$cov, by = c("config", "season", "h")) %>%
+    split_name()
+  bind_rows(contrast(g, "start", "warm", "cold", "leak"), contrast(g, "leak", "leak 0.1", "no leak", "start")) %>%
+    mutate(disease = d)
+})
+for (d in names(DELTAS)) {
+  cat("\n\n", cal_h(2), " ", d, "\n\n", sep = "")
+  DELTAS[[d]] %>%
     transmute(anchor, factor, col = paste(season, h), cell = sprintf("%+.1f / %+.3f", d_wis, d_mavg)) %>%
     tidyr::pivot_wider(names_from = col, values_from = cell) %>%
-    arrange(anchor, factor),
-  caption = "Change in WIS reduction % / month-avg L1 coverage bias from adding the factor, per anchor and season"
-)
+    arrange(anchor, factor) %>%
+    knitr::kable(caption = paste0(d, ": change in WIS reduction % / month-avg L1 coverage bias from adding the factor, per anchor and season")) %>%
+    print()
+}
 ```
 
-```{r factor-plot, fig.height=5}
-ggplot(deltas %>% filter(season != "both"), aes(h, d_wis, colour = anchor, group = anchor)) +
+```{r factor-plot, fig.height=8}
+ggplot(bind_rows(DELTAS) %>% filter(season != "both"), aes(h, d_wis, colour = anchor, group = anchor)) +
   geom_hline(yintercept = 0, colour = "grey60") +
   geom_line() +
   geom_point() +
-  facet_grid(season ~ factor) +
-  scale_colour_manual(values = c(`adaptive 0.03` = "#E69F00", `constant 0.018` = "#0072B2")) +
+  facet_grid(disease + season ~ factor) +
+  scale_colour_manual(values = ANCHOR_COLS) +
   labs(x = NULL, y = "change in WIS reduction %", colour = NULL) +
   theme(legend.position = "bottom")
 ```
@@ -139,42 +151,47 @@ Per state, pooled over h0–h3: WIS reduction % of the adaptive anchor against
 the constant one at the same start and leak (above the line, adaptive is
 better).
 
-```{r state-scatter, fig.height=5.5}
-state_pct <- cal_state_wis(cals[grid_names]) %>%
-  group_by(config, season, location) %>%
-  summarize(pct = 100 * (sum(wis_base) - sum(wis_cal)) / sum(wis_base), .groups = "drop") %>%
-  split_name() %>%
-  select(-config) %>%
-  tidyr::pivot_wider(names_from = anchor, values_from = pct) %>%
-  mutate(cell = paste(start, leak, sep = ", "))
-ggplot(state_pct, aes(`constant 0.018`, `adaptive 0.03`)) +
-  geom_abline(slope = 1, intercept = 0, colour = "grey50") +
-  geom_hline(yintercept = 0, colour = "grey85") +
-  geom_vline(xintercept = 0, colour = "grey85") +
-  geom_point(alpha = 0.8) +
-  facet_grid(season ~ cell) +
-  labs(x = "constant 0.018: WIS reduction %, h0–h3", y = "adaptive 0.03: WIS reduction %, h0–h3")
-```
-
-```{r state-counts}
-knitr::kable(
-  state_pct %>%
+```{r state-scatter, results="asis", fig.height=5.5}
+STATE <- purrr::map(RUNS, function(r) {
+  cal_state_wis(r$cals[grid_names]) %>%
+    group_by(config, season, location) %>%
+    summarize(pct = 100 * (sum(wis_base) - sum(wis_cal)) / sum(wis_base), .groups = "drop") %>%
+    split_name() %>%
+    select(-config) %>%
+    tidyr::pivot_wider(names_from = anchor, values_from = pct) %>%
+    mutate(cell = paste(start, leak, sep = ", "))
+})
+for (d in names(STATE)) {
+  cat("\n\n", cal_h(2), " ", d, "\n\n", sep = "")
+  print(
+    ggplot(STATE[[d]], aes(`constant 0.018`, `adaptive 0.03`)) +
+      geom_abline(slope = 1, intercept = 0, colour = "grey50") +
+      geom_hline(yintercept = 0, colour = "grey85") +
+      geom_vline(xintercept = 0, colour = "grey85") +
+      geom_point(alpha = 0.8) +
+      facet_grid(season ~ cell) +
+      labs(title = d, x = "constant 0.018: WIS reduction %, h0–h3", y = "adaptive 0.03: WIS reduction %, h0–h3")
+  )
+  STATE[[d]] %>%
     group_by(cell, season) %>%
     summarize(adaptive_better = sum(`adaptive 0.03` > `constant 0.018`), states = n(), .groups = "drop") %>%
     transmute(cell, season, v = sprintf("%d / %d", adaptive_better, states)) %>%
-    tidyr::pivot_wider(names_from = season, values_from = v),
-  caption = "States (of those scored) where the adaptive anchor beats the constant one, h0–h3 pooled"
-)
+    tidyr::pivot_wider(names_from = season, values_from = v) %>%
+    knitr::kable(caption = paste0(d, ": states (of those scored) where the adaptive anchor beats the constant one, h0–h3 pooled")) %>%
+    print()
+}
 ```
 
-```{r month-view-cfgs}
-# The month plots show the no-leak grid and flu prod; the tables keep every config.
+# Month views
+
+The month plots show the no-leak grid and flu prod; the tables keep every
+config.
+
+```{r month-views, results="asis"}
 mv_plot_cfgs <- c(grid_names[c(1, 3, 5, 7)], "REF-op warm")
-mv_cols <- setNames(
-  c("#E69F00", "#D55E00", "#0072B2", "#56B4E9", "#000000"),
-  mv_plot_cfgs
-)
-```
-
-```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
+mv_cols <- setNames(c("#E69F00", "#D55E00", "#0072B2", "#56B4E9", "#000000"), mv_plot_cfgs)
+for (d in names(M)) {
+  mv <- M[[d]]$mv
+  cal_month_section(d, level = 2L)
+}
 ```

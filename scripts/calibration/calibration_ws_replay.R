@@ -298,7 +298,9 @@ fin_candidates <- function(rate_scales) {
     `REF-op warm` = list(cfg = list(ref = "op"), warm = TRUE),
     `REF-op cold` = list(cfg = list(ref = "op", burn_in_seasons = character(0), slow_init = NULL), warm = FALSE),
     `sqrt 0.018` = list(cfg = sqrt_018, warm = FALSE),
-    `sqrt 0.018 warm` = list(cfg = utils::modifyList(sqrt_018, list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile")), warm = TRUE)
+    `sqrt 0.018 warm` = list(cfg = utils::modifyList(sqrt_018, list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile")), warm = TRUE),
+    # E20's best cell: the warm start plus the leak (same construction as ws_grid_configs()).
+    `sqrt 0.018 warm + leak` = list(cfg = utils::modifyList(sqrt_018, list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile", fast_decay = 0.1)), warm = TRUE)
   )
 }
 
