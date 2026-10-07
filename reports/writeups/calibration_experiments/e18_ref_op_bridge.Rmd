@@ -53,7 +53,10 @@ removes this). Burn-in outcomes never step the offsets. Step 5 changes only
 units, so that step 6 changes only the learning rate.
 
 Outside the chain: a branch, sqrt 0.018 warm, which is step 6 with the 2023-24 season present and `slow_init =
-"burn_in_quantile"` (the warm start of step 0, here on the single term).
+"burn_in_quantile"` (the warm start of step 0, here on the single term); and
+REF-op cold (prod's covid config: step 0 without the warm start or the
+2023-24 season), so the state scatters below can pair warm with warm and
+cold with cold.
 
 Steps 0, 3, 4 and 6 are the cached runs of E13 (REF-op warm), E02
 (`reference + burn-in`), E01/E02 (`reference`) and E16 (sqrt 0.018), so they
@@ -83,9 +86,10 @@ STEPS <- list(
   `5 per-100k units` = list(cfg = c(sqrt_adaptive, list(scales = wi$rate_scales)), burn_in = FALSE),
   `6 sqrt constant 0.018 (E16)` = list(cfg = utils::modifyList(const_cfg, list(lr = 0.018, transform = "sqrt")), burn_in = FALSE)
 )
-# Outside the chain: step 6 with a warm start.
+# Outside the chain: step 6 with a warm start, and REF-op without one (E16's cached run).
 REFS <- list(
-  `branch: sqrt 0.018 warm` = list(cfg = utils::modifyList(STEPS[[7]]$cfg, list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile")), burn_in = TRUE)
+  `branch: sqrt 0.018 warm` = list(cfg = utils::modifyList(STEPS[[7]]$cfg, list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile")), burn_in = TRUE),
+  `REF-op cold` = list(cfg = ws_configs(wi$rate_scales, burn_in = FALSE)[["REF-op cold"]], burn_in = FALSE)
 )
 run <- function(spec) {
   fc <- if (spec$burn_in) fc_burn_in else wi$fc
@@ -96,7 +100,7 @@ cals <- purrr::map(c(STEPS, REFS), run)
 
 ```{r metrics}
 SEASONS <- c(LIVE, "both")
-STEP_COLS <- setNames(c("#000000", "#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#D55E00", "#AA4499"), names(c(STEPS, REFS)))
+STEP_COLS <- setNames(c("#000000", "#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#D55E00", "#AA4499", "#999999"), names(c(STEPS, REFS)))
 step_m <- purrr::imap(cals, function(cal, nm) {
   fc <- cal$forecasts %>% mutate(season = season_of(reference_date)) %>% filter(location != "US")
   ws_scores(fc) %>%
@@ -152,24 +156,52 @@ knitr::kable(
 )
 ```
 
-# State by state: REF-op against sqrt 0.018
+# State by state: REF-op against sqrt 0.018, matched on the warm start
 
 Per state, pooled over h0–h3: WIS reduction % of REF-op against sqrt 0.018
-(above the line, REF-op is better).
+(above the line, REF-op is better). Three pairs: the chain's ends (REF-op
+warm vs sqrt 0.018 cold), then warm vs warm and cold vs cold. Cold configs
+play the base through Nov–Dec 2024 (35–40% of that season's base WIS), so
+only the matched pairs compare the trackers rather than the start.
 
-```{r state-scatter, fig.height=5}
-PAIR <- c("0 REF-op", "6 sqrt constant 0.018 (E16)")
-state_wis <- cal_state_wis(cals[PAIR])
-state_pct <- state_wis %>%
-  filter(config %in% PAIR) %>%
+```{r state-scatter, fig.height=4.5}
+PAIRS <- list(
+  `chain ends: REF-op warm vs sqrt 0.018 cold` = c("0 REF-op", "6 sqrt constant 0.018 (E16)"),
+  `warm vs warm` = c("0 REF-op", "branch: sqrt 0.018 warm"),
+  `cold vs cold` = c("REF-op cold", "6 sqrt constant 0.018 (E16)")
+)
+state_pct <- cal_state_wis(cals[unique(unlist(PAIRS))]) %>%
   group_by(config, season, location) %>%
-  summarize(pct = 100 * (sum(wis_base) - sum(wis_cal)) / sum(wis_base), .groups = "drop") %>%
-  tidyr::pivot_wider(names_from = config, values_from = pct)
-ggplot(state_pct, aes(.data[[PAIR[2]]], .data[[PAIR[1]]])) +
+  summarize(pct = 100 * (sum(wis_base) - sum(wis_cal)) / sum(wis_base), .groups = "drop")
+pair_pts <- purrr::imap(PAIRS, function(p, nm) {
+  state_pct %>%
+    filter(config %in% p) %>%
+    mutate(which = ifelse(config == p[1], "refop", "sqrt")) %>%
+    select(-config) %>%
+    tidyr::pivot_wider(names_from = which, values_from = pct) %>%
+    mutate(pair = nm)
+}) %>%
+  bind_rows() %>%
+  mutate(pair = factor(pair, levels = names(PAIRS)))
+ggplot(pair_pts, aes(sqrt, refop)) +
   geom_abline(slope = 1, intercept = 0, colour = "grey50") +
   geom_hline(yintercept = 0, colour = "grey85") +
   geom_vline(xintercept = 0, colour = "grey85") +
   geom_point(alpha = 0.8) +
-  facet_wrap(~season) +
+  facet_grid(season ~ pair) +
   labs(x = "sqrt 0.018: WIS reduction %, h0–h3", y = "REF-op: WIS reduction %, h0–h3")
+```
+
+States where REF-op has the lower WIS, out of the states scored, per pair
+and season.
+
+```{r state-counts}
+knitr::kable(
+  pair_pts %>%
+    group_by(pair, season) %>%
+    summarize(refop_better = sum(refop > sqrt), states = n(), .groups = "drop") %>%
+    transmute(pair, season, cell = sprintf("%d / %d", refop_better, states)) %>%
+    tidyr::pivot_wider(names_from = season, values_from = cell),
+  caption = "States (of those scored) where REF-op beats sqrt 0.018, h0–h3 pooled"
+)
 ```
