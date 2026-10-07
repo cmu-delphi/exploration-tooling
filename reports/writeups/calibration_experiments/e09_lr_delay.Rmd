@@ -65,7 +65,6 @@ week.
 **Reference configs** (marked on the plots):
 
 - **REF-paper**: the paper's tracker on counts, adaptive learning rate.
-- **rate, adaptive**: REF-paper on the rate scale (floor 0.001 per 100k).
 - **REF-op**: prod's config: REF-paper on the sqrt scale, plus a 10%
   per-round leak, a slow offset and a warm start from the burn-in season.
 
@@ -123,14 +122,12 @@ sweep <- purrr::pmap(sweep_grid, function(learn, settle_days, lr) {
   do.call(cached_run, c(list(key, "paper", settle_days = settle_days, lr = lr, learn = learn), rate))
 })
 
-# Reference points and the bridge from REF-paper, per (learn, settle_days).
+# Reference points per (learn, settle_days).
 ref_grid <- tidyr::expand_grid(learn = c("exact", "vintage"), settle_days = SETTLE)
 refs <- purrr::pmap(ref_grid, function(learn, settle_days) {
   s <- sprintf("%s_s%d", learn, settle_days)
   list(
     `REF-paper (count, adaptive)` = cached_run(paste0("paper_", s), "paper", settle_days = settle_days, learn = learn),
-    `rate, adaptive` = do.call(cached_run, c(list(paste0("rate_adaptive_", s), "paper",
-      settle_days = settle_days, learn = learn, lr_args = list(mult = 0.03, floor = 1e-3)), rate)),
     `REF-op` = cached_run(paste0("op_", s), "op", settle_days = settle_days, learn = learn)
   )
 })
@@ -282,35 +279,4 @@ mv_plot_cfgs <- c("REF-op, re-run +1 wk", "0.032, re-run +1 wk", "knee 0.056, re
 ```
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
-```
-
-# Bridge from REF-paper
-
-One change at a time at one week of extra delay, re-run design: first the
-rate scale with the adaptive learning rate (its minimum step drops from 0.1
-admissions to 0.001 per 100k, since that minimum is in the working units),
-then the constant learning rate with the lowest pooled WIS at each horizon.
-REF-op is for orientation only; it differs in several settings.
-
-```{r bridge}
-best_const <- sweep_m %>%
-  filter(location == "pooled", learn == "exact", settle_days == 14L) %>%
-  group_by(horizon) %>%
-  slice_max(wis_pct, n = 1, with_ties = FALSE) %>%
-  ungroup() %>%
-  mutate(ref = "rate, constant lr (highest WIS per horizon)")
-bridge <- bind_rows(
-  ref_m %>% filter(learn == "exact", settle_days == 14L),
-  best_const
-) %>%
-  mutate(ref = factor(ref, levels = c("REF-paper (count, adaptive)", "rate, adaptive", "rate, constant lr (highest WIS per horizon)", "REF-op")))
-base_row <- bridge %>% filter(ref == "REF-paper (count, adaptive)") %>% mutate(ref = "base", wis_pct = 0, bias_cal = bias_base)
-tbl <- bind_rows(base_row, bridge) %>%
-  transmute(config = ref, horizon, cell = sprintf("%+.1f%% / %.3f", wis_pct, bias_cal)) %>%
-  tidyr::pivot_wider(names_from = horizon, values_from = cell)
-knitr::kable(tbl, caption = "WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage bias (lower is better), pooled over states")
-knitr::kable(
-  best_const %>% select(horizon, lr) %>% mutate(lr = signif(lr, 2)) %>% tidyr::pivot_wider(names_from = horizon, values_from = lr),
-  caption = "Constant learning rate with the lowest pooled WIS (rate units per step)"
-)
 ```
