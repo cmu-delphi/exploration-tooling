@@ -48,6 +48,26 @@ if (length(last_poll) == 0) {
   }
 }
 
+cat("\n== upstream (epidata) ==\n")
+invisible(suppressMessages(loadNamespace("epidatr")))
+if (!nzchar(epidatr::get_api_key())) {
+  cat("WARNING: no epidata API key set (DELPHI_EPIDATA_KEY); requests are anonymous and rate limited\n")
+}
+for (source in c("nhsn", "nssp")) {
+  meta <- tryCatch(epidatr::epidata_meta(source), error = function(cond) conditionMessage(cond))
+  if (is.character(meta)) {
+    cat(sprintf("%s: metadata request failed: %s\n", source, meta))
+    next
+  }
+  latest_reference <- as.Date(meta$reference_time_range$latest)
+  age_days <- as.integer(Sys.Date() - latest_reference)
+  cat(sprintf(
+    "%s: %s (latest week %s, %d days old; last report %s)\n",
+    source, if (age_days <= 7) "fresh" else "stale", latest_reference, age_days,
+    as.Date(meta$report_time_range$latest)
+  ))
+}
+
 cat(sprintf("\n== today (%s) ==\n", today))
 steps <- c(
   "covid prod" = "covid prod pipeline",

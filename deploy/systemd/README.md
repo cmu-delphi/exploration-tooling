@@ -55,7 +55,8 @@ sudo loginctl enable-linger forecaster
 
 Check status with `systemctl --user list-timers` and `journalctl --user -u
 <unit>`. For the prod forecast run, `make status` (`scripts/prod_status.R`)
-summarizes today's freshness polls, pipeline and publish steps, and whether
-the live site serves the local `rendered_reports/index.html`. Once confirmed
+summarizes today's freshness polls, upstream NHSN/NSSP update times from the
+epidata metadata endpoint, pipeline and publish steps, and whether the live
+site serves the local `rendered_reports/index.html`. Once confirmed
 working, remove the corresponding entries from `crontab -e` for the
 `forecaster` user.
