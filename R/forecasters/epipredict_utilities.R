@@ -209,3 +209,31 @@ get_oversized_test_data <- function(full_data, test_data_interval, preproc, sour
 epi_as_of <- function(epi_dataframe) {
   attributes(epi_dataframe)$metadata$as_of
 }
+
+#' Find the geos whose data ends before the most recent data in any column
+#'
+#' `step_adjust_latency` sets one latency for each column from the series with
+#' the oldest last observation. Thus one late geo moves the lags of all geos.
+#' Add the geos that this function returns to `keys_to_ignore`, so that the
+#' latency comes from the geos that have current data.
+#' @param epi_data the data given to the recipe
+#' @param cols the columns that the latency adjustment uses
+#' @param keys_to_ignore rows to remove before the check, as a named list in the
+#'   format that [`default_args_list`] makes
+#' @return a sorted character vector of geo_values
+find_lagging_geos <- function(epi_data, cols, keys_to_ignore = list()) {
+  epi_data <- epi_data %>% epipredict:::drop_ignored_keys(keys_to_ignore)
+  cols %>%
+    map(function(col) {
+      last_observed <- epi_data %>%
+        drop_na(all_of(col)) %>%
+        group_by(geo_value) %>%
+        summarize(last_time = max(time_value))
+      last_observed %>%
+        filter(last_time < max(last_time)) %>%
+        pull(geo_value)
+    }) %>%
+    unlist() %>%
+    unique() %>%
+    sort()
+}

@@ -20,7 +20,7 @@ All forecasters follow the signature `function(epi_data, outcome, ahead = 1, ...
 - **climatological_model.R** — `climate_median`, `compute_pca`: seasonal baseline computations shared by several forecasters.
 - **data_transforms.R** — Feature extraction (`get_trainable_names`), rolling stats, whitening/coloring (`calculate_whitening_params`, `data_whitening`, `data_coloring`), polynomial features.
 - **data_validation.R** — `validate_forecast_output` and related shape/key checks.
-- **epipredict_utilities.R** — Helpers that wrap epipredict internals.
+- **epipredict_utilities.R** — Helpers that wrap epipredict internals; `find_lagging_geos` keeps one late geo from setting the latency adjustment for all geos (used by `scaled_pop_seasonal`).
 - **formatters.R** — Output formatting to hub submission format.
 - **ensemble_linear_climate.R** — `ensemble_climate_linear`: climate/linear mix with ahead- and quantile-dependent weights. The weighted ensemble is in `R/ensemble_weights.R`.
 - **default_epipredict_args.R** — `default_args_list`, `default_flatline_args`: ARX / flatline parameter constructors.

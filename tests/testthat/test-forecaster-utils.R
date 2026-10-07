@@ -63,3 +63,47 @@ test_that("forecaster lookup selects the right rows", {
     "simian.irishsetter", "scaled_pop", NULL, FALSE,
   ))
 })
+
+test_that("find_lagging_geos flags only geos that end early", {
+  # fmt: skip
+  epi_data <- tribble(
+    ~geo_value, ~source,   ~time_value,           ~value, ~nssp,
+    "ca",       "nhsn",    as.Date("2024-01-03"), 1,      1,
+    "ca",       "nhsn",    as.Date("2024-01-10"), 1,      1,
+    "ia",       "nhsn",    as.Date("2024-01-03"), 1,      1,
+    "ia",       "nhsn",    as.Date("2024-01-10"), 1,      NA,
+    "pr",       "nhsn",    as.Date("2024-01-03"), 1,      NA,
+    "pr",       "nhsn",    as.Date("2024-01-10"), 1,      NA,
+    "tx",       "nhsn",    as.Date("2024-01-03"), 1,      1,
+    "tx",       "flusurv", as.Date("2024-01-03"), 1,      1,
+    "tx",       "nhsn",    as.Date("2024-01-10"), 1,      1,
+    "wy",       "nhsn",    as.Date("2024-01-03"), 1,      1,
+    "wy",       "nhsn",    as.Date("2024-01-10"), NA,     1,
+  ) %>%
+    as_epi_df(other_keys = "source", as_of = as.Date("2024-01-17"))
+
+  expect_equal(find_lagging_geos(epi_data, "nssp"), "ia")
+  expect_equal(find_lagging_geos(epi_data, c("value", "nssp")), c("ia", "wy"))
+  expect_equal(find_lagging_geos(epi_data, c("value", "nssp"), list(geo_value = "wy")), "ia")
+  # A geo is not lagging if only an ignored source ends early.
+  only_flusurv_late <- epi_data %>% filter(!(geo_value == "tx" & source == "nhsn"))
+  expect_equal(find_lagging_geos(only_flusurv_late, "nssp", list(source = "flusurv")), "ia")
+})
+
+test_that("scaled_pop_seasonal: a lagging geo does not shift the lags of other geos", {
+  jhu <- epidatasets::covid_case_death_rates %>%
+    filter(time_value >= as.Date("2021-10-01"), geo_value %in% c("ca", "fl", "ny", "tx", "wa"))
+  attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 1
+  latest <- max(jhu$time_value)
+  lagging <- jhu %>% mutate(death_rate = if_else(geo_value == "wa" & time_value == latest, NA, death_rate))
+  run <- function(epi_data) {
+    scaled_pop_seasonal(
+      epi_data, "case_rate", "death_rate",
+      ahead = 7L, pop_scaling = FALSE, lags = list(c(0, 7), c(0, 7)),
+      scale_method = "none", center_method = "none", nonlin_method = "none"
+    ) %>%
+      filter(geo_value != "wa") %>%
+      arrange(geo_value, quantile)
+  }
+  expect_equal(run(lagging), run(jhu))
+})
