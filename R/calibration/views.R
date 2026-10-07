@@ -472,6 +472,128 @@ cal_state_wis <- function(cals, seasons = c("2024-2025", "2025-2026")) {
   }) %>% bind_rows()
 }
 
+#' Round bootstrap for WIS reduction %, states only, live seasons, h0–h3.
+#'
+#' Rounds (reference dates) are resampled with replacement within each
+#' season; `"both"` pools the two seasons' resampled rounds. Every config is
+#' scored on the same draws, so differences between configs taken draw by
+#' draw are paired. Each draw's WIS reduction % is `100 × (WIS_base −
+#' WIS_cal) / WIS_base` over the resampled rounds. The interval is the
+#' central `level` percentile band of the draws; see
+#' notes/calibration-ledger.md, "How to read the numbers".
+#'
+#' @param cals named list of runs (each with `$forecasts`) or forecast frames.
+#' @return list of `ci` (one row per config, season, h, with `wis_pct`, `lo`,
+#'   `hi`) and `draws` (one row per config, season, h, draw, with `wis_pct`).
+#' @export
+cal_wis_boot <- function(cals, seasons = c("2024-2025", "2025-2026"), horizons = 0:3, n_draws = 1000, level = 0.9, seed = 1, states_only = TRUE) {
+  pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
+  per_round <- purrr::imap(cals, function(x, nm) {
+    fc <- if (is.data.frame(x)) x else x$forecasts
+    if (!"is_burn_in" %in% names(fc)) fc$is_burn_in <- FALSE
+    if (states_only) fc <- fc %>% filter(.data$location != "US")
+    fc %>%
+      mutate(season = cal_season_of(.data$reference_date)) %>%
+      filter(!.data$is_burn_in, .data$horizon %in% horizons, .data$season %in% seasons, !is.na(.data$truth), !is.na(.data$value_base)) %>%
+      group_by(.data$season, .data$reference_date, .data$horizon) %>%
+      summarize(
+        wis_base = sum(pinball(.data$truth, .data$value_base, .data$level)),
+        wis_cal = sum(pinball(.data$truth, .data$value_cal, .data$level)), .groups = "drop"
+      ) %>%
+      mutate(config = nm, .before = 1)
+  }) %>% bind_rows()
+  # One weight matrix per season (draw × round), shared by every config.
+  rounds <- per_round %>% distinct(.data$season, .data$reference_date) %>% arrange(.data$season, .data$reference_date)
+  set.seed(seed)
+  weights <- purrr::map(split(rounds$reference_date, rounds$season), function(r) {
+    n <- length(r)
+    w <- t(replicate(n_draws, tabulate(sample.int(n, n, replace = TRUE), nbins = n)))
+    colnames(w) <- as.character(r)
+    w
+  })
+  # A config or horizon missing a round (e.g. h3 at the season's end) just
+  # contributes nothing for it.
+  score <- function(d, s) {
+    w <- weights[[s]][, as.character(d$reference_date), drop = FALSE]
+    list(base = as.vector(w %*% d$wis_base), cal = as.vector(w %*% d$wis_cal))
+  }
+  draws <- per_round %>%
+    group_by(.data$config, .data$horizon) %>%
+    group_modify(function(d, key) {
+      by_season <- purrr::map(split(d, d$season), function(ds) score(ds, ds$season[1]))
+      by_season$both <- list(
+        base = Reduce(`+`, purrr::map(by_season, "base")),
+        cal = Reduce(`+`, purrr::map(by_season, "cal"))
+      )
+      purrr::imap(by_season, function(x, s) {
+        tibble::tibble(season = s, draw = seq_len(n_draws), wis_pct = 100 * (x$base - x$cal) / x$base)
+      }) %>% bind_rows()
+    }) %>%
+    ungroup() %>%
+    mutate(
+      config = factor(.data$config, levels = names(cals)),
+      season = factor(.data$season, levels = c(seasons, "both")),
+      h = factor(paste0("h", .data$horizon), levels = paste0("h", sort(horizons)))
+    ) %>%
+    select("config", "season", "h", "draw", "wis_pct")
+  point <- per_round %>%
+    bind_rows(per_round %>% mutate(season = "both")) %>%
+    group_by(.data$config, .data$season, .data$horizon) %>%
+    summarize(wis_pct = 100 * (sum(.data$wis_base) - sum(.data$wis_cal)) / sum(.data$wis_base), .groups = "drop") %>%
+    mutate(
+      config = factor(.data$config, levels = names(cals)),
+      season = factor(.data$season, levels = c(seasons, "both")),
+      h = factor(paste0("h", .data$horizon), levels = paste0("h", sort(horizons)))
+    ) %>%
+    select("config", "season", "h", "wis_pct")
+  a <- (1 - level) / 2
+  ci <- draws %>%
+    group_by(.data$config, .data$season, .data$h) %>%
+    summarize(lo = quantile(.data$wis_pct, a), hi = quantile(.data$wis_pct, 1 - a), .groups = "drop") %>%
+    inner_join(point, by = c("config", "season", "h")) %>%
+    select("config", "season", "h", "wis_pct", "lo", "hi")
+  list(ci = ci, draws = draws, level = level, n_draws = n_draws)
+}
+
+#' Paired bootstrap interval for the WIS reduction % gap between two configs
+#' of a [cal_wis_boot()] result, `a − b`, draw by draw.
+#' @return one row per season and h with `diff`, `lo`, `hi`.
+#' @export
+cal_wis_boot_diff <- function(boot, a, b) {
+  al <- (1 - boot$level) / 2
+  d <- boot$draws %>%
+    filter(.data$config %in% c(a, b)) %>%
+    mutate(config = ifelse(.data$config == a, "a", "b")) %>%
+    tidyr::pivot_wider(names_from = "config", values_from = "wis_pct") %>%
+    group_by(.data$season, .data$h) %>%
+    summarize(lo = quantile(.data$a - .data$b, al), hi = quantile(.data$a - .data$b, 1 - al), .groups = "drop")
+  p <- boot$ci %>%
+    filter(.data$config %in% c(a, b)) %>%
+    mutate(config = ifelse(.data$config == a, "a", "b")) %>%
+    select("config", "season", "h", "wis_pct") %>%
+    tidyr::pivot_wider(names_from = "config", values_from = "wis_pct") %>%
+    transmute(.data$season, .data$h, diff = .data$a - .data$b)
+  inner_join(p, d, by = c("season", "h"))
+}
+
+#' Wide table of a [cal_wis_boot()] result: configs as rows, `season hX` as
+#' columns, cells `point [lo, hi]`.
+#' @export
+cal_wis_boot_table <- function(boot) {
+  boot$ci %>%
+    transmute(.data$config, col = paste(.data$season, .data$h), cell = sprintf("%+.1f [%+.1f, %+.1f]", .data$wis_pct, .data$lo, .data$hi)) %>%
+    tidyr::pivot_wider(names_from = "col", values_from = "cell")
+}
+
+#' Caption for [cal_wis_boot_table()].
+#' @export
+cal_wis_boot_caption <- function(boot) {
+  sprintf(
+    "WIS reduction %% (positive = calibrated WIS lower than base), states only, with a %d%% interval from %d round bootstrap draws (rounds resampled within each season; `both` pools the seasons' draws).",
+    round(100 * boot$level), boot$n_draws
+  )
+}
+
 # August-July season label, as `season_of()` in the replay scripts.
 cal_season_of <- function(d) {
   y <- as.integer(format(d, "%Y")) - (as.integer(format(d, "%m")) < 8)

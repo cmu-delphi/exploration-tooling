@@ -12,7 +12,8 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
    "Finalists") is down to a disease-specific choice. Provisional
    (2026-10-07, not implemented): covid REF-op cold (no tracker tested helps
    at h1–h3, E20), flu sqrt 0.018 warm + leak (about 1/1.5/2.5 points over
-   REF-op warm at h1–h3 on the ensemble, coverage within 0.002; E10, E20).
+   REF-op warm at h1–h3 on the ensemble, coverage within 0.002, the 90%
+   round-bootstrap interval on that gap excluding zero at h2–h3; E10, E20).
    Done so far: a1–a4, b1–b4 (E12, E13), the structure grid on both
    anchors and diseases (E18–E21). Next: item 1f, in its own thread. Calibrating needs full quantile forecasts over many rounds,
    not just scores. The evaluation project (`flu_hosp_evaluation` /

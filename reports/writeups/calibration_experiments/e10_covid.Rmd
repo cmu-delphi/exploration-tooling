@@ -69,6 +69,45 @@ for (d in names(FIN)) {
 }
 ```
 
+## WIS by season with bootstrap intervals
+
+Every cell carries a 90% interval from a round bootstrap: the season's
+rounds are resampled with replacement 1000 times and the WIS reduction
+recomputed on each draw (`cal_wis_boot()`), the same draws for every
+config. The paired-gap tables give the finalist's gap to prod's config on
+each base with its paired interval. The round is the resampling unit, which
+ignores dependence between neighbouring rounds, so the intervals are if
+anything too narrow.
+
+```{r fin-boot, results="asis"}
+FIN_PAIRS <- list(
+  c("sqrt 0.018 warm + leak", "REF-op warm"),
+  c("sqrt 0.018 warm + leak", "sqrt 0.018 warm"),
+  c("sqrt 0.018", "REF-op cold")
+)
+for (d in names(FIN)) {
+  cat("\n\n", cal_h(3), " ", d, "\n\n", sep = "")
+  bt <- cal_wis_boot(FIN[[d]]$cals, seasons = LIVE)
+  cal_wis_boot_table(bt) %>%
+    knitr::kable(caption = paste0(d, ": ", cal_wis_boot_caption(bt))) %>%
+    print()
+  gaps <- purrr::map(c("ensemble", "replay"), function(b) {
+    purrr::map(FIN_PAIRS, function(pr) {
+      a <- paste(b, pr[1], sep = ", "); bb <- paste(b, pr[2], sep = ", ")
+      if (!all(c(a, bb) %in% names(FIN[[d]]$cals))) return(NULL)
+      cal_wis_boot_diff(bt, a, bb) %>% mutate(base = b, pair = paste(pr[1], "−", pr[2]), .before = 1)
+    }) %>% bind_rows()
+  }) %>% bind_rows()
+  if (nrow(gaps) > 0) {
+    gaps %>%
+      transmute(base, pair, col = paste(season, h), cell = sprintf("%+.1f [%+.1f, %+.1f]", diff, lo, hi)) %>%
+      tidyr::pivot_wider(names_from = col, values_from = cell) %>%
+      knitr::kable(caption = paste0(d, ": gap in WIS reduction % (first − second) with its 90% paired bootstrap interval")) %>%
+      print()
+  }
+}
+```
+
 ## Do the finalists rank the same way on both bases?
 
 Per disease, the candidates run on both bases (covid has no warm runs on the

@@ -54,6 +54,15 @@ WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
 WIS lower than base. L1 coverage bias: lower is better. "Month-avg" coverage
 bias is computed within each calendar month and then averaged.
 
+Every WIS cell carries a 90% interval from a round bootstrap: the season's
+rounds are resampled with replacement 1000 times and the WIS reduction
+recomputed on each draw (`cal_wis_boot()`). The same draws score every
+config, so a gap between two configs has a paired interval; the "Paired
+gaps" tables show it for the cells the ledger compares. Outcomes within a
+round move together, so the round is the resampling unit; this ignores
+dependence between neighbouring rounds, so the intervals are if anything
+too narrow.
+
 ```{r load}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))
 DISEASES <- c(flu = "flu", covid = "covid")
@@ -78,7 +87,8 @@ M <- purrr::map(RUNS, function(r) {
   m <- ws_wis_by_season(r$cals)
   mv <- cal_month_view(r$cals, seasons = LIVE)
   cov <- mv$cov %>% transmute(config, season, h = factor(paste0("h", horizon), levels = h_levels), pooled = pooled_cal, mavg = mavg_cal)
-  list(m = m, mv = mv, cov = cov)
+  bt <- cal_wis_boot(r$cals, seasons = LIVE)
+  list(m = m, mv = mv, cov = cov, bt = bt)
 })
 ```
 
@@ -87,10 +97,42 @@ M <- purrr::map(RUNS, function(r) {
 ```{r wis-table, results="asis"}
 for (d in names(M)) {
   cat("\n\n", cal_h(2), " ", d, "\n\n", sep = "")
-  M[[d]]$m %>%
-    transmute(config, col = paste(season, h), cell = sprintf("%+.1f", wis_pct)) %>%
+  cal_wis_boot_table(M[[d]]$bt) %>%
+    knitr::kable(caption = paste0(d, ": ", cal_wis_boot_caption(M[[d]]$bt))) %>%
+    print()
+}
+```
+
+# Paired gaps
+
+The gap in WIS reduction % between two cells, with its paired bootstrap
+interval (same draws on both sides). An interval that excludes zero in a
+season means the ranking of the pair survived resampling that season's
+rounds.
+
+```{r paired-gaps, results="asis"}
+PAIRS <- list(
+  flu = list(
+    c("constant 0.018 | warm | leak 0.1", "constant 0.018 | warm | no leak"),
+    c("constant 0.018 | warm | leak 0.1", "REF-op warm"),
+    c("constant 0.018 | warm | leak 0.1", "adaptive 0.03 | warm | leak 0.1"),
+    c("constant 0.018 | warm | leak 0.1", "constant 0.018 | cold | leak 0.1")
+  ),
+  covid = list(
+    c("constant 0.018 | cold | leak 0.1", "REF-op cold"),
+    c("constant 0.018 | cold | leak 0.1", "constant 0.018 | cold | no leak"),
+    c("constant 0.018 | cold | leak 0.1", "constant 0.018 | warm | leak 0.1")
+  )
+)
+for (d in names(M)) {
+  cat("\n\n", cal_h(2), " ", d, "\n\n", sep = "")
+  purrr::map(PAIRS[[d]], function(pr) {
+    cal_wis_boot_diff(M[[d]]$bt, pr[1], pr[2]) %>% mutate(pair = paste(pr[1], "−", pr[2]), .before = 1)
+  }) %>%
+    bind_rows() %>%
+    transmute(pair, col = paste(season, h), cell = sprintf("%+.1f [%+.1f, %+.1f]", diff, lo, hi)) %>%
     tidyr::pivot_wider(names_from = col, values_from = cell) %>%
-    knitr::kable(caption = paste0(d, ": WIS reduction % (positive = calibrated WIS lower than base), states only; `both` pools the seasons")) %>%
+    knitr::kable(caption = paste0(d, ": gap in WIS reduction % (first − second) with its 90% paired bootstrap interval")) %>%
     print()
 }
 ```
