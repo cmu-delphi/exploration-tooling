@@ -51,6 +51,9 @@ day. If the webhook isn't set or the post fails, it logs a CRITICAL line saying
 the alert was not delivered.
 After every publish, failed or not, it also posts a message with links to the
 site and to the prod reports and health notebooks rendered that day.
+The first run to end at or after 14:00 posts the output of `make status`
+(`scripts/prod_status.R`), once a day; delete `cache/prod_status_posted_<date>`
+to post it again.
 
 The webhook is a Slack incoming webhook for the team channel. Set it in the
 `forecaster` user's `~/.Renviron` on the prod box (the project `.Rprofile`

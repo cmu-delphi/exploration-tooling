@@ -4,9 +4,10 @@
 # prod-forecasts.timer). Runs the forecasts once the data is fresh, retries on
 # later firings if not, and gives up with an alert at the 14:00 cutoff. After
 # the pipelines it renders each disease's health notebook, publishes, and posts
-# links to the new reports on Slack; a pipeline error, failed health check, or failed publish step alerts on Slack
-# (see notes/prod-health-check.md) and leaves the day unfinished so the next
-# firing retries.
+# links to the new reports on Slack; a pipeline error, failed health check, or
+# failed publish step alerts on Slack (see notes/prod-health-check.md) and
+# leaves the day unfinished so the next firing retries. The first run to end
+# after the cutoff also posts the output of scripts/prod_status.R.
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 log_file <- here::here("cache", "logs", "prod_forecast_freshness.log")
@@ -60,13 +61,32 @@ announce_reports <- function(failed) {
   }
 }
 
+cutoff_hour <- 14L
+
+# Exit the run. If the run ends at or after the cutoff hour, first post the
+# output of scripts/prod_status.R to Slack, once per day. The check uses the
+# end time because a run that is still active at the cutoff makes systemd skip
+# the cutoff firing.
+finish <- function(status) {
+  posted_marker <- here::here("cache", sprintf("prod_status_posted_%s", Sys.Date()))
+  if (as.integer(format(Sys.time(), "%H")) >= cutoff_hour && !file.exists(posted_marker)) {
+    report <- system2(file.path(R.home("bin"), "Rscript"), here::here("scripts", "prod_status.R"), stdout = TRUE)
+    if (notify_slack(sprintf(":clipboard: end-of-day prod status\n```\n%s\n```", paste(report, collapse = "\n")))) {
+      file.create(posted_marker)
+    } else {
+      log_msg("The end-of-day status was not delivered (SLACK_WEBHOOK_URL unset or the post failed).")
+    }
+  }
+  quit(status = status)
+}
+
 today <- Sys.Date()
 hour <- as.integer(format(Sys.time(), "%H"))
 marker <- here::here("cache", sprintf("prod_forecast_done_%s", today))
 
 if (file.exists(marker)) {
   log_msg(sprintf("Forecast already completed today (%s), skipping.", today))
-  quit(status = 0)
+  finish(0)
 }
 
 freshness <- map(c("covid_hosp_prod", "flu_hosp_prod"), function(project) {
@@ -84,13 +104,13 @@ log_msg(paste0("Freshness: ", paste(
 
 if (!all(freshness$fresh)) {
   log_msg(sprintf("Data is stale (local hour=%d).", hour))
-  if (hour >= 14) {
+  if (hour >= cutoff_hour) {
     alert(sprintf(
-      "NHSN/NSSP data is still stale at the 14:00 cutoff. Skipping forecast run for %s; upstream data needs investigation.",
-      today
+      "NHSN/NSSP data is still stale at the %d:00 cutoff. Skipping forecast run for %s; upstream data needs investigation.",
+      cutoff_hour, today
     ))
   }
-  quit(status = 0)
+  finish(0)
 }
 
 log_msg("Data is fresh, running prod forecasts.")
@@ -201,8 +221,8 @@ for (step in publish_steps) {
 announce_reports(failed = length(failures) > 0)
 if (length(failures) > 0) {
   alert(paste("-", failures, collapse = "\n"))
-  quit(status = 1)
+  finish(1)
 }
 file.create(marker)
 log_msg(sprintf("Prod forecast run for %s completed successfully.", today))
-quit(status = 0)
+finish(0)
