@@ -22,15 +22,27 @@ step_status <- function(step) {
   "not run today"
 }
 
+# Named vector of systemd unit properties; empty values become "-".
+unit_props <- function(unit, props) {
+  out <- system2("systemctl", c("--user", "show", unit, "--no-pager", "-p", paste(props, collapse = ",")), stdout = TRUE)
+  values <- sub("^[^=]*=", "", out)
+  values[!nzchar(values)] <- "-"
+  setNames(values, sub("=.*$", "", out))
+}
+
 cat("== timer ==\n")
-system2("systemctl", c("--user", "list-timers", "prod-forecasts.timer", "--all", "--no-pager"))
-service <- system2(
-  "systemctl",
-  c("--user", "show", "prod-forecasts.service", "--no-pager", "-p", "ActiveState,Result,ExecMainStatus,ExecMainExitTimestamp"),
-  stdout = TRUE
-)
-cat(paste0("  ", service), sep = "\n")
-if (!"Result=success" %in% service) {
+timer <- unit_props("prod-forecasts.timer", c("ActiveState", "LastTriggerUSec", "NextElapseUSecRealtime"))
+service <- unit_props("prod-forecasts.service", c("ActiveState", "Result", "ExecMainStatus", "ExecMainExitTimestamp"))
+cat(sprintf(
+  "%-15s %s\n",
+  c("timer:", "last trigger:", "next trigger:", "service:", "last result:"),
+  c(
+    timer[["ActiveState"]], timer[["LastTriggerUSec"]], timer[["NextElapseUSecRealtime"]],
+    service[["ActiveState"]],
+    sprintf("%s (exit %s, finished %s)", service[["Result"]], service[["ExecMainStatus"]], service[["ExecMainExitTimestamp"]])
+  )
+), sep = "")
+if (service[["Result"]] != "success") {
   cat("last journal lines:\n")
   system2("journalctl", c("--user", "-u", "prod-forecasts.service", "-n", "10", "--no-pager"))
 }
