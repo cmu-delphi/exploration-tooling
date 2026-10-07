@@ -30,7 +30,7 @@ configs running in prod:
 
 Both calibrate the submitted `CMU-TimeSeries` ensemble, learn from NHSN data
 as published (re-run every round, as prod does; E00), and are drawn against
-finalized truth. Spoiled submissions are dropped. Seasons run August–July;
+finalized truth. Spoiled submissions are dropped. States only (US excluded). Seasons run August–July;
 only the two live seasons (2024-25 and 2025-26) are shown.
 
 ```{r load}
@@ -56,6 +56,7 @@ PROD <- list(
   covid = load_prod("covid", params$covid_hub_dir, list(burn_in_seasons = character(0), slow_init = NULL))
 )
 abbrev <- setNames(toupper(get_population_data()$state_id), get_population_data()$state_code)
+STATES <- CAL_STATES[names(CAL_STATES) != "US"]
 ```
 
 ```{r sections, results="asis", fig.height=4}
@@ -65,7 +66,7 @@ for (d in names(PROD)) {
 
   cat("\n\n## Fixed states {.tabset}\n\n")
   cat(
-    "The same states (US, CA, GA, MN, VT) for both diseases. Every other",
+    "The same states (CA, GA, MN, VT) for both diseases. Every other",
     "round's fan at h−1–h3: blue ribbon and line are the base 80% band and",
     "median, orange lines the calibrated 10/50/90% quantiles, grey the",
     "finalized truth. The black line is the last two reported weeks of NHSN",
@@ -74,9 +75,9 @@ for (d in names(PROD)) {
     "reports were later revised up. A black line with no fan in front of it is",
     "a round with no submission.\n\n"
   )
-  for (nm in names(CAL_STATES)) {
+  for (nm in names(STATES)) {
     cat("\n\n### ", nm, "\n\n", sep = "")
-    for (s in LIVE) print(cal_state_panel(p$cal, CAL_STATES[[nm]], s, p$truth, p$vintages, title = paste(d, nm, s)))
+    for (s in LIVE) print(cal_state_panel(p$cal, STATES[[nm]], s, p$truth, p$vintages, title = paste(d, nm, s)))
   }
 
   cat("\n\n## Gallery {.tabset}\n\n")
@@ -90,8 +91,8 @@ for (d in names(PROD)) {
     "forecast date.\n\n"
   )
   cal_live <- p$cal
-  cal_live$forecasts <- cal_live$forecasts %>% filter(season %in% LIVE)
-  picks <- cal_gallery_pick(cal_live, p$population)
+  cal_live$forecasts <- cal_live$forecasts %>% filter(season %in% LIVE, location != "US")
+  picks <- cal_gallery_pick(cal_live, p$population %>% filter(location != "US"))
   for (i in seq_len(nrow(picks))) {
     pk <- picks[i, ]
     if (i == 1L || pk$phase != picks$phase[i - 1L]) cat("\n\n### ", as.character(pk$phase), "\n\n", sep = "")
