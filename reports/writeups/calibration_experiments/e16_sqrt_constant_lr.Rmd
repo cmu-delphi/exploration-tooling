@@ -390,38 +390,3 @@ mv_cols <- MONTH_COLS
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
-
-# Findings
-
-There are no uncertainty estimates; a WIS gap under 1 point or a month-avg
-coverage gap under 0.01 is read as no clear difference. The cold start leaves
-Nov–Dec 2024 equal to the base for every config. States only, h0/h1/h2/h3.
-
-- **Sweep:** sqrt 0.001–0.018 are at or above the base in every season ×
-  horizon, often by +0.0 to +0.3. From 0.032 some cells turn negative
-  (2024-25 h3 −0.3); from 0.056 the losses grow. The rule selects 0.018
-  (mean +1.15, worst +0.06); 0.01 is close (mean +1.02, worst +0.10).
-- **sqrt 0.018 vs rate 0.032:** pooled +2.2/+0.8/+0.6/+0.6 vs
-  +1.3/+0.7/+0.5/+0.4. About 1 point apart at h0 (2024-25 +0.7, 2025-26
-  +1.1); within 0.2 at h1–h3 pooled (no clear difference). At h3 sqrt is
-  ahead in 2025-26 (+0.7) and rate in 2024-25 (+0.1).
-- **sqrt 0.018 vs REF-op cold:** the order flips by season. In 2024-25
-  REF-op is ahead at h0–h1 (+2.2/+0.9 vs +1.7/+0.6) and behind at h2–h3
-  (−0.0/−0.8 vs +0.3/+0.1); in 2025-26 sqrt is ahead at every horizon.
-  Pooled gaps are 0.2–0.8.
-- **Month-avg coverage (both seasons):** base 0.112/0.127/0.153/0.177; sqrt
-  0.018 0.094/0.116/0.143/0.169; REF-op 0.098/0.119/0.146/0.167; rate 0.018
-  0.102/0.120/0.147/0.172; rate 0.032 0.108/0.127/0.155/0.177. sqrt vs REF-op
-  and vs rate 0.018: no clear difference. sqrt vs rate 0.032: 0.008–0.014
-  lower, all from 2025-26 (0.023–0.029 there; in 2024-25 rate 0.032 is
-  0.003–0.008 lower). Rate 0.032's low season-pooled 2025-26 bias
-  (0.010–0.014) is cancellation; month-avg it is above the base.
-- **Offset tail:** 90th percentile of |offset| ÷ base 90% width, all levels:
-  sqrt 0.018 0.092–0.111, rate 0.018 0.078–0.096, rate 0.032 0.124–0.153,
-  REF-op 0.074–0.114. sqrt is smaller than rate 0.032 at the 0.05 level and
-  larger at 0.95.
-- **March at h2** (within the month, 2024-25 / 2025-26): rate 0.018
-  −1.2/−10.6, rate 0.032 −2.2/−18.7, sqrt 0.018 −7.2/−27.9, REF-op
-  −19.8/−24.3. March is 7.5% and 4.2% of the base WIS, so these cost 0.1–1.5
-  season points. In March the base already over-predicts (58% and 67% of
-  outcomes below its median at h2).

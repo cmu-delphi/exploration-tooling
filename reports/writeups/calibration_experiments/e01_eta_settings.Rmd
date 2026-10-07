@@ -261,29 +261,3 @@ mv_plot_cfgs <- c(
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
-
-# Findings
-
-There are no uncertainty estimates; a WIS gap under 1 point or a month-avg
-coverage gap under 0.01 is read as no clear difference. The cold start leaves
-Nov–Dec 2024 (about 38% of 2024-25's base WIS at h2) equal to the base for
-every config. States only, window 20, carry unless stated.
-
-- **Large multipliers:** 0.1 is −1.3/−6.8/−11.3/−16.7 pooled at h0–h3 and
-  0.3 loses 14–77. Across multipliers WIS moves 16–81 points; across windows
-  0.8–2.4; across season policies 0.3–1.7.
-- **0.01 vs 0.03:** 0.01 is ahead at h1–h3 in both seasons (by 0.5–2.4);
-  0.03 is ahead at h0 in 2024-25 (by 0.8). Pooled: 0.01
-  +1.7/+0.7/+0.5/+0.5, 0.03 +1.9/−0.2/−1.1/−1.7.
-- **Month-avg coverage (both seasons, h0…h3):** base 0.112/0.127/0.153/0.177;
-  0.01 0.093/0.114/0.142/0.168; 0.03 0.095/0.120/0.150/0.176; 0.1
-  0.097/0.130/0.161/0.190. 0.01 vs 0.03: no clear difference. 0.1 is worse
-  than the base at h1–h3. Season-pooled, 0.03 and 0.1 look much better than
-  the base (0.017–0.045), but pooling lets ramp and post-peak errors cancel.
-- **Window:** no strong result (under 1 point in most cells; up to 2.4 at h3,
-  2025-26, driven by mult 0.3).
-- **Carry vs reset (2025-26 only):** at mult ≤ 0.03 carry is 0.3–1.9 points
-  ahead on WIS; at 0.1 and 0.3 the order is mixed. Month-avg coverage: no
-  clear difference (reset lower by 0.002–0.008).
-- **Count scale** (mult 0.03): −0.4/−2.5/−4.9/−7.0 pooled, 2–5 points below
-  sqrt at h1–h3 in both seasons.

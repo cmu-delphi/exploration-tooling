@@ -413,6 +413,23 @@ cal_month_cov_table <- function(mv, seasons = NULL) {
 }
 
 
+#' WIS reduction % per season and horizon as a wide table: configs as rows,
+#' `season hX` as columns, `both` pooling the seasons. Same rows as the month
+#' view (states only, burn-in dropped).
+#' @export
+cal_month_wis_table <- function(mv, seasons = NULL) {
+  m <- mv$month
+  if (!is.null(seasons)) m <- m %>% filter(.data$season %in% seasons)
+  bind_rows(m, m %>% mutate(season = "both")) %>%
+    mutate(season = factor(.data$season, levels = c(sort(unique(m$season)), "both"))) %>%
+    group_by(.data$config, .data$season, .data$horizon) %>%
+    summarize(pct = 100 * (sum(.data$wis_base) - sum(.data$wis_cal)) / sum(.data$wis_base), .groups = "drop") %>%
+    arrange(.data$season, .data$horizon) %>%
+    transmute(.data$config, col = paste0(.data$season, " h", .data$horizon), cell = sprintf("%+.1f", .data$pct)) %>%
+    tidyr::pivot_wider(names_from = "col", values_from = "cell")
+}
+
+
 #' The month view plot for one season: rows are WIS reduction %, L1 coverage
 #' bias and median absolute-error reduction %; columns are horizons; one line
 #' per config. The base's coverage bias is grey (dashed unless `linetype` is

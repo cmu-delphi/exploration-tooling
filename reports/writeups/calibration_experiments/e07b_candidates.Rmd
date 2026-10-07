@@ -211,27 +211,3 @@ mv_linetype <- "forecaster"
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
-
-# Findings
-
-States only. WIS reduction % (positive = calibrated WIS lower than base)
-differences are in points; L1 coverage bias is lower-is-better and leads
-with the month-avg.
-
-- **Candidates, WIS: the order flips between seasons.** Mean over h0–h3,
-  REF-op warm leads in 2024-25 on both (A +3.44, B +2.07; next +0.79 and
-  +0.90). In 2025-26 the 1 March switch-off leads on both (A +1.96, B
-  +2.37) and REF-op warm is 4th on A, 5th on B (+0.69, +0.60). Pooled over
-  both seasons the other four candidates are within 0.2 points of each
-  other on A (+0.64 to +0.83) and within 0.9 on B (+0.63 to +1.48).
-- **1 March switch-off in 2024-25.** No strong result: 0.47 points below
-  sqrt 0.018 on A and 0.24 above it on B. The rates (0.018, 0.032) and the
-  1 March date were picked in E14/E16/E17 on these same seasons, on B.
-- **Coverage, month-avg.** No strong result among candidates: over h0–h3,
-  A ranges 0.115–0.126 for four candidates (base 0.132) and B 0.130–0.136
-  (base 0.142). Rate 0.032 is no better than the base on either (A 0.133,
-  B 0.142), and in 2025-26 it is above the base at every horizon (A by
-  0.016–0.024, B by 0.007–0.017). Season-pooled, rate 0.032 has the lowest
-  2025-26 bias on B (0.010–0.014), because pooling lets ramp and post-peak
-  errors cancel. Season-pooled coverage ranks agree between A and B over
-  both seasons (Spearman 0.97) but not in 2025-26 (0.31).

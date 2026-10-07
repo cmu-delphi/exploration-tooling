@@ -294,33 +294,3 @@ mv <- cal_month_view(cals, seasons = LIVE)
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
-
-# Findings
-
-There are no uncertainty estimates; a WIS gap under 1 point or a month-avg
-coverage gap under 0.01 is read as no clear difference. Both configs are cold
-and equal the base through December 2024 (about a third of 2024-25's base
-WIS), so the pooled gains are diluted. There is no per-season split here.
-States only, both seasons pooled, h0/h1/h2/h3.
-
-- **WIS:** REF-op +2.03/+0.59/+0.09/−0.17, E11 +0.73/−0.21/−0.70/−1.03.
-  REF-op is 1.3 points ahead at h0; at h1–h3 the gap is 0.8–0.9 (no clear
-  difference).
-- **By level:** the six tail levels (0.01–0.05, 0.95–0.99) add at most 0.1
-  point. REF-op's levels below the median give +1.36/+0.72/+0.59/+0.58 and
-  those above +0.54/−0.14/−0.48/−0.76. E11: below +1.00/+0.39/+0.12/−0.02,
-  above −0.31/−0.55/−0.73/−0.91.
-- **Offset size:** median |offset| is 2–5% of the base 90% width at levels
-  0.25–0.95, and 0.4–2.1% at the 0.05 level. The median calibrated 90% width
-  is 1.00–1.04 times the base. The 90th percentile of |offset| ÷ 90% width
-  (levels 0.25–0.95) is 0.07–0.20 for REF-op and 0.24–0.55 for E11.
-- **Median shift vs width change:** for REF-op, median shift only gives
-  +2.29/+0.80/+0.47/+0.39 (0.2–0.6 above the full calibration) and width
-  change only −0.59 to −1.14. The interaction is +0.33 to +0.57 (E11: +0.43
-  to +0.86), so the split is not additive. The coverage of the width-only
-  variant is not measured.
-- **Month-avg coverage:** base 0.112/0.127/0.153/0.177; REF-op
-  0.098/0.119/0.146/0.167 (0.007–0.014 lower); E11 0.116/0.143/0.174/0.203
-  (0.004–0.026 higher than the base). Season-pooled, E11 looks lowest
-  (0.020–0.025, REF-op 0.077–0.085, base 0.105–0.127), but pooling lets ramp
-  and post-peak errors cancel.

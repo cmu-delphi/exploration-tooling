@@ -30,8 +30,7 @@ Question: how do the two finalists, REF-op and sqrt constant 0.018, do on
 flu and covid, on the submitted ensemble and on the clean replay?
 
 Part 1 runs them on both diseases and both bases, h0–h3, on identical rows.
-Part 2 is the covid ensemble at h−1–h3 with REF-paper for reference, and the
-standard views.
+Part 2 is the covid ensemble at h−1–h3 with REF-paper for reference.
 
 # Part 1: both diseases, both bases
 
@@ -91,110 +90,21 @@ FIN <- purrr::map(c(flu = "flu", covid = "covid"), function(d) {
   })
   list(cals = setNames(cals, paste(grid$base, grid$cand, sep = ", ")), grid = grid, cands = names(cands))
 })
-fin_score <- function(cal) {
-  ws_scores(cal$forecasts %>% mutate(season = season_of(reference_date)) %>% filter(location != "US")) %>%
-    select(season, horizon, which, wis, cal_err) %>%
-    tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err)) %>%
-    mutate(wis_pct = 100 * (wis_base - wis_cal) / wis_base)
-}
-FIN_M <- purrr::map(FIN, function(f) {
-  purrr::map2(f$cals, seq_len(nrow(f$grid)), \(cal, i) fin_score(cal) %>% mutate(f$grid[i, ])) %>%
-    bind_rows() %>%
-    mutate(
-      base = factor(base, levels = c("ensemble", "replay")), cand = factor(cand, levels = f$cands),
-      season = factor(season, levels = c(LIVE, "both"), labels = c(LIVE, "both seasons")),
-      h = factor(paste0("h", horizon), levels = paste0("h", 0:3))
-    )
-})
-BASE_COLS <- c(ensemble = "#0072B2", replay = "#D55E00")
-fin_table <- function(m) {
-  bind_rows(
-    m %>% distinct(base, season, h, .keep_all = TRUE) %>% mutate(cand = "base", cell = sprintf("WIS %.1f", wis_base)),
-    m %>% mutate(cell = sprintf("%+.1f", wis_pct))
-  ) %>%
-    mutate(config = paste(base, cand, sep = ", ")) %>%
-    arrange(base, cand != "base", cand) %>%
-    transmute(config = factor(config, levels = unique(config)), col = paste(season, h), cell) %>%
-    tidyr::pivot_wider(names_from = col, values_from = cell)
-}
-fin_plot <- function(m) {
-  ggplot(m, aes(cand, wis_pct, fill = base)) +
-    geom_hline(yintercept = 0, colour = "grey50") +
-    geom_col(position = position_dodge(width = 0.85, preserve = "single"), width = 0.8) +
-    facet_grid(season ~ h) +
-    scale_fill_manual(values = BASE_COLS, name = NULL) +
-    labs(x = NULL, y = "WIS reduction % (positive = calibrated WIS lower than base)") +
-    theme(legend.position = "bottom", axis.text.x = element_text(angle = 30, hjust = 1))
-}
 ```
 
-```{r fin-sections, results="asis", fig.height=6.5}
-for (d in names(FIN)) {
-  f <- FIN[[d]]
-  m <- FIN_M[[d]]
-  cat("\n\n", cal_h(2), " ", d, "\n\n", sep = "")
-  cat("\n\n", cal_h(3), " WIS\n\n", sep = "")
-  cat("WIS reduction % (positive = calibrated WIS lower than base), states only; the base rows give the base WIS.\n\n")
-  print(knitr::kable(fin_table(m)))
-  print(fin_plot(m))
-  cat("\n\n", cal_h(3), " Coverage\n\n", sep = "")
-  print(knitr::kable(cal_month_cov_table(cal_month_view(f$cals, seasons = LIVE)), caption = CAL_MONTH_COV_CAPTION))
-  cat("\n\n", cal_h(3), " State by state\n\n", sep = "")
-  cat("States share the national wave, so the counts are not independent tests.\n\n")
-  op <- if (d == "flu") "REF-op warm" else "REF-op cold"
-  pairs <- unlist(purrr::map(c("ensemble", "replay"), function(b) {
-    nm <- function(x) paste(b, x, sep = ", ")
-    ps <- list(c(nm(op), nm("sqrt 0.018")), c(nm("sqrt 0.018 warm"), nm("sqrt 0.018")))
-    purrr::keep(ps, \(p) all(p %in% names(f$cals)))
-  }), recursive = FALSE)
-  print(knitr::kable(cal_pair_wins(cal_state_wis(f$cals), pairs), caption = CAL_PAIR_WINS_CAPTION))
-}
-```
+Per disease, a month view for each base. The ensemble and replay rows are
+the same (round, location, horizon, level) cells, so the two bases' tables
+compare like for like.
 
 ```{r fin-month, results="asis"}
 for (d in names(FIN)) {
+  cat("\n\n", cal_h(2), " ", d, "\n\n", sep = "")
   for (b in c("ensemble", "replay")) {
     mv <- cal_month_view(FIN[[d]]$cals[startsWith(names(FIN[[d]]$cals), paste0(b, ", "))], seasons = LIVE)
-    mv_show_table <- FALSE
-    cal_month_section(paste("Month view:", d, b), level = 2L)
+    cal_month_section(paste(d, b), level = 3L)
   }
 }
 ```
-
-# Findings, part 1
-
-States only, h0/h1/h2/h3, WIS reduction % (positive = calibrated WIS lower
-than base). No uncertainty estimates; gaps under 1 point read as no clear
-difference.
-
-- **Flu, ensemble:** sqrt 0.018 warm +4.4/+2.5/+2.7/+4.3 pooled, REF-op
-  warm +3.9/+1.9/+1.5/+2.3, both cold configs within ±0.7 at h1–h3. All of
-  the warm configs' lead is 2024-25 (sqrt warm +4.4/+4.0/+4.9/+7.9; REF-op
-  warm wins 49–51 of 52 states against sqrt cold). In 2025-26 every config
-  is within 1 point of the base at h1–h2, and both warm configs lose at h3
-  (sqrt warm −1.7, REF-op warm −0.9).
-- **Flu, replay:** as E18: sqrt 0.018 warm +3.4/+1.6/+1.5/+2.7, REF-op warm
-  +2.8/+1.1/+0.8/+1.2. Here sqrt warm stays positive in 2025-26
-  (+3.3/+0.9/+0.8/+1.3) where on the ensemble it does not, so the replay
-  overstates its 2025-26 result for what we submit.
-- **Flu coverage, month-avg:** on the ensemble, REF-op warm is the only
-  config below the base at every horizon (0.090/0.110/0.124/0.138 vs
-  0.116/0.123/0.137/0.151); sqrt warm is close to the base at h1–h3
-  (0.119/0.133/0.147). On the replay sqrt warm is 0.009–0.017 above the base
-  at h2–h3 (E18).
-- **Covid, ensemble:** REF-op cold (covid prod) +0.8/−0.1/−0.3/−0.8 pooled;
-  sqrt 0.018 +0.1/−2.7/−3.7/−4.2. Both gain a little in 2024-25; in 2025-26
-  sqrt 0.018 loses 6.9–8.3 at h1–h3 against REF-op's 2.0–2.9, and REF-op
-  has the lower WIS in 44–45 of 52 states at h1–h3. Month-avg coverage is
-  within 0.011 of the base for both, and 0.004–0.006 above it at h2–h3.
-- **Covid, replay:** nothing is consistently positive beyond h0. Warm
-  starts (from the HHS backfill) lose at h0–h2 in 2024-25 (sqrt warm −1.3
-  to −5.1) and gain at h3 in 2025-26 (+4.1, +5.0). Pooled, the best h3 is
-  REF-op warm +2.8, the best h1 sqrt 0.018 cold −1.8 and REF-op cold −1.1.
-- **So:** on flu the warm sqrt 0.018 leads on both bases, but on the
-  ensemble its whole lead is the first live season. On covid sqrt 0.018 is
-  clearly worse than REF-op cold on what we submit, and no config tested
-  helps at h1–h3.
 
 # Part 2: covid ensemble, h−1–h3
 
@@ -206,8 +116,8 @@ difference.
 - Rounds 2024-11-30 to 2026-09-19. The 2024-11-23 round is excluded (made
   from a bad NHSN release corrected the next day).
 - Covid is submitted year-round; per-season views use August–July seasons.
-- Horizons h−1 to h3. Headline tables: all hub locations; month view: states
-  only.
+- Horizons h−1 to h3. Scores: states only (US excluded), the two live
+  seasons.
 
 | config | change from REF-paper |
 |---|---|
@@ -234,36 +144,9 @@ cals <- purrr::map(cals, function(cal) {
   cal
 })
 LIVE <- c("2024-2025", "2025-2026")
-focus <- "REF-op (no warm start)"
 ```
 
-```{r child=here::here("reports/writeups/calibration_experiments/_standard_views.Rmd")}
+```{r p2-month-view, results="asis"}
+mv <- cal_month_view(cals, seasons = LIVE, horizons = NULL)
+cal_month_section("Month view", level = 2L)
 ```
-
-# Findings, part 2
-
-There are no uncertainty estimates; a WIS gap under 1 point or a month-avg
-coverage gap under 0.01 is read as no clear difference. The pooled headline,
-median-error and by-month tables run to 2026-09-19 to include the 2026 summer
-wave; those Aug–Sep 2026 rounds are in no per-season table.
-
-- **h−1:** both configs improve WIS by about 10–11% in each season
-  (REF-paper 11.6/10.5, REF-op 8.9/10.8) and the absolute error of the median
-  by about 20%. Which config is ahead flips between seasons.
-- **REF-paper at h1–h3:** −4.5/−7.3/−10.3 pooled, almost all from 2025-26
-  (−10.2/−14.4/−19.3). In 2024-25 it is within 0.3 points of the base.
-- **REF-op at h1–h3:** 0.0/−0.6/−1.3 pooled; +2.4/+2.8/+1.9 in 2024-25 and
-  −3.0/−4.0/−4.3 in 2025-26. No strong result: the sign depends on the
-  season.
-- **Month-avg coverage (states, h−1…h3):** base 0.148/0.102/0.125/0.143/0.157;
-  REF-op 0.123/0.096/0.126/0.147/0.161 (lower at h−1 only); REF-paper
-  0.111/0.094/0.126/0.155/0.171 (about 0.01 worse at h2/h3). Season-pooled,
-  the base looks calibrated at h1–h3, but pooling lets the two seasons'
-  errors cancel: within each season its bias is 0.072–0.078 (2024-25) and
-  0.029–0.051 (2025-26).
-- **By month at h3:** REF-op −16.5% in September and −12.0% in October
-  (together 20% of base WIS); REF-paper −42% to −49% in April–May (about 6%).
-- **sqrt 0.018 (added 2026-10-02):** the largest h−1 gain, +14.9 pooled
-  (+14.9/+14.1 by season) against REF-op's +10.2, and +24.4% median absolute
-  error. At h1–h3 it is −3.3/−4.2/−4.1 pooled and −9.5/−9.1/−7.7 in 2025-26,
-  worse than REF-op (−3.0/−4.0/−4.3) and better than REF-paper.

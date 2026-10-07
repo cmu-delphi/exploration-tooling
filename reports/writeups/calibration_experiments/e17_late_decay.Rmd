@@ -198,36 +198,3 @@ mv_cols <- setNames(DECAY_COLS, mv_plot_cfgs)
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
-
-# Findings
-
-There are no uncertainty estimates; a WIS gap under 1 point or a month-avg
-coverage gap under 0.01 is read as no clear difference. The cold start leaves
-Nov–Dec 2024 equal to the base for every config. States only, h0/h1/h2/h3.
-
-- **Decays vs no decay, pooled WIS:** sqrt 0.018 loses 0.4–0.5 at h0 and is
-  within 0.2 at h1–h3; rate 0.018 loses 0.5–0.7 at h0 and 0.2–0.3 at h1–h3;
-  rate 0.032 loses 0.2–0.5 at h0 and at most 0.2 at h1–h3. No strong result.
-  For sqrt the order flips by season: in 2024-25 the decays are 0.1–0.3
-  ahead at h1–h3; in 2025-26 they are 0.9–1.3 behind at h0.
-- **`off_after` vs no decay, pooled WIS:** sqrt 0.018 +2.3/+1.2/+1.2/+1.3 vs
-  +2.2/+0.8/+0.6/+0.6 (0.1–0.7 apart); rate 0.032 −0.1 to +0.5; rate 0.018
-  −0.5 to 0. No pooled gap reaches 1 point. The sqrt gain is mostly 2025-26
-  (+3.4/+1.6/+1.9/+2.6 vs +3.0/+1.0/+1.1/+1.5). In 2024-25 the rate-scale
-  trackers are lower at h0 with the switch-off. The date was tuned
-  in-sample.
-- **March and spring at h2:** the decays shrink the March loss (sqrt
-  2025-26: −27.9 to −10.7/−6.3/−2.9; `off_after` −0.0), and also remove the
-  April–May gains (sqrt May 2025-26: +17.3 to +3.3/−0.0/−0.1; `off_after`
-  +0.0).
-- **Month-avg coverage (both seasons):** sqrt 0.018 no decay
-  0.094/0.116/0.143/0.169, decay 0.85 0.103/0.123/0.149/0.173, `off_after`
-  0.104/0.121/0.150/0.170, base 0.112/0.127/0.153/0.177: gaps ≤ 0.010, no
-  clear difference. For rate 0.032, decay 0.85 is 0.005–0.007 lower than no
-  decay overall and 0.014–0.024 lower in 2025-26. Season-pooled, no decay is
-  0.032–0.043 lower for sqrt, but pooling lets ramp and post-peak errors
-  cancel.
-- **Carry-over:** `off_after` carries the pre-March offset into the next
-  ramp. In 2025-26 that ramp under-predicted too (Nov 2025 h0 month bias
-  0.065 for `off_after` vs 0.096–0.103 for the decays), which a season that
-  ramps differently would not repeat.

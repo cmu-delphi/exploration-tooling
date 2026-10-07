@@ -278,22 +278,3 @@ knitr::kable(cal_month_cov_table(mv_trk), caption = CAL_MONTH_COV_CAPTION)
 ```{r table-all}
 knitr::kable(season_table(GEOS[["all"]]))
 ```
-
-# Findings
-
-States only. WIS reduction % (positive = calibrated WIS lower than base)
-differences are in points; L1 coverage bias is lower-is-better and leads
-with the month-avg.
-
-- **Bases.** B/A base WIS is 0.93–1.01 in 2024-25 and 1.05–1.33 in 2025-26
-  (largest at h0); per state B is lower in 29 of 52 states, then 7 of 52.
-  Month-avg base bias over h0–h3 is 0.116–0.151 for A and 0.112–0.177 for
-  B (both seasons), 0.089–0.117 vs 0.097–0.146 in 2025-26. Both bases have
-  over 86% of outcomes above the median in December and under 40% in March
-  2025-26. They differ in November 2024-25 (51% vs 73% above), March–April
-  2024-25 (59/75% vs 45/56%) and February 2025-26 (60% vs 71%).
-- **Trackers.** On both, pooled WIS at h1–h3 orders operating > leaky >
-  single. Operating gains 0.7–1.1 points more on A than on B (A
-  +3.9/+1.9/+1.5/+2.3, B +2.8/+1.1/+0.8/+1.2), mostly 2024-25 h2/h3
-  (+2.8/+4.3 vs +1.4/+1.7) and 2025-26 h0 (+4.3 vs +2.2). On B, leaky and
-  single are under 1 point apart except at h3 (1.2).

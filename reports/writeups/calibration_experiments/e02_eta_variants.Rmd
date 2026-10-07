@@ -236,34 +236,3 @@ mv_cols <- CFG_COLS
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
-
-# Findings
-
-There are no uncertainty estimates; a WIS gap under 1 point or a month-avg
-coverage gap under 0.01 is read as no clear difference. The cold start leaves
-Nov–Dec 2024 equal to the base for the cold configs. States only, pooled over
-both seasons unless stated.
-
-- **Switching off from 1 March or 15 February:** +2.8/+1.7/+2.0/+2.5 and
-  +2.7/+2.1/+2.5/+3.2 at h0–h3, against the reference's
-  +1.9/−0.2/−1.1/−1.7, ahead at every horizon in both seasons. The two dates
-  differ by 0.1–0.7 (no clear difference). Both dates were chosen with these
-  seasons in view.
-- **Where that gain sits:** in 2024-25 it is the March–April months, where
-  the reference loses (h2: −31% in March, −41% in April). In 2025-26 about
-  half of the h2 gain is December, where offsets frozen in February 2025 are
-  still in play (+13.6% vs +6.3%), partly offset by January and October.
-- **Switching off from 1 April:** +1.6/−0.2/−0.7/−0.8, within 1 point of the
-  reference at h0–h2.
-- **Per-level eta:** +2.1/+0.5/−0.0/−0.3, about 1 point above the reference
-  at h1–h3 in both seasons.
-- **Seasonal window and burn-in:** against `reference + burn-in`
-  (+2.0/−0.0/−0.6/−1.0), the seasonal window is +2.0/−0.1/−0.8/−1.3 with carry
-  and +1.4/−0.2/−0.9/−1.6 with reset. The burn-in alone is +0.5 to +0.7 at
-  h2–h3 over the cold reference, in 2024-25 only. No strong result.
-- **Month-avg coverage (h0…h3):** base 0.112/0.127/0.153/0.177; reference
-  0.095/0.120/0.150/0.176; off 1 March 0.104/0.124/0.153/0.170; off 15
-  February 0.106/0.126/0.153/0.169; per-level 0.092/0.117/0.147/0.173. No
-  clear difference between any variant and the reference. Season-pooled the
-  switch-offs look much worse than the reference (0.080–0.100 vs
-  0.032–0.045), but pooling lets ramp and post-peak errors cancel.
