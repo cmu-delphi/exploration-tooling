@@ -10,10 +10,11 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
 1. **Use the evaluation project as the calibration testbed.** The
    operating-point work (hub harness, `notes/calibration-ledger.md`,
    "Finalists") is down to a disease-specific choice. Provisional
-   (2026-10-02, to confirm after the notebook review, not implemented):
-   covid REF-op cold (sqrt 0.018 loses 3–4 points at h1–h3), flu REF-op warm
-   or sqrt 0.018 warm (ahead by 1–2 points, all in 2024-25). Done so far:
-   a1–a4, b1–b4 (E12, E13). Next: item 1f, in its own thread. Calibrating needs full quantile forecasts over many rounds,
+   (2026-10-07, not implemented): covid REF-op cold (no tracker tested helps
+   at h1–h3, E20), flu sqrt 0.018 warm + leak (about 1/1.5/2.5 points over
+   REF-op warm at h1–h3 on the ensemble, coverage within 0.002; E10, E20).
+   Done so far: a1–a4, b1–b4 (E12, E13), the structure grid on both
+   anchors and diseases (E18–E21). Next: item 1f, in its own thread. Calibrating needs full quantile forecasts over many rounds,
    not just scores. The evaluation project (`flu_hosp_evaluation` /
    `covid_hosp_evaluation`) replays the current prod components and
    ensemble weekly since 2024-11-20, which is what calibration would see in
@@ -66,9 +67,9 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
         later.
    b. *2023-24 as a burn-in season.* REF-op warm-starts from a burn-in
       season, and the replay has none. The warm start helps only in the
-      first live season (E05, E18), and sqrt 0.018 needs no burn-in, so if
-      it is chosen the open level and stitching questions below drop off the
-      critical path. Delphi's `hhs` source
+      first live season (E05, E18, E20), but the flu finalist uses it, so the
+      stitch stays on the critical path for 1f. Its level is settled (E21:
+      HHS 2–4% below the NHSN final over 2023-24). Delphi's `hhs` source
       (`confirmed_admissions_{influenza,covid}_1d`) has real issue history
       for 2023-24 (CA 2023-12-01: issues 12-06, 12-08, 12-20, 12-22), until
       HHS reporting ended 2024-04-30. Steps, each checked before the next:
@@ -124,27 +125,12 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
       an ensemble component. To evaluate calibration there: calibrate the
       replayed forecasts over all dates, learn from per-round snapshots
       (`calibrate_hub_forecasts_exact()`), take the config as a parameter so
-      both finalists run, and score states only. A burn-in for REF-op needs
+      prod's config and the finalist (flu: sqrt 0.018 warm + leak; covid:
+      REF-op cold is prod) both run, and score states only. A burn-in for REF-op needs
       the HHS stitching (b), which today exists only in the harness.
 
-   **Later (not needed to evaluate calibration):**
+   **Later (not needed to evaluate calibration; c and d moved to Parked):**
 
-   c. *The ensemble with fixed weights.* The geo-exclusions CSVs carry the
-      ensemble weights as well as exclusions, so "no hand edits" for
-      `ensemble_mix` means one fixed weight block for every date. Decide
-      which block (the default one at the top of the file, or the current
-      one), check the resolved weights on one date, then replay. Not needed
-      to choose the operating point: E10 already scores the finalists on
-      the submitted ensemble, and E07 shows calibration acts the same way
-      on the ensemble and the single-component replay. Revisit if 1f needs
-      a clean ensemble history.
-   d. *Hand edits on vs off as its own question.* A separate evaluation
-      project (like the `_regr` ones) replaying with the edits, to measure
-      whether the weekly substitutions and weight changes help. The only
-      past check found is the 2025 revision report
-      (`revision_summary_report_2025.Rmd`), which scored substitutions by
-      whether they moved values toward the final value. Calibration needs
-      only the clean replay.
    e. *ILINet as a target*, to check our methods on a dataset we have not
       tuned on. `fluview` has real issue history (CA wILI for week 2023-50
       is revised weekly through May 2024) back to about 2010. Follows the
@@ -254,9 +240,25 @@ validator, simplification inventory) live in `notes/refactor-ideas.md`.
   no burn-in.
 - CMU-climate_baseline US forecast is too low (item 2b).
 - `us_method` spec column and removing the `usa` alias (item 2b).
-- Ensemble-base calibration headline tables (E00, E03–E05, E09–E11) pool
+- Ensemble-base calibration headline tables (E00, E03, E09, E10 part 2) pool
   raw counts over all locations, so US is about half of their "WIS change
   %". The replay experiments report states only (except E12).
+- *The ensemble with fixed weights* (was item 1c, parked 2026-10-07). The
+  geo-exclusions CSVs carry the ensemble weights as well as exclusions, so "no hand edits" for
+  `ensemble_mix` means one fixed weight block for every date. Decide
+  which block (the default one at the top of the file, or the current
+  one), check the resolved weights on one date, then replay. Not needed
+  to choose the operating point: E10 already scores the finalists on
+  the submitted ensemble, and E07 shows calibration acts the same way
+  on the ensemble and the single-component replay. Revisit if 1f needs
+  a clean ensemble history.
+- *Hand edits on vs off as its own question* (was item 1d, parked
+  2026-10-07). A separate evaluation project (like the `_regr` ones) replaying with the edits, to measure
+  whether the weekly substitutions and weight changes help. The only
+  past check found is the 2025 revision report
+  (`revision_summary_report_2025.Rmd`), which scored substitutions by
+  whether they moved values toward the final value. Calibration needs
+  only the clean replay.
 
 ## Tech debt
 
