@@ -163,8 +163,7 @@ mb %>%
 # 2. What calibration does to each
 
 WIS reduction % (positive = calibrated WIS lower than base) and L1 coverage
-bias (lower is better), states only. The month view of these runs is in
-E07b.
+bias (lower is better), states only.
 
 ```{r table-states}
 mv_trk <- cal_month_view(setNames(cals, paste(grid$forecaster, grid$tracker, sep = ", ")), seasons = LIVE)

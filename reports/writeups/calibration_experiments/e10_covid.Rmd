@@ -30,7 +30,8 @@ Question: how do the two finalists, REF-op and sqrt constant 0.018, do on
 flu and covid, on the submitted ensemble and on the clean replay?
 
 Part 1 runs them on both diseases and both bases, h0–h3, on identical rows.
-Part 2 is the covid ensemble at h−1–h3 with REF-paper for reference.
+Part 1 also checks whether the finalists rank the same way on both bases.
+Part 2 is the covid ensemble at h−1–h3.
 
 # Part 1: both diseases, both bases
 
@@ -51,45 +52,7 @@ Setup:
 
 ```{r fin-runs}
 source(here::here("scripts/calibration/calibration_ws_replay.R"))
-key <- c("reference_date", "location", "horizon", "level")
-fin_inputs <- function(d) {
-  wi <- ws_inputs(d)
-  # Right after ws_inputs(): both read the harness globals that ch_use() sets.
-  burn <- ws_burn_in_forecasts(d)
-  hub <- suppressMessages(hub_read_forecasts(
-    hub_dir = here::here(HUB_DIRS[[d]]), target = c(flu = HUB_FLU_TARGET, covid = HUB_COVID_TARGET)[[d]]
-  )) %>% filter(horizon %in% 0:3)
-  ws <- bind_rows(burn, wi$fc)
-  common <- inner_join(distinct(hub, across(all_of(key))), distinct(ws, across(all_of(key))), by = key)
-  fcs <- list(ensemble = semi_join(hub, common, by = key), replay = semi_join(ws, common, by = key))
-  warm <- fcs
-  if (!any(season_of(fcs$ensemble$reference_date) == "2023-2024")) {
-    warm <- list(replay = bind_rows(burn, fcs$replay))
-  }
-  list(wi = wi, cold = purrr::map(fcs, \(fc) filter(fc, season_of(reference_date) %in% LIVE)), warm = warm)
-}
-fin_cands <- function(rate_scales) {
-  const <- ws_configs(rate_scales, burn_in = FALSE)[["E11 constant 0.1"]]
-  sqrt_018 <- utils::modifyList(const, list(lr = 0.018, transform = "sqrt"))
-  list(
-    `REF-op warm` = list(cfg = list(ref = "op"), warm = TRUE),
-    `REF-op cold` = list(cfg = list(ref = "op", burn_in_seasons = character(0), slow_init = NULL), warm = FALSE),
-    `sqrt 0.018` = list(cfg = sqrt_018, warm = FALSE),
-    `sqrt 0.018 warm` = list(cfg = utils::modifyList(sqrt_018, list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile")), warm = TRUE)
-  )
-}
-FIN <- purrr::map(c(flu = "flu", covid = "covid"), function(d) {
-  inp <- fin_inputs(d)
-  cands <- fin_cands(inp$wi$rate_scales)
-  grid <- tidyr::expand_grid(base = c("ensemble", "replay"), cand = names(cands)) %>%
-    filter(!cands[cand] %>% purrr::map_lgl("warm") | base %in% names(inp$warm))
-  cals <- purrr::pmap(grid, function(base, cand) {
-    cc <- cands[[cand]]
-    fc <- if (cc$warm) inp$warm[[base]] else inp$cold[[base]]
-    do.call(cal_run_cached, c(list(fc, inp$wi$truth), cc$cfg, list(learn = "exact", vintages = inp$wi$vintages, workers = params$workers)))
-  })
-  list(cals = setNames(cals, paste(grid$base, grid$cand, sep = ", ")), grid = grid, cands = names(cands))
-})
+FIN <- purrr::map(c(flu = "flu", covid = "covid"), \(d) fin_runs(d, workers = params$workers))
 ```
 
 Per disease, a month view for each base. The ensemble and replay rows are
@@ -106,6 +69,57 @@ for (d in names(FIN)) {
 }
 ```
 
+## Do the finalists rank the same way on both bases?
+
+Per disease, the candidates run on both bases (covid has no warm runs on the
+ensemble), ordered by mean WIS reduction % (positive = calibrated WIS lower
+than base) over h0–h3, separately on each base, states only. `rank` 1 is the
+largest WIS reduction; `cov rank` 1 is the lowest month-avg L1 coverage
+bias. Spearman ρ compares the two bases over all (candidate, horizon) cells
+of a season.
+
+```{r fin-rank, results="asis"}
+for (d in names(FIN)) {
+  mv_all <- cal_month_view(FIN[[d]]$cals, seasons = LIVE)
+  wis <- bind_rows(mv_all$month, mv_all$month %>% mutate(season = "both")) %>%
+    group_by(config, season, horizon) %>%
+    summarize(wis = 100 * (sum(wis_base) - sum(wis_cal)) / sum(wis_base), .groups = "drop")
+  cells <- mv_all$cov %>%
+    transmute(config, season = as.character(season), horizon, cov = mavg_cal) %>%
+    inner_join(wis, by = c("config", "season", "horizon")) %>%
+    tidyr::separate(config, c("base", "cand"), sep = ", ", extra = "merge")
+  shared <- cells %>% distinct(base, cand) %>% count(cand) %>% filter(n == 2) %>% pull(cand)
+  cells <- cells %>% filter(cand %in% shared)
+  cat("\n\n", cal_h(3), " ", d, "\n\n", sep = "")
+  cells %>%
+    group_by(base, season, cand) %>%
+    summarize(wis = mean(wis), cov = mean(cov), .groups = "drop") %>%
+    group_by(base, season) %>%
+    mutate(rank = rank(-wis), cov_rank = rank(cov)) %>%
+    ungroup() %>%
+    tidyr::pivot_wider(names_from = base, values_from = c(wis, rank, cov, cov_rank)) %>%
+    arrange(season, rank_ensemble) %>%
+    transmute(season, cand,
+      `WIS % ensemble` = round(wis_ensemble, 2), `rank ensemble` = rank_ensemble,
+      `WIS % replay` = round(wis_replay, 2), `rank replay` = rank_replay,
+      `cov ensemble` = round(cov_ensemble, 3), `cov rank ensemble` = cov_rank_ensemble,
+      `cov replay` = round(cov_replay, 3), `cov rank replay` = cov_rank_replay
+    ) %>%
+    knitr::kable(caption = "Mean over h0–h3, states only. Coverage is month-avg L1 coverage bias (lower is better)") %>%
+    print()
+  cells %>%
+    select(season, cand, horizon, base, wis, cov) %>%
+    tidyr::pivot_wider(names_from = base, values_from = c(wis, cov)) %>%
+    group_by(season) %>%
+    summarize(
+      `ρ WIS cells` = cor(wis_ensemble, wis_replay, method = "spearman"),
+      `ρ coverage cells` = cor(cov_ensemble, cov_replay, method = "spearman")
+    ) %>%
+    knitr::kable(digits = 2, caption = "Spearman correlation of ensemble vs replay over (candidate, horizon) cells") %>%
+    print()
+}
+```
+
 # Part 2: covid ensemble, h−1–h3
 
 - Disease: covid. Base forecaster: the submitted `CMU-TimeSeries` ensemble.
@@ -119,10 +133,9 @@ for (d in names(FIN)) {
 - Horizons h−1 to h3. Scores: states only (US excluded), the two live
   seasons.
 
-| config | change from REF-paper |
+| config | tracker |
 |---|---|
-| `REF-paper` | none (counts, adaptive learning rate) |
-| `REF-op (no warm start)` | sqrt scale, learning-rate floor, slow term 0.003, leak 0.1; no warm start |
+| `REF-op cold` | covid prod: sqrt scale, adaptive learning rate with floor, slow term 0.003, leak 0.1; no warm start |
 | `sqrt 0.018` | sqrt of the per-100k rate, constant learning rate 0.018 (E16), single term |
 
 WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
@@ -131,8 +144,7 @@ WIS lower than base. L1 coverage bias: lower is better.
 ```{r runs}
 no_burn_in <- list(burn_in_seasons = character(0), slow_init = NULL)
 cals <- list(
-  `REF-paper` = do.call(run, c(list("paper"), no_burn_in)),
-  `REF-op (no warm start)` = do.call(run, c(list("op"), no_burn_in)),
+  `REF-op cold` = do.call(run, c(list("op"), no_burn_in)),
   `sqrt 0.018` = do.call(run, c(list("paper", transform = "sqrt", lr = 0.018, scales = rate_scales), no_burn_in))
 )
 season_of <- function(d) {

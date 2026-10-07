@@ -163,6 +163,55 @@ ws_month_scores <- function(fc) {
     ungroup()
 }
 
+# The finalists' inputs for one disease: the submitted ensemble and the replay
+# on the (round, location, horizon, level) rows both have, h0–h3. Cold runs see
+# the live seasons only; warm runs also see the 2023-24 burn-in season (covid
+# submissions start 2024-11-23, so covid has warm runs on the replay only).
+fin_inputs <- function(disease) {
+  key <- c("reference_date", "location", "horizon", "level")
+  wi <- ws_inputs(disease)
+  # Right after ws_inputs(): both read the harness globals that ch_use() sets.
+  burn <- ws_burn_in_forecasts(disease)
+  hub <- suppressMessages(hub_read_forecasts(
+    hub_dir = here::here(HUB_DIRS[[disease]]), target = c(flu = HUB_FLU_TARGET, covid = HUB_COVID_TARGET)[[disease]]
+  )) %>% filter(horizon %in% 0:3)
+  ws <- bind_rows(burn, wi$fc)
+  common <- inner_join(distinct(hub, across(all_of(key))), distinct(ws, across(all_of(key))), by = key)
+  fcs <- list(ensemble = semi_join(hub, common, by = key), replay = semi_join(ws, common, by = key))
+  warm <- fcs
+  if (!any(season_of(fcs$ensemble$reference_date) == "2023-2024")) {
+    warm <- list(replay = bind_rows(burn, fcs$replay))
+  }
+  list(wi = wi, cold = purrr::map(fcs, \(fc) filter(fc, season_of(reference_date) %in% LIVE)), warm = warm)
+}
+
+# The finalist configs: REF-op and sqrt constant 0.018 per 100k (E16), each cold and warm.
+fin_candidates <- function(rate_scales) {
+  const <- ws_configs(rate_scales, burn_in = FALSE)[["E11 constant 0.1"]]
+  sqrt_018 <- utils::modifyList(const, list(lr = 0.018, transform = "sqrt"))
+  list(
+    `REF-op warm` = list(cfg = list(ref = "op"), warm = TRUE),
+    `REF-op cold` = list(cfg = list(ref = "op", burn_in_seasons = character(0), slow_init = NULL), warm = FALSE),
+    `sqrt 0.018` = list(cfg = sqrt_018, warm = FALSE),
+    `sqrt 0.018 warm` = list(cfg = utils::modifyList(sqrt_018, list(burn_in_seasons = "2023-2024", slow_init = "burn_in_quantile")), warm = TRUE)
+  )
+}
+
+# Every finalist on each of `bases` that has its inputs, cached. Returns the
+# inputs, the runs named "<base>, <candidate>", their grid and the candidate names.
+fin_runs <- function(disease, bases = c("ensemble", "replay"), workers = WORKERS) {
+  inp <- fin_inputs(disease)
+  cands <- fin_candidates(inp$wi$rate_scales)
+  grid <- tidyr::expand_grid(base = bases, cand = names(cands)) %>%
+    filter(!purrr::map_lgl(cands[cand], "warm") | base %in% names(inp$warm))
+  cals <- purrr::pmap(grid, function(base, cand) {
+    cc <- cands[[cand]]
+    fc <- if (cc$warm) inp$warm[[base]] else inp$cold[[base]]
+    do.call(cal_run_cached, c(list(fc, inp$wi$truth), cc$cfg, list(learn = "exact", vintages = inp$wi$vintages, workers = workers)))
+  })
+  list(inputs = inp, cals = setNames(cals, paste(grid$base, grid$cand, sep = ", ")), grid = grid, cands = names(cands))
+}
+
 # Location subsets scored separately: raw-count pooling makes US about half of
 # the all-locations WIS.
 WS_GEOS <- list(all = \(loc) rep(TRUE, length(loc)), states = \(loc) loc != "US", us = \(loc) loc == "US")
