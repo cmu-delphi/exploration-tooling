@@ -193,7 +193,6 @@ get_flu_forecaster_params <- function() {
         filter_source = c("", "nhsn"),
         filter_agg_level = "state",
         n_training = Inf,
-        drop_non_seasons = FALSE,
         keys_to_ignore = g_very_latent_locations
       )
     ),
@@ -206,7 +205,6 @@ get_flu_forecaster_params <- function() {
       train_residual = FALSE,
       filter_source = c("", "nhsn"),
       filter_agg_level = "state",
-      drop_non_seasons = FALSE,
       n_training = Inf,
       seasonal_backward_window = c(3 * 7, 5 * 7, 7 * 7),
       seasonal_forward_window = c(7, 3 * 7, 5 * 7),

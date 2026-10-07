@@ -42,7 +42,6 @@ scaled_pop_seasonal <- function(
   primary_source = "nhsn",
   ahead = 1,
   pop_scaling = TRUE,
-  drop_non_seasons = FALSE,
   scale_method = c("quantile", "std", "none"),
   center_method = c("median", "mean", "none"),
   nonlin_method = c("quart_root", "none"),
@@ -111,14 +110,9 @@ scaled_pop_seasonal <- function(
   # whiten to get the sources on the same scale
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict
-  if (drop_non_seasons) {
-    season_data <- epi_data %>% drop_non_seasons()
-  } else {
-    season_data <- epi_data
-  }
   # TODO: Jank way to avoid having hhs_region get centered; this isn't very general
   learned_params <- calculate_whitening_params(
-    season_data,
+    epi_data,
     setdiff(predictors, "hhs_region"),
     scale_method,
     center_method,
@@ -178,12 +172,6 @@ scaled_pop_seasonal <- function(
         filter(time_value <= max_time_nhsn)
     )
 
-  if (drop_non_seasons) {
-    season_data <- epi_data %>% drop_non_seasons()
-  } else {
-    season_data <- epi_data
-  }
-
   # preprocessing supported by epipredict
   preproc <- epi_recipe(epi_data)
   if (pop_scaling) {
@@ -229,7 +217,7 @@ scaled_pop_seasonal <- function(
       )
   }
   # with all the setup done, we execute and format
-  pred <- run_workflow_and_format(preproc, postproc, trainer, season_data, epi_data, source_value = primary_source)
+  pred <- run_workflow_and_format(preproc, postproc, trainer, epi_data, epi_data, source_value = primary_source)
   # now pred has the columns
   # (geo_value, forecast_date, target_end_date, quantile, value)
   # finally, any postprocessing not supported by epipredict e.g. calibration

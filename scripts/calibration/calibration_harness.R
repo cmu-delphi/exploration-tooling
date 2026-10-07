@@ -67,7 +67,6 @@ CH_SPEC <- list(
     extra_sources = "nssp",
     trainer = epipredict::quantile_reg(),
     seasonal_method = "window",
-    drop_non_seasons = TRUE,
     pop_scaling = FALSE,
     lags = list(c(0, 7), c(0, 7))
   ),
@@ -138,7 +137,6 @@ CH_CONFIGS <- list(
         outcome = "value",
         trainer = epipredict::quantile_reg(),
         seasonal_method = "none",
-        drop_non_seasons = TRUE,
         pop_scaling = FALSE,
         lags = c(0, 7)
       ),
