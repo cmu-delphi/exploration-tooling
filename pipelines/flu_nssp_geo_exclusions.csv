@@ -39,6 +39,270 @@ forecast_date,forecaster,geo_value,ahead,weight
 2026-09-23, climate_quantile_extrapolated, all,, 0
 2026-09-23, revision_aware, all, -1, 1
 ##################
+# May 27: backfilled from the defaults as of b15556f
+##################
+2026-05-27, all, mp,, 0
+2026-05-27, windowed_seasonal, all,, 3
+2026-05-27, windowed_seasonal_extra_sources, all,, 0.5
+2026-05-27, climate_linear, all,, 0.001
+2026-05-27, linear_no_population_scale, all,, 2
+2026-05-27, linearlog, all,, 0
+2026-05-27, climate_base, all,, 0.5
+2026-05-27, climate_geo_agged, all,, 0
+2026-05-27, climate_quantile_extrapolated, all,, 0
+##################
+# May 20: backfilled from the defaults as of b15556f
+##################
+2026-05-20, all, mp,, 0
+2026-05-20, windowed_seasonal, all,, 3
+2026-05-20, windowed_seasonal_extra_sources, all,, 0.5
+2026-05-20, climate_linear, all,, 0.001
+2026-05-20, linear_no_population_scale, all,, 2
+2026-05-20, linearlog, all,, 0
+2026-05-20, climate_base, all,, 0.5
+2026-05-20, climate_geo_agged, all,, 0
+2026-05-20, climate_quantile_extrapolated, all,, 0
+##################
+# May 13: backfilled from the defaults as of b15556f
+##################
+2026-05-13, all, mp,, 0
+2026-05-13, windowed_seasonal, all,, 3
+2026-05-13, windowed_seasonal_extra_sources, all,, 0.5
+2026-05-13, climate_linear, all,, 0.001
+2026-05-13, linear_no_population_scale, all,, 2
+2026-05-13, linearlog, all,, 0
+2026-05-13, climate_base, all,, 0.5
+2026-05-13, climate_geo_agged, all,, 0
+2026-05-13, climate_quantile_extrapolated, all,, 0
+##################
+# May 6: backfilled from the defaults as of b15556f
+##################
+2026-05-06, all, mp,, 0
+2026-05-06, windowed_seasonal, all,, 3
+2026-05-06, windowed_seasonal_extra_sources, all,, 0.5
+2026-05-06, climate_linear, all,, 0.001
+2026-05-06, linear_no_population_scale, all,, 2
+2026-05-06, linearlog, all,, 0
+2026-05-06, climate_base, all,, 0.5
+2026-05-06, climate_geo_agged, all,, 0
+2026-05-06, climate_quantile_extrapolated, all,, 0
+##################
+# Apr 29: backfilled from the defaults as of b15556f
+##################
+2026-04-29, all, mp,, 0
+2026-04-29, windowed_seasonal, all,, 3
+2026-04-29, windowed_seasonal_extra_sources, all,, 0.5
+2026-04-29, climate_linear, all,, 0.001
+2026-04-29, linear_no_population_scale, all,, 2
+2026-04-29, linearlog, all,, 0
+2026-04-29, climate_base, all,, 0.5
+2026-04-29, climate_geo_agged, all,, 0
+2026-04-29, climate_quantile_extrapolated, all,, 0
+##################
+# Apr 22: backfilled from the defaults as of b15556f
+##################
+2026-04-22, all, mp,, 0
+2026-04-22, windowed_seasonal, all,, 3
+2026-04-22, windowed_seasonal_extra_sources, all,, 0.5
+2026-04-22, climate_linear, all,, 0.001
+2026-04-22, linear_no_population_scale, all,, 2
+2026-04-22, linearlog, all,, 0
+2026-04-22, climate_base, all,, 0.5
+2026-04-22, climate_geo_agged, all,, 0
+2026-04-22, climate_quantile_extrapolated, all,, 0
+##################
+# Apr 8: backfilled from the defaults as of b15556f
+##################
+2026-04-08, all, mp,, 0
+2026-04-08, windowed_seasonal, all,, 3
+2026-04-08, windowed_seasonal_extra_sources, all,, 0.5
+2026-04-08, climate_linear, all,, 0.001
+2026-04-08, linear_no_population_scale, all,, 2
+2026-04-08, linearlog, all,, 0
+2026-04-08, climate_base, all,, 0.5
+2026-04-08, climate_geo_agged, all,, 0
+2026-04-08, climate_quantile_extrapolated, all,, 0
+##################
+# Apr 1: backfilled from the defaults as of b15556f
+##################
+2026-04-01, all, mp,, 0
+2026-04-01, windowed_seasonal, all,, 3
+2026-04-01, windowed_seasonal_extra_sources, all,, 0.5
+2026-04-01, climate_linear, all,, 0.001
+2026-04-01, linear_no_population_scale, all,, 2
+2026-04-01, linearlog, all,, 0
+2026-04-01, climate_base, all,, 0.5
+2026-04-01, climate_geo_agged, all,, 0
+2026-04-01, climate_quantile_extrapolated, all,, 0
+##################
+# Mar 25: backfilled from the defaults as of b15556f
+##################
+2026-03-25, all, mp,, 0
+2026-03-25, windowed_seasonal, all,, 3
+2026-03-25, windowed_seasonal_extra_sources, all,, 0.5
+2026-03-25, climate_linear, all,, 0.001
+2026-03-25, linear_no_population_scale, all,, 2
+2026-03-25, linearlog, all,, 0
+2026-03-25, climate_base, all,, 0.5
+2026-03-25, climate_geo_agged, all,, 0
+2026-03-25, climate_quantile_extrapolated, all,, 0
+##################
+# Mar 18: backfilled from the defaults as of b15556f
+##################
+2026-03-18, all, mp,, 0
+2026-03-18, windowed_seasonal, all,, 3
+2026-03-18, windowed_seasonal_extra_sources, all,, 0.5
+2026-03-18, climate_linear, all,, 0.001
+2026-03-18, linear_no_population_scale, all,, 2
+2026-03-18, linearlog, all,, 0
+2026-03-18, climate_base, all,, 0.5
+2026-03-18, climate_geo_agged, all,, 0
+2026-03-18, climate_quantile_extrapolated, all,, 0
+##################
+# Mar 11: backfilled from the defaults as of b15556f
+##################
+2026-03-11, all, mp,, 0
+2026-03-11, windowed_seasonal, all,, 3
+2026-03-11, windowed_seasonal_extra_sources, all,, 0.5
+2026-03-11, climate_linear, all,, 0.001
+2026-03-11, linear_no_population_scale, all,, 2
+2026-03-11, linearlog, all,, 0
+2026-03-11, climate_base, all,, 0.5
+2026-03-11, climate_geo_agged, all,, 0
+2026-03-11, climate_quantile_extrapolated, all,, 0
+##################
+# Mar 4: backfilled from the defaults as of b15556f
+##################
+2026-03-04, all, mp,, 0
+2026-03-04, windowed_seasonal, all,, 3
+2026-03-04, windowed_seasonal_extra_sources, all,, 0.5
+2026-03-04, climate_linear, all,, 0.001
+2026-03-04, linear_no_population_scale, all,, 2
+2026-03-04, linearlog, all,, 0
+2026-03-04, climate_base, all,, 0.5
+2026-03-04, climate_geo_agged, all,, 0
+2026-03-04, climate_quantile_extrapolated, all,, 0
+##################
+# Feb 25: backfilled from the defaults as of b15556f
+##################
+2026-02-25, all, mp,, 0
+2026-02-25, windowed_seasonal, all,, 3
+2026-02-25, windowed_seasonal_extra_sources, all,, 0.5
+2026-02-25, climate_linear, all,, 0.001
+2026-02-25, linear_no_population_scale, all,, 2
+2026-02-25, linearlog, all,, 0
+2026-02-25, climate_base, all,, 0.5
+2026-02-25, climate_geo_agged, all,, 0
+2026-02-25, climate_quantile_extrapolated, all,, 0
+##################
+# Feb 18: backfilled from the defaults as of b15556f
+##################
+2026-02-18, all, mp,, 0
+2026-02-18, windowed_seasonal, all,, 3
+2026-02-18, windowed_seasonal_extra_sources, all,, 0.5
+2026-02-18, climate_linear, all,, 0.001
+2026-02-18, linear_no_population_scale, all,, 2
+2026-02-18, linearlog, all,, 0
+2026-02-18, climate_base, all,, 0.5
+2026-02-18, climate_geo_agged, all,, 0
+2026-02-18, climate_quantile_extrapolated, all,, 0
+##################
+# Feb 11: backfilled from the defaults as of b15556f
+##################
+2026-02-11, all, mp,, 0
+2026-02-11, windowed_seasonal, all,, 3
+2026-02-11, windowed_seasonal_extra_sources, all,, 0.5
+2026-02-11, climate_linear, all,, 0.001
+2026-02-11, linear_no_population_scale, all,, 2
+2026-02-11, linearlog, all,, 0
+2026-02-11, climate_base, all,, 0.5
+2026-02-11, climate_geo_agged, all,, 0
+2026-02-11, climate_quantile_extrapolated, all,, 0
+##################
+# Feb 4: backfilled from the defaults as of b15556f
+##################
+2026-02-04, all, mp,, 0
+2026-02-04, windowed_seasonal, all,, 3
+2026-02-04, windowed_seasonal_extra_sources, all,, 0.5
+2026-02-04, climate_linear, all,, 0.001
+2026-02-04, linear_no_population_scale, all,, 2
+2026-02-04, linearlog, all,, 0
+2026-02-04, climate_base, all,, 0.5
+2026-02-04, climate_geo_agged, all,, 0
+2026-02-04, climate_quantile_extrapolated, all,, 0
+##################
+# Jan 28: backfilled from the defaults as of b15556f
+##################
+2026-01-28, all, mp,, 0
+2026-01-28, windowed_seasonal, all,, 3
+2026-01-28, windowed_seasonal_extra_sources, all,, 0.5
+2026-01-28, climate_linear, all,, 0.001
+2026-01-28, linear_no_population_scale, all,, 2
+2026-01-28, linearlog, all,, 0
+2026-01-28, climate_base, all,, 0.5
+2026-01-28, climate_geo_agged, all,, 0
+2026-01-28, climate_quantile_extrapolated, all,, 0
+##################
+# Jan 21: backfilled from the defaults as of b15556f
+##################
+2026-01-21, all, mp,, 0
+2026-01-21, windowed_seasonal, all,, 3
+2026-01-21, windowed_seasonal_extra_sources, all,, 0.5
+2026-01-21, climate_linear, all,, 0.001
+2026-01-21, linear_no_population_scale, all,, 2
+2026-01-21, linearlog, all,, 0
+2026-01-21, climate_base, all,, 0.5
+2026-01-21, climate_geo_agged, all,, 0
+2026-01-21, climate_quantile_extrapolated, all,, 0
+##################
+# Jan 14: backfilled from the defaults as of b15556f
+##################
+2026-01-14, all, mp,, 0
+2026-01-14, windowed_seasonal, all,, 3
+2026-01-14, windowed_seasonal_extra_sources, all,, 0.5
+2026-01-14, climate_linear, all,, 0.001
+2026-01-14, linear_no_population_scale, all,, 2
+2026-01-14, linearlog, all,, 0
+2026-01-14, climate_base, all,, 0.5
+2026-01-14, climate_geo_agged, all,, 0
+2026-01-14, climate_quantile_extrapolated, all,, 0
+##################
+# Jan 7: backfilled from the defaults as of b15556f
+##################
+2026-01-07, all, mp,, 0
+2026-01-07, windowed_seasonal, all,, 3
+2026-01-07, windowed_seasonal_extra_sources, all,, 0.5
+2026-01-07, climate_linear, all,, 0.001
+2026-01-07, linear_no_population_scale, all,, 2
+2026-01-07, linearlog, all,, 0
+2026-01-07, climate_base, all,, 0.5
+2026-01-07, climate_geo_agged, all,, 0
+2026-01-07, climate_quantile_extrapolated, all,, 0
+##################
+# Dec 31: backfilled from the defaults as of b15556f
+##################
+2025-12-31, all, mp,, 0
+2025-12-31, windowed_seasonal, all,, 3
+2025-12-31, windowed_seasonal_extra_sources, all,, 0.5
+2025-12-31, climate_linear, all,, 0.001
+2025-12-31, linear_no_population_scale, all,, 2
+2025-12-31, linearlog, all,, 0
+2025-12-31, climate_base, all,, 0.5
+2025-12-31, climate_geo_agged, all,, 0
+2025-12-31, climate_quantile_extrapolated, all,, 0
+##################
+# Dec 24: backfilled from the defaults as of b15556f
+##################
+2025-12-24, all, mp,, 0
+2025-12-24, windowed_seasonal, all,, 3
+2025-12-24, windowed_seasonal_extra_sources, all,, 0.5
+2025-12-24, climate_linear, all,, 0.001
+2025-12-24, linear_no_population_scale, all,, 2
+2025-12-24, linearlog, all,, 0
+2025-12-24, climate_base, all,, 0.5
+2025-12-24, climate_geo_agged, all,, 0
+2025-12-24, climate_quantile_extrapolated, all,, 0
+##################
 # Dec 17
 ##################
 2025-12-17, all, mp,, 0
@@ -50,6 +314,30 @@ forecast_date,forecaster,geo_value,ahead,weight
 2025-12-17, climate_base, all,, 2
 2025-12-17, climate_geo_agged, all,, 0
 2025-12-17, climate_quantile_extrapolated, all,, 0
+##################
+# Dec 10: backfilled from the defaults as of 24f366d
+##################
+2025-12-10, all, mp,, 0
+2025-12-10, windowed_seasonal, all,, 3
+2025-12-10, windowed_seasonal_extra_sources, all,, 0.5
+2025-12-10, climate_linear, all,, 0.001
+2025-12-10, linear_no_population_scale, all,, 2
+2025-12-10, linearlog, all,, 0
+2025-12-10, climate_base, all,, 0.5
+2025-12-10, climate_geo_agged, all,, 0
+2025-12-10, climate_quantile_extrapolated, all,, 0
+##################
+# Dec 3: backfilled from the defaults as of 24f366d
+##################
+2025-12-03, all, mp,, 0
+2025-12-03, windowed_seasonal, all,, 3
+2025-12-03, windowed_seasonal_extra_sources, all,, 0.5
+2025-12-03, climate_linear, all,, 0.001
+2025-12-03, linear_no_population_scale, all,, 2
+2025-12-03, linearlog, all,, 0
+2025-12-03, climate_base, all,, 0.5
+2025-12-03, climate_geo_agged, all,, 0
+2025-12-03, climate_quantile_extrapolated, all,, 0
 ##################
 # Nov 26
 ##################
@@ -74,6 +362,54 @@ forecast_date,forecaster,geo_value,ahead,weight
 2025-11-19, climate_base, all,, 0.5
 2025-11-19, climate_geo_agged, all,, 0
 2025-11-19, climate_quantile_extrapolated, all,, 0
+##################
+# Nov 12: backfilled from the defaults as of c97c8eb
+##################
+2025-11-12, all, mp,, 0
+2025-11-12, windowed_seasonal, all,, 3
+2025-11-12, windowed_seasonal_extra_sources, all,, 0.001
+2025-11-12, climate_linear, all,, 0.001
+2025-11-12, linear, all,, 2
+2025-11-12, linearlog, all,, 0
+2025-11-12, climate_base, all,, 0.5
+2025-11-12, climate_geo_agged, all,, 0
+2025-11-12, climate_quantile_extrapolated, all,, 0
+##################
+# Nov 5: backfilled from the defaults as of c97c8eb
+##################
+2025-11-05, all, mp,, 0
+2025-11-05, windowed_seasonal, all,, 3
+2025-11-05, windowed_seasonal_extra_sources, all,, 0.001
+2025-11-05, climate_linear, all,, 0.001
+2025-11-05, linear, all,, 2
+2025-11-05, linearlog, all,, 0
+2025-11-05, climate_base, all,, 0.5
+2025-11-05, climate_geo_agged, all,, 0
+2025-11-05, climate_quantile_extrapolated, all,, 0
+##################
+# Oct 29: backfilled from the defaults as of c97c8eb
+##################
+2025-10-29, all, mp,, 0
+2025-10-29, windowed_seasonal, all,, 3
+2025-10-29, windowed_seasonal_extra_sources, all,, 0.001
+2025-10-29, climate_linear, all,, 0.001
+2025-10-29, linear, all,, 2
+2025-10-29, linearlog, all,, 0
+2025-10-29, climate_base, all,, 0.5
+2025-10-29, climate_geo_agged, all,, 0
+2025-10-29, climate_quantile_extrapolated, all,, 0
+##################
+# Oct 22: backfilled from the defaults as of c97c8eb
+##################
+2025-10-22, all, mp,, 0
+2025-10-22, windowed_seasonal, all,, 3
+2025-10-22, windowed_seasonal_extra_sources, all,, 0.001
+2025-10-22, climate_linear, all,, 0.001
+2025-10-22, linear, all,, 2
+2025-10-22, linearlog, all,, 0
+2025-10-22, climate_base, all,, 0.5
+2025-10-22, climate_geo_agged, all,, 0
+2025-10-22, climate_quantile_extrapolated, all,, 0
 ##################
 # Oct 15: no data, massively weight climate linear
 ##################

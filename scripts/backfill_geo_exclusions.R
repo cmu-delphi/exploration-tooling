@@ -2,9 +2,12 @@
 #
 # Usage: Rscript scripts/backfill_geo_exclusions.R [pipelines/covid_geo_exclusions.csv]
 #
-# For each Wednesday since the file first appeared, take the version of the file
-# that prod would have used: the last commit before the next Wednesday. Dates in
-# `keep_current` are not changed. Resolve
+# The forecast dates are the Wednesdays that CMU-TimeSeries submitted the target
+# of the file to the hub (`origin/main` of the hub clone next to this repo), and
+# `unsubmitted_forecast_dates`.
+# For each forecast date since the file first appeared, take the version of the file
+# that prod would have used: the last commit before the next Wednesday, other
+# than `ignored_commits`. Dates in `keep_current` are not changed. Resolve
 # the weights for that date the way `parse_prod_weights()` does: the rows dated
 # that Wednesday, else the rows of the earliest date (the defaults), with later
 # duplicate keys overriding earlier ones.
@@ -21,23 +24,55 @@ suppressPackageStartupMessages({
 args <- commandArgs(trailingOnly = TRUE)
 filename <- if (length(args) > 0) args[[1]] else "pipelines/covid_geo_exclusions.csv"
 weight_keys <- c("forecaster", "geo_value", "ahead")
+hub <- list(
+  "pipelines/covid_geo_exclusions.csv" = c(repo = "../covid19-forecast-hub", target = "wk inc covid hosp"),
+  "pipelines/covid_nssp_geo_exclusions.csv" = c(repo = "../covid19-forecast-hub", target = "wk inc covid prop ed visits"),
+  "pipelines/flu_geo_exclusions.csv" = c(repo = "../FluSight-forecast-hub", target = "wk inc flu hosp"),
+  "pipelines/flu_nssp_geo_exclusions.csv" = c(repo = "../FluSight-forecast-hub", target = "wk inc flu prop ed visits")
+)[[filename]]
+# Old forecaster ids in the history and their current ids, per file. Only for
+# times when the pipeline also used the old id.
+forecaster_renames <- list(
+  "pipelines/covid_geo_exclusions.csv" = c(linear_climate = "climate_linear")
+)[[filename]] %||% character(0)
+# Forecaster ids in the history that matched no forecaster of the pipeline at
+# that time, per file. They had no effect, so the script drops them.
+unmatched_forecasters <- list(
+  "pipelines/flu_geo_exclusions.csv" = c("linear_climate")
+)[[filename]]
+# Forecast dates that prod forecast but did not submit to the hub.
+unsubmitted_forecast_dates <- seq(as.Date("2025-10-22"), as.Date("2025-11-12"), by = "week")
 # Forecast dates where the current file has the weights that prod used, per file.
 # Usually the weights were committed after the cutoff.
 keep_current <- as.Date(list(
   "pipelines/covid_geo_exclusions.csv" = c(
-    "2024-11-20", "2025-02-19", "2025-07-30", "2025-08-06", "2025-08-20",
+    "2024-11-20", "2025-07-30", "2025-08-06", "2025-08-20",
     "2025-09-03", "2025-12-31", "2026-08-26"
   ),
   "pipelines/covid_nssp_geo_exclusions.csv" = c(
     "2025-06-25", "2025-07-23", "2025-07-30", "2025-08-06", "2025-08-13",
     "2025-08-20", "2026-08-26"
-  )
-)[[filename]])
+  ),
+  "pipelines/flu_nssp_geo_exclusions.csv" = c("2025-12-17")
+)[[filename]] %||% character(0))
+# Commits that rewrote past weights (e.g. for backtesting) and so do not show
+# what prod used, per file.
+ignored_commits <- list(
+  "pipelines/flu_geo_exclusions.csv" = c("070e8bd")
+)[[filename]]
 
 git <- function(...) {
   out <- system2("git", shQuote(c(...)), stdout = TRUE)
   if (!is.null(attr(out, "status"))) stop("git ", paste(c(...), collapse = " "), " failed")
   out
+}
+
+# Hub file names have the reference date, which is the Saturday after the
+# Wednesday forecast date.
+submitted_forecast_dates <- function(repo, target) {
+  git("-C", repo, "fetch", "--quiet", "origin", "main")
+  hub_files <- git("-C", repo, "grep", "-l", "-F", target, "origin/main", "--", "model-output/CMU-TimeSeries/")
+  sort(as.Date(regmatches(hub_files, regexpr("\\d{4}-\\d{2}-\\d{2}", hub_files))) - 3)
 }
 
 # One row per commit that touched the file, with the path of the file at that
@@ -67,12 +102,12 @@ read_weights <- function(text) {
   raw %>%
     transmute(
       forecast_date = as.Date(forecast_date),
-      forecaster,
+      forecaster = coalesce(unname(forecaster_renames[forecaster]), forecaster),
       geo_value,
       ahead = as.integer(ahead),
       weight = as.numeric(weight)
     ) %>%
-    filter(!is.na(forecast_date))
+    filter(!is.na(forecast_date), !forecaster %in% unmatched_forecasters)
 }
 
 # Rows that `parse_prod_weights()` uses for `forecast_date`, in file order, with
@@ -133,14 +168,14 @@ insert_block <- function(lines, block, forecast_date, default_date) {
   append(lines, block, after = insert_at - 1)
 }
 
-commits <- file_commits(filename)
+commits <- file_commits(filename) %>%
+  filter(!substr(sha, 1, 7) %in% ignored_commits)
 current_lines <- readLines(filename)
 current_weights <- read_weights(current_lines)
 default_date <- min(current_weights$forecast_date)
 
-first_wednesday <- min(commits$commit_date) + (3 - as.integer(format(min(commits$commit_date), "%u"))) %% 7
-last_wednesday <- Sys.Date() - (as.integer(format(Sys.Date(), "%u")) - 3) %% 7
-wednesdays <- seq(first_wednesday, last_wednesday, by = "week")
+wednesdays <- sort(unique(c(submitted_forecast_dates(hub[["repo"]], hub[["target"]]), unsubmitted_forecast_dates)))
+wednesdays <- wednesdays[wednesdays >= min(commits$commit_date)]
 
 snapshot_cache <- list()
 report <- list()

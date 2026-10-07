@@ -41,12 +41,20 @@ if (file.exists(marker)) {
   quit(status = 0)
 }
 
-fresh <- all(vapply(c("covid_hosp_prod", "flu_hosp_prod"), function(project) {
+freshness <- map(c("covid_hosp_prod", "flu_hosp_prod"), function(project) {
   Sys.setenv(TAR_PROJECT = project)
-  check_data_freshness()
-}, logical(1)))
+  check_data_freshness() %>% mutate(project = project)
+}) %>% bind_rows()
+log_msg(paste0("Freshness: ", paste(
+  sprintf(
+    "%s %s %s (latest %s, %d days old)",
+    freshness$project, freshness$source, ifelse(freshness$fresh, "fresh", "stale"),
+    freshness$latest, as.integer(freshness$age_days)
+  ),
+  collapse = "; "
+)))
 
-if (!fresh) {
+if (!all(freshness$fresh)) {
   log_msg(sprintf("Data is stale (local hour=%d).", hour))
   if (hour >= 14) {
     alert(sprintf(
@@ -108,8 +116,8 @@ publish_steps <- list(
     name = "sync reports to S3",
     run = function() {
       log_path <- here::here("cache", "logs", "update_site_log.txt")
-      run_logged("aws", c("s3", "sync", "reports/", "s3://forecasting-team-data/2024/reports/"), log_path)
-      run_logged("aws", c("s3", "sync", "s3://forecasting-team-data/2024/reports/", "reports/"), log_path)
+      run_logged("aws", c("s3", "sync", "rendered_reports/", "s3://forecasting-team-data/2024/reports/"), log_path)
+      run_logged("aws", c("s3", "sync", "s3://forecasting-team-data/2024/reports/", "rendered_reports/"), log_path)
     }
   ),
   list(
@@ -118,7 +126,7 @@ publish_steps <- list(
   ),
   list(
     name = "netlify deploy",
-    run = function() run_logged("netlify", c("deploy", "--dir=reports", "--prod"), here::here("cache", "prod_netlify"))
+    run = function() run_logged("netlify", c("deploy", "--dir=rendered_reports", "--prod"), here::here("cache", "prod_netlify"))
   )
 )
 
@@ -127,7 +135,9 @@ publish_steps <- list(
 failures <- character(0)
 for (p in pipelines) {
   log_msg(sprintf("Starting: %s prod pipeline", p$disease))
-  if (run_project_pipeline(p$project, p$log) != 0) {
+  status <- run_project_pipeline(p$project, p$log)
+  log_msg(sprintf("Finished: %s prod pipeline (%s)", p$disease, if (status == 0) "ok" else "failed"))
+  if (status != 0) {
     failures <- c(failures, sprintf("%s prod pipeline errored (log: %s)", p$disease, p$log))
   }
 }
@@ -146,7 +156,9 @@ for (p in pipelines) {
 }
 for (step in publish_steps) {
   log_msg(sprintf("Starting: %s", step$name))
-  if (step$run() != 0) {
+  status <- step$run()
+  log_msg(sprintf("Finished: %s (%s)", step$name, if (status == 0) "ok" else "failed"))
+  if (status != 0) {
     failures <- c(failures, sprintf("%s failed", step$name))
   }
 }
