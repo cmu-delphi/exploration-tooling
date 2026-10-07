@@ -38,8 +38,7 @@ Setup:
   zero at the first 2024-25 round (REF-op's slow term starts from its warm
   start).
 - Seasons scored: 2024-25 and 2025-26, burn-in rounds excluded. Horizons
-  h−1 to h3. Headline tables: all hub locations including US; month view:
-  states only.
+  h−1 to h3. States only (US excluded).
 - Scores are always against finalized truth.
 
 Configs are `ref/settle_days/learn`:
@@ -76,56 +75,19 @@ names(cals) <- with(grid, paste(ref, settle_days, learn, sep = "/"))
 
 ```{r headline}
 LIVE <- c("2024-2025", "2025-2026")
-head_tbl <- cal_headline(cals) %>%
-  tidyr::separate(variant, c("ref", "settle_days", "learn"), sep = "/", remove = FALSE) %>%
-  mutate(learn = factor(learn, levels = c("final", "vintage", "exact")))
 first_version <- min(vintages$version)
 n_clamped <- sum(unique(hub_fc$reference_date) - 3L < first_version &
   hub_label_seasons(unique(hub_fc$reference_date))$season %in% LIVE)
+mv <- cal_month_view(cals, seasons = LIVE, horizons = NULL)
+# Runs drawn in the month view; the tables keep all twelve.
+mv_plot_cfgs <- c("op/14/final", "op/14/exact", "op/7/vintage", "op/7/exact", "paper/14/final", "paper/14/exact")
 ```
 
 `r n_clamped` live rounds are issued before the first vintage (2024-11-19); only
-burn-in rounds use that vintage in place of their own.
+burn-in rounds use that vintage in place of their own. Configs are
+`ref/settle_days/learn`.
 
-# Headline
-
-WIS reduction % by horizon (positive = calibrated WIS lower than base):
-
-```{r wis-table}
-knitr::kable(cal_wide(head_tbl, "pct_improvement", id = c("ref", "settle_days", "learn")) %>% arrange(ref, settle_days, learn))
-```
-
-L1 coverage bias (lower is better; mean over levels of |coverage − level|); the `base` row is
-the uncalibrated forecast:
-
-```{r cal-table}
-knitr::kable(
-  bind_rows(
-    cal_wide(head_tbl, "cal_error_cal", 3, id = c("ref", "settle_days", "learn")),
-    cal_wide(head_tbl %>% filter(learn == "final", ref == "paper", settle_days == "14") %>% mutate(ref = "base", settle_days = "", learn = ""), "cal_error_base", 3, id = c("ref", "settle_days", "learn"))
-  ) %>% arrange(ref, settle_days, learn)
-)
-```
-
-The same bias for states only, both seasons, season-pooled against
-month-average (see "Month view" below). Configs are `ref/settle_days/learn`:
-
-```{r cal-table-month}
-mv <- cal_month_view(cals, seasons = LIVE, horizons = NULL)
-mv_show_table <- FALSE
-knitr::kable(cal_month_cov_table(mv, seasons = "both"), caption = CAL_MONTH_COV_CAPTION)
-```
-
-WIS reduction % by season (positive = calibrated WIS lower than base):
-
-```{r season-table}
-knitr::kable(
-  cal_wide(
-    cal_headline(cals, by = "season") %>% filter(season %in% LIVE) %>%
-      tidyr::separate(variant, c("ref", "settle_days", "learn"), sep = "/"),
-    "pct_improvement", id = c("ref", "settle_days", "learn", "season")
-  ) %>% arrange(ref, settle_days, season, learn)
-)
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
 
 # Vintage vs exact: difference in the calibrated median
@@ -152,12 +114,4 @@ ggplot(drift, aes(month, 100 * rel, colour = factor(horizon), group = horizon)) 
   geom_point(size = 0.8) +
   facet_wrap(~config) +
   labs(x = NULL, y = "median |vintage − exact| / base median (%)", colour = "horizon")
-```
-
-```{r month-view-cfgs}
-# Runs drawn in the month view.
-mv_plot_cfgs <- c("op/14/final", "op/14/exact", "op/7/vintage", "op/7/exact", "paper/14/final", "paper/14/exact")
-```
-
-```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```

@@ -149,12 +149,14 @@ scratch each round on that round's data, as prod does).
 The index groups them by topic (finalists, flu and covid, learning rate,
 tracker structure, late season, learning truth).
 
-Standard views (`_standard_views.Rmd`, `_month_view.Rmd`): V-head (WIS and
-coverage by horizon × season), V-month (by month of reference date, with
-month-avg coverage), V-state (per-state season panels), V-gallery (a few
-forecasts picked by `cal_gallery_pick()`, stratified by season phase ×
-location size), V-ae (median absolute error), V-curve (coverage vs WIS over a
-swept parameter).
+Each comparison notebook leads with the month view (`_month_view.Rmd`):
+WIS, coverage bias and median error by month of reference date, then
+by-horizon tables of WIS reduction % and season-pooled / month-avg coverage
+bias. All scores are states only. Sweep notebooks (E01, E09, E14, E16) lead
+with their coverage-vs-WIS curves and follow with a month view of a few rates
+around the elbow. Per-state fan panels and the gallery of best and worst
+forecasts are only in `prod_views.Rmd`, for the prod configs. Conclusions
+live in this ledger, not in the notebooks.
 
 ## Experiments
 

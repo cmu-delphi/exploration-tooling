@@ -35,7 +35,7 @@ the learning rate and with the extra delay before an outcome is learned?
 |---|---|
 | disease, base | flu, the submitted hub ensemble (`CMU-TimeSeries`) |
 | seasons | 2023-24 burn-in (its outcomes take no steps; offsets start at zero); 2024-25 and 2025-26 scored |
-| locations, horizons | all 53 hub locations, h−1 to h3; the month view is states only |
+| locations, horizons | learns on all 53 hub locations; scores are states only (US excluded), h−1 to h3 |
 | scoring truth | finalized NHSN |
 | tracker | REF-paper (one offset per level, carried across seasons) on the rate scale |
 | learning rate | constant, 0.001 to about 3.2 per 100k per step (15 values, a quarter-decade apart) |
@@ -138,10 +138,10 @@ refs <- purrr::pmap(ref_grid, function(learn, settle_days) {
 
 ```{r metrics, cache=FALSE}
 pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
-# Per (location, horizon) and pooled over locations: WIS reduction % and L1
+# Per (location, horizon) and pooled over states: WIS reduction % and L1
 # coverage bias, for the calibrated forecast and the base.
 metrics <- function(cal) {
-  fc <- cal$forecasts %>% filter(!is_burn_in, !is.na(truth), !is.na(value_base))
+  fc <- cal$forecasts %>% filter(!is_burn_in, !is.na(truth), !is.na(value_base), location != "US")
   one <- function(df, by) {
     df %>%
       group_by(across(all_of(c(by, "horizon", "level")))) %>%
@@ -174,61 +174,6 @@ label_panels <- function(df) {
 }
 sweep_m <- label_panels(sweep_m)
 ref_m <- label_panels(ref_m)
-```
-
-# Bridge from REF-paper
-
-One change at a time at one week of extra delay, re-run design: first the
-rate scale with the adaptive learning rate (its minimum step drops from 0.1
-admissions to 0.001 per 100k, since that minimum is in the working units),
-then the constant learning rate with the lowest pooled WIS at each horizon.
-REF-op is for orientation only; it differs in several settings.
-
-```{r bridge}
-best_const <- sweep_m %>%
-  filter(location == "pooled", learn == "exact", settle_days == 14L) %>%
-  group_by(horizon) %>%
-  slice_max(wis_pct, n = 1, with_ties = FALSE) %>%
-  ungroup() %>%
-  mutate(ref = "rate, constant lr (highest WIS per horizon)")
-bridge <- bind_rows(
-  ref_m %>% filter(learn == "exact", settle_days == 14L),
-  best_const
-) %>%
-  mutate(ref = factor(ref, levels = c("REF-paper (count, adaptive)", "rate, adaptive", "rate, constant lr (highest WIS per horizon)", "REF-op")))
-base_row <- bridge %>% filter(ref == "REF-paper (count, adaptive)") %>% mutate(ref = "base", wis_pct = 0, bias_cal = bias_base)
-tbl <- bind_rows(base_row, bridge) %>%
-  transmute(config = ref, horizon, cell = sprintf("%+.1f%% / %.3f", wis_pct, bias_cal)) %>%
-  tidyr::pivot_wider(names_from = horizon, values_from = cell)
-knitr::kable(tbl, caption = "WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage bias (lower is better), pooled over locations")
-knitr::kable(
-  best_const %>% select(horizon, lr) %>% mutate(lr = signif(lr, 2)) %>% tidyr::pivot_wider(names_from = horizon, values_from = lr),
-  caption = "Constant learning rate with the lowest pooled WIS (rate units per step)"
-)
-```
-
-L1 coverage bias for states only, both seasons, season-pooled against
-month-average (see "Month view" below), for the reference configs, the knee
-(0.056) and 0.1 at several delays and both designs:
-
-```{r bridge-month}
-sweep_run <- function(learn, settle_days, lr) {
-  sweep[[which(sweep_grid$learn == learn & sweep_grid$settle_days == settle_days & abs(log10(sweep_grid$lr / lr)) < 1e-6)]]
-}
-ref_run <- function(learn, settle_days, nm) refs[[which(ref_grid$learn == learn & ref_grid$settle_days == settle_days)]][[nm]]
-mv_cals <- list(
-  `REF-paper, re-run +1 wk` = ref_run("exact", 14L, "REF-paper (count, adaptive)"),
-  `REF-op, re-run +1 wk` = ref_run("exact", 14L, "REF-op"),
-  `knee 0.056, re-run +0 wk` = sweep_run("exact", 7L, 10^-1.25),
-  `knee 0.056, re-run +1 wk` = sweep_run("exact", 14L, 10^-1.25),
-  `knee 0.056, re-run +2 wk` = sweep_run("exact", 21L, 10^-1.25),
-  `0.1, re-run +1 wk` = sweep_run("exact", 14L, 10^-1),
-  `knee 0.056, stateful +0 wk` = sweep_run("vintage", 7L, 10^-1.25),
-  `knee 0.056, stateful +1 wk` = sweep_run("vintage", 14L, 10^-1.25)
-)
-mv <- cal_month_view(mv_cals, seasons = c("2024-2025", "2025-2026"), horizons = NULL)
-mv_show_table <- FALSE
-knitr::kable(cal_month_cov_table(mv, seasons = "both"), caption = CAL_MONTH_COV_CAPTION)
 ```
 
 # Coverage bias vs WIS, per location
@@ -314,41 +259,58 @@ ggplot(pooled_all, aes(bias_cal, wis_pct, colour = extra, linetype = design, gro
   theme(legend.position = "bottom", legend.box = "vertical")
 ```
 
-# Tables
-
-Pooled WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage bias (lower is better) for every learning rate, by horizon
-(columns) and extra delay (row blocks).
-
-```{r table-fn}
-sweep_table <- function(which_learn) {
-  sweep_m %>%
-    filter(location == "pooled", learn == which_learn) %>%
-    transmute(extra, lr = signif(lr, 2), horizon, cell = sprintf("%+.1f / %.3f", wis_pct, bias_cal)) %>%
-    tidyr::pivot_wider(names_from = horizon, values_from = cell) %>%
-    arrange(extra, lr) %>%
-    knitr::kable()
-}
-```
-
-## Re-run design (prod)
-
-```{r table-exact}
-sweep_table("exact")
-```
-
-## Stateful design
-
-```{r table-vintage}
-sweep_table("vintage")
-```
-
 ```{r month-view-cfgs}
-# The configs the Findings compare: the references and the knee at one week of delay, and the knee in the stateful design.
-mv_plot_cfgs <- c(
-  "REF-paper, re-run +1 wk", "REF-op, re-run +1 wk", "knee 0.056, re-run +1 wk", "0.1, re-run +1 wk",
-  "knee 0.056, stateful +0 wk", "knee 0.056, stateful +1 wk"
+sweep_run <- function(learn, settle_days, lr) {
+  sweep[[which(sweep_grid$learn == learn & sweep_grid$settle_days == settle_days & abs(log10(sweep_grid$lr / lr)) < 1e-6)]]
+}
+ref_run <- function(learn, settle_days, nm) refs[[which(ref_grid$learn == learn & ref_grid$settle_days == settle_days)]][[nm]]
+mv_cals <- list(
+  `REF-paper, re-run +1 wk` = ref_run("exact", 14L, "REF-paper (count, adaptive)"),
+  `REF-op, re-run +1 wk` = ref_run("exact", 14L, "REF-op"),
+  `0.032, re-run +1 wk` = sweep_run("exact", 14L, 10^-1.5),
+  `knee 0.056, re-run +0 wk` = sweep_run("exact", 7L, 10^-1.25),
+  `knee 0.056, re-run +1 wk` = sweep_run("exact", 14L, 10^-1.25),
+  `knee 0.056, re-run +2 wk` = sweep_run("exact", 21L, 10^-1.25),
+  `0.1, re-run +1 wk` = sweep_run("exact", 14L, 10^-1),
+  `0.18, re-run +1 wk` = sweep_run("exact", 14L, 10^-0.75),
+  `knee 0.056, stateful +0 wk` = sweep_run("vintage", 7L, 10^-1.25),
+  `knee 0.056, stateful +1 wk` = sweep_run("vintage", 14L, 10^-1.25)
 )
+mv <- cal_month_view(mv_cals, seasons = c("2024-2025", "2025-2026"), horizons = NULL)
+# The plots show REF-op and the constant rates around the knee at one week of delay; the tables also cover the other delays and designs.
+mv_plot_cfgs <- c("REF-op, re-run +1 wk", "0.032, re-run +1 wk", "knee 0.056, re-run +1 wk", "0.1, re-run +1 wk", "0.18, re-run +1 wk")
 ```
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
+```
+
+# Bridge from REF-paper
+
+One change at a time at one week of extra delay, re-run design: first the
+rate scale with the adaptive learning rate (its minimum step drops from 0.1
+admissions to 0.001 per 100k, since that minimum is in the working units),
+then the constant learning rate with the lowest pooled WIS at each horizon.
+REF-op is for orientation only; it differs in several settings.
+
+```{r bridge}
+best_const <- sweep_m %>%
+  filter(location == "pooled", learn == "exact", settle_days == 14L) %>%
+  group_by(horizon) %>%
+  slice_max(wis_pct, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  mutate(ref = "rate, constant lr (highest WIS per horizon)")
+bridge <- bind_rows(
+  ref_m %>% filter(learn == "exact", settle_days == 14L),
+  best_const
+) %>%
+  mutate(ref = factor(ref, levels = c("REF-paper (count, adaptive)", "rate, adaptive", "rate, constant lr (highest WIS per horizon)", "REF-op")))
+base_row <- bridge %>% filter(ref == "REF-paper (count, adaptive)") %>% mutate(ref = "base", wis_pct = 0, bias_cal = bias_base)
+tbl <- bind_rows(base_row, bridge) %>%
+  transmute(config = ref, horizon, cell = sprintf("%+.1f%% / %.3f", wis_pct, bias_cal)) %>%
+  tidyr::pivot_wider(names_from = horizon, values_from = cell)
+knitr::kable(tbl, caption = "WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage bias (lower is better), pooled over states")
+knitr::kable(
+  best_const %>% select(horizon, lr) %>% mutate(lr = signif(lr, 2)) %>% tidyr::pivot_wider(names_from = horizon, values_from = lr),
+  caption = "Constant learning rate with the lowest pooled WIS (rate units per step)"
+)
 ```

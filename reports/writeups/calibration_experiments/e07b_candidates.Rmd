@@ -23,7 +23,7 @@ ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplo
 Question: do the operating-point candidates rank the same way on the
 submitted ensemble as on one fixed forecaster?
 
-**Setup.** As in E07 (the sections above): A is the submitted flu ensemble,
+**Setup.** As in E07: A is the submitted flu ensemble,
 B the clean `windowed_seasonal` replay with the 2023-24 HHS backfill as its
 burn-in season, on identical (round, location, horizon, level) rows, h0–h3,
 exact learning truth with one week of extra delay.
@@ -69,23 +69,22 @@ ccals <- purrr::pmap(cgrid, function(forecaster, cand) {
 ```
 
 ```{r metrics}
-GEOS <- c(states = "states only (US excluded)", all = "all locations")
+GEOS <- c(states = "states only (US excluded)")
 SEASONS <- c(LIVE, "both")
 score <- function(cal) {
   fc <- cal$forecasts %>% mutate(season = season_of(reference_date))
   purrr::imap(WS_GEOS[names(GEOS)], function(keep, g) ws_scores(fc %>% filter(keep(location))) %>% mutate(geos = g)) %>%
     bind_rows() %>%
-    select(geos, season, horizon, which, wis, cal_err, cov50, cov90, above_median) %>%
-    tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err, cov50, cov90)) %>%
+    select(geos, season, horizon, which, wis, cal_err) %>%
+    tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err)) %>%
     mutate(wis_pct = 100 * (wis_base - wis_cal) / wis_base)
 }
-FC_COLS <- c(`A ensemble` = "#0072B2", `B windowed_seasonal` = "#D55E00")
 ```
 
 # Candidates on both
 
 The candidates from E14, E16 and E17, each run on both forecasters on the
-same rows: REF-op warm (as in section 2) and cold, sqrt-scale constant
+same rows: REF-op warm (as in E07) and cold, sqrt-scale constant
 0.018 (E16), rate-scale constant 0.032 per 100k (E14), and sqrt 0.018
 switched off from 1 March (`off_after = "03-01"`, E17). The cold ones learn
 from the live seasons only.
@@ -101,32 +100,21 @@ cm <- purrr::map2(ccals, seq_len(nrow(cgrid)), \(cal, i) score(cal) %>% mutate(c
   )
 ```
 
-WIS reduction % (positive = calibrated WIS lower than base) per candidate, states only.
-
-```{r cand-plot, fig.height=6.5}
-ggplot(cm %>% filter(geos == GEOS[["states"]]), aes(cand, wis_pct, fill = forecaster)) +
-  geom_hline(yintercept = 0, colour = "grey50") +
-  geom_col(position = position_dodge(width = 0.85), width = 0.8) +
-  facet_grid(season ~ h) +
-  scale_fill_manual(values = FC_COLS, name = NULL) +
-  labs(x = NULL, y = "WIS reduction % (positive = calibrated WIS lower than base)") +
-  theme(legend.position = "bottom", axis.text.x = element_text(angle = 30, hjust = 1))
+```{r month-view-cfgs}
+mv <- cal_month_view(setNames(ccals, paste(cgrid$forecaster, cgrid$cand, sep = ", ")), seasons = LIVE)
+# Three candidates on both forecasters: colour is the candidate, linetype the forecaster (also for the grey base lines).
+MV_CANDS <- c(`REF-op warm` = "black", `sqrt 0.018` = "#0072B2", `sqrt 0.018, off 1 Mar` = "#D55E00")
+mv_plot_cfgs <- paste(rep(names(FCS), each = length(MV_CANDS)), names(MV_CANDS), sep = ", ")
+mv_cols <- MV_CANDS
+mv$month <- mv$month %>% mutate(forecaster = sub(",.*", "", config), cand = factor(sub("^[^,]*, ", "", config), levels = names(CANDS)))
+mv_colour_by <- "cand"
+mv_linetype <- "forecaster"
 ```
 
-L1 coverage bias (lower is better), calibrated (filled) against the base (open), states only.
-
-```{r cand-cov, fig.height=6.5}
-ggplot(cm %>% filter(geos == GEOS[["states"]]), aes(cand, cal_err_cal, colour = forecaster)) +
-  geom_point(aes(y = cal_err_base), shape = 1, size = 2.4, position = position_dodge(width = 0.6)) +
-  geom_point(size = 2.4, position = position_dodge(width = 0.6)) +
-  facet_grid(season ~ h) +
-  scale_colour_manual(values = FC_COLS, name = NULL) +
-  expand_limits(y = 0) +
-  labs(x = NULL, y = "L1 coverage bias (lower is better; open: base)") +
-  theme(legend.position = "bottom", axis.text.x = element_text(angle = 30, hjust = 1))
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
 
-## Rankings on A and B
+# Rankings on A and B
 
 Candidates ordered by mean WIS reduction % (positive = calibrated WIS lower than base) over h0–h3, separately on each
 forecaster, states only. `rank A` / `rank B` are the positions (1 is the
@@ -159,55 +147,4 @@ cm %>%
     `ρ coverage cells` = cor(.data[[paste0("cal_err_cal_", names(FCS)[1])]], .data[[paste0("cal_err_cal_", names(FCS)[2])]], method = "spearman")
   ) %>%
   knitr::kable(digits = 2, caption = "Spearman correlation of A vs B over (candidate, horizon) cells")
-```
-
-## Tables
-
-WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage bias (lower is better).
-
-```{r cand-tables}
-cand_table <- function(g) {
-  bind_rows(
-    cm %>% filter(cand == names(CANDS)[1]) %>% mutate(cand = "base", wis_pct = 0, cal_err_cal = cal_err_base),
-    cm
-  ) %>%
-    filter(geos == g) %>%
-    mutate(config = factor(paste(forecaster, cand, sep = ", "), levels = paste(rep(names(FCS), each = length(CANDS) + 1), c("base", names(CANDS)), sep = ", "))) %>%
-    transmute(config, col = paste(season, h), cell = sprintf("%+.1f / %.3f", wis_pct, cal_err_cal)) %>%
-    tidyr::pivot_wider(names_from = col, values_from = cell) %>%
-    arrange(config)
-}
-```
-
-### States only
-
-```{r cand-table-states}
-knitr::kable(cand_table(GEOS[["states"]]))
-```
-
-L1 coverage bias, season-pooled against month-average (see "Month view" below):
-
-```{r cand-table-states-month}
-mv <- cal_month_view(setNames(ccals, paste(cgrid$forecaster, cgrid$cand, sep = ", ")), seasons = LIVE)
-mv_show_table <- FALSE
-knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
-```
-
-### All locations
-
-```{r cand-table-all}
-knitr::kable(cand_table(GEOS[["all"]]))
-```
-
-```{r month-view-cfgs}
-# Three candidates on both forecasters: colour is the candidate, linetype the forecaster (also for the grey base lines).
-MV_CANDS <- c(`REF-op warm` = "black", `sqrt 0.018` = "#0072B2", `sqrt 0.018, off 1 Mar` = "#D55E00")
-mv_plot_cfgs <- paste(rep(names(FCS), each = length(MV_CANDS)), names(MV_CANDS), sep = ", ")
-mv_cols <- MV_CANDS
-mv$month <- mv$month %>% mutate(forecaster = sub(",.*", "", config), cand = factor(sub("^[^,]*, ", "", config), levels = names(CANDS)))
-mv_colour_by <- "cand"
-mv_linetype <- "forecaster"
-```
-
-```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```

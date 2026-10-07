@@ -37,8 +37,8 @@ Setup:
   decade apart. 0.1 is E11's config, though E11 used the submitted ensemble.
 - References on the same data: `REF-op cold` (prod's tracker without its warm
   start) and `sqrt, adaptive` (E13's "E05 single cold").
-- Tables lead with states only (US excluded; it is about 45% of the
-  all-locations WIS).
+- Scores: states only (US excluded; it is about 45% of the all-locations
+  WIS).
 
 WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
 WIS lower than base. L1 coverage bias: lower is better.
@@ -59,15 +59,15 @@ refs <- purrr::map(ref_cfgs, run)
 ```
 
 ```{r metrics}
-GEOS <- c(states = "states only (US excluded)", all = "all locations")
+GEOS <- c(states = "states only (US excluded)")
 SEASONS <- c(LIVE, "both")
 # ws_scores() per location subset; wis_pct is the WIS reduction % vs base (positive = calibrated WIS lower).
 score <- function(cal) {
   fc <- cal$forecasts %>% mutate(season = season_of(reference_date))
   purrr::imap(WS_GEOS[names(GEOS)], function(keep, g) ws_scores(fc %>% filter(keep(location))) %>% mutate(geos = g)) %>%
     bind_rows() %>%
-    select(geos, season, horizon, which, wis, cal_err, cov50, cov90) %>%
-    tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err, cov50, cov90)) %>%
+    select(geos, season, horizon, which, wis, cal_err) %>%
+    tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err)) %>%
     mutate(wis_pct = 100 * (wis_base - wis_cal) / wis_base)
 }
 label <- function(df) {
@@ -114,16 +114,8 @@ curve_plot <- function(g) {
 }
 ```
 
-## States only
-
 ```{r curve-states}
 curve_plot(GEOS[["states"]])
-```
-
-## All locations
-
-```{r curve-all}
-curve_plot(GEOS[["all"]])
 ```
 
 # Each metric against the learning rate
@@ -155,71 +147,10 @@ ggplot(long, aes(lr, value, colour = season)) +
   theme(legend.position = "bottom")
 ```
 
-# Tables
-
-WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage
-bias (lower is better), per learning rate (rows) and season × horizon
-(columns). The base row shows the base's coverage bias. The
-references follow the sweep.
-
-```{r tables}
-season_table <- function(g) {
-  rows <- bind_rows(
-    sweep_m %>% filter(lr == LRS[1]) %>% mutate(config = "base", wis_pct = 0, cal_err_cal = cal_err_base),
-    sweep_m %>% mutate(config = format(lr, drop0trailing = TRUE)),
-    ref_m %>% mutate(config = ref)
-  ) %>%
-    filter(geos == g) %>%
-    mutate(config = factor(config, levels = unique(config)))
-  rows %>%
-    transmute(config, col = paste(season, h), cell = sprintf("%+.1f / %.3f", wis_pct, cal_err_cal)) %>%
-    tidyr::pivot_wider(names_from = col, values_from = cell) %>%
-    arrange(config)
-}
-```
-
-## States only
-
-```{r table-states}
-knitr::kable(season_table(GEOS[["states"]]))
-```
-
-L1 coverage bias, season-pooled against month-average (see "Month view" below):
-
-```{r table-states-month}
-mv <- cal_month_view(c(setNames(sweep, paste("rate", format(LRS, drop0trailing = TRUE))), refs), seasons = LIVE)
-mv_show_table <- FALSE
-knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
-```
-
-## All locations
-
-```{r table-all}
-knitr::kable(season_table(GEOS[["all"]]))
-```
-
-## 50% and 90% interval coverage, states only
-
-E12 found the constant rate at 0.1 under-covers the 50% interval. Coverage
-of the 50% / 90% intervals, per season, at h0 and h2.
-
-```{r table-cov}
-bind_rows(
-  sweep_m %>% filter(lr == LRS[1]) %>% mutate(config = "base", cov50_cal = cov50_base, cov90_cal = cov90_base),
-  sweep_m %>% mutate(config = format(lr, drop0trailing = TRUE)),
-  ref_m %>% mutate(config = ref)
-) %>%
-  filter(geos == GEOS[["states"]], h %in% c("h0", "h2"), season != "both seasons") %>%
-  mutate(config = factor(config, levels = unique(config))) %>%
-  transmute(config, col = paste(season, h), cell = sprintf("%.2f / %.2f", cov50_cal, cov90_cal)) %>%
-  tidyr::pivot_wider(names_from = col, values_from = cell) %>%
-  arrange(config) %>%
-  knitr::kable()
-```
-
 ```{r month-view-cfgs}
-# The good range (0.018–0.032), the knee and E11's 0.1, and the two references.
-mv_plot_cfgs <- c("rate 0.018", "rate 0.032", "rate 0.056", "rate 0.1", "REF-op cold", "sqrt, adaptive")
+mv <- cal_month_view(c(setNames(sweep, paste("rate", format(LRS, drop0trailing = TRUE))), refs), seasons = LIVE)
+# The plots show the rates around the elbow and REF-op cold; the tables cover every rate.
+mv_plot_cfgs <- c("rate 0.018", "rate 0.032", "rate 0.056", "rate 0.1", "REF-op cold")
 ```
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}

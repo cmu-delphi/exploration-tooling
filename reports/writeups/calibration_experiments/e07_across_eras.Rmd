@@ -34,7 +34,7 @@ submitted ensemble as for one fixed forecaster?
 |---|---|
 | rows | identical (round, location, horizon, level) rows for A and B: hub submission rounds, submissions excluded from the hub reads dropped from both |
 | seasons | 2023-24 burn-in (27 rounds), 2024-25 (27) and 2025-26 (28) scored |
-| locations | all 53; results lead with states only |
+| locations | all 53 learned; scores are states only |
 | horizons | h0–h3 (the ensemble's h−1 is a different model) |
 | learning truth | NHSN as published each week, re-run from scratch each week, one week of extra revision delay |
 | scoring truth | the store's NHSN truth |
@@ -88,14 +88,14 @@ purrr::imap(FCS, \(fc, nm) fc %>% mutate(season = season_of(reference_date)) %>%
 ```
 
 ```{r metrics}
-GEOS <- c(states = "states only (US excluded)", all = "all locations")
+GEOS <- c(states = "states only (US excluded)")
 SEASONS <- c(LIVE, "both")
 score <- function(cal) {
   fc <- cal$forecasts %>% mutate(season = season_of(reference_date))
   purrr::imap(WS_GEOS[names(GEOS)], function(keep, g) ws_scores(fc %>% filter(keep(location))) %>% mutate(geos = g)) %>%
     bind_rows() %>%
-    select(geos, season, horizon, which, wis, cal_err, cov50, cov90, above_median) %>%
-    tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err, cov50, cov90)) %>%
+    select(geos, season, horizon, which, wis, cal_err) %>%
+    tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err)) %>%
     mutate(wis_pct = 100 * (wis_base - wis_cal) / wis_base)
 }
 m <- purrr::map2(cals, seq_len(nrow(grid)), \(cal, i) score(cal) %>% mutate(grid[i, ])) %>%
@@ -119,60 +119,11 @@ the ratio B/A (below 1: `windowed_seasonal` is better).
 ```{r base-wis}
 m %>%
   filter(tracker == "single") %>%
-  select(geos, season, h, forecaster, wis_base) %>%
+  select(season, h, forecaster, wis_base) %>%
   tidyr::pivot_wider(names_from = forecaster, values_from = wis_base) %>%
-  transmute(geos, season, h, A = .data[[names(FCS)[1]]], B = .data[[names(FCS)[2]]], `B/A` = B / A) %>%
-  arrange(geos, season, h) %>%
-  knitr::kable(digits = c(0, 0, 0, 1, 1, 3), caption = "Base WIS, A ensemble vs B windowed_seasonal")
-```
-
-Per state: base WIS pooled over h0–h3, A against B (log scales; below the
-line, B is better).
-
-```{r base-wis-state, fig.height=5}
-base_fc <- purrr::map(which(grid$tracker == "single"), \(i) cals[[i]]$forecasts %>% mutate(forecaster = grid$forecaster[i])) %>%
-  bind_rows() %>%
-  mutate(season = season_of(reference_date)) %>%
-  filter(season %in% LIVE, !is.na(truth), !is.na(value_base))
-pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
-loc_wis <- base_fc %>%
-  filter(location != "US") %>%
-  group_by(forecaster, season, location) %>%
-  summarize(wis = 2 * mean(pinball(truth, value_base, level)), .groups = "drop") %>%
-  tidyr::pivot_wider(names_from = forecaster, values_from = wis) %>%
-  transmute(season, location, A = .data[[names(FCS)[1]]], B = .data[[names(FCS)[2]]], ratio = B / A)
-ggplot(loc_wis, aes(A, B)) +
-  geom_abline(slope = 1, intercept = 0, colour = "grey50") +
-  geom_point(alpha = 0.8) +
-  facet_wrap(~season) +
-  scale_x_log10() +
-  scale_y_log10() +
-  labs(x = "A ensemble base WIS", y = "B windowed_seasonal base WIS")
-```
-
-```{r base-wis-ratio}
-loc_wis %>%
-  group_by(season) %>%
-  summarize(
-    states = n(), `B better` = sum(ratio < 1), q10 = quantile(ratio, 0.1), q25 = quantile(ratio, 0.25),
-    median = median(ratio), q75 = quantile(ratio, 0.75), q90 = quantile(ratio, 0.9)
-  ) %>%
-  knitr::kable(digits = 2, caption = "Per-state B/A base WIS ratio, h0–h3 pooled")
-```
-
-## Base miscalibration
-
-How miscalibrated each forecaster is before calibration, states only: WIS,
-L1 coverage bias, and the share of outcomes above the median (0.5 is
-calibrated; above 0.5 means the forecaster under-predicts).
-
-```{r bases}
-m %>%
-  filter(geos == GEOS[["states"]], tracker == "single") %>%
-  transmute(forecaster, season, h, cell = sprintf("%.1f / %.3f / %.2f", wis_base, cal_err_base, above_median)) %>%
-  tidyr::pivot_wider(names_from = h, values_from = cell) %>%
-  arrange(season, forecaster) %>%
-  knitr::kable(caption = "Base WIS / L1 coverage bias (lower is better) / share above the median, states only")
+  transmute(season, h, A = .data[[names(FCS)[1]]], B = .data[[names(FCS)[2]]], `B/A` = B / A) %>%
+  arrange(season, h) %>%
+  knitr::kable(digits = c(0, 0, 1, 1, 3), caption = "Base WIS, A ensemble vs B windowed_seasonal, states only")
 ```
 
 ## Base bias by month
@@ -181,6 +132,10 @@ Share of outcomes above the base median and L1 coverage bias, by calendar
 month of the reference date, states only.
 
 ```{r base-month, fig.height=7}
+base_fc <- purrr::map(which(grid$tracker == "single"), \(i) cals[[i]]$forecasts %>% mutate(forecaster = grid$forecaster[i])) %>%
+  bind_rows() %>%
+  mutate(season = season_of(reference_date)) %>%
+  filter(season %in% LIVE, !is.na(truth), !is.na(value_base))
 month_base <- function(d) {
   d %>%
     group_by(across(c(any_of(c("forecaster", "season", "horizon", "month")), level))) %>%
@@ -205,76 +160,14 @@ mb %>%
   theme(legend.position = "bottom")
 ```
 
-Pooled over h0–h3: share above the base median / L1 coverage bias (lower is better), A vs B.
-
-```{r base-month-table}
-month_base(base_fc_states %>% select(-horizon)) %>%
-  transmute(season, month, forecaster, cell = sprintf("%.2f / %.3f", above, cal_err)) %>%
-  tidyr::pivot_wider(names_from = forecaster, values_from = cell) %>%
-  left_join(base_fc_states %>% filter(level == 0.5) %>% count(season, month, forecaster) %>% filter(forecaster == names(FCS)[1]) %>% select(season, month, forecasts = n), by = c("season", "month")) %>%
-  arrange(season, month) %>%
-  knitr::kable(caption = "Share above base median / L1 coverage bias (lower is better), states only, h0–h3 pooled")
-```
-
 # 2. What calibration does to each
 
-WIS reduction % (positive = calibrated WIS lower than base) per tracker, one panel per season and horizon, states only.
-
-```{r head-plot, fig.height=6}
-ggplot(m %>% filter(geos == GEOS[["states"]]), aes(tracker, wis_pct, fill = forecaster)) +
-  geom_hline(yintercept = 0, colour = "grey50") +
-  geom_col(position = position_dodge(width = 0.85), width = 0.8) +
-  facet_grid(season ~ h) +
-  scale_fill_manual(values = FC_COLS, name = NULL) +
-  labs(x = NULL, y = "WIS reduction % (positive = calibrated WIS lower than base)") +
-  theme(legend.position = "bottom")
-```
-
-L1 coverage bias (lower is better), calibrated (filled) against the base (open), states only.
-
-```{r cov-plot, fig.height=6}
-d <- m %>% filter(geos == GEOS[["states"]])
-ggplot(d, aes(tracker, cal_err_cal, colour = forecaster)) +
-  geom_point(aes(y = cal_err_base), shape = 1, size = 2.4, position = position_dodge(width = 0.6)) +
-  geom_point(size = 2.4, position = position_dodge(width = 0.6)) +
-  facet_grid(season ~ h) +
-  scale_colour_manual(values = FC_COLS, name = NULL) +
-  expand_limits(y = 0) +
-  labs(x = NULL, y = "L1 coverage bias (lower is better; open: base)") +
-  theme(legend.position = "bottom")
-```
-
-WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage bias (lower is better):
-
-```{r tables}
-season_table <- function(g) {
-  bind_rows(
-    m %>% filter(tracker == "single") %>% mutate(tracker = "base", wis_pct = 0, cal_err_cal = cal_err_base),
-    m
-  ) %>%
-    filter(geos == g) %>%
-    mutate(config = factor(paste(forecaster, tracker, sep = ", "), levels = paste(rep(names(FCS), each = 4), c("base", names(TRACKERS)), sep = ", "))) %>%
-    transmute(config, col = paste(season, h), cell = sprintf("%+.1f / %.3f", wis_pct, cal_err_cal)) %>%
-    tidyr::pivot_wider(names_from = col, values_from = cell) %>%
-    arrange(config)
-}
-```
-
-## States only
+WIS reduction % (positive = calibrated WIS lower than base) and L1 coverage
+bias (lower is better), states only. The month view of these runs is in
+E07b.
 
 ```{r table-states}
-knitr::kable(season_table(GEOS[["states"]]))
-```
-
-L1 coverage bias, season-pooled against month-average (the month view is in E07b):
-
-```{r table-states-month}
 mv_trk <- cal_month_view(setNames(cals, paste(grid$forecaster, grid$tracker, sep = ", ")), seasons = LIVE)
+knitr::kable(cal_month_wis_table(mv_trk))
 knitr::kable(cal_month_cov_table(mv_trk), caption = CAL_MONTH_COV_CAPTION)
-```
-
-## All locations
-
-```{r table-all}
-knitr::kable(season_table(GEOS[["all"]]))
 ```

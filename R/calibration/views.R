@@ -50,58 +50,6 @@ cal_run <- function(forecasts, truth, ref = "paper", ..., learn = c("final", "vi
 }
 
 
-#' V-head: WIS reduction % and L1 coverage bias by horizon, one row per
-#' (variant, `by`, horizon).
-#'
-#' @param cals named list of [calibrate_hub_forecasts()] outputs.
-#' @param from only score rounds with reference date on or after this date.
-#' @export
-cal_headline <- function(cals, by = character(0), from = NULL) {
-  purrr::imap(cals, function(cal, nm) {
-    fc <- cal$forecasts
-    if (!is.null(from)) fc <- fc %>% filter(.data$reference_date >= from)
-    left_join(
-      hub_quantile_loss(fc, by = by),
-      hub_coverage_summary(fc, by = by) %>%
-        select(all_of(c(by, "horizon")), "cal_error_base", "cal_error_cal"),
-      by = c(by, "horizon")
-    ) %>% mutate(variant = nm, .before = 1)
-  }) %>%
-    bind_rows() %>%
-    mutate(variant = factor(.data$variant, levels = names(cals)))
-}
-
-
-#' One column of a [cal_headline()] table, horizons across.
-#' @export
-cal_wide <- function(tbl, col, digits = 1, id = "variant") {
-  tbl %>%
-    select(all_of(id), "horizon", value = all_of(col)) %>%
-    mutate(value = round(.data$value, digits)) %>%
-    tidyr::pivot_wider(names_from = "horizon", values_from = "value", names_prefix = "h")
-}
-
-
-#' V-month: WIS reduction % by month of reference date, with each month's share
-#' of the base WIS, per horizon.
-#' @export
-cal_by_month <- function(cal) {
-  pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
-  cal$forecasts %>%
-    filter(!.data$is_burn_in, !is.na(.data$truth), !is.na(.data$value_base)) %>%
-    mutate(month = factor(format(.data$reference_date, "%b"), levels = month.abb[c(7:12, 1:6)])) %>%
-    group_by(.data$horizon, .data$month) %>%
-    summarize(
-      base = sum(pinball(.data$truth, .data$value_base, .data$level)),
-      cal = sum(pinball(.data$truth, .data$value_cal, .data$level)),
-      .groups = "drop"
-    ) %>%
-    group_by(.data$horizon) %>%
-    mutate(pct = 100 * (.data$base - .data$cal) / .data$base, share = 100 * .data$base / sum(.data$base)) %>%
-    ungroup()
-}
-
-
 #' [cal_run()], cached on disk under a hash of its inputs.
 #'
 #' Keeps only the forecast columns the views use. Clear `cache_dir` after
@@ -123,26 +71,6 @@ cal_run_cached <- function(forecasts, truth, ref = "paper", ..., learn = "exact"
   dir.create(cache_dir, showWarnings = FALSE, recursive = TRUE)
   saveRDS(cal, path)
   cal
-}
-
-
-#' V-ae: summed absolute error of the median, change % vs base (positive is
-#' better), per (variant, `by`, horizon).
-#' @export
-cal_ae <- function(cals, by = character(0)) {
-  purrr::imap(cals, function(cal, nm) {
-    cal$forecasts %>%
-      filter(!.data$is_burn_in, .data$level == 0.5, !is.na(.data$truth), !is.na(.data$value_base)) %>%
-      group_by(across(all_of(c(by, "horizon")))) %>%
-      summarize(
-        ae_base = sum(abs(.data$truth - .data$value_base)),
-        ae_cal = sum(abs(.data$truth - .data$value_cal)),
-        .groups = "drop"
-      ) %>%
-      mutate(variant = nm, .before = 1, ae_pct = 100 * (.data$ae_base - .data$ae_cal) / .data$ae_base)
-  }) %>%
-    bind_rows() %>%
-    mutate(variant = factor(.data$variant, levels = names(cals)))
 }
 
 
@@ -537,34 +465,6 @@ cal_state_wis <- function(cals, seasons = c("2024-2025", "2025-2026")) {
       mutate(config = nm)
   }) %>% bind_rows()
 }
-
-#' For each pair `c(a, b)` of runs in `state_wis`: per (season, horizon), the
-#' number of states where `a` has the lower WIS, and the median per-state gap
-#' in WIS reduction points (positive = `a` better). A table for `knitr::kable()`.
-#' @export
-cal_pair_wins <- function(state_wis, pairs) {
-  labels <- purrr::map_chr(pairs, \(pr) paste(pr[1], "vs", pr[2]))
-  purrr::map2(pairs, labels, function(pr, lab) {
-    state_wis %>%
-      filter(.data$config %in% pr) %>%
-      select("season", "location", "horizon", "config", "wis_cal", "wis_base") %>%
-      tidyr::pivot_wider(names_from = "config", values_from = "wis_cal") %>%
-      transmute(
-        season = .data$season, horizon = .data$horizon, pair = lab,
-        a_wins = .data[[pr[1]]] < .data[[pr[2]]],
-        gap = 100 * (.data[[pr[2]]] - .data[[pr[1]]]) / .data$wis_base
-      )
-  }) %>%
-    bind_rows() %>%
-    mutate(pair = factor(.data$pair, levels = labels)) %>%
-    mutate(h = paste0("h", .data$horizon)) %>%
-    group_by(across(all_of(c("pair", "season", "h")))) %>%
-    summarize(cell = sprintf("%d of %d (median %+.1f)", sum(.data$a_wins), n(), stats::median(.data$gap)), .groups = "drop") %>%
-    tidyr::pivot_wider(names_from = "h", values_from = "cell") %>%
-    arrange(.data$pair, .data$season)
-}
-
-CAL_PAIR_WINS_CAPTION <- "States where the first config of the pair has the lower WIS, of the states scored, and the median per-state gap in WIS reduction points (positive = first config better)"
 
 # August-July season label, as `season_of()` in the replay scripts.
 cal_season_of <- function(d) {

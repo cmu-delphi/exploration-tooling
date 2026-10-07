@@ -79,95 +79,17 @@ fc <- purrr::map2(cals, seq_len(nrow(grid)), function(cal, i) {
 DECAY_COLS <- setNames(c("black", "#56B4E9", "#0072B2", "#D55E00", "#009E73"), names(DECAYS))
 ```
 
-# 1. Overall, by season
-
-WIS reduction % (positive = calibrated WIS lower than base) / L1 coverage bias (lower is better), states only.
-
-```{r head}
-head_m <- fc %>%
-  group_by(rate, decay) %>%
-  group_modify(\(d, k) ws_scores(d)) %>%
-  ungroup() %>%
-  select(rate, decay, season, horizon, which, wis, cal_err) %>%
-  tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err)) %>%
-  mutate(wis_pct = 100 * (wis_base - wis_cal) / wis_base, season = factor(season, levels = c(LIVE, "both"), labels = c(LIVE, "both seasons")))
-base_row <- head_m %>%
-  filter(rate == names(RATES)[1], decay == "no decay") %>%
-  transmute(config = "base", season, horizon, cell = sprintf("%+.1f / %.3f", 0, cal_err_base))
-bind_rows(base_row, head_m %>% transmute(config = paste(rate, decay, sep = ", "), season, horizon, cell = sprintf("%+.1f / %.3f", wis_pct, cal_err_cal))) %>%
-  mutate(config = factor(config, levels = unique(config))) %>%
-  transmute(config, col = paste0(season, " h", horizon), cell) %>%
-  tidyr::pivot_wider(names_from = col, values_from = cell) %>%
-  knitr::kable()
-```
-
-L1 coverage bias, season-pooled against month-average (see "Month view" below):
-
-```{r head-month}
+```{r month-view-cfgs}
 mv <- cal_month_view(setNames(cals, paste(grid$rate, grid$decay, sep = ", ")), seasons = LIVE)
-mv_show_table <- FALSE
-knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
+# The plots show sqrt 0.018 with each decay setting; the tables cover all three trackers.
+mv_plot_cfgs <- paste(names(RATES)[3], names(DECAYS), sep = ", ")
+mv_cols <- setNames(DECAY_COLS, mv_plot_cfgs)
 ```
 
-The same WIS reductions as a plot, one panel per season and horizon.
-
-```{r head-plot, fig.height=5.5}
-ggplot(head_m, aes(rate, wis_pct, fill = decay)) +
-  geom_hline(yintercept = 0, colour = "grey50") +
-  geom_col(position = position_dodge(width = 0.85), width = 0.8) +
-  facet_grid(season ~ paste0("h", horizon)) +
-  scale_fill_manual(values = DECAY_COLS, name = NULL) +
-  labs(x = NULL, y = "WIS reduction % (positive = calibrated WIS lower than base)") +
-  theme(legend.position = "bottom", axis.text.x = element_text(angle = 20, hjust = 1))
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
 
-# 2. Month by month
-
-WIS reduction % (positive = calibrated WIS lower than base) by calendar month of the reference date, one figure per
-constant rate; rows are seasons, columns horizons. Grey bars are each
-month's share of the season's base WIS. Clipped at −40%.
-
-```{r month, results="asis", fig.height=5.5}
-month_m <- ws_month_scores(fc %>% mutate(config = interaction(rate, decay, sep = "|"))) %>%
-  tidyr::separate(config, c("rate", "decay"), sep = "[|]") %>%
-  mutate(decay = factor(decay, levels = names(DECAYS)), h = factor(paste0("h", horizon), levels = paste0("h", 0:3)))
-for (r in names(RATES)) {
-  cat("\n\n", cal_h(2), " ", r, "\n\n", sep = "")
-  d <- month_m %>% filter(rate == r)
-  share <- d %>% filter(decay == "no decay")
-  print(
-    ggplot(d, aes(month, pct, colour = decay, group = decay)) +
-      geom_col(data = share, aes(month, share), inherit.aes = FALSE, fill = "grey85", width = 0.7) +
-      geom_hline(yintercept = 0, colour = "grey40") +
-      geom_line() +
-      geom_point(size = 1.1) +
-      facet_grid(season ~ h, scales = "free_x", space = "free_x") +
-      scale_colour_manual(values = DECAY_COLS, name = NULL) +
-      coord_cartesian(ylim = c(-40, 30)) +
-      labs(x = "month of reference date", y = "WIS reduction % (positive = calibrated\nWIS lower than base); grey: % of season base WIS", title = r) +
-      theme(legend.position = "bottom")
-  )
-}
-```
-
-## Share of outcomes below the median, March–May
-
-0.5 is calibrated; above 0.5 the median is too high. h2, states only.
-
-```{r month-below}
-month_m %>%
-  filter(h == "h2", month %in% c("Mar", "Apr", "May")) %>%
-  transmute(rate, season, month, decay, v = sprintf("%+.1f (%.2f)", pct, below_med_cal)) %>%
-  tidyr::pivot_wider(names_from = decay, values_from = v) %>%
-  left_join(
-    month_m %>% filter(h == "h2", decay == "no decay") %>% transmute(rate, season, month, `base below median` = round(below_med_base, 2)),
-    by = c("rate", "season", "month")
-  ) %>%
-  arrange(rate, season, month) %>%
-  knitr::kable(caption = "h2: WIS reduction %, positive = calibrated WIS lower than base (share of outcomes below the calibrated median)")
-```
-
-# 3. Mean offset at the median over time
+# Mean offset at the median over time
 
 Calibrated minus base median in admissions per 100k, averaged over states at
 each round, h2.
@@ -188,13 +110,4 @@ fc %>%
   scale_x_date(date_breaks = "1 month", date_labels = "%b") +
   labs(x = "reference date", y = "mean offset at the median, per 100k") +
   theme(legend.position = "bottom")
-```
-
-```{r month-view-cfgs}
-# sqrt 0.018 with each decay setting; section 2 has the WIS months for the rate-scale trackers.
-mv_plot_cfgs <- paste(names(RATES)[3], names(DECAYS), sep = ", ")
-mv_cols <- setNames(DECAY_COLS, mv_plot_cfgs)
-```
-
-```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```

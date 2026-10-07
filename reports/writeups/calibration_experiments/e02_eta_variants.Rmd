@@ -48,7 +48,7 @@ Setup:
   with the 2023-24 burn-in (the HHS-stitched backfill from E13), which only
   warms eta. The reference is re-run with the same burn-in
   (`reference + burn-in`) for comparison.
-- Tables lead with states only (US excluded).
+- Scores: states only (US excluded).
 
 WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
 WIS lower than base. L1 coverage bias: lower is better.
@@ -84,155 +84,16 @@ run <- function(spec) {
 cals <- purrr::map(CFGS, run)
 ```
 
-```{r metrics}
-GEOS <- c(states = "states only (US excluded)", all = "all locations")
-SEASONS <- c(LIVE, "both")
-score <- function(cal) {
-  fc <- cal$forecasts %>% mutate(season = season_of(reference_date))
-  purrr::imap(WS_GEOS[names(GEOS)], function(keep, g) ws_scores(fc %>% filter(keep(location))) %>% mutate(geos = g)) %>%
-    bind_rows() %>%
-    select(geos, season, horizon, which, wis, cal_err, cov50, cov90) %>%
-    tidyr::pivot_wider(names_from = which, values_from = c(wis, cal_err, cov50, cov90)) %>%
-    mutate(wis_pct = 100 * (wis_base - wis_cal) / wis_base)
-}
-m <- purrr::imap(cals, \(cal, nm) score(cal) %>% mutate(config = nm)) %>%
-  bind_rows() %>%
-  mutate(
-    config = factor(config, levels = names(CFGS)),
-    geos = factor(geos, levels = names(GEOS), labels = GEOS),
-    season = factor(season, levels = SEASONS, labels = c(LIVE, "both seasons")),
-    h = factor(paste0("h", horizon), levels = paste0("h", 0:3))
-  )
-CFG_COLS <- setNames(c("black", "#56B4E9", "#0072B2", "#003F6B", "#CC79A7", "grey55", "#E69F00", "#D55E00"), names(CFGS))
-```
-
-# 1. Overall, by season
-
-WIS reduction % (positive = calibrated WIS lower than base) per config, one panel per season and horizon, states only. The
-seasonal-window bars compare with "reference + burn-in", the others with
-"reference".
-
-```{r head-plot, fig.height=6}
-ggplot(m %>% filter(geos == GEOS[["states"]]), aes(config, wis_pct, fill = config)) +
-  geom_hline(yintercept = 0, colour = "grey50") +
-  geom_col(width = 0.8) +
-  facet_grid(season ~ h) +
-  scale_fill_manual(values = CFG_COLS, name = NULL) +
-  labs(x = NULL, y = "WIS reduction % (positive = calibrated WIS lower than base)") +
-  theme(legend.position = "bottom", axis.text.x = element_blank(), axis.ticks.x = element_blank())
-```
-
-WIS reduction % against L1 coverage bias, one point per config, states only.
-The open circle is the base (at its coverage bias and zero WIS reduction); up
-and to the left is better. The seasonal-window configs compare with
-"reference + burn-in", the others with "reference".
-
-```{r scatter, fig.height=7}
-d <- m %>% filter(geos == GEOS[["states"]])
-base <- d %>% filter(config == "reference") %>% distinct(season, h, cal_err_base)
-ggplot(d, aes(cal_err_cal, wis_pct, colour = config)) +
-  geom_hline(yintercept = 0, colour = "grey60", linewidth = 0.3) +
-  geom_point(data = base, aes(cal_err_base, 0, shape = "base (uncalibrated)"), colour = "black", fill = "white", size = 2.2, inherit.aes = FALSE) +
-  geom_point(size = 2) +
-  facet_grid(season ~ h) +
-  scale_colour_manual(values = CFG_COLS, name = NULL) +
-  scale_shape_manual(values = c(`base (uncalibrated)` = 21), name = NULL) +
-  expand_limits(x = 0) +
-  labs(x = "L1 coverage bias (lower is better)", y = "WIS reduction % (positive = calibrated WIS lower than base)") +
-  theme(legend.position = "bottom")
-```
-
-Per config (rows) and season × horizon (columns): first WIS reduction %
-(positive = calibrated WIS lower than base), then L1 coverage bias (lower is
-better), with the base's coverage bias in the base row.
-
-```{r tables}
-season_table <- function(g, value, fmt) {
-  bind_rows(
-    m %>% filter(config == "reference") %>% mutate(config = "base", wis_pct = 0, cal_err_cal = cal_err_base),
-    m
-  ) %>%
-    filter(geos == g) %>%
-    mutate(config = factor(config, levels = c("base", names(CFGS)))) %>%
-    transmute(config, col = paste(season, h), cell = sprintf(fmt, .data[[value]])) %>%
-    tidyr::pivot_wider(names_from = col, values_from = cell) %>%
-    arrange(config)
-}
-wis_table <- function(g) {
-  knitr::kable(season_table(g, "wis_pct", "%+.1f"), caption = paste0("WIS reduction %, ", g, "; positive = calibrated WIS lower than base"))
-}
-cov_table <- function(g) {
-  knitr::kable(season_table(g, "cal_err_cal", "%.3f"), caption = paste0("L1 coverage bias (lower is better), ", g))
-}
-```
-
-## States only
-
-```{r table-states}
-wis_table(GEOS[["states"]])
-cov_table(GEOS[["states"]])
-```
-
-L1 coverage bias, season-pooled against month-average (see "Month view" below):
-
-```{r table-states-month}
-mv <- cal_month_view(cals, seasons = LIVE)
-mv_show_table <- FALSE
-knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
-```
-
-## All locations
-
-```{r table-all}
-wis_table(GEOS[["all"]])
-cov_table(GEOS[["all"]])
-```
-
-## 50% and 90% interval coverage, states only
-
-```{r table-cov}
-bind_rows(
-  m %>% filter(config == "reference") %>% mutate(config = "base", cov50_cal = cov50_base, cov90_cal = cov90_base),
-  m
-) %>%
-  filter(geos == GEOS[["states"]], h %in% c("h0", "h2"), season != "both seasons") %>%
-  mutate(config = factor(config, levels = c("base", names(CFGS)))) %>%
-  transmute(config, col = paste(season, h), cell = sprintf("%.2f / %.2f", cov50_cal, cov90_cal)) %>%
-  tidyr::pivot_wider(names_from = col, values_from = cell) %>%
-  arrange(config) %>%
-  knitr::kable()
-```
-
-# 2. Month by month
-
-The month plots are in "Month view" below. h2 by month, states only: WIS
-reduction % (positive = calibrated WIS lower than base) (share of outcomes
-below the calibrated median). The burn-in configs are left out except the
-seasonal window with reset.
-
-```{r month-table}
-MONTH_CFGS <- c("reference", "off after 1 Mar", "off after 15 Feb", "per-level eta", "seasonal window, reset")
-fc_m <- purrr::imap(cals[MONTH_CFGS], \(cal, nm) cal$forecasts %>% mutate(config = nm)) %>%
-  bind_rows() %>%
-  mutate(season = season_of(reference_date), config = factor(config, levels = MONTH_CFGS)) %>%
-  filter(season %in% LIVE, location != "US")
-month_m <- ws_month_scores(fc_m) %>% mutate(h = factor(paste0("h", horizon), levels = paste0("h", 0:3)))
-share <- month_m %>% filter(config == "reference")
-month_m %>%
-  filter(h == "h2") %>%
-  transmute(season, month, config, v = sprintf("%+.1f (%.2f)", pct, below_med_cal)) %>%
-  tidyr::pivot_wider(names_from = config, values_from = v) %>%
-  left_join(share %>% filter(h == "h2") %>% transmute(season, month, `base share %` = round(share, 1), `base below` = round(below_med_base, 2)),
-    by = c("season", "month")) %>%
-  arrange(season, month) %>%
-  knitr::kable()
-```
-
 ```{r month-view-cfgs}
-# Same configs as the h2 table.
-mv_plot_cfgs <- MONTH_CFGS
+CFG_COLS <- setNames(c("black", "#56B4E9", "#0072B2", "#003F6B", "#CC79A7", "grey55", "#E69F00", "#D55E00"), names(CFGS))
+mv <- cal_month_view(cals, seasons = LIVE)
+# The plots leave out the burn-in configs except the seasonal window with reset; the tables keep every config.
+mv_plot_cfgs <- c("reference", "off after 1 Mar", "off after 15 Feb", "per-level eta", "seasonal window, reset")
 mv_cols <- CFG_COLS
 ```
+
+The seasonal-window configs compare with "reference + burn-in", the others
+with "reference".
 
 ```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```

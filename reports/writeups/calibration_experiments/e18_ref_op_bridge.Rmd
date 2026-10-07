@@ -116,46 +116,18 @@ step_m <- purrr::imap(cals, function(cal, nm) {
     h = factor(paste0("h", horizon), levels = paste0("h", 0:3))
   )
 mv <- cal_month_view(cals, seasons = LIVE)
-step_table <- function(col, fmt, base_col = NULL) {
-  rows <- step_m %>% mutate(step = as.character(step), v = .data[[col]])
-  if (!is.null(base_col)) {
-    rows <- bind_rows(step_m %>% filter(step == names(STEPS)[1]) %>% mutate(step = "base", v = .data[[base_col]]), rows)
-  }
-  rows %>%
-    mutate(step = factor(step, levels = unique(step))) %>%
-    arrange(season, h) %>%
-    transmute(step, col = paste(season, h), cell = sprintf(fmt, v)) %>%
-    tidyr::pivot_wider(names_from = col, values_from = cell) %>%
-    arrange(step)
-}
 ```
 
-# 1. Season scores per step
-
-States only. Each season is scored on its own rounds; "both seasons" pools
-them. The tracker runs over both seasons, so 2025-26 starts from the offsets
-2024-25 left behind.
-
-## WIS reduction % (positive = calibrated WIS lower than base)
-
-```{r table-wis}
-knitr::kable(step_table("wis_pct", "%+.1f"), caption = "WIS reduction % (positive = calibrated WIS lower than base), states only")
+```{r month-view-cfgs}
+# Five configs, so the month plots stay readable; the tables below them cover every config.
+mv_plot_cfgs <- c("0 REF-op", "1 no warm start", "4 no burn-in season", "6 sqrt constant 0.018 (E16)", "branch: sqrt 0.018 warm")
+mv_cols <- STEP_COLS
 ```
 
-## L1 coverage bias (lower is better), season-pooled
-
-```{r table-cov}
-knitr::kable(step_table("cal_err_cal", "%.3f", base_col = "cal_err_base"), caption = "L1 coverage bias (lower is better), season-pooled, states only")
+```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
 
-## L1 coverage bias (lower is better), season-pooled and month-average
-
-```{r table-month-cov}
-mv_show_table <- FALSE
-knitr::kable(cal_month_cov_table(mv), caption = CAL_MONTH_COV_CAPTION)
-```
-
-# 2. What each step changes
+# What each step changes
 
 The change each step makes to the step before it, both seasons pooled,
 states only. WIS: change in WIS reduction % (positive = the step lowers
@@ -185,63 +157,24 @@ knitr::kable(
 )
 ```
 
-```{r delta-plot, fig.height=6.5}
-delta_long <- delta %>%
-  transmute(step, h,
-    `WIS reduction %, change\n(positive = step lowers WIS)` = d_wis,
-    `month-avg L1 coverage bias,\nchange (negative = better)` = d_mavg,
-    `season-pooled L1 coverage bias,\nchange (negative = better)` = d_pooled
-  ) %>%
-  tidyr::pivot_longer(-c(step, h), names_to = "metric") %>%
-  mutate(metric = factor(metric, levels = unique(metric)), step = factor(step, levels = rev(names(STEPS)[-1])))
-ggplot(delta_long, aes(value, step, fill = step)) +
-  geom_vline(xintercept = 0, colour = "grey50", linewidth = 0.3) +
-  geom_col(width = 0.7, show.legend = FALSE) +
-  scale_fill_manual(values = STEP_COLS) +
-  facet_grid(h ~ metric, scales = "free_x") +
-  labs(x = "change from the previous step (both seasons, states only)", y = NULL)
-```
-
-# 3. State by state: REF-op against sqrt 0.018
-
-How many of the 52 states (50 states, DC and PR) each config of a pair has
-the lower WIS in, per season and horizon. States share the national wave,
-so the counts are not independent tests; they show whether a pooled gap
-comes from most states or from a few large ones.
-
-```{r state-wins}
-PAIRS <- list(
-  c("0 REF-op", "6 sqrt constant 0.018 (E16)"),
-  c("0 REF-op", "branch: sqrt 0.018 warm"),
-  c("branch: sqrt 0.018 warm", "6 sqrt constant 0.018 (E16)")
-)
-state_wis <- cal_state_wis(cals[unique(unlist(PAIRS))])
-knitr::kable(cal_pair_wins(state_wis, PAIRS), caption = CAL_PAIR_WINS_CAPTION)
-```
+# State by state: REF-op against sqrt 0.018
 
 Per state, pooled over h0–h3: WIS reduction % of REF-op against sqrt 0.018
 (above the line, REF-op is better).
 
 ```{r state-scatter, fig.height=5}
+PAIR <- c("0 REF-op", "6 sqrt constant 0.018 (E16)")
+state_wis <- cal_state_wis(cals[PAIR])
 state_pct <- state_wis %>%
-  filter(config %in% PAIRS[[1]]) %>%
+  filter(config %in% PAIR) %>%
   group_by(config, season, location) %>%
   summarize(pct = 100 * (sum(wis_base) - sum(wis_cal)) / sum(wis_base), .groups = "drop") %>%
   tidyr::pivot_wider(names_from = config, values_from = pct)
-ggplot(state_pct, aes(.data[[PAIRS[[1]][2]]], .data[[PAIRS[[1]][1]]])) +
+ggplot(state_pct, aes(.data[[PAIR[2]]], .data[[PAIR[1]]])) +
   geom_abline(slope = 1, intercept = 0, colour = "grey50") +
   geom_hline(yintercept = 0, colour = "grey85") +
   geom_vline(xintercept = 0, colour = "grey85") +
   geom_point(alpha = 0.8) +
   facet_wrap(~season) +
   labs(x = "sqrt 0.018: WIS reduction %, h0–h3", y = "REF-op: WIS reduction %, h0–h3")
-```
-
-```{r month-view-cfgs}
-# Five configs, so the month plots stay readable; every config is in the tables above.
-mv_plot_cfgs <- c("0 REF-op", "1 no warm start", "4 no burn-in season", "6 sqrt constant 0.018 (E16)", "branch: sqrt 0.018 warm")
-mv_cols <- STEP_COLS
-```
-
-```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```

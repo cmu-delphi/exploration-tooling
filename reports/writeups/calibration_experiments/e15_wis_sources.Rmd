@@ -30,7 +30,7 @@ Setup:
 - Learning truth: exact (re-run at every round on the data published by then;
   E00), one week of extra delay. Cold start, no burn-in season.
 - Scores against finalized truth over 2024-25 and 2025-26, pooled; states
-  only first (US excluded), then all locations.
+  only (US excluded).
 - Configs, both from E12:
   - **REF-op cold**: prod's tracker (sqrt, adaptive rate, slow term, leak)
     without its warm start.
@@ -72,13 +72,14 @@ cals <- purrr::map(cfgs, function(cfg) {
   do.call(cal_run_cached, c(list(wi$fc, wi$truth), cfg, list(learn = "exact", vintages = wi$vintages, workers = params$workers)))
 })
 pinball <- function(y, q, tau) ifelse(y >= q, tau * (y - q), (1 - tau) * (q - y))
-GEOS <- c(states = "states only (US excluded)", all = "all locations")
+GEOS <- c(states = "states only (US excluded)")
 fc <- purrr::imap(cals, function(cal, nm) cal$forecasts %>% mutate(config = nm)) %>%
   bind_rows() %>%
   mutate(season = season_of(reference_date), config = factor(config, levels = names(cals))) %>%
   filter(season %in% LIVE, !is.na(truth), !is.na(value_base))
-# One copy of each row per location subset.
-fc <- bind_rows(fc %>% filter(location != "US") %>% mutate(geos = "states"), fc %>% mutate(geos = "all")) %>%
+fc <- fc %>%
+  filter(location != "US") %>%
+  mutate(geos = "states") %>%
   mutate(geos = factor(geos, levels = names(GEOS), labels = GEOS))
 ```
 
@@ -110,16 +111,8 @@ level_plot <- function(g) {
 }
 ```
 
-## States only
-
 ```{r by-level-states, fig.height=6}
 level_plot(GEOS[["states"]])
-```
-
-## All locations
-
-```{r by-level-all, fig.height=6}
-level_plot(GEOS[["all"]])
 ```
 
 ## Grouped: tails, shoulders, centre
@@ -149,21 +142,6 @@ group_tbl <- function(g) {
     arrange(config, part)
 }
 knitr::kable(group_tbl(GEOS[["states"]]), caption = "States only: WIS reduction % by group of levels (positive = calibrated WIS lower than base)")
-knitr::kable(group_tbl(GEOS[["all"]]), caption = "All locations: WIS reduction % by group of levels (positive = calibrated WIS lower than base)")
-```
-
-Change in pinball loss at each level relative to that level's own base
-loss (not a share of WIS), states only.
-
-```{r level-pct}
-knitr::kable(
-  by_level %>%
-    filter(geos == GEOS[["states"]], level %in% c(0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99)) %>%
-    transmute(config, level, horizon = paste0("h", horizon), v = round(level_pct, 1)) %>%
-    tidyr::pivot_wider(names_from = horizon, values_from = v) %>%
-    arrange(config, level),
-  caption = "States only: pinball loss reduction % at selected levels, vs that level's base loss (positive = calibrated loss lower than base)"
-)
 ```
 
 # 2. Offset size against the forecast's spread
@@ -201,27 +179,6 @@ ggplot(off_q, aes(level, med, colour = config, fill = config)) +
   scale_fill_manual(values = c(`REF-op cold` = "#D55E00", `E11 constant 0.1` = "#0072B2"), name = NULL) +
   labs(x = "quantile level", y = "offset / base (q95 − q05)") +
   theme(legend.position = "bottom")
-```
-
-Typical size, ignoring direction: median of |offset| ÷ the base 90% and
-50% interval widths at selected levels, with the share of forecasts whose
-offset exceeds a tenth of the 90% width.
-
-```{r offset-table}
-off_tbl <- function(g) {
-  off %>%
-    filter(geos == g, level %in% c(0.05, 0.25, 0.5, 0.75, 0.95)) %>%
-    group_by(config, horizon, level) %>%
-    summarize(
-      `|off|/w90 median` = median(abs(r90)), `|off|/w90 p90` = quantile(abs(r90), 0.9),
-      `|off|/w50 median` = median(abs(r50)), `share |off| > 0.1 w90` = mean(abs(r90) > 0.1),
-      .groups = "drop"
-    ) %>%
-    mutate(horizon = paste0("h", horizon), across(where(is.double) & !level, \(x) round(x, 3))) %>%
-    arrange(config, horizon, level)
-}
-knitr::kable(off_tbl(GEOS[["states"]]), caption = "States only")
-knitr::kable(off_tbl(GEOS[["all"]]) %>% filter(level %in% c(0.05, 0.5, 0.95)), caption = "All locations, three levels")
 ```
 
 # 3. Median shift vs width change
@@ -262,35 +219,4 @@ split_tbl <- function(g) {
     arrange(config, variant)
 }
 knitr::kable(split_tbl(GEOS[["states"]]), caption = "States only: WIS reduction % (positive = calibrated WIS lower than base)")
-knitr::kable(split_tbl(GEOS[["all"]]), caption = "All locations: WIS reduction % (positive = calibrated WIS lower than base)")
-```
-
-How the calibrated widths compare with the base: the median over forecasts
-of calibrated ÷ base interval width, states only. 1 means unchanged.
-
-```{r width-ratio}
-wr <- split %>%
-  filter(geos == GEOS[["states"]], level %in% c(0.05, 0.25, 0.75, 0.95)) %>%
-  select(config, location, horizon, reference_date, level, value_base, value_cal) %>%
-  tidyr::pivot_wider(names_from = level, values_from = c(value_base, value_cal)) %>%
-  mutate(
-    r90 = (value_cal_0.95 - value_cal_0.05) / (value_base_0.95 - value_base_0.05),
-    r50 = (value_cal_0.75 - value_cal_0.25) / (value_base_0.75 - value_base_0.25)
-  ) %>%
-  filter(is.finite(r90), is.finite(r50)) %>%
-  group_by(config, horizon) %>%
-  summarize(
-    `90% width ratio, median` = median(r90), `90% width ratio, middle 80%` = sprintf("%.2f–%.2f", quantile(r90, 0.1), quantile(r90, 0.9)),
-    `50% width ratio, median` = median(r50), `50% width ratio, middle 80%` = sprintf("%.2f–%.2f", quantile(r50, 0.1), quantile(r50, 0.9)),
-    .groups = "drop"
-  ) %>%
-  mutate(horizon = paste0("h", horizon), across(where(is.double), \(x) round(x, 2)))
-knitr::kable(wr)
-```
-
-```{r month-view-cfgs}
-mv <- cal_month_view(cals, seasons = LIVE)
-```
-
-```{r child=here::here("reports/writeups/calibration_experiments/_month_view.Rmd")}
 ```
