@@ -76,9 +76,8 @@ steps <- c(
   "site update" = "update site",
   "netlify" = "netlify deploy"
 )
-for (ii in seq_along(steps)) {
-  cat(sprintf("%-15s %s\n", paste0(names(steps)[ii], ":"), step_status(steps[[ii]])))
-}
+step_statuses <- vapply(steps, step_status, character(1))
+cat(sprintf("%-15s %s\n", paste0(names(steps), ":"), step_statuses), sep = "")
 done_marker <- here::here("cache", sprintf("prod_forecast_done_%s", today))
 cat(if (file.exists(done_marker)) "run marked complete\n" else "run NOT marked complete\n")
 critical <- grep("] CRITICAL: ", todays_lines, value = TRUE, fixed = TRUE)
@@ -96,4 +95,13 @@ if (is.null(live_index)) {
   } else {
     "live index DIFFERS from local rendered_reports/index.html\n"
   })
+}
+
+for (disease in c("covid", "flu")) {
+  if (startsWith(step_statuses[[sprintf("%s prod", disease)]], "failed")) {
+    cat(sprintf(
+      "\n%s prod failed. To see the errors:\n  make get-%s-prod-errors\n  tail -n 100 cache/logs/prod_%s\n",
+      disease, disease, disease
+    ))
+  }
 }
