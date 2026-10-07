@@ -21,6 +21,7 @@ make pull / make push     # sync aux_data, targets stores, and forecasts with S3
 make update-site && make netlify   # rebuild report index and deploy
 make submit-flu           # commit forecast to ../FluSight-forecast-hub, open PR, then commit + push flu weights CSVs to main (also: submit-covid, submit-rsv; *-dry skips the weights push)
 make get-flu-prod-errors  # show errors from the last pipeline run
+make status               # on the prod box: today's systemd prod run (freshness per source, pipelines, site, netlify)
 ```
 
 Run a single test file: `Rscript -e "testthat::test_file('tests/testthat/test-forecaster-utils.R')"`.

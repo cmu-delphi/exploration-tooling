@@ -9,7 +9,7 @@
 	oracle-capture oracle-compare \
 	prod-compare-covid prod-compare-flu \
 	explore-rsv prune-rsv-explore pull-rsv-explore push-rsv-explore \
-	push-weights-covid push-weights-flu push-weights-rsv
+	push-weights-covid push-weights-flu push-weights-rsv status
 
 # Long-running recipes tee to cache/logs/ and set pipefail inline so a failing
 # Rscript isn't masked by tee's exit status. bash is needed for pipefail; keep
@@ -44,6 +44,10 @@ prod-rsv: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_rsv
 
 prod: prod-covid prod-flu update-site netlify
+
+# Summarize today's systemd prod run: freshness polls, pipelines, site, netlify.
+status:
+	@Rscript scripts/prod_status.R
 
 prod-rsv-backtest:
 	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R

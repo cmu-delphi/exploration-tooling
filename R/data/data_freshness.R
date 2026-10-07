@@ -66,17 +66,24 @@ get_socrata_updated_at <- function(dataset_url, missing_value) {
 #'
 #' @param max_age_days Maximum allowed age, in days, of the latest time_value
 #'   before the data is considered stale.
-#' @return TRUE if both NHSN and NSSP archives have a time_value within
-#'   `max_age_days`, FALSE otherwise.
+#' @return A tibble with one row per source (`nhsn`, `nssp`) and columns
+#'   `source`, `latest` (latest time_value), `age_days`, and `fresh` (TRUE if
+#'   `age_days <= max_age_days`).
 check_data_freshness <- function(max_age_days = 7) {
   targets::tar_make(names = targets::any_of(c("nhsn_archive_data", "nssp_archive_data")))
-  nhsn_archive <- targets::tar_read(nhsn_archive_data)
-  nssp_archive <- targets::tar_read(nssp_archive_data)
-  nhsn_latest <- max(nhsn_archive$DT$time_value)
-  nssp_latest <- max(nssp_archive$DT$time_value)
-  nhsn_age <- as.numeric(Sys.Date() - nhsn_latest)
-  nssp_age <- as.numeric(Sys.Date() - nssp_latest)
-  cli::cli_inform("NHSN latest time_value: {nhsn_latest} ({nhsn_age} days old)")
-  cli::cli_inform("NSSP latest time_value: {nssp_latest} ({nssp_age} days old)")
-  nhsn_age <= max_age_days && nssp_age <= max_age_days
+  latest <- c(
+    max(targets::tar_read(nhsn_archive_data)$DT$time_value),
+    max(targets::tar_read(nssp_archive_data)$DT$time_value)
+  )
+  freshness <- tibble::tibble(
+    source = c("nhsn", "nssp"),
+    latest = latest,
+    age_days = as.numeric(Sys.Date() - latest),
+    fresh = age_days <= max_age_days
+  )
+  cli::cli_inform(sprintf(
+    "%s latest time_value: %s (%d days old)",
+    toupper(freshness$source), freshness$latest, as.integer(freshness$age_days)
+  ))
+  freshness
 }
