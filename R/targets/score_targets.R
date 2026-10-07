@@ -111,9 +111,10 @@ score_forecasts <- function(latest_data, forecasts, target, excluded_locations =
   if (!is.data.frame(scores)) {
     return(scores)
   }
-  # A location must be scored if truth exists (for any geo) on one of its target dates.
+  # A location must be scored if it has truth on one of its target dates.
   expected_locations <- forecasts_formatted %>%
-    filter(target_end_date %in% truth_data$target_end_date, location %nin% excluded_locations) %>%
+    semi_join(truth_data, by = c("location", "target_end_date")) %>%
+    filter(location %nin% excluded_locations) %>%
     distinct(location) %>%
     pull()
   dropped <- setdiff(expected_locations, scores$location)
