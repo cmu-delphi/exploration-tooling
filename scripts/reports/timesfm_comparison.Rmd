@@ -1,0 +1,375 @@
+---
+title: "TimesFM vs. R forecasters (`r params$target`)"
+author: Delphi Forecast Team
+date: "Rendered: `r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: True
+params:
+  target: "nhsn"
+  start_date: "2025-10-01"
+  end_date: "2026-07-08"
+  forecasters: !r c("windowed_seasonal", "windowed_seasonal_extra_sources", "ensemble_mix", "climate_linear", "linear")
+  exclude_geos: !r c("us", "as", "gu", "mp", "vi")
+---
+
+```{r setup, echo=TRUE}
+knitr::opts_chunk$set(
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE
+)
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+ggplot2::theme_set(ggplot2::theme_bw())
+Mean <- function(x) mean(x, na.rm = TRUE)
+q9_levels <- seq(0.1, 0.9, by = 0.1)
+```
+
+# TimesFM vs. R forecasters: `r params$target` {.tabset}
+
+This report backtests Google's TimesFM 3.0 foundation model against the repo's R
+forecasters on the `r params$target` target, over forecast dates
+`r params$start_date` to `r params$end_date`. The main comparison point is
+`windowed_seasonal`, the repo's workhorse flu forecaster.
+
+## Setup & load
+
+```{r load, echo=TRUE}
+r_forecasts_path <- here::here("cache", "tsfm", "r_forecasts.parquet")
+timesfm_forecasts_path <- here::here("cache", "tsfm", "timesfm_forecasts.parquet")
+truth_path <- here::here("cache", "tsfm", "truth.parquet")
+population_path <- here::here("cache", "tsfm", "population.parquet")
+schedule_path <- here::here("cache", "tsfm", "forecast_schedule.parquet")
+
+r_forecasts_raw <- arrow::read_parquet(r_forecasts_path)
+truth_raw <- arrow::read_parquet(truth_path)
+population <- arrow::read_parquet(population_path)
+forecast_schedule <- arrow::read_parquet(schedule_path)
+
+start_date <- as.Date(params$start_date)
+end_date <- as.Date(params$end_date)
+
+# TimesFM forecasts may not exist yet (backtest still running); degrade gracefully.
+have_timesfm <- file.exists(timesfm_forecasts_path)
+if (have_timesfm) {
+  timesfm_forecasts_raw <- arrow::read_parquet(timesfm_forecasts_path)
+  timesfm_forecaster_ids <- timesfm_forecasts_raw %>%
+    filter(target == params$target) %>%
+    distinct(forecaster) %>%
+    pull(forecaster) %>%
+    stringr::str_subset("^timesfm3_")
+} else {
+  cli::cli_alert_warning("{timesfm_forecasts_path} not found; comparing R forecasters only.")
+  timesfm_forecasts_raw <- tibble::tibble()
+  timesfm_forecaster_ids <- character(0)
+}
+
+wanted_forecasters <- c(params$forecasters, timesfm_forecaster_ids)
+
+filter_common <- function(df) {
+  df %>%
+    filter(target == params$target) %>%
+    filter(forecast_date >= start_date, forecast_date <= end_date) %>%
+    filter(geo_value %nin% params$exclude_geos) %>%
+    filter(forecaster %in% wanted_forecasters)
+}
+
+r_forecasts <- filter_common(r_forecasts_raw)
+timesfm_forecasts <- if (have_timesfm) filter_common(timesfm_forecasts_raw) else timesfm_forecasts_raw
+
+all_forecasts <- bind_rows(r_forecasts, timesfm_forecasts)
+
+# Warn (don't error) about any requested forecaster missing entirely from the data.
+present_forecasters <- unique(all_forecasts$forecaster)
+missing_requested <- setdiff(params$forecasters, present_forecasters)
+if (length(missing_requested) > 0) {
+  cli::cli_alert_warning("Requested forecaster(s) not found in data, dropping: {missing_requested}")
+}
+compare_forecasters <- intersect(wanted_forecasters, present_forecasters)
+all_forecasts <- all_forecasts %>% filter(forecaster %in% compare_forecasters)
+
+truth <- truth_raw %>%
+  filter(source == params$target) %>%
+  filter(geo_value %nin% params$exclude_geos) %>%
+  select(geo_value, target_end_date, true_value = value)
+
+cli::cli_alert_info("Comparing forecasters: {compare_forecasters}")
+```
+
+```{r common-tasks, echo=TRUE}
+# Restrict to the common set of (geo_value, forecast_date, target_end_date) tasks
+# present for every forecaster being compared, so scores are apples-to-apples.
+task_cols <- c("geo_value", "forecast_date", "target_end_date")
+tasks_by_forecaster <- all_forecasts %>%
+  distinct(forecaster, geo_value, forecast_date, target_end_date)
+
+n_forecasters <- length(compare_forecasters)
+common_tasks <- tasks_by_forecaster %>%
+  count(geo_value, forecast_date, target_end_date, name = "n_forecasters_present") %>%
+  filter(n_forecasters_present == n_forecasters) %>%
+  select(all_of(task_cols))
+
+n_all_tasks <- tasks_by_forecaster %>% distinct(across(all_of(task_cols))) %>% nrow()
+n_common_tasks <- nrow(common_tasks)
+cli::cli_alert_info(
+  "Common tasks: {n_common_tasks} of {n_all_tasks} distinct (geo, forecast_date, target_end_date) triples ({n_all_tasks - n_common_tasks} dropped)."
+)
+
+all_forecasts_common <- all_forecasts %>%
+  semi_join(common_tasks, by = task_cols)
+```
+
+```{r scoring, echo=TRUE}
+# Two scoring variants: all 23 quantiles ("full") and the 9 quantiles TimesFM
+# natively produces ("q9"). The remaining 14 hub quantiles for TimesFM are
+# tail-extrapolated, so scores_q9 is the fairer head-to-head.
+to_scoring_input <- function(df) {
+  df %>%
+    rename(model = forecaster, prediction = value)
+}
+
+# Like evaluate_predictions() in R/scoring.R, but tolerates quantile sets that
+# lack the 0.25/0.75 pair (the 9-quantile variant), reporting NA coverage there.
+score_quantiles <- function(forecasts, truth_data) {
+  forecast_obj <- forecasts %>%
+    arrange(model, geo_value, target_end_date, forecast_date, quantile) %>%
+    group_by(model, geo_value, target_end_date, forecast_date) %>%
+    mutate(prediction = sort(prediction)) %>%
+    ungroup() %>%
+    left_join(truth_data, by = c("geo_value", "target_end_date")) %>%
+    filter(!is.na(true_value)) %>%
+    scoringutils::as_forecast_quantile(
+      quantile_level = "quantile",
+      observed = "true_value",
+      predicted = "prediction",
+      forecast_unit = c("model", "geo_value", "forecast_date", "target_end_date")
+    )
+  scores <- forecast_obj %>%
+    scoringutils::score(metrics = scoringutils::get_metrics(.)) %>%
+    as_tibble()
+  for (col in c("interval_coverage_50", "interval_coverage_90")) {
+    if (!col %in% names(scores)) scores[[col]] <- NA
+  }
+  scores %>%
+    select(model, geo_value, forecast_date, target_end_date, wis, ae = ae_median,
+           coverage_50 = interval_coverage_50, coverage_90 = interval_coverage_90)
+}
+
+score_variant <- function(df) {
+  score_quantiles(to_scoring_input(df), truth) %>%
+    rename(forecaster = model) %>%
+    mutate(ahead_wk = as.numeric(target_end_date - forecast_date - 3) / 7)
+}
+
+scores_full <- score_variant(all_forecasts_common)
+scores_q9 <- score_variant(all_forecasts_common %>% filter(quantile %in% q9_levels))
+
+# Population-normalized WIS (nhsn only; nssp is already a rate).
+if (params$target == "nhsn") {
+  scores_full <- scores_full %>%
+    left_join(population, by = "geo_value") %>%
+    mutate(wis_rate = wis * 1e5 / population)
+  scores_q9 <- scores_q9 %>%
+    left_join(population, by = "geo_value") %>%
+    mutate(wis_rate = wis * 1e5 / population)
+}
+```
+
+Ahead -1 is a nowcast of the already-reported week (`target_end_date` before
+`forecast_date`); TimesFM emits the (already-known) observed value there, which
+makes it look artificially strong, so most of the summaries below are also
+shown restricted to `ahead_wk >= 0`.
+
+## Headline table
+
+```{r headline, echo=TRUE}
+headline_table <- function(scores, label) {
+  scores %>%
+    filter(ahead_wk >= 0) %>%
+    group_by(forecaster) %>%
+    summarize(
+      mean_wis = Mean(wis),
+      mean_ae = Mean(ae),
+      coverage_50 = Mean(coverage_50),
+      coverage_90 = Mean(coverage_90),
+      n = n(),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      rel_wis_vs_windowed_seasonal = mean_wis / mean_wis[forecaster == "windowed_seasonal"][1],
+      scoring = label
+    ) %>%
+    arrange(mean_wis)
+}
+
+headline <- bind_rows(
+  headline_table(scores_full, "full (23 quantiles)"),
+  headline_table(scores_q9, "q9 (9 quantiles)")
+)
+
+headline %>%
+  mutate(across(c(mean_wis, mean_ae, coverage_50, coverage_90, rel_wis_vs_windowed_seasonal), ~ round(.x, 3))) %>%
+  select(scoring, forecaster, mean_wis, rel_wis_vs_windowed_seasonal, mean_ae, coverage_50, coverage_90, n) %>%
+  knitr::kable()
+```
+
+## WIS by ahead
+
+```{r wis-by-ahead-table, echo=TRUE}
+by_ahead <- function(scores, label) {
+  scores %>%
+    group_by(forecaster, ahead_wk) %>%
+    summarize(mean_wis = Mean(wis), n = n(), .groups = "drop") %>%
+    mutate(scoring = label)
+}
+
+wis_by_ahead <- bind_rows(
+  by_ahead(scores_full, "full"),
+  by_ahead(scores_q9, "q9")
+)
+
+wis_by_ahead %>%
+  mutate(mean_wis = round(mean_wis, 3)) %>%
+  arrange(scoring, ahead_wk, mean_wis) %>%
+  knitr::kable()
+```
+
+```{r wis-by-ahead-plot, echo=TRUE, fig.width=12, fig.height=5}
+wis_by_ahead %>%
+  ggplot(aes(x = ahead_wk, y = mean_wis, color = forecaster)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~scoring, scales = "free_y") +
+  labs(x = "ahead (weeks)", y = "mean WIS", title = "Mean WIS by ahead")
+```
+
+## WIS over time
+
+```{r wis-over-time, echo=TRUE, fig.width=12, fig.height=5}
+scores_q9 %>%
+  filter(ahead_wk >= 0) %>%
+  group_by(forecaster, forecast_date) %>%
+  summarize(mean_wis = Mean(wis), .groups = "drop") %>%
+  ggplot(aes(x = forecast_date, y = mean_wis, color = forecaster)) +
+  geom_line() +
+  geom_point() +
+  scale_y_log10() +
+  labs(x = "forecast date", y = "mean WIS (log scale)", title = "Mean WIS over time (q9 scores, ahead >= 0)")
+```
+
+## By geo
+
+```{r by-geo, echo=TRUE, fig.width=10, fig.height=8}
+if (length(timesfm_forecaster_ids) > 0) {
+  focus_timesfm <- timesfm_forecaster_ids[1]
+
+  by_geo <- scores_q9 %>%
+    filter(ahead_wk >= 0, forecaster %in% c("windowed_seasonal", focus_timesfm)) %>%
+    group_by(forecaster, geo_value) %>%
+    summarize(mean_wis = Mean(wis), .groups = "drop") %>%
+    tidyr::pivot_wider(names_from = forecaster, values_from = mean_wis) %>%
+    filter(!is.na(.data[["windowed_seasonal"]]), !is.na(.data[[focus_timesfm]])) %>%
+    mutate(rel_wis = .data[[focus_timesfm]] / .data[["windowed_seasonal"]]) %>%
+    arrange(rel_wis)
+
+  by_geo %>%
+    mutate(geo_value = forcats::fct_reorder(geo_value, rel_wis)) %>%
+    ggplot(aes(x = geo_value, y = rel_wis)) +
+    geom_col() +
+    geom_hline(yintercept = 1, linetype = "dashed") +
+    coord_flip() +
+    labs(
+      x = "geo", y = glue::glue("relative WIS ({focus_timesfm} / windowed_seasonal)"),
+      title = "Relative WIS by geo (ahead >= 0, q9 scores)"
+    )
+
+  cli::cli_h3("10 best geos (lowest relative WIS)")
+  by_geo %>% head(10) %>% knitr::kable()
+
+  cli::cli_h3("10 worst geos (highest relative WIS)")
+  by_geo %>% tail(10) %>% arrange(desc(rel_wis)) %>% knitr::kable()
+} else {
+  cli::cli_alert_info("No timesfm forecaster available; skipping by-geo comparison.")
+}
+```
+
+## Coverage
+
+Nominal coverage targets are 0.5 and 0.9.
+
+```{r coverage, echo=TRUE}
+scores_full %>%
+  filter(ahead_wk >= 0) %>%
+  group_by(forecaster, ahead_wk) %>%
+  summarize(
+    coverage_50 = round(Mean(coverage_50), 3),
+    coverage_90 = round(Mean(coverage_90), 3),
+    n = n(),
+    .groups = "drop"
+  ) %>%
+  arrange(ahead_wk, forecaster) %>%
+  knitr::kable()
+```
+
+## Fan charts
+
+```{r fan-charts, echo=TRUE, fig.width=14, fig.height=8}
+fan_geos <- c("us", "ca", "tx", "ny", "pa", "fl")
+fan_geos <- intersect(fan_geos, unique(all_forecasts$geo_value))
+
+if (length(timesfm_forecaster_ids) > 0 && length(fan_geos) > 0) {
+  focus_timesfm <- timesfm_forecaster_ids[1]
+  fan_forecasters <- c("windowed_seasonal", focus_timesfm)
+
+  fan_wide <- all_forecasts %>%
+    filter(
+      geo_value %in% fan_geos,
+      forecaster %in% fan_forecasters,
+      (as.numeric(target_end_date - forecast_date - 3) / 7) %in% 0:3,
+      quantile %in% c(0.05, 0.25, 0.5, 0.75, 0.95)
+    ) %>%
+    mutate(quantile_label = paste0("q", quantile)) %>%
+    select(forecaster, geo_value, forecast_date, target_end_date, quantile_label, value) %>%
+    tidyr::pivot_wider(names_from = quantile_label, values_from = value)
+
+  fan_truth <- truth %>%
+    filter(geo_value %in% fan_geos, target_end_date >= start_date - 28, target_end_date <= end_date + 28)
+
+  fan_wide %>%
+    ggplot(aes(x = target_end_date, group = forecast_date)) +
+    geom_ribbon(aes(ymin = q0.05, ymax = q0.95), fill = "steelblue", alpha = 0.15) +
+    geom_ribbon(aes(ymin = q0.25, ymax = q0.75), fill = "steelblue", alpha = 0.25) +
+    geom_line(aes(y = q0.5), color = "steelblue", linewidth = 0.3, alpha = 0.8) +
+    geom_line(
+      data = fan_truth, aes(x = target_end_date, y = true_value, group = NULL),
+      color = "black", linewidth = 0.5, inherit.aes = FALSE
+    ) +
+    facet_grid(forecaster ~ geo_value, scales = "free_y") +
+    labs(x = "target end date", y = "value", title = "Fan charts: windowed_seasonal vs. TimesFM (aheads 0-3)")
+} else {
+  cli::cli_alert_info("No timesfm forecaster or no matching geos available; skipping fan charts.")
+}
+```
+
+## Notes
+
+- TimesFM natively produces only the 9 quantile levels 0.1-0.9; the remaining
+  14 hub quantiles (0.01, 0.025, 0.05, 0.975, 0.99, and the extreme tails) are
+  tail-extrapolated rather than model-native. `scores_full` includes this
+  extrapolation; `scores_q9` restricts to the 9 native levels for a fairer
+  comparison.
+- Ahead -1 (`target_end_date` before `forecast_date`) is a nowcast of the
+  already-reported week; TimesFM tends to emit close to the observed value
+  there, which is not a meaningful test of forecasting skill. Headline and
+  summary tables restrict to `ahead_wk >= 0` for this reason.
+- Both sides are scored against as-of (versioned) data available at forecast
+  time, not finalized truth revised after the fact -- except the truth table
+  itself, which is finalized.
+- The R forecasts are the actual real-time production runs; the TimesFM
+  forecasts are a replay against the archive, run after the fact. This is not
+  a fully apples-to-apples operational comparison (e.g. data availability
+  timing may differ slightly).
+- TimesFM 3.0's released weights are licensed for non-commercial use only,
+  which is a consideration for any operational (as opposed to exploratory) use.
