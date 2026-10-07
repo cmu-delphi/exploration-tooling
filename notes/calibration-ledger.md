@@ -122,8 +122,12 @@ Finalists (E10 part 1, E18), states only, h1/h2/h3 pooled over both seasons:
   REF-op has the lower WIS in 44–45 of 52 states). At h−1 sqrt 0.018 gains
   the most of any config, +14.9 vs REF-op +10.2 (E10 part 2). No config
   helps covid at h1–h3 on either base.
-- **The season flip is broad.** REF-op beats sqrt 0.018 cold in 41–45 of
-  52 flu states in 2024-25 and 14–18 in 2025-26 (E18).
+- **The season flip is broad, but the pair is unmatched.** REF-op warm
+  beats sqrt 0.018 cold in 41–45 of 52 flu states in 2024-25 and 14–18 in
+  2025-26 (E18). Cold configs play the base through Nov–Dec 2024, and on the
+  same replay sqrt 0.018 warm beats REF-op warm at every horizon in both
+  seasons, so the per-state flip is partly the start, not the tracker. E18's
+  matched pairs (warm vs warm, cold vs cold) are written, not yet rendered.
 
 Operating point: for covid nothing tested beats REF-op cold (prod) at
 h0–h3. For flu, sqrt 0.018 warm is ahead of REF-op warm (prod) by about 1
@@ -182,7 +186,9 @@ gating), exact learning truth, spoiled submissions excluded.
 | E16 | `e16_sqrt_constant_lr` | replay, cold | constant rate on sqrt scale | sqrt 0.018 about +1 over rate constants at h0; at h1–h3 within 0.2 pooled, up to +0.7 in 2025-26. vs REF-op cold: behind in 2024-25 h0–h1, ahead elsewhere; month-avg coverage tie | 0.018 picked in-sample |
 | E17 | `e17_late_decay` | replay, cold | shrink or stop offsets from 1 Mar | `late_decay` fixes March but costs about 0.5 at h0, otherwise ±0.2. Off 1 Mar +0.4 to +0.7 at h1–h3 for sqrt 0.018 (mostly 2025-26), ≤ 0 for rate 0.018 | `late_decay` shrinks the stored offset, so it carries into the next season |
 | E18 | `e18_ref_op_bridge` | replay | which piece of REF-op matters | REF-op vs sqrt 0.018 within 0.6 pooled; REF-op ahead in 2024-25 by 1.3–1.5, behind in 2025-26 by 0.8–1.3. Warm start +0.9 to +2.0 in 2024-25, −0.2 to −0.7 in 2025-26. No step moves month-avg coverage beyond 0.008. Branch sqrt 0.018 warm: +3.4/+1.6/+1.6/+2.5 pooled, best of all, but month-avg coverage 0.011–0.018 worse than base at h2–h3 | steps 0 and 4 are the same cached runs as E13; steps 4 and 5 identical (scale invariance) |
-| E19 | none (`calibration_tracker_internals.R`) | replay, cold, final truth | why do the leak and constant 0.018 score alike? | REF-op cold and no-leak eta identical; adaptive eta / width peaks Apr–May (h3 0.10) vs constant ≤ 0.03. h3 median offset / width, Feb/Mar/Apr/May 2025: REF-op 0.045/0.078/0.114/0.009, no leak 0.048/0.109/0.237/0.199, constant 0.013/0.026/0.057/0.074; Apr/May 2026: 0.093/0.013, 0.165/0.149, 0.101/0.143. Share of truths above the base median at h3: Mar 0.27–0.43, Apr–May 2026 0.62–0.71 | final truth, not exact; h1–h3; median-level offset only; no WIS by month in the script |
+| E19 | `e19_tracker_internals` (was a script; the numbers here are the script's, on final truth, until the notebook is rendered) | replay | why do the leak and constant 0.018 score alike? Step size, offset and base bias by month on the E20 grid; carry vs reset on both anchors | REF-op cold and no-leak eta identical; adaptive eta / width peaks Apr–May (h3 0.10) vs constant ≤ 0.03. h3 median offset / width, Feb/Mar/Apr/May 2025: REF-op 0.045/0.078/0.114/0.009, no leak 0.048/0.109/0.237/0.199, constant 0.013/0.026/0.057/0.074; Apr/May 2026: 0.093/0.013, 0.165/0.149, 0.101/0.143. Share of truths above the base median at h3: Mar 0.27–0.43, Apr–May 2026 0.62–0.71 | script numbers: final truth, h1–h3, median-level offset only, no WIS by month. The notebook uses exact truth and adds WIS by month and the resets; not yet rendered |
+| E20 | `e20_structure_grid` | replay | warm start and leak on both anchors: {adaptive 0.03, constant 0.018} × {cold, warm} × {no leak, leak 0.1}, plus REF-op warm and cold | not yet run | replaces E03–E05 and E11's questions on the replay; those stay until read against it. The slow term is left out (E18 step 2) |
+| E21 | `e21_data_by_season` | replay data | how the two live seasons differ as data: shape, revisions, learning-truth gap at lags 1–4, HHS-stitched burn-in vs NHSN | 2024-25: 27 rounds from 2024-11-23, peak 2025-02-08 at 55.6k (states summed), total 559k; 2025-26: 28 rounds from 2025-10-18, peak 2026-01-03 at 42.5k, total 336k. State peaks within ±1 week of the national one: 37 vs 47 of 52. Revisions: 26% vs 40% of (state, week) keys never revised; relative spread > 10% for 48% vs 39%. Value at lag 2 (what the tracker learns from) vs final: median gap −1.1% vs 0.0%, \|gap\| > 10% for 19% vs 14% of keys; at lag 1, 44% vs 41%. HHS vs NHSN final over 2023-24: 0.957–0.978 in Nov–Apr (states summed), per-state median 1.004 | describes the data only; no tracker runs. Revision keys start at the first archive version (2024-11-19) |
 
 E06 (ILI+ burn-in) and E08 (old covid) were run on code or data later found
 broken and were not rebuilt.
@@ -218,7 +224,9 @@ Checked and resolved on 2026-10-02:
 |---|---|
 | E00, E01 | verified |
 | E02, E07, E09 | commented; changes made, not re-verified |
-| E10 part 1, E18 | changes made (finalists runs, state counts), not reviewed |
+| E10 part 1, E18 | changes made (finalists runs, state counts), not reviewed; E18's matched pairs not yet rendered |
+| E19, E20 | written 2026-10-06, not run |
+| E21 | rendered 2026-10-06, not reviewed |
 | E03, E04, E05, E10, E11, E14, E15, E16, E17 | not reviewed |
 
 On 2026-10-02 every notebook's introduction and Findings were rewritten to
@@ -240,8 +248,10 @@ reviewed.
 - `R/calibration/views.R`: reference configs, cached runs, standard views.
 - `scripts/calibration/calibration_ws_replay.R`: E12/E13. Scores in
   `cache/calibration/ws_replay_scores_*.csv`.
-- `scripts/calibration/calibration_tracker_internals.R`: E19. Per-round
-  eta and offsets in `cache/calibration/tracker_internals/`.
+- `scripts/calibration/calibration_ws_replay.R` also holds the notebook
+  helpers: `ws_grid_configs()` (the E19/E20 structure grid),
+  `ws_prod_specs()`, `ws_run_spec()`, `ws_wis_by_season()` and
+  `ws_internals()` (per-round eta and offsets from an exact run).
 - `scripts/calibration/calibration_ili_backfill.R`: replays
   `windowed_seasonal` over the ILI+ state history (2010–2024) into
   hub-schema parquets in `cache/calibration/`, for an ILI+ burn-in (thread closed 2026-10-02, unused).
@@ -314,10 +324,11 @@ operating point.
 
 | item | status |
 |---|---|
+| **Reorganization (2026-10-06).** The constant-rate line was never given the structure analysis (E03–E05, E11 ran the adaptive rate on the ensemble; E16 inherited "cold" from E11's framing and E13's constant 0.1 warm covid loss). Plan: (1) E18 matched-pair scatters, warm vs warm and cold vs cold; (2) E20, the {anchor} × {start} × {leak} grid on the replay; (3) E19 as a notebook on that grid with WIS by month and carry vs reset; (4) E21, the seasons as data. Then re-read E03–E05 and E11 against E20 and retire or keep them | written, not run: E18's new pair uses cached runs; E19 and E20 need about 7 new exact runs (the four leak variants, adaptive warm without leak, the two resets; the rest are cached from E01, E13, E16 and E18). E21 rendered 2026-10-06. Render with `just calibration-experiments e18_ref_op_bridge e19_tracker_internals e20_structure_grid` inside the rocker container |
 | Uncertainty for WIS and coverage differences (bootstrap over rounds or locations) | open; needed before any ranking under ~2 points means anything |
 | Shrink only the played offset after the peak, keep the stored state | open; `late_decay` shrinks the stored state |
 | Disease-specific operating point | provisional (2026-10-02): covid REF-op cold; flu REF-op warm or sqrt 0.018 warm, to confirm after the notebook review. Not implemented |
-| HHS burn-in level (3–9% below NHSN) | used as-is (E13, E18); settle it with item 1f if a warm flu config is chosen |
+| HHS burn-in level | E21: 2–4% below the NHSN final in Nov–Apr 2023-24 (states summed), per-state median ratio 1.004. Used as-is (E13, E18); settle it with item 1f if a warm flu config is chosen |
 | `windowed_seasonal_extra_sources` retrospective | parked (ROADMAP) |
 | Method ideas: cross-horizon gradients for staleness, data-driven phase gating, scale proxy | open; no code |
 | Collaborator email | unknown |
