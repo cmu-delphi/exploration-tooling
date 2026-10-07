@@ -29,7 +29,7 @@ Setup:
   locations, the 55 hub rounds). Horizons h0–h3.
 - Learning truth: exact (re-run at every round on the data published by then;
   E00), one week of extra delay. Cold start, no burn-in season. States only.
-- Three constant-rate trackers: rate 0.018 and rate 0.032 per 100k (E14),
+- Three constant-rate trackers: rate 0.018 and rate 0.032 per 100k (E16),
   and sqrt 0.018 (E16). Each crossed with five settings:
   - **no decay**.
   - **`late_decay`** with factor 0.85, 0.7 or 0.5: from 1 March to 30 June
@@ -65,7 +65,7 @@ DECAYS <- list(
   `off after 1 Mar` = list(off_after = "03-01")
 )
 grid <- tidyr::expand_grid(rate = names(RATES), decay = names(DECAYS))
-# Cached under cache/calibration/experiments/runs; the no-decay runs are E14/E16's.
+# Cached under cache/calibration/experiments/runs; the no-decay runs are E16's.
 cals <- purrr::pmap(grid, function(rate, decay) {
   cfg <- c(utils::modifyList(base_cfg, RATES[[rate]]), DECAYS[[decay]])
   do.call(cal_run_cached, c(list(wi$fc, wi$truth), cfg, list(learn = "exact", vintages = wi$vintages, workers = params$workers)))

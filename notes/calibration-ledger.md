@@ -152,7 +152,7 @@ tracker structure, late season, learning truth).
 Each comparison notebook leads with the month view (`_month_view.Rmd`):
 WIS, coverage bias and median error by month of reference date, then
 by-horizon tables of WIS reduction % and season-pooled / month-avg coverage
-bias. All scores are states only. Sweep notebooks (E01, E09, E14, E16) lead
+bias. All scores are states only. Sweep notebooks (E01, E09, E16) lead
 with their coverage-vs-WIS curves and follow with a month view of a few rates
 around the elbow. Per-state fan panels and the gallery of best and worst
 forecasts are only in `prod_views.Rmd`, for the prod configs. Conclusions
@@ -177,7 +177,7 @@ gating), exact learning truth, spoiled submissions excluded.
 | E11 | `e11_constant_lr` | ensemble | constant 0.1 vs adaptive | REF-op best pooled WIS at every horizon (up to 2 over warm + sqrt). Constant 0.1 gives up 1.5–2.3 at h−1/h0 vs adaptive sqrt | constant 0.1 is effectively cold; its coverage edge is season-pooled only |
 | E12 | none (`calibration_ws_replay.R`) | replay, cold, flu + covid | first look at the clean replay | flu: REF-op cold leads constant 0.1 by 0–2.5. Covid: REF-op cold h0 +1.3 states, losses at h1–h3 in 2025-26 | **all locations** (US is 47% of WIS); covid h0 gains are mostly US |
 | E13 | none (`calibration_ws_replay.R burn_in`) | replay, flu + covid | 2023-24 HHS burn-in | flu warm +1 to +2.6 in 2024-25, ≤ 0 in 2025-26. Covid: warm worse at h0–h1, better at h2–h3 (+1.3, +4.4); constant 0.1 warm −8 to −27 | HHS used as-is (3–9% below NHSN); coverage is season-pooled only |
-| E14 | `e14_lr_by_season` | replay, cold | constant rate grid by season | every rate 0.0032–0.056 is ≥ 0 in both seasons and within 1.2 of each other; 0.018 vs 0.032 ≤ 0.3. Above 0.1 loses | month-avg: no rate ≤ 0.032 beats base beyond 0.01 |
+| E14 | folded into `e16_sqrt_constant_lr` | replay, cold | constant rate grid by season | every rate 0.0032–0.056 is ≥ 0 in both seasons and within 1.2 of each other; 0.018 vs 0.032 ≤ 0.3. Above 0.1 loses | month-avg: no rate ≤ 0.032 beats base beyond 0.01 |
 | E15 | `e15_wis_sources` | replay, cold | where the WIS gain comes from | offsets a few % of interval width; REF-op gain from the lower half and the median shift | width-only variant's coverage not measured; split is not additive |
 | E16 | `e16_sqrt_constant_lr` | replay, cold | constant rate on sqrt scale | sqrt 0.018 about +1 over rate constants at h0; at h1–h3 within 0.2 pooled, up to +0.7 in 2025-26. vs REF-op cold: behind in 2024-25 h0–h1, ahead elsewhere; month-avg coverage tie | 0.018 picked in-sample |
 | E17 | `e17_late_decay` | replay, cold | shrink or stop offsets from 1 Mar | `late_decay` fixes March but costs about 0.5 at h0, otherwise ±0.2. Off 1 Mar +0.4 to +0.7 at h1–h3 for sqrt 0.018 (mostly 2025-26), ≤ 0 for rate 0.018 | `late_decay` shrinks the stored offset, so it carries into the next season |

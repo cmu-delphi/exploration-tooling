@@ -1,5 +1,5 @@
 ---
-title: "E16: constant learning rate on the square-root scale, and month by month"
+title: "E16: constant learning rate by season, sqrt and rate scales"
 date: "`r format(Sys.time(), '%d %B %Y, %H:%M %Z', tz = 'America/Los_Angeles')`"
 output:
   html_document:
@@ -19,9 +19,9 @@ knitr::opts_knit$set(root.dir = here::here())
 ggplot2::theme_set(ggplot2::theme_bw() + ggplot2::theme(panel.grid.minor = ggplot2::element_blank()))
 ```
 
-Question: how does a constant-rate tracker on the square-root scale compare
-with the same tracker on the rate scale and with REF-op cold, across learning
-rates and by month?
+Question: how do WIS and coverage change with a constant learning rate,
+season by season, on the square-root scale and on the rate scale, and how do
+they compare with REF-op cold?
 
 Setup:
 
@@ -38,11 +38,14 @@ Setup:
     quarter decade apart, in sqrt(per-100k) units (not comparable number for
     number with the rate scale). The grid was set after a first look at
     results.
-  - `rate <lr>`: E14's rate-scale runs; 0.018 and 0.032 are shown as
-    references.
+  - `rate <lr>`: the same tracker on admissions per 100k; 12 rates from
+    0.0032 to 1.8, a quarter decade apart. 0.1 is E11's config, though E11
+    used the submitted ensemble.
   - `REF-op cold`: prod's tracker without its warm start.
-- A sqrt rate is selected below by E14's rule (highest mean gain with no loss
-  in any season × horizon). The selection is in-sample.
+  - `sqrt, adaptive`: REF-paper on the sqrt scale with its adaptive learning
+    rate (E05's `single`, cold).
+- A sqrt rate is selected below as the highest mean gain with no loss in any
+  season × horizon. The selection is in-sample.
 
 WIS reduction % = 100 × (base − calibrated) / base, so positive = calibrated
 WIS lower than base. L1 coverage bias: lower is better.
@@ -55,13 +58,14 @@ SQRT_LRS <- signif(10^seq(-3, -0.5, by = 0.25), 2)
 all_cfgs <- ws_configs(wi$rate_scales, burn_in = FALSE)
 rate_cfg <- function(lr) utils::modifyList(all_cfgs[["E11 constant 0.1"]], list(lr = lr))
 sqrt_cfg <- function(lr) utils::modifyList(all_cfgs[["E11 constant 0.1"]], list(lr = lr, transform = "sqrt"))
-# Cached under cache/calibration/experiments/runs; the rate sweep and REF-op cold are E14's runs.
+# Cached under cache/calibration/experiments/runs; E17, E18 and E07 reuse some of these runs.
 run <- function(cfg) {
   do.call(cal_run_cached, c(list(wi$fc, wi$truth), cfg, list(learn = "exact", vintages = wi$vintages, workers = params$workers)))
 }
 rate_runs <- purrr::map(RATE_LRS, \(lr) run(rate_cfg(lr)))
 sqrt_runs <- purrr::map(SQRT_LRS, \(lr) run(sqrt_cfg(lr)))
 refop <- run(all_cfgs[["REF-op cold"]])
+sqrt_adaptive <- run(ws_configs(wi$rate_scales, burn_in = TRUE)[["E05 single cold"]])
 ```
 
 ```{r metrics}
@@ -87,7 +91,10 @@ sweep_m <- bind_rows(
   purrr::map2(rate_runs, RATE_LRS, \(cal, lr) score(cal) %>% mutate(scale = "rate", lr = lr)),
   purrr::map2(sqrt_runs, SQRT_LRS, \(cal, lr) score(cal) %>% mutate(scale = "sqrt", lr = lr))
 ) %>% label()
-ref_m <- score(refop) %>% mutate(ref = "REF-op cold") %>% label()
+ref_m <- bind_rows(
+  score(refop) %>% mutate(ref = "REF-op cold"),
+  score(sqrt_adaptive) %>% mutate(ref = "sqrt, adaptive")
+) %>% label()
 # Best sqrt rate: the highest mean WIS reduction among rates that improve WIS in both seasons at h0–h3 (states only).
 best_tbl <- sweep_m %>%
   filter(scale == "sqrt", geos == GEOS[["states"]], season %in% LIVE) %>%
@@ -99,9 +106,10 @@ BEST_SQRT <- best_tbl %>% filter(worst > 0) %>% slice_max(mean, n = 1) %>% pull(
 # 1. Coverage bias vs WIS, by season and scale
 
 One curve per season and scale, tracing the learning rate from smallest
-(near the base, the open circle) to largest. Solid lines are the rate scale
-(E14), dashed lines the sqrt scale. Labels mark a few rates on each curve.
-Triangles are REF-op cold. The y axis is clipped at −10%. The sqrt rate
+(near the base, the open circle) to largest. Solid lines are the rate scale,
+dashed lines the sqrt scale. Labels mark a few rates on each curve.
+Triangles are REF-op cold, squares the adaptive sqrt tracker. The y axis is
+clipped at −10%. The sqrt rate
 selected by the rule below is **`r BEST_SQRT`**.
 
 ```{r curve-fn}
@@ -118,14 +126,14 @@ curve_plot <- function(g) {
     geom_text(data = lab, aes(label = paste0(ifelse(scale == "sqrt", "s", "r"), format(lr, drop0trailing = TRUE))),
       size = 2.3, vjust = -0.8, show.legend = FALSE) +
     geom_point(data = base, aes(cal_err_base, 0), shape = 21, fill = "white", size = 2.2) +
-    geom_point(data = r, shape = 17, size = 2.6) +
+    geom_point(data = r, aes(shape = ref), size = 2.6) +
     scale_colour_manual(values = SEASON_COLS, name = NULL) +
     scale_linetype_manual(values = c(rate = "solid", sqrt = "22"), name = "scale") +
-    scale_shape_manual(values = c(rate = 16, sqrt = 1), name = "scale") +
+    scale_shape_manual(values = c(rate = 16, sqrt = 1, `REF-op cold` = 17, `sqrt, adaptive` = 15), name = NULL) +
     facet_wrap(~h, nrow = 1) +
     coord_cartesian(ylim = c(max(-10, min(d$wis_pct)), max(c(d$wis_pct, r$wis_pct)) + 0.5)) +
     labs(x = "L1 coverage bias (lower is better)", y = "WIS reduction % (positive = calibrated WIS lower than base)", title = g,
-      caption = "labels: r = rate-scale learning rate (per 100k), s = sqrt-scale learning rate; triangles: REF-op cold") +
+      caption = "labels: r = rate-scale learning rate (per 100k), s = sqrt-scale learning rate") +
     theme(legend.position = "bottom")
 }
 ```
@@ -134,39 +142,50 @@ curve_plot <- function(g) {
 curve_plot(GEOS[["states"]])
 ```
 
-## Each metric against the learning rate, sqrt scale
+## Each metric against the learning rate
 
-Top: WIS reduction % (positive = calibrated WIS lower than base). Bottom: L1 coverage bias (lower is better), each season's base dotted.
-States only.
+One panel set per scale; the two scales' rates are in different units.
+Top: WIS reduction % (positive = calibrated WIS lower than base). Bottom: L1
+coverage bias (lower is better), each season's base dotted. States only.
 
-```{r vs-lr, fig.height=6.5}
-long <- sweep_m %>%
-  filter(scale == "sqrt", geos == GEOS[["states"]], season != "both seasons") %>%
-  transmute(h, season, lr, `WIS reduction % (positive = calibrated WIS lower than base)` = wis_pct, `L1 coverage bias (lower is better)` = cal_err_cal) %>%
-  tidyr::pivot_longer(c(`WIS reduction % (positive = calibrated WIS lower than base)`, `L1 coverage bias (lower is better)`), names_to = "metric") %>%
-  mutate(metric = factor(metric, levels = c("WIS reduction % (positive = calibrated WIS lower than base)", "L1 coverage bias (lower is better)")))
-base_lines <- sweep_m %>%
-  filter(scale == "sqrt", geos == GEOS[["states"]], season != "both seasons") %>%
-  distinct(h, season, value = cal_err_base) %>%
-  mutate(metric = factor("L1 coverage bias (lower is better)", levels = levels(long$metric)))
-zero <- tibble(metric = factor("WIS reduction % (positive = calibrated WIS lower than base)", levels = levels(long$metric)), value = 0)
-ggplot(long, aes(lr, value, colour = season)) +
-  geom_hline(data = zero, aes(yintercept = value), colour = "grey60", linewidth = 0.3) +
-  geom_hline(data = base_lines, aes(yintercept = value, colour = season), linetype = "dotted") +
-  geom_line() +
-  geom_point(size = 1) +
-  scale_x_log10(breaks = c(0.001, 0.003, 0.01, 0.03, 0.1, 0.3), labels = c("0.001", "0.003", "0.01", "0.03", "0.1", "0.3")) +
-  scale_colour_manual(values = SEASON_COLS, name = NULL) +
-  facet_grid(metric ~ h, scales = "free_y", labeller = labeller(metric = label_wrap_gen(28))) +
-  labs(x = "constant learning rate (sqrt of per-100k units per step)", y = NULL) +
-  theme(legend.position = "bottom")
+```{r vs-lr-fn}
+vs_lr_plot <- function(sc, breaks, xlab) {
+  long <- sweep_m %>%
+    filter(scale == sc, geos == GEOS[["states"]], season != "both seasons") %>%
+    transmute(h, season, lr, `WIS reduction % (positive = calibrated WIS lower than base)` = wis_pct, `L1 coverage bias (lower is better)` = cal_err_cal) %>%
+    tidyr::pivot_longer(c(`WIS reduction % (positive = calibrated WIS lower than base)`, `L1 coverage bias (lower is better)`), names_to = "metric") %>%
+    mutate(metric = factor(metric, levels = c("WIS reduction % (positive = calibrated WIS lower than base)", "L1 coverage bias (lower is better)")))
+  base_lines <- sweep_m %>%
+    filter(scale == sc, geos == GEOS[["states"]], season != "both seasons") %>%
+    distinct(h, season, value = cal_err_base) %>%
+    mutate(metric = factor("L1 coverage bias (lower is better)", levels = levels(long$metric)))
+  zero <- tibble(metric = factor("WIS reduction % (positive = calibrated WIS lower than base)", levels = levels(long$metric)), value = 0)
+  ggplot(long, aes(lr, value, colour = season)) +
+    geom_hline(data = zero, aes(yintercept = value), colour = "grey60", linewidth = 0.3) +
+    geom_hline(data = base_lines, aes(yintercept = value, colour = season), linetype = "dotted") +
+    geom_line() +
+    geom_point(size = 1) +
+    scale_x_log10(breaks = breaks, labels = format(breaks, drop0trailing = TRUE)) +
+    scale_colour_manual(values = SEASON_COLS, name = NULL) +
+    facet_grid(metric ~ h, scales = "free_y", labeller = labeller(metric = label_wrap_gen(28))) +
+    labs(x = xlab, y = NULL, title = paste(sc, "scale")) +
+    theme(legend.position = "bottom")
+}
+```
+
+```{r vs-lr-sqrt, fig.height=6.5}
+vs_lr_plot("sqrt", c(0.001, 0.003, 0.01, 0.03, 0.1, 0.3), "constant learning rate (sqrt of per-100k units per step)")
+```
+
+```{r vs-lr-rate, fig.height=6.5}
+vs_lr_plot("rate", c(0.003, 0.01, 0.03, 0.1, 0.3, 1), "constant learning rate (per 100k per step)")
 ```
 
 ## Selecting a sqrt rate
 
 For each sqrt rate, the worst and the mean WIS reduction % (positive = calibrated WIS lower than base) over the two seasons
 and h0–h3 (states only). The selected rate has the highest mean among those
-whose worst case is still a gain (E14's rule).
+whose worst case is still a gain.
 
 ```{r best}
 knitr::kable(best_tbl %>% mutate(across(c(worst, mean), \(x) round(x, 2))))
@@ -174,13 +193,12 @@ knitr::kable(best_tbl %>% mutate(across(c(worst, mean), \(x) round(x, 2))))
 
 ```{r month-view-cfgs}
 lr_lab <- function(lr) vapply(lr, \(x) format(x, drop0trailing = TRUE), character(1))
-rate_keep <- RATE_LRS %in% c(0.018, 0.032, 0.056, 0.1)
 mv <- cal_month_view(c(
   setNames(sqrt_runs, paste("sqrt", lr_lab(SQRT_LRS))),
-  setNames(rate_runs[rate_keep], paste("rate", lr_lab(RATE_LRS[rate_keep]))),
-  list(`REF-op cold` = refop)
+  setNames(rate_runs, paste("rate", lr_lab(RATE_LRS))),
+  list(`REF-op cold` = refop, `sqrt, adaptive` = sqrt_adaptive)
 ), seasons = LIVE)
-# The plots show the sqrt rates around the elbow, rate 0.032 (E14) and REF-op cold; the tables cover every sqrt rate.
+# The plots show the sqrt rates around the elbow, rate 0.032 and REF-op cold; the tables cover every rate on both scales.
 MONTH_COLS <- c(`sqrt 0.01` = "#56B4E9", `sqrt 0.018` = "#CC79A7", `sqrt 0.032` = "#0072B2", `rate 0.032` = "#009E73", `REF-op cold` = "#D55E00")
 mv_plot_cfgs <- names(MONTH_COLS)
 mv_cols <- MONTH_COLS
