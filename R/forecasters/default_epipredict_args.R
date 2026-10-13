@@ -51,8 +51,8 @@ default_args_list <- function(
   }
   # putting the first vector as the names of the list of the rest
   if (length(keys_to_ignore)) {
-    key_colnames <- keys_to_ignore[[1]][[1]]
-    keys_to_ignore <- keys_to_ignore[[1]][-1]
+    key_colnames <- keys_to_ignore[[1]]
+    keys_to_ignore <- keys_to_ignore[-1]
     names(keys_to_ignore) <- key_colnames
   }
 

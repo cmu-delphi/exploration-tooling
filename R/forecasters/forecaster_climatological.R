@@ -95,11 +95,11 @@ climate_linear_ensembled <- function(
 
   if (model_used == "climate_linear") {
     pred <- bind_rows(pred_climate, pred_linear) %>%
-      ensemble_climate_linear((args_list$aheads[[1]]) / 7) %>%
+      ensemble_climate_linear(args_list$aheads / 7) %>%
       ungroup()
   } else if (model_used == "climatological_forecaster") {
     # forecast all aheads at the same time
-    if (ahead == args_list$aheads[[1]][[1]] / 7) {
+    if (ahead == args_list$aheads[[1]] / 7) {
       if (quantiles_by_geo) {
         quantile_key <- "geo_value"
       } else {
@@ -112,7 +112,7 @@ climate_linear_ensembled <- function(
           nonneg = (scale_method == "none"),
           time_type = "epiweek",
           quantile_levels = quantile_levels,
-          forecast_horizon = args_list$aheads[[1]] / 7,
+          forecast_horizon = args_list$aheads / 7,
           quantile_by_key = quantile_key
         )
       )

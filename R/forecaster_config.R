@@ -115,19 +115,14 @@ make_forecaster_grid <- function(tib, family) {
     tib$trainer <- rlang::syms(tib$trainer)
   }
   spec_names <- names(FORECASTER_SPEC_DEFAULTS)
-  # turns a tibble into a list of named lists (spec columns are not params)
+  # turns a tibble into a list of named lists (spec columns are not params).
+  # as.list() on a one-row tibble puts each list-column cell in a length-one
+  # list; unwrap it so that each param is the cell value from the config.
   params_list <- tib %>%
     select(-any_of(c("forecaster", "id", spec_names))) %>%
     split(seq_len(nrow(.))) %>%
     unname() %>%
-    lapply(as.list)
-  # for whatever reason, trainer ends up being a list of lists, which we do not want
-  params_list %<>%
-    lapply(function(x) {
-      x$trainer <- x$trainer[[1]]
-      x$lags <- x$lags[[1]]
-      x
-    })
+    lapply(\(row) lapply(as.list(row), \(cell) if (is.list(cell)) cell[[1]] else cell))
 
   if (length(params_list) == 0) {
     out <- tibble(
