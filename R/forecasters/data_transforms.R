@@ -418,6 +418,7 @@ compute_pca <- function(
       prcomp()
     seasonal_features <- as_tibble(predict(pca)[, 1:3]) %>% select(PC1)
     seasonal_features$season_week <- 1:nrow(seasonal_features)
+    dir.create(dirname(cache_file_path), showWarnings = FALSE, recursive = TRUE)
     qs::qsave(seasonal_features, cache_file_path)
   }
   if (normalize) {

@@ -20,6 +20,13 @@ get_covid_forecaster_params <- function() {
     revision_aware = c(g_nowcast_aheads, g_aheads),
     revision_ratio = g_nowcast_aheads
   )
+  whitening_bundles <- tibble(
+    scale_method = c("quantile", "none"),
+    center_method = c("median", "none"),
+    nonlin_method = c("quart_root", "none"),
+    residual_tail = c(0.70, 0.97),
+    residual_center = c(0.127, 0.097)
+  )
   out <- rlang::list2(
     scaled_pop_main = tidyr::expand_grid(
       forecaster = "scaled_pop",
@@ -222,45 +229,24 @@ get_covid_forecaster_params <- function() {
       sort_quantiles = TRUE,
       outlier_n_weeks = c(NA_integer_, 4L)
     ),
+    # Whitening is all on or all off; the residual widths are tuned per state.
     climate_linear = bind_rows(
       expand_grid(
         forecaster = "climate_linear_ensembled",
-        scale_method = "quantile",
-        center_method = "median",
-        nonlin_method = c("quart_root", "none"),
-        model_used = c("climate_linear", "climate", "climatological_forecaster"),
+        whitening_bundles,
+        model_used = c("climate_linear", "climatological_forecaster"),
         filter_agg_level = "state",
-        drop_non_seasons = c(TRUE, FALSE),
         quantiles_by_geo = c(TRUE, FALSE),
-        aheads = list(g_aheads),
-        residual_tail = 0.70,
-        residual_center = 0.127
+        aheads = list(g_aheads)
       ),
+      # quantiles_by_geo has no effect on the linear model.
       expand_grid(
         forecaster = "climate_linear_ensembled",
-        scale_method = "none",
-        center_method = "none",
-        nonlin_method = c("quart_root", "none"),
-        model_used = c("climate_linear", "climate", "climatological_forecaster"),
-        filter_agg_level = "state",
-        drop_non_seasons = c(TRUE, FALSE),
-        quantiles_by_geo = c(TRUE, FALSE),
-        aheads = list(g_aheads),
-        residual_tail = 0.97,
-        residual_center = 0.097
-      ),
-      # only linear, a bunch of the parameters don't matter for it
-      expand_grid(
-        forecaster = "climate_linear_ensembled",
-        scale_method = "none",
-        center_method = "none",
-        nonlin_method = "none",
+        whitening_bundles,
         model_used = "linear",
         filter_agg_level = "state",
-        aheads = list(g_aheads),
-        residual_tail = 0.97,
-        residual_center = 0.097
-      ),
+        aheads = list(g_aheads)
+      )
     )
   ) %>%
     imap(function(x, family) {

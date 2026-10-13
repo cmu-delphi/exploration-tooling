@@ -14,6 +14,24 @@ season_of_date <- function(date, cutoff_month = 7L, cutoff_day = 15L) {
   paste0(start_year, "_", start_year + 1L)
 }
 
+#' Pick the forecaster that relative scores divide by in one season.
+#'
+#' This is the hub baseline when the hub has scores for the season. Otherwise it
+#' is `fallback_id`, for seasons before the hub existed.
+#' @param season_scores scores for one season, with a `forecaster` column
+#' @param outside_forecasters the hub forecaster names; the baseline has
+#'   "baseline" in its name
+#' @param fallback_id the forecaster id to use without a hub baseline, or NULL
+#' @return a forecaster name, or "" to keep the notebook default
+#' @keywords internal
+season_baseline_id <- function(season_scores, outside_forecasters, fallback_id) {
+  hub_baseline <- grep("baseline", outside_forecasters, value = TRUE)
+  if (is.null(fallback_id) || any(hub_baseline %in% season_scores$forecaster)) {
+    return("")
+  }
+  fallback_id
+}
+
 #' Get partially applied forecaster function
 #'
 #' params is defined by the values of the tar_map: a named list of forecaster
@@ -187,6 +205,8 @@ create_forecast_targets <- function() {
 #' @return A list of targets for joined forecasts and scores
 #' @export
 create_joined_targets <- function() {
+  # Renders write intermediates to the per-worker tempdir(). Parallel renders of
+  # one template otherwise share and delete each other's .knit.md files.
   tar_map(
     values = list(season = g_season),
     tar_target(joined_forecasts, command = {
@@ -203,7 +223,8 @@ create_joined_targets <- function() {
         name = notebook,
         command = {
           params_subset <- g_forecaster_parameter_combinations[[forecaster_family]]
-          forecaster_ids <- c(params_subset$id, outside_forecaster_subset)
+          fallback_id <- g_forecaster_parameter_combinations$flatline_forecaster$id
+          forecaster_ids <- c(params_subset$id, outside_forecaster_subset, fallback_id)
           # h−1 rows go to nowcast_notebook instead.
           family_forecasts <- joined_forecasts %>%
             filter(forecaster %in% forecaster_ids, target_end_date >= forecast_date) %>%
@@ -217,15 +238,23 @@ create_joined_targets <- function() {
             filter(forecaster %in% params_subset$id) %>%
             pull(season_slug)
           for (slug in sort(unique(family_slugs))) {
+            season_scores <- family_scores %>% filter(season_slug == slug) %>% select(-season_slug)
+            baseline <- season_baseline_id(season_scores, outside_forecaster_subset, fallback_id)
+            # Keep the fallback rows only in seasons that divide by them.
+            extra_ids <- setdiff(fallback_id, c(baseline, params_subset$id))
             rmarkdown::render(
               "pipelines/templates/comparison-notebook.Rmd",
+              intermediates_dir = tempdir(),
               params = list(
                 forecaster_parameters = params_subset,
                 forecaster_family = forecaster_family,
-                forecasts = family_forecasts %>% filter(season_slug == slug) %>% select(-season_slug),
-                scores = family_scores %>% filter(season_slug == slug) %>% select(-season_slug),
+                forecasts = family_forecasts %>%
+                  filter(season_slug == slug, forecaster %nin% extra_ids) %>%
+                  select(-season_slug),
+                scores = season_scores %>% filter(forecaster %nin% extra_ids),
                 truth_data = hhs_evaluation_data,
-                disease = g_disease
+                disease = g_disease,
+                baseline = baseline
               ),
               output_file = here::here(g_reports_dir, paste0(g_disease, "-notebook-", forecaster_family, "-", slug, ".html"))
             )
@@ -243,14 +272,21 @@ create_joined_targets <- function() {
           filter(target_end_date >= forecast_date) %>%
           mutate(season_slug = season_of_date(forecast_date))
         for (slug in sort(unique(all_forecasts$season_slug))) {
+          season_scores <- all_scores %>% filter(season_slug == slug) %>% select(-season_slug)
           rmarkdown::render(
             "pipelines/templates/overall-comparison-notebook.Rmd",
+            intermediates_dir = tempdir(),
             params = list(
               forecaster_parameters = g_forecaster_parameter_combinations,
               forecasts = all_forecasts %>% filter(season_slug == slug) %>% select(-season_slug),
-              scores = all_scores %>% filter(season_slug == slug) %>% select(-season_slug),
+              scores = season_scores,
               truth_data = hhs_evaluation_data,
-              disease = g_disease
+              disease = g_disease,
+              baseline = season_baseline_id(
+                season_scores,
+                outside_forecaster_subset,
+                g_forecaster_parameter_combinations$flatline_forecaster$id
+              )
             ),
             output_file = here::here(g_reports_dir, paste0(g_disease, "-overall-notebook-", slug, ".html"))
           )
@@ -274,6 +310,7 @@ create_joined_targets <- function() {
         for (slug in sort(unique(nowcast_forecasts$season_slug))) {
           rmarkdown::render(
             "pipelines/templates/nowcast-notebook.Rmd",
+            intermediates_dir = tempdir(),
             params = list(
               forecaster_parameters = g_forecaster_parameter_combinations[unique(nowcast_grid$family)] %>% bind_rows(.id = "family"),
               baseline_id = nowcast_grid$id[nowcast_grid$family == "revision_ratio"][[1]],

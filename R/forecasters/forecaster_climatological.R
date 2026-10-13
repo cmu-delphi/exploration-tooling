@@ -71,7 +71,7 @@ climate_linear_ensembled <- function(
     pred_climate <- climatological_model(
       season_data,
       ahead,
-      geo_agg = quantiles_by_geo,
+      geo_agg = !quantiles_by_geo,
       floor_value = min(season_data$value, na.rm = TRUE),
       pop_scale = FALSE
     ) %>%

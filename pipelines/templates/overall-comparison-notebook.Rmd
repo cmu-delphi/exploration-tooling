@@ -10,6 +10,7 @@ params:
   scores: ""
   truth_data: ""
   disease: ""
+  baseline: ""
 editor_options:
   chunk_output_type: console
 ---
@@ -39,9 +40,16 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 if (params$disease == "flu") {
   base_forecaster_name <- "FluSight-baseline"
   ensemble_forecaster_name <- "FluSight-ensemble"
+} else if (params$disease == "rsv") {
+  base_forecaster_name <- "RSVHub-baseline"
+  ensemble_forecaster_name <- "RSVHub-ensemble"
 } else {
   base_forecaster_name <- "CovidHub-baseline"
   ensemble_forecaster_name <- "CovidHub-ensemble"
+}
+# Seasons without hub forecasts divide by the baseline that the pipeline gives.
+if (nzchar(params$baseline)) {
+  base_forecaster_name <- params$baseline
 }
 
 # Select forecasters for this notebook
@@ -58,7 +66,6 @@ id_to_forecaster <- params$forecaster_parameters %>%
 overall_rating <- params$scores %>%
   summarize(mean_score = mean(wis), .by = forecaster) %>%
   arrange(mean_score) %>%
-  filter(mean_score > 20) %>%
   left_join(id_to_forecaster, by = join_by(forecaster == id)) %>%
   mutate(
     family_name = if_else(is.na(family_name), "external", family_name),

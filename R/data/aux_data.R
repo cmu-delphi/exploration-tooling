@@ -13,7 +13,7 @@ build_cast_api_query <- function(
   time_value = NULL
 ) {
   source <- rlang::arg_match(source)
-  if (!is.null(fill_method)) fill_method <- rlang::arg_match(fill_method, c("source", "fill_ave", "fill_zero"))
+  if (!is.null(fill_method)) fill_method <- rlang::arg_match(fill_method, c("source", "ave", "zero"))
   geo_type <- rlang::arg_match(geo_type)
   columns <- columns %||% c("geo_value", "time_value", "value", "version")
   columns <- gsub("\\btime_value\\b", "reference_time", columns)

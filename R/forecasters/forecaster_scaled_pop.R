@@ -93,6 +93,10 @@ scaled_pop <- function(
   predictors <- c(outcome, extra_sources)
   c(args_list, predictors, trainer) %<-%
     sanitize_args_predictors_trainer(epi_data, outcome, predictors, trainer, args_list)
+  args_list$keys_to_ignore$geo_value <- union(
+    args_list$keys_to_ignore$geo_value,
+    find_lagging_geos(epi_data, predictors, args_list$keys_to_ignore)
+  )
   # end of the copypasta
   # finally, any other pre-processing (e.g. smoothing) that isn't performed by
   # epipredict

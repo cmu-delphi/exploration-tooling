@@ -14,6 +14,13 @@ get_flu_forecaster_params <- function() {
     revision_aware = c(g_nowcast_aheads, g_aheads),
     revision_ratio = g_nowcast_aheads
   )
+  whitening_bundles <- tibble(
+    scale_method = c("quantile", "none"),
+    center_method = c("median", "none"),
+    nonlin_method = c("quart_root", "none"),
+    residual_tail = c(0.67, 0.99),
+    residual_center = c(0.097, 0.35)
+  )
   out <- rlang::list2(
     scaled_pop_main = tidyr::expand_grid(
       forecaster = "scaled_pop",
@@ -387,48 +394,29 @@ get_flu_forecaster_params <- function() {
       ) %>%
         filter((scale_method == "none") == (center_method == "none"), (scale_method == "none") == (nonlin_method == "none"))
     ),
+    # Whitening is all on or all off; the residual widths are tuned per state.
+    # Pooling all sources needs whitening, since ILI+ and FluSurv rates are on
+    # a different scale from NHSN counts.
     climate_linear = bind_rows(
       expand_grid(
         forecaster = "climate_linear_ensembled",
-        scale_method = "quantile",
-        center_method = "median",
-        nonlin_method = c("quart_root", "none"),
-        model_used = c("climate_linear", "climate", "climatological_forecaster"),
+        whitening_bundles,
+        model_used = c("climate_linear", "climatological_forecaster"),
         filter_source = c("", "nhsn"),
         filter_agg_level = "state",
-        drop_non_seasons = c(TRUE, FALSE),
         quantiles_by_geo = c(TRUE, FALSE),
-        aheads = list(g_aheads),
-        residual_tail = 0.67,
-        residual_center = 0.097
-      ),
+        aheads = list(g_aheads)
+      ) %>%
+        filter(scale_method != "none" | filter_source == "nhsn"),
+      # quantiles_by_geo has no effect on the linear model.
       expand_grid(
         forecaster = "climate_linear_ensembled",
-        scale_method = "none",
-        center_method = "none",
-        nonlin_method = c("quart_root", "none"),
-        model_used = c("climate_linear", "climate", "climatological_forecaster"),
-        filter_source = "nhsn",
-        filter_agg_level = "state",
-        drop_non_seasons = c(TRUE, FALSE),
-        quantiles_by_geo = c(TRUE, FALSE),
-        aheads = list(g_aheads),
-        residual_tail = 0.99,
-        residual_center = 0.35
-      ),
-      # only linear, a bunch of the parameters don't matter for it
-      expand_grid(
-        forecaster = "climate_linear_ensembled",
-        scale_method = "none",
-        center_method = "none",
-        nonlin_method = "none",
+        whitening_bundles,
         model_used = "linear",
         filter_source = "nhsn",
         filter_agg_level = "state",
-        aheads = list(g_aheads),
-        residual_tail = 0.99,
-        residual_center = 0.35
-      ),
+        aheads = list(g_aheads)
+      )
     )
   ) %>%
     imap(function(x, family) {

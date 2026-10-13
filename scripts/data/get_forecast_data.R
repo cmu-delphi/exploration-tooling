@@ -52,6 +52,15 @@ flu_config <- list(
   disease = "flu",
   start_date = as.Date("2023-10-14")
 )
+rsv_config <- list(
+  base_url = "https://raw.githubusercontent.com/CDCgov/rsv-forecast-hub/main/model-output",
+  git_root_url = "https://api.github.com/repos/CDCgov/rsv-forecast-hub/git/trees/main?recursive=1",
+  forecasters = NULL, # pulled from API
+  s3_bucket = "forecasting-team-data",
+  s3_prefix = "exploration",
+  disease = "rsv",
+  start_date = as.Date("2025-09-20")
+)
 get_all_forecasters <- function(git_url) {
   all_files <- GET(paste0(git_url))
   flat_file_list <- unlist(lapply(content(all_files)$tree, "[", "path"), use.names = FALSE)
@@ -64,6 +73,7 @@ get_all_forecasters <- function(git_url) {
 
 covid_config$forecasters <- get_all_forecasters(covid_config$git_root_url)
 flu_config$forecasters <- get_all_forecasters(flu_config$git_root_url)
+rsv_config$forecasters <- get_all_forecasters(rsv_config$git_root_url)
 
 # Function to check if file exists on GitHub
 check_github_file <- function(forecaster, filename, disease) {
@@ -71,6 +81,8 @@ check_github_file <- function(forecaster, filename, disease) {
     config <- covid_config
   } else if (disease == "flu") {
     config <- flu_config
+  } else if (disease == "rsv") {
+    config <- rsv_config
   } else {
     stop("Invalid disease")
   }
@@ -84,6 +96,8 @@ download_forecast_file <- function(forecaster, filename, disease) {
     config <- covid_config
   } else if (disease == "flu") {
     config <- flu_config
+  } else if (disease == "rsv") {
+    config <- rsv_config
   } else {
     stop("Invalid disease")
   }
@@ -114,6 +128,8 @@ fetch_forecast_files <- function(sync_to_s3 = TRUE, disease, redownload = FALSE)
     config <- covid_config
   } else if (disease == "flu") {
     config <- flu_config
+  } else if (disease == "rsv") {
+    config <- rsv_config
   } else {
     stop("Invalid disease")
   }
@@ -188,6 +204,8 @@ cli::cli_alert_info("Fetching COVID forecasts {run_time_local} (UTC: {run_time})
 covid_forecasts <- fetch_forecast_files(disease = "covid")
 cli::cli_alert_info("Fetching FLU forecasts {run_time_local} (UTC: {run_time})")
 flu_forecasts <- fetch_forecast_files(disease = "flu")
+cli::cli_alert_info("Fetching RSV forecasts {run_time_local} (UTC: {run_time})")
+rsv_forecasts <- fetch_forecast_files(disease = "rsv")
 print(glue::glue("Run successfully finished at {Sys.time()}"))
 print("-------------------------------------------------------")
 print("-------------------------------------------------------")

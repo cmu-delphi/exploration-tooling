@@ -8,6 +8,11 @@ flu_hosp_explore:
   store: flu_hosp_explore
   use_crew: yes
   reporter_make: timestamp
+rsv_hosp_explore:
+  script: pipelines/rsv_hosp_explore.R
+  store: rsv_hosp_explore
+  use_crew: yes
+  reporter_make: timestamp
 flu_hosp_prod:
   script: pipelines/flu_hosp_prod.R
   store: flu_hosp_prod

@@ -11,6 +11,7 @@ params:
   scores: ""
   truth_data: ""
   disease: ""
+  baseline: ""
 editor_options:
   chunk_output_type: console
 ---
@@ -49,9 +50,29 @@ suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 if (params$disease == "flu") {
   base_forecaster_name <- "FluSight-baseline"
   ensemble_forecaster_name <- "FluSight-ensemble"
+} else if (params$disease == "rsv") {
+  base_forecaster_name <- "RSVHub-baseline"
+  ensemble_forecaster_name <- "RSVHub-ensemble"
 } else {
   base_forecaster_name <- "CovidHub-baseline"
   ensemble_forecaster_name <- "CovidHub-ensemble"
+}
+# Seasons without hub forecasts divide by the baseline that the pipeline gives.
+if (nzchar(params$baseline)) {
+  base_forecaster_name <- params$baseline
+}
+
+# Dashed black overlay for the hub ensemble. Seasons without hub forecasts get
+# no layers, because plotly cannot draw a line with no rows.
+ensemble_overlay <- function(df, x_col, var) {
+  ensemble_df <- df %>% filter(forecaster == ensemble_forecaster_name)
+  if (nrow(ensemble_df) == 0) {
+    return(list())
+  }
+  list(
+    geom_line(data = ensemble_df, aes(x = .data[[x_col]], y = .data[[var]]), color = "black", linetype = 2),
+    geom_point(data = ensemble_df, aes(x = .data[[x_col]], y = .data[[var]]), color = "black", shape = 21, fill = "white")
+  )
 }
 
 # Load scores and filter them, get global variables
@@ -224,16 +245,7 @@ p <- ggplot(
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
+  ensemble_overlay(normalized_df, "forecast_date", var) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   facet_grid(rows = vars(ahead)) +
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
@@ -283,16 +295,7 @@ p <- ggplot(
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
+  ensemble_overlay(normalized_df, "ahead", var) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   scale_y_log10(n.breaks = 10) +
   scale_color_discrete() +
@@ -340,16 +343,7 @@ p <- ggplot(
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
+  ensemble_overlay(normalized_df, "ahead", var) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   scale_y_log10(n.breaks = 20) +
   scale_color_discrete() +
@@ -403,16 +397,7 @@ p <- ggplot(
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
+  ensemble_overlay(normalized_df, "forecast_date", var) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   facet_grid(rows = vars(ahead)) +
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
@@ -462,16 +447,7 @@ p <- ggplot(
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = normalized_df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
+  ensemble_overlay(normalized_df, "ahead", var) +
   geom_hline(yintercept = 1, linetype = 1, color = "black") +
   scale_y_log10(n.breaks = 25) +
   scale_color_discrete() +
@@ -507,16 +483,7 @@ p <- ggplot(
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = forecast_date, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
+  ensemble_overlay(df, "forecast_date", var) +
   geom_hline(yintercept = .8, linetype = 1, color = "black") +
   facet_grid(rows = vars(ahead)) +
   facet_wrap(~ahead, nrow = 4, labeller = labeller(ahead = facets.label)) +
@@ -552,16 +519,7 @@ p <- ggplot(
 ) +
   geom_line(aes(color = forecaster, group = forecaster)) +
   geom_point(aes(color = forecaster, group = forecaster)) +
-  geom_line(
-    data = df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", linetype = 2
-  ) +
-  geom_point(
-    data = df %>% filter(forecaster == ensemble_forecaster_name),
-    aes(x = ahead, y = !!sym(var)),
-    color = "black", shape = 21, fill = "white"
-  ) +
+  ensemble_overlay(df, "ahead", var) +
   geom_hline(yintercept = .8, linetype = 1, color = "black") +
   scale_color_discrete() +
   guides(color = guide_legend(ncol = 2)) +

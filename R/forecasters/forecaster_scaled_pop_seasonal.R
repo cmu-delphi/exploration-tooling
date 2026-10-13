@@ -62,6 +62,7 @@ scaled_pop_seasonal <- function(
 
   epi_data <- validate_epi_data(epi_data)
   extra_sources <- unlist(extra_sources)
+  seasonal_method <- unlist(seasonal_method)
 
   if (identical(seasonal_method, c("none", "flu", "covid", "indicator", "window", "climatological"))) {
     seasonal_method <- "none"

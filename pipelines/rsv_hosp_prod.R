@@ -51,7 +51,64 @@ if (!g_backtest_mode) {
   g_forecast_dates <- seq.Date(as.Date("2024-11-20"), Sys.Date(), by = 7L)
 }
 
-# Forecaster grid — function definitions live in R/rsv_prod_forecasters.R.
+# Forecaster closures. They are not on the shared forecaster stack; replace
+# them with a declarative grid when this pipeline moves to run_forecaster().
+g_rsv_linear <- function(epi_data, ahead, extra_data, ...) {
+  forecaster_baseline_linear(epi_data, ahead, ..., residual_tail = 0.97, residual_center = 0.097, no_intercept = TRUE)
+}
+
+g_rsv_linear_no_population_scale <- function(epi_data, ahead, extra_data, ...) {
+  forecaster_baseline_linear(
+    epi_data,
+    ahead,
+    ...,
+    residual_tail = 0.97,
+    residual_center = 0.097,
+    no_intercept = TRUE,
+    population_scale = FALSE
+  )
+}
+
+g_rsv_climate_base <- function(epi_data, ahead, extra_data, ...) {
+  climatological_model(epi_data, ahead, ...)
+}
+
+g_rsv_climate_geo_agged <- function(epi_data, ahead, extra_data, ...) {
+  climatological_model(epi_data, ahead, ..., geo_agg = TRUE)
+}
+
+g_rsv_windowed_seasonal <- function(epi_data, ahead, extra_data, ...) {
+  epi_data %>%
+    scaled_pop_seasonal(
+      outcome = "value",
+      ahead = ahead * 7,
+      ...,
+      seasonal_method = "none",
+      trainer = epipredict::quantile_reg(),
+      pop_scaling = FALSE,
+      lags = list(c(0, 7))
+    ) %>%
+    mutate(target_end_date = target_end_date + 3)
+}
+
+g_rsv_windowed_seasonal_extra_sources <- function(epi_data, ahead, extra_data, ...) {
+  epi_data %>%
+    left_join(extra_data, by = join_by(geo_value, time_value)) %>%
+    scaled_pop_seasonal(
+      outcome = "value",
+      ahead = ahead * 7,
+      extra_sources = "nssp",
+      ...,
+      seasonal_method = "window",
+      trainer = epipredict::quantile_reg(),
+      pop_scaling = FALSE,
+      lags = list(c(0, 7), c(0, 7))
+    ) %>%
+    mutate(target_end_date = target_end_date + 3) %>%
+    filter(geo_value %nin% c("mo", "wy"))
+}
+
+# Forecaster grid.
 ids <- c(
   "cdc_baseline",
   "linear",
@@ -76,8 +133,7 @@ g_forecaster_params_grid <- tibble(
     "g_rsv_windowed_seasonal",
     "g_rsv_windowed_seasonal_extra_sources"
   )),
-  params = vector("list", length(ids)),
-  param_names = vector("list", length(ids))
+  params = vector("list", length(ids))
 )
 
 
@@ -180,7 +236,7 @@ forecast_targets <- tar_map(
       }
       attributes(nhsn_data)$metadata$as_of <- as.Date(forecast_date_int)
 
-      forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
+      forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params)
 
       forecaster_fn(nhsn_data, extra_data = nssp_data) %>%
         mutate(
@@ -228,7 +284,7 @@ forecast_targets <- tar_map(
         )
       attributes(nssp_data)$metadata$as_of <- as.Date(forecast_date_int)
 
-      forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params, param_names)
+      forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params)
 
       forecaster_fn(nssp_data, extra_data = nhsn_data) %>%
         mutate(
