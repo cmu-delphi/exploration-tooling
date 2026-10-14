@@ -1,8 +1,11 @@
 #' Write a submission file. pred is assumed to be in the correct submission format.
 write_submission_file <- function(pred, forecast_reference_date, submission_directory, file_name = "CMU-TimeSeries") {
-  if (!file.exists(submission_directory)) {
-    cli::cli_abort("Submission directory does not exist.", call = rlang::current_call())
+  # The hub's model-output directory must exist; a model's first submission
+  # creates its subdirectory, since git does not keep empty directories.
+  if (!dir.exists(dirname(submission_directory))) {
+    cli::cli_abort("Submission directory {.path {dirname(submission_directory)}} does not exist.", call = rlang::current_call())
   }
+  dir.create(submission_directory, showWarnings = FALSE)
   file_path <- file.path(submission_directory, sprintf("%s-%s.csv", forecast_reference_date, file_name))
   if (file.exists(file_path)) {
     cli::cli_warn(c("Overwriting existing file in", file_path), call = rlang::current_call())
