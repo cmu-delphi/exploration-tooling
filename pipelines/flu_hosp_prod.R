@@ -165,7 +165,7 @@ g_forecaster_params_grid <- list(
     ahead_multiplier = 7L,
     target_date_shift = 3L,
     join_extra_data = TRUE,
-    excluded_geos = list(c("mo", "wy")),
+    excluded_geos = list(),
     sort_quantiles = TRUE
   ),
   climate_base = tibble(
@@ -650,7 +650,8 @@ calibration_targets <- list(
         ) %>%
         select(
           "reference_date", "target", "horizon", "target_end_date",
-          "location", "output_type", "output_type_id", value = "value_cal"
+          "location", "output_type", "output_type_id",
+          value = "value_cal"
         ) %>%
         write_submission_file(
           current_ref,
@@ -663,7 +664,9 @@ calibration_targets <- list(
   tar_target(
     local_calibrated_scores_nhsn,
     command = {
-      if (is.null(calibrated_ensemble_nhsn)) return(tibble())
+      if (is.null(calibrated_ensemble_nhsn)) {
+        return(tibble())
+      }
       calibrated_ensemble_nhsn$forecasts %>%
         filter(!.data$is_burn_in, !is.na(.data$value_cal)) %>%
         left_join(hub_location_crosswalk(), by = "location") %>%
