@@ -24,7 +24,7 @@ git fetch origin main
 git fetch delphi main
 
 # 2. Save current "dirty" state (including untracked files) to a temp branch
-git checkout -b work-backup
+git checkout -B work-backup
 git add .
 git commit -m "Temp backup of today's work"
 
@@ -32,13 +32,21 @@ git commit -m "Temp backup of today's work"
 git checkout main
 git reset --hard origin/main
 
-# 4. Rely on git checkout to selectively restore only the different files
-# (If this doesn't work, just use the date pattern to select the right file.)
-git checkout work-backup -- model-output/CMU-TimeSeries/ model-output/CMU-TimeSeries_Cal/
+# 4. Restore our model directories from the backup. Not every hub has every
+# model (rsv has no CMU-TimeSeries_Cal), and git checkout restores nothing if
+# one pathspec is missing, so restore each directory that exists separately.
+for model_dir in model-output/CMU-TimeSeries model-output/CMU-TimeSeries_Cal; do
+	if git cat-file -e "work-backup:$model_dir" 2>/dev/null; then
+		git checkout work-backup -- "$model_dir"
+		git add "$model_dir"
+	fi
+done
 
-# 5. Add, commit, and push
-git add model-output/CMU-TimeSeries/*
-git add model-output/CMU-TimeSeries_Cal/*
+# 5. Commit and push. Stop, and keep work-backup, if there is nothing to submit.
+if git diff --cached --quiet; then
+	echo "No submission files differ from origin/main; not pushing. Today's work is on branch work-backup."
+	exit 1
+fi
 git commit -m "CMU-Delphi submission $(date +%Y-%m-%d)"
 git push --force delphi main
 
