@@ -84,3 +84,10 @@ rsv_hosp_prod:
   store: rsv_hosp_prod
   use_crew: yes
   reporter_make: timestamp
+rsv_hosp_evaluation:
+  # Same script as rsv_hosp_prod; it dispatches on the project name. Separate
+  # store so evaluation runs don't invalidate the production cache.
+  script: pipelines/rsv_hosp_prod.R
+  store: rsv_hosp_evaluation
+  use_crew: yes
+  reporter_make: timestamp

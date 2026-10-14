@@ -26,6 +26,8 @@
 #' @param pop_scaling an example extra parameter unique to this forecaster
 #' @param trainer an example extra parameter that is fairly common
 #' @param filter_source if multiple sources are mixed together, if this is non-null it filters to just ones that match this value
+#' @param primary_source the source that the forecast is for; only its rows are
+#'   used as test data
 #' @param filter_agg_level if multiple geographic levels are mixed together, if this is non-null it filters to just ones that match this value (e.g. you probably want "state")
 #' @param ... it can also have any number of other parameters. In this case, the
 #'   `...` args are all inputs to [`epipredict::default_args_list`].  Consult the
@@ -59,6 +61,7 @@ scaled_pop <- function(
   quantile_levels = covidhub_probs(),
   filter_source = "",
   filter_agg_level = "",
+  primary_source = "nhsn",
   ...
 ) {
   scale_method <- arg_match(scale_method)
@@ -82,7 +85,7 @@ scaled_pop <- function(
   adding_source <- FALSE
   if (!("source" %in% names(epi_data))) {
     adding_source <- TRUE
-    epi_data$source <- c("nhsn")
+    epi_data$source <- primary_source
     attributes(epi_data)$metadata$other_keys <- "source"
   }
   args_input[["ahead"]] <- ahead
@@ -148,7 +151,7 @@ scaled_pop <- function(
   if (scale_method != "none") {
     postproc %<>% layer_epi_coloring(colname = outcome, nonlin_method = nonlin_method)
   }
-  pred_final <- run_workflow_and_format(preproc, postproc, trainer, season_data, epi_data) %>%
+  pred_final <- run_workflow_and_format(preproc, postproc, trainer, season_data, epi_data, source_value = primary_source) %>%
     mutate(value = pmax(0, value))
   if (adding_source) {
     pred_final %<>% select(-source)

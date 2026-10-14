@@ -240,6 +240,8 @@ create_joined_targets <- function() {
           for (slug in sort(unique(family_slugs))) {
             season_scores <- family_scores %>% filter(season_slug == slug) %>% select(-season_slug)
             baseline <- season_baseline_id(season_scores, outside_forecaster_subset, fallback_id)
+            # A family that is only the baseline has nothing to compare.
+            if (all(params_subset$id %in% baseline)) next
             # Keep the fallback rows only in seasons that divide by them.
             extra_ids <- setdiff(fallback_id, c(baseline, params_subset$id))
             rmarkdown::render(

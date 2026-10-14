@@ -153,7 +153,7 @@ stamp_default_weights <- function(filename, forecast_date) {
   new_lines <- sub(default_date_str, date_str, lines[all_default_indices], fixed = TRUE)
   last_idx <- max(all_default_indices)
   writeLines(
-    c(lines[seq_len(last_idx)], header, new_lines, lines[seq(last_idx + 1L, length(lines))]),
+    c(lines[seq_len(last_idx)], header, new_lines, lines[-seq_len(last_idx)]),
     filename
   )
   invisible(NULL)

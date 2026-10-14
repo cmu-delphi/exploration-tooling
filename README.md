@@ -61,7 +61,7 @@ make pull
 # Make forecasts
 make prod-flu
 make prod-covid
-# (make prod-rsv is a stub: scripts/rsv_hosp_prod.R is not written yet)
+make prod-rsv
 
 # If there are errors, view the top n with (in an R session; replace with appropriate project):
 #   suppressPackageStartupMessages(source("R/load_all.R"))
@@ -111,10 +111,8 @@ to a store directory (targets cache) of the same name:
 
 - `covid_hosp_explore`, `flu_hosp_explore`: exploration sweeps over many
   forecaster/parameter combinations
-- `covid_hosp_prod`, `flu_hosp_prod`: weekly production forecasts and reports
-- `rsv_hosp_prod`: a stub — its Makefile recipes and `_targets.yaml` entry
-  point at a not-yet-written `scripts/rsv_hosp_prod.R` (not a priority)
-- `flu_hosp_evaluation`: historical replay + scoring; same script as flu prod
+- `covid_hosp_prod`, `flu_hosp_prod`, `rsv_hosp_prod`: weekly production forecasts and reports
+- `flu_hosp_evaluation` (also `covid_hosp_evaluation`, `rsv_hosp_evaluation`): historical replay + scoring; same script as flu prod
   but a separate store, so replays don't invalidate the production cache
 
 ### Directory Layout
@@ -230,9 +228,7 @@ defaults while prod forecasters declare their overrides inline in
 `g_forecaster_params_grid` (see `scripts/flu_hosp_prod.R`). Because both
 pipelines consume the same grid and runner, a forecaster that works in an
 exploration sweep runs verbatim in backtesting and prod — there is no separate
-per-disease prod closure to keep in sync. (Covid and RSV prod are still on the
-older per-disease wiring pending their own migration; see "Shared forecaster
-architecture" in `CLAUDE.md` for status and roadmap.)
+per-disease prod closure to keep in sync.
 
 ### Some handy utilities
 

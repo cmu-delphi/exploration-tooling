@@ -186,3 +186,16 @@ test_that("flatline_fc same across aheads", {
   expect_equal(resM2, resM1)
   expect_equal(resM2, res1)
 })
+
+test_that("scaled_pop forecasts a primary_source other than nhsn", {
+  jhu <- epidatasets::covid_case_death_rates %>%
+    dplyr::filter(time_value >= as.Date("2021-11-01")) %>%
+    dplyr::mutate(source = "nssp") %>%
+    epiprocess::as_epi_df(other_keys = "source")
+  attributes(jhu)$metadata$as_of <- max(jhu$time_value) + 3
+
+  res <- scaled_pop(jhu, "case_rate", "death_rate", primary_source = "nssp", ahead = 1L)
+
+  expect_gt(nrow(res), 0)
+  expect_setequal(unique(res$geo_value), unique(jhu$geo_value))
+})

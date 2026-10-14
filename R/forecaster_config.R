@@ -81,9 +81,10 @@ get_single_id <- function(param_list) {
 #   needs_archive     TRUE hands the forecaster the truncated epi_archive instead
 #                     of an as-of epi_df snapshot, for revision-aware forecasters
 #                     (see make_forecast_archive_snapshot / run_forecaster).
-#   run_aheads        explore only: aheads (days) this forecaster runs. NULL
-#                     means `g_aheads` (the non-negative ones); nowcast families
-#                     opt into `g_nowcast_aheads`. Other aheads get an empty forecast.
+#   run_aheads        aheads (days) this forecaster runs; other aheads get an
+#                     empty forecast. In explore, NULL means `g_aheads` (the
+#                     non-negative ones) and nowcast families opt into
+#                     `g_nowcast_aheads`. In rsv prod, NULL means all aheads.
 FORECASTER_SPEC_DEFAULTS <- list(
   as_of_policy = "asof",
   ahead_multiplier = 1L,

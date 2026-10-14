@@ -144,6 +144,9 @@ build_external_forecast_targets <- function() {
 #   literal in every branch's frozen command rather than a run-time global.
 # - climate_submission_excluded_geos: geos dropped from the standalone
 #   CMU-climate_baseline submission (flu only; historically g_excluded_geos).
+# - climate_submission: FALSE skips the CMU-climate_baseline submission targets.
+# - calibrated: TRUE adds the calibrated_ensemble_nhsn target (built by the
+#   calling script) to the weekly report.
 # - run_ensembles: FALSE (an evaluation run filtered to some components) keeps
 #   only forecast_filtered and passes it through as forecasts_and_ensembles.
 build_prod_ensemble_targets <- function(
@@ -153,6 +156,8 @@ build_prod_ensemble_targets <- function(
   nssp_geo_exclusions_file,
   ensemble_spec,
   climate_submission_excluded_geos = character(0),
+  climate_submission = TRUE,
+  calibrated = TRUE,
   run_ensembles = TRUE
 ) {
   values <- forecast_schedule %>%
@@ -161,7 +166,8 @@ build_prod_ensemble_targets <- function(
       geo_exclusions_file = rlang::syms(.env$geo_exclusions_file),
       nssp_geo_exclusions_file = rlang::syms(.env$nssp_geo_exclusions_file),
       ensemble_spec = list(.env$ensemble_spec),
-      climate_excluded_geos = list(.env$climate_submission_excluded_geos)
+      climate_excluded_geos = list(.env$climate_submission_excluded_geos),
+      calibrated_ensemble = if (calibrated) rlang::syms("calibrated_ensemble_nhsn") else list(NULL)
     )
   forecast_filtered_target <- tar_target(
     name = forecast_filtered,
@@ -174,6 +180,52 @@ build_prod_ensemble_targets <- function(
         filter(forecaster %nin% c("linear"))
     )
   )
+  climate_submission_targets <- if (climate_submission) {
+    list(
+      tar_target(
+        name = make_climate_submission_csv,
+        command = {
+          if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+            forecast_filtered$nhsn %>%
+              filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
+              group_by(geo_value, target_end_date, quantile) %>%
+              summarize(forecast_date = as.Date(forecast_date_int), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+              ungroup() %>%
+              filter(!(geo_value %in% climate_excluded_geos)) %>%
+              format_flusight(disease = disease) %>%
+              filter(location %nin% c("60", "66", "78")) %>%
+              write_submission_file(
+                get_forecast_reference_date(forecast_date_int),
+                file.path(g_submission_directory, "model-output/CMU-climate_baseline"),
+                file_name = "CMU-climate_baseline"
+              )
+          } else {
+            cli_alert_info(
+              "Not making climate submission csv because we're in backtest mode or submission directory is cache"
+            )
+          }
+        },
+        cue = tar_cue("always")
+      ),
+      tar_target(
+        name = validate_climate_result,
+        command = {
+          make_climate_submission_csv
+          if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
+            validate_submission(
+              g_submission_directory,
+              file_path = sprintf(
+                "CMU-climate_baseline/%s-CMU-climate_baseline.csv",
+                get_forecast_reference_date(forecast_date_int)
+              )
+            )
+          } else {
+            "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
+          }
+        }
+      )
+    )
+  }
   if (!run_ensembles) {
     cli::cli_inform("Ensemble components missing from the grid; skipping ensemble, submission and report targets.")
     return(tar_map(
@@ -187,6 +239,7 @@ build_prod_ensemble_targets <- function(
     values = values,
     names = "forecast_date_chr",
     forecast_filtered_target,
+    climate_submission_targets,
     tar_target(
       name = geo_weights,
       command = {
@@ -322,31 +375,6 @@ build_prod_ensemble_targets <- function(
       cue = tar_cue("always")
     ),
     tar_target(
-      name = make_climate_submission_csv,
-      command = {
-        if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
-          forecast_filtered$nhsn %>%
-            filter(forecaster %in% c("climate_base", "climate_geo_agged")) %>%
-            group_by(geo_value, target_end_date, quantile) %>%
-            summarize(forecast_date = as.Date(forecast_date_int), value = mean(value, na.rm = TRUE), .groups = "drop") %>%
-            ungroup() %>%
-            filter(!(geo_value %in% climate_excluded_geos)) %>%
-            format_flusight(disease = disease) %>%
-            filter(location %nin% c("60", "66", "78")) %>%
-            write_submission_file(
-              get_forecast_reference_date(forecast_date_int),
-              file.path(g_submission_directory, "model-output/CMU-climate_baseline"),
-              file_name = "CMU-climate_baseline"
-            )
-        } else {
-          cli_alert_info(
-            "Not making climate submission csv because we're in backtest mode or submission directory is cache"
-          )
-        }
-      },
-      cue = tar_cue("always")
-    ),
-    tar_target(
       name = validate_result,
       command = {
         make_submission_csv
@@ -354,23 +382,6 @@ build_prod_ensemble_targets <- function(
           validate_submission(
             g_submission_directory,
             file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(forecast_date_int))
-          )
-        } else {
-          "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
-        }
-      }
-    ),
-    tar_target(
-      name = validate_climate_result,
-      command = {
-        make_climate_submission_csv
-        if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
-          validate_submission(
-            g_submission_directory,
-            file_path = sprintf(
-              "CMU-climate_baseline/%s-CMU-climate_baseline.csv",
-              get_forecast_reference_date(forecast_date_int)
-            )
           )
         } else {
           "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
@@ -413,11 +424,14 @@ build_prod_ensemble_targets <- function(
       command = {
         if (!g_evaluation_mode) {
           if (!dir.exists(here::here("rendered_reports"))) dir.create(here::here("rendered_reports"))
+          report_forecasters <- function(signal) {
+            c(ensemble_spec$climate_linear$id, ensemble_spec$ensemble_mix$id, ensemble_spec$ensemble_mix$components[[signal]])
+          }
           base_nhsn <- forecasts_and_ensembles$nhsn %>%
             ungroup() %>%
-            filter(forecaster %in% c("climate_linear", "ensemble_mix", "windowed_seasonal", "windowed_seasonal_extra_sources", "revision_aware"))
-          cal_nhsn <- if (!is.null(calibrated_ensemble_nhsn)) {
-            calibrated_ensemble_nhsn$forecasts %>%
+            filter(forecaster %in% report_forecasters("nhsn"))
+          cal_nhsn <- if (!is.null(calibrated_ensemble)) {
+            calibrated_ensemble$forecasts %>%
               filter(
                 .data$reference_date == get_forecast_reference_date(forecast_date_int),
                 !.data$is_burn_in,
@@ -442,7 +456,7 @@ build_prod_ensemble_targets <- function(
             params = list(
               disease = disease,
               forecast_nhsn = bind_rows(base_nhsn, cal_nhsn),
-              forecast_nssp = forecasts_and_ensembles$nssp %>% ungroup() %>% filter(forecaster %in% c("climate_linear", "ensemble_mix", "windowed_seasonal", "windowed_seasonal_extra_sources", "revision_aware")),
+              forecast_nssp = forecasts_and_ensembles$nssp %>% ungroup() %>% filter(forecaster %in% report_forecasters("nssp")),
               forecast_date = as.Date(forecast_date_int),
               truth_data_nhsn = truth_data$nhsn,
               truth_data_nssp = truth_data$nssp

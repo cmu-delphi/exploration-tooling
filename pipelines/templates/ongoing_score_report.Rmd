@@ -426,6 +426,10 @@ recent_archive %>%
 Plotting the forecasts from 8 weeks ago until 3 weeks ago for each geography, sorted by WIS or population scaled WIS.
 ```{r plotting_recent_forecasts_function, echo=FALSE, message=FALSE}
 plotting_forecasts <- function(plotting_window, score_window, geo_score_order, n_plotting) {
+  if (length(geo_score_order) == 0) {
+    cat("No CMU-TimeSeries scores in the last", score_window, "weeks, so there is nothing to plot.\n")
+    return(invisible(NULL))
+  }
   geo_score_order_2 <- geo_score_order[1:n_plotting]
   plotting_archive <- recent_archive
   plotting_archive$DT <- data.table::as.data.table(recent_archive$DT)

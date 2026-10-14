@@ -10,8 +10,12 @@ get_external_forecasts <- function(external_object_name) {
       locations_crosswalk <- get_population_data() %>%
         select(state_id, state_code) %>%
         filter(state_id != "usa")
+      # Some hub files have rows whose target_end_date does not agree with
+      # their horizon (e.g. 2025-09-27-RSVHub-ensemble); they duplicate other
+      # rows, so remove them.
       external_values <- external_values %>%
         filter(output_type == "quantile") %>%
+        filter(is.na(horizon) | target_end_date == as.Date(reference_date) + 7 * horizon) %>%
         select(target, forecaster, geo_value = location, forecast_date, target_end_date, quantile = output_type_id, value) %>%
         inner_join(locations_crosswalk, by = c("geo_value" = "state_code")) %>%
         mutate(geo_value = state_id) %>%
@@ -85,7 +89,7 @@ score_forecasts <- function(latest_data, forecasts, target, excluded_locations =
   }
   forecasts_formatted %<>%
     format_scoring_utils(target)
-  if (target == "wk inc covid prop ed visits") {
+  if (grepl("prop ed visits", target, fixed = TRUE)) {
     forecasts_formatted %<>% mutate(value = value * 100)
   }
   scores <- tryCatch(

@@ -1,9 +1,10 @@
 .PHONY: all test test-forecasters run sync download upload dashboard \
-	prod-rsv prod-rsv-backtest prune-rsv-prod \
+	prod-rsv prune-rsv-prod \
 	commit-rsv submit-rsv submit-rsv-dry \
 	pull-rsv-prod push-rsv-prod get-rsv-prod-errors \
 	eval-flu prune-flu-evaluation \
 	eval-covid prune-covid-evaluation \
+	eval-rsv prune-rsv-evaluation \
 	pull-covid-evaluation push-covid-evaluation get-covid-evaluation-errors \
 	pull-flu-evaluation push-flu-evaluation get-flu-evaluation-errors \
 	oracle-capture oracle-compare \
@@ -37,9 +38,6 @@ prod-covid: | cache/logs
 prod-flu: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_flu
 
-# BROKEN: the rsv prod recipes (prod-rsv, prod-rsv-backtest, prune-rsv-prod,
-# commit/submit-rsv) run pipelines/rsv_hosp_prod.R, which predates the refactor
-# and calls forecasters that no longer exist — they fail if run.
 prod-rsv: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_rsv
 
@@ -49,13 +47,7 @@ prod: prod-covid prod-flu update-site netlify
 status:
 	@Rscript scripts/prod_status.R
 
-prod-rsv-backtest:
-	export BACKTEST_MODE=TRUE; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R
-
-prod-backtest: prod-rsv-backtest
-
-# Historical replays are their own targets projects (separate stores), not a
-# BACKTEST_MODE flag on prod (BACKTEST_MODE remains only for the rsv stub).
+# Historical replays are their own targets projects (separate stores).
 # Set EVALUATION_N_DATES=<n> to replay only the last n forecast dates.
 # EVALUATION_DATES=<d1,d2> and EVALUATION_FORECASTERS=<id1,id2> narrow it further;
 # EVALUATION_SUBSTITUTIONS=false replays without the data substitutions (AGENTS.md).
@@ -64,6 +56,9 @@ eval-flu: | cache/logs
 
 eval-covid: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=covid_hosp_evaluation; Rscript scripts/run.R 2>&1 | tee -a cache/logs/eval_covid
+
+eval-rsv: | cache/logs
+	set -o pipefail; export TAR_RUN_PROJECT=rsv_hosp_evaluation; Rscript scripts/run.R 2>&1 | tee -a cache/logs/eval_rsv
 
 explore-covid:
 	export TAR_RUN_PROJECT=covid_hosp_explore; Rscript scripts/run.R
@@ -106,7 +101,7 @@ oracle-compare:
 		echo "Usage: make oracle-compare project=flu_hosp_prod a=baseline b=refactored"; exit 1; fi
 	Rscript scripts/oracle/compare.R $(project):$(a) $(project):$(b)
 
-prune: prune-covid-prod prune-covid-evaluation prune-flu-prod prune-flu-evaluation prune-rsv-prod prune-covid-explore prune-flu-explore prune-rsv-explore
+prune: prune-covid-prod prune-covid-evaluation prune-flu-prod prune-flu-evaluation prune-rsv-prod prune-rsv-evaluation prune-covid-explore prune-flu-explore prune-rsv-explore
 
 # scripts/prune.R selects the project via TAR_RUN_PROJECT (like run.R): an
 # .Renviron that sets TAR_PROJECT overrides shell exports on every R start,
@@ -127,7 +122,10 @@ prune-flu-evaluation:
 	export TAR_RUN_PROJECT=flu_hosp_evaluation; Rscript scripts/prune.R
 
 prune-rsv-prod:
-	export TAR_RUN_PROJECT=rsv_hosp_prod; export BACKTEST_MODE=TRUE; Rscript scripts/prune.R
+	export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/prune.R
+
+prune-rsv-evaluation:
+	export TAR_RUN_PROJECT=rsv_hosp_evaluation; Rscript scripts/prune.R
 
 prune-covid-explore:
 	export TAR_RUN_PROJECT=covid_hosp_explore; Rscript scripts/prune.R

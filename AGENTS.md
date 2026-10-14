@@ -13,11 +13,11 @@ make install              # renv::restore() R dependencies (R 4.4.1)
 make test                 # testthat::test_dir('tests/testthat')
 make prod-flu             # run flu production pipeline (TAR_RUN_PROJECT=flu_hosp_prod)
 make prod-covid           # covid production pipeline
-make prod-rsv             # BROKEN: pipelines/rsv_hosp_prod.R is pre-refactor and calls forecasters that no longer exist
+make prod-rsv             # weekly rsv forecast; no calibration (no CMU-TimeSeries history in the rsv hub yet)
 make explore-flu          # flu exploration sweep (~3h)
 make explore-covid        # covid exploration sweep (~3h)
-make explore-rsv          # rsv exploration sweep (2025-26 hub season only)
-make eval-flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n forecast dates; see Key env vars for the other EVALUATION_* scopes. Also: eval-covid. BACKTEST_MODE survives only for the rsv stub (prod-rsv-backtest)
+make explore-rsv          # rsv exploration sweep (2024-25 and 2025-26 seasons)
+make eval-flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n forecast dates; see Key env vars for the other EVALUATION_* scopes. Also: eval-covid, eval-rsv
 make pull / make push     # sync aux_data, targets stores, and forecasts with S3 (forecasting-team-data bucket)
 make update-site && make netlify   # rebuild report index and deploy
 make submit-flu           # commit forecast to ../FluSight-forecast-hub, open PR, then commit + push flu weights CSVs to main (also: submit-covid, submit-rsv; *-dry skips the weights push)
@@ -39,11 +39,11 @@ get_targets_errors("covid_hosp_prod", top_n = 10)
 forecaster_lookup("surprised.tarantula")  # map code name -> parameter settings
 ```
 
-Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in a REPL — never in `.Renviron`, which overrides the shell env on every Rscript start), `TAR_RUN_PROJECT` (how make recipes/`scripts/run.R` select the project, immune to `.Renviron`), `BACKTEST_MODE` (rsv stub only; flu/covid evaluation mode dispatches on the project name), `FORECAST_REFERENCE_DATE` (pins the pipeline's "today" for reproducible replays/captures), `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EVALUATION_N_DATES` / `EVALUATION_DATES` (comma-separated forecast dates) / `EVALUATION_FORECASTERS` (comma-separated grid ids; if any ensemble component is left out, the ensemble, submission, report and calibration targets are skipped) / `EVALUATION_SUBSTITUTIONS=false` (replay without `*_data_substitutions.csv`) — all inert outside flu/covid evaluation mode, `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
+Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in a REPL — never in `.Renviron`, which overrides the shell env on every Rscript start), `TAR_RUN_PROJECT` (how make recipes/`scripts/run.R` select the project, immune to `.Renviron`), `FORECAST_REFERENCE_DATE` (pins the pipeline's "today" for reproducible replays/captures), `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EVALUATION_N_DATES` / `EVALUATION_DATES` (comma-separated forecast dates) / `EVALUATION_FORECASTERS` (comma-separated grid ids; if any ensemble component is left out, the ensemble, submission, report and calibration targets are skipped) / `EVALUATION_SUBSTITUTIONS=false` (replay without `*_data_substitutions.csv`) — all inert outside evaluation mode, `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
 
 ## Architecture
 
-Each project in `_targets.yaml` maps a pipeline script to a store directory of the same name: `covid_hosp_explore`, `flu_hosp_explore`, `rsv_hosp_explore`, `covid_hosp_prod`, `flu_hosp_prod`, `rsv_hosp_prod` (broken — see below), plus `flu_hosp_evaluation` / `covid_hosp_evaluation` (same scripts as the prod projects, separate stores, for historical replays). Explore projects sweep many forecaster/parameter combinations to find good settings; prod projects generate the weekly submission and reports. Store directories (targets caches) are synced to/from S3 rather than recomputed.
+Each project in `_targets.yaml` maps a pipeline script to a store directory of the same name: `covid_hosp_explore`, `flu_hosp_explore`, `rsv_hosp_explore`, `covid_hosp_prod`, `flu_hosp_prod`, `rsv_hosp_prod`, plus `flu_hosp_evaluation` / `covid_hosp_evaluation` / `rsv_hosp_evaluation` (same scripts as the prod projects, separate stores, for historical replays). Explore projects sweep many forecaster/parameter combinations to find good settings; prod projects generate the weekly submission and reports. Store directories (targets caches) are synced to/from S3 rather than recomputed.
 
 - `pipelines/<project>.R` — pipeline definitions. Globals are prefixed `g_` and must be top-level (targets freezes commands as expressions, so function arguments can't carry them). `g_forecast_dates` are the nominal (Wednesday) forecast dates; `g_forecast_generation_dates` are when forecasts actually ran (differ on holiday/outage delays) and serve as the data `as_of`.
 - `g_forecaster_parameter_combinations` — human-readable tibble of forecasters × parameter settings; `g_forecaster_params_grid` is the same data reshaped for targets' dynamic branching. Each heading in the combinations tibble gets its own report notebook in `reports/`.
@@ -60,8 +60,8 @@ Forecaster functions follow the signature `function(epi_data, outcome, ahead = 1
 Principle: one declarative spec per forecaster (core function + parameter grid
 + spec metadata) consumed identically by exploration sweeps, backtesting, and
 prod, so explore results transfer to prod verbatim and the prod copy of "the
-same" forecaster can't silently drift from what exploration evaluated. Flu
-prod, covid prod, and flu/covid/rsv explore are all on this stack. Three layers:
+same" forecaster can't silently drift from what exploration evaluated. Flu,
+covid and rsv prod, and flu/covid/rsv explore are all on this stack. Three layers:
 
 1. **Canonical archives**: version-independent munging (geo renames,
    Wednesday↔Saturday shift, season info, source stamping, folding in static
@@ -107,9 +107,8 @@ explore batches dates inside one target per forecaster via the slide cache.
 
 Rsv explore (`pipelines/rsv_hosp_explore.R`) is on the shared stack and
 mirrors covid explore: NHSN RSV admissions are raw counts, like covid.
-Rsv prod is **broken**: `pipelines/rsv_hosp_prod.R` predates the refactor and
-calls `g_rsv_*` forecasters that no longer exist; rewrite it on the shared
-prod stack (`build_prod_ensemble_targets()`) using rsv explore results.
+Rsv prod mirrors covid prod. Its `ensemble_mix` components are rsv explore
+forecasters; the grid comments give their explore ids.
 
 History lives in `notes/`: the annotated commit log
 (`notes/2026-07-22-ds-refactor2-annotated-commit-log.md`) is the source of

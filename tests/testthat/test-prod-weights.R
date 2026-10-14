@@ -100,3 +100,28 @@ test_that("all four hand-edited prod weights csvs pass schema validation", {
     expect_no_error(parse_prod_weights(x$f, date_int, x$ids))
   }
 })
+
+test_that("stamp_default_weights stamps a file that ends with the defaults block", {
+  weights_file <- withr::local_tempfile(fileext = ".csv")
+  defaults <- c(
+    "forecast_date,forecaster,geo_value,ahead,weight",
+    "# defaults",
+    "2024-10-01, linear, all,, 3",
+    "2024-10-01, climate_base, all,, 2"
+  )
+  writeLines(defaults, weights_file)
+
+  stamp_default_weights(weights_file, as.Date("2026-10-14"))
+
+  expect_identical(
+    readLines(weights_file),
+    c(
+      defaults,
+      "##################",
+      "# Oct 14",
+      "##################",
+      "2026-10-14, linear, all,, 3",
+      "2026-10-14, climate_base, all,, 2"
+    )
+  )
+})
