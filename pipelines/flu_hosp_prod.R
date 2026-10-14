@@ -165,7 +165,6 @@ g_forecaster_params_grid <- list(
     ahead_multiplier = 7L,
     target_date_shift = 3L,
     join_extra_data = TRUE,
-    excluded_geos = list(),
     sort_quantiles = TRUE
   ),
   climate_base = tibble(
