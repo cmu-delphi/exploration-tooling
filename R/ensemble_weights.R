@@ -79,7 +79,6 @@ parse_prod_weights <- function(filename, forecast_date_int, forecaster_fn_names)
   )
   all_prod_weights <- readr::read_csv(filename, comment = "#", show_col_types = FALSE)
   validate_prod_weights_columns(all_prod_weights, filename)
-  has_ahead <- "ahead" %in% names(all_prod_weights)
   # if we haven't set specific weights, use the overall defaults
   useful_prod_weights <- filter(all_prod_weights, forecast_date == forecast_date_val)
   if (nrow(useful_prod_weights) == 0) {
@@ -88,30 +87,47 @@ parse_prod_weights <- function(filename, forecast_date_int, forecaster_fn_names)
       mutate(forecast_date = forecast_date_val)
   }
   validate_prod_weights_values(useful_prod_weights, filename, forecaster_fn_names, all_states)
-  # weights that apply to specific states
-  state_weights <- useful_prod_weights %>%
+  merge_geo_weights(useful_prod_weights, forecaster_fn_names, all_states) %>%
+    mutate(forecast_date = forecast_date_val)
+}
+
+#' Merge the all-geo rows and the geo-specific rows of one date's weights.
+#'
+#' Expands `geo_value == "all"` to every geo in `all_states` and `forecaster ==
+#' "all"` in geo rows to every forecaster in `forecaster_fn_names`. A geo row
+#' overrides the all-geo rows for its (forecaster, geo_value). A geo row with no
+#' `ahead` applies to every ahead, so it also replaces the ahead-specific
+#' all-geo rows. A geo row with an `ahead` replaces only the matching row.
+#' @param weights the rows of one forecast_date block.
+merge_geo_weights <- function(weights, forecaster_fn_names, all_states) {
+  has_ahead <- "ahead" %in% names(weights)
+  state_weights <- weights %>%
     filter(geo_value != "all") %>%
     mutate(
       forecaster = ifelse(forecaster == "all", list(forecaster_fn_names), forecaster),
     ) %>%
     unnest_longer(forecaster)
   forecaster_weights <-
-    useful_prod_weights %>%
+    weights %>%
     filter(geo_value == "all") %>%
     mutate(
       geo_value = list(all_states)
     ) %>%
     unnest_longer(geo_value)
-  # bind together and overwrite any generic weights with geo_specific ones.
-  # Group includes `ahead` when present so ahead-specific rows override only
-  # their matching (forecaster, geo_value, ahead) combination.
   group_cols <- c("forecast_date", "forecaster", "geo_value")
-  if (has_ahead) group_cols <- c(group_cols, "ahead")
+  if (has_ahead) {
+    all_ahead_overrides <- state_weights %>%
+      filter(is.na(ahead)) %>%
+      distinct(forecaster, geo_value)
+    forecaster_weights <- forecaster_weights %>%
+      anti_join(all_ahead_overrides, by = c("forecaster", "geo_value"))
+    group_cols <- c(group_cols, "ahead")
+  }
+  # The last row of each group wins, so geo rows override all-geo rows.
   forecaster_weights %>%
     bind_rows(state_weights) %>%
     group_by(across(all_of(group_cols))) %>%
     filter(row_number() == n()) %>%
-    mutate(forecast_date = as.Date(forecast_date_int)) %>%
     ungroup()
 }
 
@@ -170,26 +186,24 @@ add_week_ahead <- function(tbl) {
 #' Expand a weights table to one row per (forecaster, geo, ahead).
 #'
 #' Weights with a specific `ahead` apply only to that ahead; general weights
-#' (`ahead` NA or absent) apply to every ahead in `forecaster_aheads` for that
-#' forecaster. A forecaster with any ahead-specific row uses only those rows.
+#' (`ahead` NA or absent) apply to every other ahead in `forecaster_aheads` for
+#' that (forecaster, geo_value). A (forecaster, geo_value) with only
+#' ahead-specific rows has no weight at the other aheads.
 #' @param weights prod weights (`forecaster`, `geo_value`, `weight`, optional `ahead`).
 #' @param forecaster_aheads tibble of (`forecaster`, `ahead`) pairs, aheads in weeks.
 expand_weights_by_ahead <- function(weights, forecaster_aheads) {
-  if ("ahead" %in% names(weights) && any(!is.na(weights$ahead))) {
-    specific_forecasters <- unique(weights$forecaster[!is.na(weights$ahead)])
-    w_specific <- weights %>%
-      filter(forecaster %in% specific_forecasters, !is.na(ahead)) %>%
-      mutate(ahead = as.integer(ahead))
-    w_general <- weights %>%
-      filter(forecaster %nin% specific_forecasters) %>%
-      select(-ahead) %>%
-      left_join(forecaster_aheads, by = "forecaster", relationship = "many-to-many")
-    bind_rows(w_general, w_specific)
-  } else {
-    weights %>%
-      select(-any_of("ahead")) %>%
-      left_join(forecaster_aheads, by = "forecaster", relationship = "many-to-many")
+  if (!"ahead" %in% names(weights)) {
+    weights <- mutate(weights, ahead = NA_integer_)
   }
+  w_specific <- weights %>%
+    filter(!is.na(ahead)) %>%
+    mutate(ahead = as.integer(ahead))
+  weights %>%
+    filter(is.na(ahead)) %>%
+    select(-ahead) %>%
+    left_join(forecaster_aheads, by = "forecaster", relationship = "many-to-many") %>%
+    anti_join(w_specific, by = c("forecaster", "geo_value", "ahead")) %>%
+    bind_rows(w_specific)
 }
 
 #' Resolve prod weights to the ensemble weight of each component at each (geo, ahead).

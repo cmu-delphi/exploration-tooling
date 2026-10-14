@@ -84,3 +84,25 @@ test_that("ensemble_weighted gives no weight to a component without a weights ro
   out <- ensemble_weighted(forecasts, mk_weights("ar", 2))
   expect_equal(out$value, 10)
 })
+
+test_that("expand_weights_by_ahead decides ahead-specific rows per (forecaster, geo)", {
+  # revision_aware is ahead-specific in tx but general in ca.
+  weights <- bind_rows(
+    mk_weights("revision_aware", c(1, 0.1), geo_value = "tx", ahead = c(-1, 0)),
+    mk_weights("revision_aware", 5, geo_value = "ca")
+  )
+  forecaster_aheads <- tidyr::expand_grid(forecaster = "revision_aware", ahead = -1:2)
+  expanded <- expand_weights_by_ahead(weights, forecaster_aheads) %>% arrange(geo_value, ahead)
+  expect_equal(expanded$ahead[expanded$geo_value == "ca"], -1:2)
+  expect_equal(expanded$weight[expanded$geo_value == "ca"], rep(5, 4))
+  expect_equal(expanded$ahead[expanded$geo_value == "tx"], c(-1L, 0L))
+  expect_equal(expanded$weight[expanded$geo_value == "tx"], c(1, 0.1))
+})
+
+test_that("expand_weights_by_ahead lets an ahead row override the general row of its geo", {
+  weights <- mk_weights("ar", c(1, 7), ahead = c(NA, 1))
+  forecaster_aheads <- tidyr::expand_grid(forecaster = "ar", ahead = 0:2)
+  expanded <- expand_weights_by_ahead(weights, forecaster_aheads) %>% arrange(ahead)
+  expect_equal(expanded$ahead, 0:2)
+  expect_equal(expanded$weight, c(1, 7, 1))
+})

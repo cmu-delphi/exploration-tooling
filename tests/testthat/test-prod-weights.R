@@ -101,6 +101,67 @@ test_that("all four hand-edited prod weights csvs pass schema validation", {
   }
 })
 
+merge_date <- as.Date("2026-10-14")
+merge_geos <- c("ca", "ny")
+merge_ids <- c("windowed_seasonal", "revision_aware")
+mk_block <- function(forecaster, geo_value, ahead, weight) {
+  tibble::tibble(forecast_date = merge_date, forecaster, geo_value, ahead, weight)
+}
+merged_weight <- function(merged, forecaster, geo_value, ahead) {
+  keep <- merged$forecaster == forecaster & merged$geo_value == geo_value &
+    (if (is.na(ahead)) is.na(merged$ahead) else merged$ahead %in% ahead)
+  merged$weight[keep]
+}
+
+test_that("merge_geo_weights: a geo row with no ahead replaces the ahead-specific all-geo rows", {
+  block <- mk_block(
+    forecaster = c("revision_aware", "revision_aware", "revision_aware"),
+    geo_value = c("all", "all", "ca"),
+    ahead = c(-1, 0, NA),
+    weight = c(1, 0.1, 5000)
+  )
+  merged <- merge_geo_weights(block, merge_ids, merge_geos)
+  ca_rows <- dplyr::filter(merged, geo_value == "ca")
+  expect_equal(nrow(ca_rows), 1)
+  expect_equal(merged_weight(merged, "revision_aware", "ca", NA), 5000)
+  expect_equal(merged_weight(merged, "revision_aware", "ny", -1), 1)
+  expect_equal(merged_weight(merged, "revision_aware", "ny", 0), 0.1)
+})
+
+test_that("merge_geo_weights: a geo row with an ahead replaces only that ahead", {
+  block <- mk_block(
+    forecaster = c("windowed_seasonal", "windowed_seasonal", "windowed_seasonal"),
+    geo_value = c("all", "all", "ca"),
+    ahead = c(NA, 1, 1),
+    weight = c(1, 2, 7)
+  )
+  merged <- merge_geo_weights(block, merge_ids, merge_geos)
+  expect_equal(merged_weight(merged, "windowed_seasonal", "ca", NA), 1)
+  expect_equal(merged_weight(merged, "windowed_seasonal", "ca", 1), 7)
+  expect_equal(merged_weight(merged, "windowed_seasonal", "ny", 1), 2)
+})
+
+test_that("merge_geo_weights: an `all` forecaster geo row zeroes every forecaster at every ahead", {
+  block <- mk_block(
+    forecaster = c("windowed_seasonal", "revision_aware", "all"),
+    geo_value = c("all", "all", "ca"),
+    ahead = c(NA, -1, NA),
+    weight = c(1, 1, 0)
+  )
+  merged <- merge_geo_weights(block, merge_ids, merge_geos)
+  ca_rows <- dplyr::filter(merged, geo_value == "ca")
+  expect_setequal(ca_rows$forecaster, merge_ids)
+  expect_true(all(is.na(ca_rows$ahead)))
+  expect_true(all(ca_rows$weight == 0))
+})
+
+test_that("merge_geo_weights works on a block without an ahead column", {
+  block <- dplyr::select(mk_block(c("windowed_seasonal", "windowed_seasonal"), c("all", "ca"), NA, c(1, 3)), -ahead)
+  merged <- merge_geo_weights(block, merge_ids, merge_geos)
+  expect_equal(merged$weight[merged$geo_value == "ca"], 3)
+  expect_equal(merged$weight[merged$geo_value == "ny"], 1)
+})
+
 test_that("stamp_default_weights stamps a file that ends with the defaults block", {
   weights_file <- withr::local_tempfile(fileext = ".csv")
   defaults <- c(
