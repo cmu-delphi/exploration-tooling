@@ -1,4 +1,4 @@
-# Gates the flu/covid prod forecast run on NHSN/NSSP data freshness.
+# Gates the flu/covid/rsv prod forecast run on NHSN/NSSP data freshness.
 #
 # Fired every 30 minutes, 07:00-14:00 America/Los_Angeles, on Wednesdays (see
 # prod-forecasts.timer). Runs the forecasts once the data is fresh, retries on
@@ -89,7 +89,7 @@ if (file.exists(marker)) {
   finish(0)
 }
 
-freshness <- map(c("covid_hosp_prod", "flu_hosp_prod"), function(project) {
+freshness <- map(c("covid_hosp_prod", "flu_hosp_prod", "rsv_hosp_prod"), function(project) {
   Sys.setenv(TAR_PROJECT = project)
   check_data_freshness() %>% mutate(project = project)
 }) %>% bind_rows()
@@ -105,9 +105,12 @@ log_msg(paste0("Freshness: ", paste(
 if (!all(freshness$fresh)) {
   log_msg(sprintf("Data is stale (local hour=%d).", hour))
   if (hour >= cutoff_hour) {
+    stale <- freshness %>% filter(!fresh)
     alert(sprintf(
-      "NHSN/NSSP data is still stale at the %d:00 cutoff. Skipping forecast run for %s; upstream data needs investigation.",
-      cutoff_hour, today
+      "Data is still stale at the %d:00 cutoff: %s. Skipping forecast run for %s; upstream data needs investigation.",
+      cutoff_hour,
+      paste(sprintf("%s %s (latest %s)", stale$project, stale$source, stale$latest), collapse = ", "),
+      today
     ))
   }
   finish(0)
@@ -163,7 +166,8 @@ run_project_pipeline <- function(project, log_path) {
 
 pipelines <- list(
   list(project = "covid_hosp_prod", disease = "covid", log = here::here("cache", "logs", "prod_covid")),
-  list(project = "flu_hosp_prod", disease = "flu", log = here::here("cache", "logs", "prod_flu"))
+  list(project = "flu_hosp_prod", disease = "flu", log = here::here("cache", "logs", "prod_flu")),
+  list(project = "rsv_hosp_prod", disease = "rsv", log = here::here("cache", "logs", "prod_rsv"))
 )
 publish_steps <- list(
   list(
@@ -185,7 +189,7 @@ publish_steps <- list(
   )
 )
 
-# Run both pipelines, then always render their health notebooks and publish, so
+# Run the pipelines, then always render their health notebooks and publish, so
 # a failed or degraded run is visible on the site before anyone is alerted.
 failures <- character(0)
 for (p in pipelines) {

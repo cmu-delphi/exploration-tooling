@@ -84,6 +84,7 @@ cat(sprintf("\n== today (%s) ==\n", today))
 steps <- c(
   "covid prod" = "covid prod pipeline",
   "flu prod" = "flu prod pipeline",
+  "rsv prod" = "rsv prod pipeline",
   "s3 sync" = "sync reports to S3",
   "site update" = "update site",
   "netlify" = "netlify deploy"
@@ -109,7 +110,7 @@ if (is.null(live_index)) {
   })
 }
 
-for (disease in c("covid", "flu")) {
+for (disease in c("covid", "flu", "rsv")) {
   if (startsWith(step_statuses[[sprintf("%s prod", disease)]], "failed")) {
     cat(sprintf(
       "\n%s prod failed. To see the errors:\n  make get-%s-prod-errors\n  tail -n 100 cache/logs/prod_%s\n",

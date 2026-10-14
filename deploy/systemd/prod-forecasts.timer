@@ -1,5 +1,5 @@
 [Unit]
-Description=Attempt flu/covid prod forecasts every 30 minutes, 07:00-14:00, on Wednesdays
+Description=Attempt flu/covid/rsv prod forecasts every 30 minutes, 07:00-14:00, on Wednesdays
 
 [Timer]
 OnCalendar=Wed *-*-* 07..13:00/30:00

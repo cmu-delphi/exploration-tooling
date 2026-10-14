@@ -41,7 +41,7 @@ prod-flu: | cache/logs
 prod-rsv: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_rsv
 
-prod: prod-covid prod-flu update-site netlify
+prod: prod-covid prod-flu prod-rsv update-site netlify
 
 # Summarize today's systemd prod run: freshness polls, pipelines, site, netlify.
 status:

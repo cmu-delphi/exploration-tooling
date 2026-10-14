@@ -1,5 +1,5 @@
 [Unit]
-Description=Run flu/covid prod forecasts once NHSN/NSSP data is fresh
+Description=Run flu/covid/rsv prod forecasts once NHSN/NSSP data is fresh
 
 [Service]
 Type=oneshot
