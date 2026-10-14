@@ -11,9 +11,10 @@ Delphi (CMU) epidemic forecasting monorepo for COVID, flu, and RSV hospitalizati
 ```sh
 make install              # renv::restore() R dependencies (R 4.4.1)
 make test                 # testthat::test_dir('tests/testthat')
-make prod-flu             # run flu production pipeline (TAR_RUN_PROJECT=flu_hosp_prod)
-make prod-covid           # covid production pipeline
-make prod-rsv             # weekly rsv forecast; no calibration (no CMU-TimeSeries history in the rsv hub yet)
+make prod-flu             # run flu production pipeline (TAR_RUN_PROJECT=flu_hosp_prod), then publish (update-site + netlify)
+make prod-covid           # covid production pipeline, then publish
+make prod-rsv             # weekly rsv forecast, then publish; no calibration (no CMU-TimeSeries history in the rsv hub yet)
+make prod                 # all three pipelines, then publish once; prod-<disease>-pipeline runs one without publishing
 make explore-flu          # flu exploration sweep (~3h)
 make explore-covid        # covid exploration sweep (~3h)
 make explore-rsv          # rsv exploration sweep (2024-25 and 2025-26 seasons)

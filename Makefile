@@ -1,5 +1,7 @@
 .PHONY: all test test-forecasters run sync download upload dashboard \
-	prod-rsv prune-rsv-prod \
+	prod prod-covid prod-flu prod-rsv publish \
+	prod-covid-pipeline prod-flu-pipeline prod-rsv-pipeline \
+	prune-rsv-prod \
 	commit-rsv submit-rsv submit-rsv-dry \
 	pull-rsv-prod push-rsv-prod get-rsv-prod-errors \
 	eval-flu prune-flu-evaluation \
@@ -32,16 +34,30 @@ run:
 cache/logs:
 	mkdir -p cache/logs
 
-prod-covid: | cache/logs
+# prod-<disease> runs one pipeline and publishes the reports; prod runs all
+# three pipelines and publishes once. The *-pipeline targets skip publishing.
+prod-covid-pipeline: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_covid
 
-prod-flu: | cache/logs
+prod-flu-pipeline: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_flu
 
-prod-rsv: | cache/logs
+prod-rsv-pipeline: | cache/logs
 	set -o pipefail; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_rsv
 
-prod: prod-covid prod-flu prod-rsv update-site netlify
+prod-covid: prod-covid-pipeline
+	$(MAKE) publish
+
+prod-flu: prod-flu-pipeline
+	$(MAKE) publish
+
+prod-rsv: prod-rsv-pipeline
+	$(MAKE) publish
+
+prod: prod-covid-pipeline prod-flu-pipeline prod-rsv-pipeline
+	$(MAKE) publish
+
+publish: update-site netlify
 
 # Summarize today's systemd prod run: freshness polls, pipelines, site, netlify.
 status:
