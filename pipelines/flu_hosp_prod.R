@@ -19,7 +19,8 @@ set_targets_config()
 g_aheads <- -1:3
 g_submission_directory <- Sys.getenv("FLU_SUBMISSION_DIRECTORY", "cache")
 g_insufficient_data_geos <- c("as", "mp", "vi", "gu")
-g_insufficient_data_geos_nssp <- g_insufficient_data_geos
+# Iowa NSSP is out for an extended period (from Oct 2026).
+g_insufficient_data_geos_nssp <- c(g_insufficient_data_geos, "ia")
 g_time_value_adjust <- 3
 g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
 g_disease <- "flu"
@@ -324,6 +325,7 @@ parameters_and_date_targets <- rlang::list2(
           time_value = floor_date(time_value, "week", week_start = 7) + 3,
           source = "nssp"
         ) %>%
+        filter(geo_value %nin% g_insufficient_data_geos_nssp) %>%
         add_season_info() %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
     }
