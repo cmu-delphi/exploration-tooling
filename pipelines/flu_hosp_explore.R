@@ -61,7 +61,6 @@ custom_targets <- list2(
     rescaled_delphi_forecasts,
     command = {
       delphi_forecasts %>%
-        mutate(forecast_date = ceiling_date(forecast_date, "weeks", week_start = 6)) %>%
         left_join(hhs_evaluation_data %>% distinct(geo_value, population), by = "geo_value") %>%
         mutate(prediction = prediction * population / 10L**5) %>%
         select(-population)
