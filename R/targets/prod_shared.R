@@ -212,7 +212,7 @@ build_prod_ensemble_targets <- function(
         command = {
           make_climate_submission_csv
           if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
-            validate_submission(
+            validate_submission_with_warning(
               g_submission_directory,
               file_path = sprintf(
                 "CMU-climate_baseline/%s-CMU-climate_baseline.csv",
@@ -379,7 +379,7 @@ build_prod_ensemble_targets <- function(
       command = {
         make_submission_csv
         if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
-          validate_submission(
+          validate_submission_with_warning(
             g_submission_directory,
             file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(forecast_date_int))
           )

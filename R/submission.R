@@ -14,6 +14,19 @@ write_submission_file <- function(pred, forecast_reference_date, submission_dire
   readr::write_csv(pred, file_path)
 }
 
+#' Run the hub validations on a submission file and warn (do not abort) on failures.
+#' `check_for_errors()` prints the failing checks before it aborts.
+validate_submission_with_warning <- function(hub_path, file_path) {
+  validation <- hubValidations::validate_submission(hub_path, file_path = file_path)
+  tryCatch(
+    hubValidations::check_for_errors(validation),
+    error = function(cnd) {
+      cli::cli_warn("Hub validation failed for {.file {file_path}}; see the failing checks above.", parent = cnd)
+    }
+  )
+  validation
+}
+
 #' Utility to get the reference date for a given date. This is the last day of
 #' the epiweek that the date falls in.
 get_forecast_reference_date <- function(date) {
