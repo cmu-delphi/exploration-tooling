@@ -1,11 +1,11 @@
-# Render calibration experiment notebooks into reports/calibration_experiments/
+# Render calibration experiment notebooks into rendered_reports/calibration_experiments/
 # and rebuild its index.html (an overview plus links to every rendered notebook).
 #
 # Usage: Rscript scripts/calibration/render_experiments.R [learning_rate ...]
 # With no arguments, renders every notebook; `--index` renders only the index.
 
 src_dir <- here::here("reports/writeups/calibration_experiments")
-out_dir <- here::here("reports/calibration_experiments")
+out_dir <- here::here("rendered_reports/calibration_experiments")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 args <- commandArgs(trailingOnly = TRUE)
