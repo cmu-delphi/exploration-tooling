@@ -3,7 +3,7 @@ forecast_date,forecaster,geo_value,ahead,weight
 # defaults
 ##################
 2024-10-01, all, mp,, 0
-2024-10-01, windowed_seasonal, all,, 0.5
+2024-10-01, windowed_seasonal, all,, 2
 2024-10-01, windowed_seasonal_extra_sources, all,, 3
 2024-10-01, climate_linear, all,, 0.001
 2024-10-01, linear, all,, 3
@@ -14,6 +14,68 @@ forecast_date,forecaster,geo_value,ahead,weight
 2024-10-01, climate_linear, hi,, 0.0001
 2024-10-01, revision_aware, all, -1, 1
 2024-10-01, revision_aware, all, 0, .1
+2024-10-01, windowed_seasonal_extra_sources, ia,, 0
+##################
+# Oct 21
+##################
+2026-10-21, all, mp,, 0
+2026-10-21, windowed_seasonal, all,, 2
+2026-10-21, windowed_seasonal_extra_sources, all,, 3
+2026-10-21, climate_linear, all,, 0.001
+2026-10-21, linear, all,, 3
+2026-10-21, linearlog, all,, 0
+2026-10-21, climate_base, all,, 2
+2026-10-21, climate_geo_agged, all,, 0
+2026-10-21, climate_quantile_extrapolated, all,, 0
+2026-10-21, climate_linear, hi,, 0.0001
+2026-10-21, revision_aware, all, -1, 1
+2026-10-21, revision_aware, all, 0, .1
+2026-10-21, windowed_seasonal_extra_sources, ia,, 0
+##################
+# Oct 14
+##################
+2026-10-14, all, mp,, 0
+2026-10-14, windowed_seasonal, all,, 0.5
+2026-10-14, windowed_seasonal_extra_sources, all,, 3
+2026-10-14, climate_linear, all,, 0.001
+2026-10-14, linear, all,, 3
+2026-10-14, linearlog, all,, 0
+2026-10-14, climate_base, all,, 2
+2026-10-14, climate_geo_agged, all,, 0
+2026-10-14, climate_quantile_extrapolated, all,, 0
+2026-10-14, climate_linear, hi,, 0.0001
+2026-10-14, revision_aware, all, -1, 1
+2026-10-14, revision_aware, all, 0, .1
+2026-10-14, windowed_seasonal_extra_sources, ia,, 0
+2026-10-14, revision_aware, ca,, 5
+2026-10-14, revision_aware, fl,, 5
+2026-10-14, revision_aware, hi,, 5
+2026-10-14, revision_aware, wa,, 5
+##################
+# Oct 7
+##################
+2026-10-07, all, mp,, 0
+2026-10-07, windowed_seasonal, all,, 0.5
+2026-10-07, windowed_seasonal_extra_sources, all,, 3
+2026-10-07, climate_linear, all,, 0.001
+2026-10-07, linear, all,, 3
+2026-10-07, linearlog, all,, 0
+2026-10-07, climate_base, all,, 2
+2026-10-07, climate_geo_agged, all,, 0
+2026-10-07, climate_quantile_extrapolated, all,, 0
+2026-10-07, climate_linear, hi,, 0.0001
+2026-10-07, revision_aware, all, -1, 1
+2026-10-07, revision_aware, all, 0, .1
+2026-10-07, revision_aware, ca,, 0.5
+2026-10-07, windowed_seasonal, ct,, 2
+2026-10-07, windowed_seasonal, hi,, 2
+2026-10-07, windowed_seasonal, id,, 1
+2026-10-07, windowed_seasonal, nj,, 2
+2026-10-07, revision_aware, nv,, 5
+2026-10-07, windowed_seasonal, nv,, 10
+2026-10-07, windowed_seasonal, sc,, 1
+2026-10-07, revision_aware, sd,, 3
+2026-10-07, revision_aware, vt,, 2
 ##################
 # Sep 30
 ##################
