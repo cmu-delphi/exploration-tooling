@@ -6,8 +6,10 @@
 # the pipelines it renders each disease's health notebook, publishes, and posts
 # links to the new reports on Slack; a pipeline error, failed health check, or
 # failed publish step alerts on Slack (see notes/prod-health-check.md) and
-# leaves the day unfinished so the next firing retries. The first run to end
-# after the cutoff also posts the output of scripts/prod_status.R.
+# leaves the day unfinished so the next firing retries. If the netlify deploy
+# succeeded despite failures, the run instead hands the day off to a person:
+# later firings do not run or post. The first run to end after the cutoff also
+# posts the output of scripts/prod_status.R.
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
 log_file <- here::here("cache", "logs", "prod_forecast_freshness.log")
@@ -85,9 +87,14 @@ finish <- function(status) {
 today <- Sys.Date()
 hour <- as.integer(format(Sys.time(), "%H"))
 marker <- here::here("cache", sprintf("prod_forecast_done_%s", today))
+handoff_marker <- here::here("cache", sprintf("prod_forecast_handed_off_%s", today))
 
 if (file.exists(marker)) {
   log_msg(sprintf("Forecast already completed today (%s), skipping.", today))
+  finish(0)
+}
+if (file.exists(handoff_marker)) {
+  log_msg(sprintf("Failed run for %s was published and handed off to a person, skipping.", today))
   finish(0)
 }
 
@@ -222,10 +229,17 @@ for (step in publish_steps) {
   if (status != 0) {
     failures <- c(failures, sprintf("%s failed", step$name))
   }
+  if (step$name == "netlify deploy") {
+    published <- status == 0
+  }
 }
 
 announce_reports(failed = length(failures) > 0)
 if (length(failures) > 0) {
+  if (published) {
+    file.create(handoff_marker)
+    failures <- c(failures, "The site is live, so automatic retries stop for today. Rerun with `make prod-*`.")
+  }
   alert(paste("-", failures, collapse = "\n"))
   finish(1)
 }

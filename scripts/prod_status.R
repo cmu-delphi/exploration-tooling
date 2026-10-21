@@ -99,6 +99,8 @@ step_statuses <- vapply(steps, step_status, character(1))
 cat(sprintf("%-15s %s\n", paste0(names(steps), ":"), step_statuses), sep = "")
 done_marker <- here::here("cache", sprintf("prod_forecast_done_%s", today))
 cat(if (file.exists(done_marker)) "run marked complete\n" else "run NOT marked complete\n")
+handoff_marker <- here::here("cache", sprintf("prod_forecast_handed_off_%s", today))
+if (file.exists(handoff_marker)) cat("failed run was published and handed off; automatic retries stopped\n")
 critical <- grep("] CRITICAL: ", todays_lines, value = TRUE, fixed = TRUE)
 if (length(critical) > 0) cat(paste0("  ", critical), sep = "\n")
 

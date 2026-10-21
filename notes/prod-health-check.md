@@ -47,7 +47,11 @@ explaining a failure is online. On `fail`, `error`, a failed publish step, or
 stale data at the 14:00 cutoff, it posts one Slack message through the incoming
 webhook in `SLACK_WEBHOOK_URL`, exits nonzero, and leaves the day unfinished so
 the next half-hourly firing retries. The same message is sent at most once a
-day. If the webhook isn't set or the post fails, it logs a CRITICAL line saying
+day.
+If the netlify deploy succeeded despite the failure, the site is live and the
+day goes to a person instead: the run writes
+`cache/prod_forecast_handed_off_<date>`, and later firings do not run or post.
+Rerun by hand with `make prod-*`; that path ignores the marker. If the webhook isn't set or the post fails, it logs a CRITICAL line saying
 the alert was not delivered.
 After every publish, failed or not, it also posts a message with links to the
 site and to the prod reports and health notebooks rendered that day.
