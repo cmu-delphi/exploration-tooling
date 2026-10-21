@@ -60,30 +60,112 @@ if (length(last_poll) == 0) {
   }
 }
 
-cat("\n== upstream (socrata) ==\n")
 suppressPackageStartupMessages({
   library(magrittr)
   library(purrr)
 })
-source(here::here("R", "data", "data_freshness.R"))
-socrata_datasets <- c(
-  "nhsn" = "ua7e-t2fy",
-  "nhsn prelim" = "mpgq-jmmr",
-  "nssp" = "rdmq-nq56"
+
+# Print the number of geos with a value in the latest week and in the week
+# before. `counts` is named by week, latest first.
+cat_geo_counts <- function(label, counts) {
+  cat(sprintf(
+    "  %-30s %s geos on %s (%s the week before)\n",
+    paste0(label, ":"), counts[1], names(counts)[1], counts[2]
+  ))
+}
+
+cat("\n== upstream (epidata) ==\n")
+Sys.setenv(EPIDATR_USE_CACHE = "FALSE")
+invisible(suppressMessages(loadNamespace("epidatr")))
+if (!nzchar(epidatr::get_api_key())) {
+  cat("WARNING: no epidata API key set (DELPHI_EPIDATA_KEY); requests are anonymous and rate limited\n")
+}
+epidata_signals <- list(
+  "nhsn" = c("confirmed_admissions_covid_ew", "confirmed_admissions_flu_ew", "confirmed_admissions_rsv_ew"),
+  "nssp" = c("pct_ed_visits_covid", "pct_ed_visits_influenza", "pct_ed_visits_rsv")
 )
-for (dataset in names(socrata_datasets)) {
-  metadata_url <- sprintf("https://data.cdc.gov/api/views/%s", socrata_datasets[[dataset]])
+# Count the states with a value for each of the latest two reference weeks.
+epidata_latest_counts <- function(source, signal) {
+  window <- epidatr::epirange(format(Sys.Date() - 28, "%Y%m%d"), format(Sys.Date(), "%Y%m%d"))
+  snapshot <- epidatr::epidata_snapshot(source, signal, geo_type = "state", reference_time = window)
+  rev(tail(table(as.character(snapshot$reference_time[!is.na(snapshot$value)])), 2))
+}
+for (epidata_source in names(epidata_signals)) {
+  meta <- tryCatch(epidatr::epidata_meta(epidata_source), error = function(cond) conditionMessage(cond))
+  if (is.character(meta)) {
+    cat(sprintf("%s: metadata request failed: %s\n", epidata_source, meta))
+    next
+  }
+  reported_at <- as.POSIXct(meta$report_time_range$latest, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  age_days <- as.numeric(difftime(Sys.time(), reported_at, units = "days"))
+  cat(sprintf(
+    "%-12s %s (last report %s, %.1f days ago)\n",
+    paste0(epidata_source, ":"), if (age_days <= 7) "fresh" else "stale", format(reported_at, "%F"), age_days
+  ))
+  for (signal in epidata_signals[[epidata_source]]) {
+    counts <- tryCatch(epidata_latest_counts(epidata_source, signal), error = function(cond) conditionMessage(cond))
+    if (is.character(counts)) {
+      cat(sprintf("  %-30s request failed: %s\n", paste0(signal, ":"), counts))
+      next
+    }
+    cat_geo_counts(signal, counts)
+  }
+}
+
+cat("\n== upstream (socrata) ==\n")
+source(here::here("R", "data", "data_freshness.R"))
+nhsn_columns <- c(covid = "totalconfc19newadm", flu = "totalconfflunewadm", rsv = "totalconfrsvnewadm")
+socrata_datasets <- list(
+  "nhsn" = list(id = "ua7e-t2fy", date_column = "weekendingdate", columns = nhsn_columns),
+  "nhsn prelim" = list(id = "mpgq-jmmr", date_column = "weekendingdate", columns = nhsn_columns),
+  "nssp" = list(
+    id = "rdmq-nq56", date_column = "week_end", where = "county = 'All'",
+    columns = c(covid = "percent_visits_covid", flu = "percent_visits_influenza", rsv = "percent_visits_rsv")
+  )
+)
+# Count the rows with a value in each column for the latest two weeks. Returns
+# one named count vector per column.
+socrata_latest_counts <- function(dataset) {
+  response <- httr::GET(
+    sprintf("https://data.cdc.gov/resource/%s.json", dataset$id),
+    query = compact(list(
+      `$select` = paste(c(dataset$date_column, sprintf("count(%s)", dataset$columns)), collapse = ","),
+      `$where` = dataset$where,
+      `$group` = dataset$date_column,
+      `$order` = paste(dataset$date_column, "DESC"),
+      `$limit` = 2
+    )),
+    httr::timeout(30)
+  )
+  httr::stop_for_status(response)
+  weeks <- httr::content(response)
+  map(dataset$columns, function(column) {
+    setNames(
+      map_int(weeks, ~ as.integer(.x[[paste0("count_", column)]])),
+      map_chr(weeks, ~ substr(.x[[dataset$date_column]], 1, 10))
+    )
+  })
+}
+for (name in names(socrata_datasets)) {
+  dataset <- socrata_datasets[[name]]
+  metadata_url <- sprintf("https://data.cdc.gov/api/views/%s", dataset$id)
   updated_at <- get_socrata_updated_at(metadata_url, missing_value = NA)
   if (is.na(updated_at)) {
-    cat(sprintf("%-12s metadata request failed (%s)\n", paste0(dataset, ":"), metadata_url))
+    cat(sprintf("%-12s metadata request failed (%s)\n", paste0(name, ":"), metadata_url))
     next
   }
   age_days <- as.numeric(difftime(Sys.time(), updated_at, units = "days"))
   cat(sprintf(
     "%-12s %s (rows updated %s, %.1f days ago)\n",
-    paste0(dataset, ":"), if (age_days <= 7) "fresh" else "stale",
+    paste0(name, ":"), if (age_days <= 7) "fresh" else "stale",
     format(updated_at, "%F %H:%M %Z", tz = Sys.timezone()), age_days
   ))
+  counts <- tryCatch(socrata_latest_counts(dataset), error = function(cond) conditionMessage(cond))
+  if (is.character(counts)) {
+    cat(sprintf("  count request failed: %s\n", counts))
+    next
+  }
+  iwalk(counts, ~ cat_geo_counts(dataset$columns[[.y]], .x))
 }
 
 cat(sprintf("\n== today (%s) ==\n", today))
