@@ -21,6 +21,14 @@ forecast_date,forecaster,geo_value,ahead,weight
 2026-10-21, linear_no_population_scale, all,, 3
 2026-10-21, climate_base, all,, 2
 2026-10-21, climate_geo_agged, all,, 0
+2026-10-21, revision_aware, mo,, 0
+2026-10-21, nssp_exogenous, hi,, 5
+2026-10-21, climate_linear, ne,, 0.5
+2026-10-21, climate_linear, wa,, 0.5
+2026-10-21, climate_linear, ks,, 1
+2026-10-21, climate_linear, nd,, 1
+2026-10-21, climate_linear, sd,, 1
+2026-10-21, climate_linear, vt,, 1
 ##################
 # Oct 14
 ##################

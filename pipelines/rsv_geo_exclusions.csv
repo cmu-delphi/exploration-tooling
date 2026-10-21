@@ -21,6 +21,13 @@ forecast_date,forecaster,geo_value,ahead,weight
 2026-10-21, linear, all,, 3
 2026-10-21, climate_base, all,, 2
 2026-10-21, climate_geo_agged, all,, 0
+2026-10-21, climate_linear, dc,, 1
+2026-10-21, revision_aware, nd,, 3
+2026-10-21, windowed_seasonal, nd,, 0.25 
+2026-10-21, revision_aware, sd,, 3
+2026-10-21, windowed_seasonal, sd,, 0.25 
+2026-10-21, revision_aware, wy,, 3
+2026-10-21, windowed_seasonal, wy,, 0.25 
 ##################
 # Oct 14
 ##################
