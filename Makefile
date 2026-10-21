@@ -163,27 +163,30 @@ commit-rsv:
 
 # Commit only the disease's weights files (other staged or dirty files stay
 # out of the commit) and push to main. Refuse to run off main, so that a push
-# cannot carry unrelated branch commits.
-push-weights-%:
+# cannot carry unrelated branch commits. Rebase onto origin before the push,
+# because origin usually has new commits; autostash keeps the dirty files.
+push-weights-covid push-weights-flu push-weights-rsv: push-weights-%:
 	@[ "$$(git branch --show-current)" = main ] || { echo "push-weights-$*: not on main"; exit 1; }
 	git diff --quiet HEAD -- pipelines/$*_geo_exclusions.csv pipelines/$*_nssp_geo_exclusions.csv || \
 		git commit -m "$* weights $(current_date)" -- pipelines/$*_geo_exclusions.csv pipelines/$*_nssp_geo_exclusions.csv
+	git pull --rebase --autostash origin main
 	git push origin main
 
+# Push the weights before the PR, so that a failed PR step cannot skip them.
 submit-covid: commit-covid
+	$(MAKE) push-weights-covid
 	cd ../covid19-forecast-hub; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo CDCgov/covid19-forecast-hub
-	$(MAKE) push-weights-covid
 
 submit-flu: commit-flu
+	$(MAKE) push-weights-flu
 	cd ../FluSight-forecast-hub; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo cdcepi/FluSight-forecast-hub
-	$(MAKE) push-weights-flu
 
 submit-rsv: commit-rsv
+	$(MAKE) push-weights-rsv
 	cd ../rsv-forecast-hub; \
 	gh pr create --title "CMU-TimeSeries $(current_date)" --repo CDCgov/rsv-forecast-hub
-	$(MAKE) push-weights-rsv
 
 submit-covid-dry: commit-covid
 	cd ../covid19-forecast-hub; \

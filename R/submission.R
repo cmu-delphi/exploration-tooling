@@ -183,7 +183,7 @@ update_site <- function() {
     explore_table <- tibble(filename = explore_files) %>%
       mutate(
         file_name = path_file(filename),
-        disease = str_extract(file_name, "^(flu|covid)"),
+        disease = str_extract(file_name, "^(flu|covid|rsv)"),
         season_slug = str_extract(file_name, "\\d{4}_\\d{4}"),
         season_name = str_replace(season_slug, "_", "-"),
         is_overall = grepl("overall", file_name),

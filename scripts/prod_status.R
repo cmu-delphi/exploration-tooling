@@ -60,23 +60,29 @@ if (length(last_poll) == 0) {
   }
 }
 
-cat("\n== upstream (epidata) ==\n")
-invisible(suppressMessages(loadNamespace("epidatr")))
-if (!nzchar(epidatr::get_api_key())) {
-  cat("WARNING: no epidata API key set (DELPHI_EPIDATA_KEY); requests are anonymous and rate limited\n")
-}
-for (source in c("nhsn", "nssp")) {
-  meta <- tryCatch(epidatr::epidata_meta(source), error = function(cond) conditionMessage(cond))
-  if (is.character(meta)) {
-    cat(sprintf("%s: metadata request failed: %s\n", source, meta))
+cat("\n== upstream (socrata) ==\n")
+suppressPackageStartupMessages({
+  library(magrittr)
+  library(purrr)
+})
+source(here::here("R", "data", "data_freshness.R"))
+socrata_datasets <- c(
+  "nhsn" = "ua7e-t2fy",
+  "nhsn prelim" = "mpgq-jmmr",
+  "nssp" = "rdmq-nq56"
+)
+for (dataset in names(socrata_datasets)) {
+  metadata_url <- sprintf("https://data.cdc.gov/api/views/%s", socrata_datasets[[dataset]])
+  updated_at <- get_socrata_updated_at(metadata_url, missing_value = NA)
+  if (is.na(updated_at)) {
+    cat(sprintf("%-12s metadata request failed (%s)\n", paste0(dataset, ":"), metadata_url))
     next
   }
-  latest_reference <- as.Date(meta$reference_time_range$latest)
-  age_days <- as.integer(Sys.Date() - latest_reference)
+  age_days <- as.numeric(difftime(Sys.time(), updated_at, units = "days"))
   cat(sprintf(
-    "%s: %s (latest week %s, %d days old; last report %s)\n",
-    source, if (age_days <= 7) "fresh" else "stale", latest_reference, age_days,
-    as.Date(meta$report_time_range$latest)
+    "%-12s %s (rows updated %s, %.1f days ago)\n",
+    paste0(dataset, ":"), if (age_days <= 7) "fresh" else "stale",
+    format(updated_at, "%F %H:%M %Z", tz = Sys.timezone()), age_days
   ))
 }
 
