@@ -44,13 +44,15 @@ alert <- function(msg) {
 # today, whether or not the run had failures.
 announce_reports <- function(failed) {
   site_url <- "https://delphi-forecasting-reports.netlify.app"
+  pings <- trimws(strsplit(Sys.getenv("SLACK_REPORT_PINGS"), ",")[[1]])
   reports <- basename(Sys.glob(here::here("rendered_reports", sprintf("*_on_%s.html", Sys.Date()))))
   reports <- reports[grepl("_(prod|health)_on_", reports)]
   text <- paste(
     c(
       sprintf(
-        ":bar_chart: prod forecasts for %s published%s: <%s|reports site>",
-        Sys.Date(), if (failed) " with failures (see alert)" else "", site_url
+        ":bar_chart: prod forecasts for %s published%s: <%s|reports site> %s",
+        Sys.Date(), if (failed) " with failures (see alert)" else "", site_url,
+        paste0("<@", pings, ">", collapse = " ", recycle0 = TRUE)
       ),
       sprintf("- <%s/%s|%s>", site_url, reports, reports)
     ),

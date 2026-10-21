@@ -33,7 +33,8 @@ forecast for the day. See the script for the exact steps and log paths.
 After the pipelines, the script renders a health notebook per disease and
 posts failures (pipeline errors, failed health checks, failed publish steps,
 stale data at the cutoff) to Slack. It needs a Slack incoming webhook URL in
-`SLACK_WEBHOOK_URL`, set in the `forecaster` user's `~/.Renviron`. See
+`SLACK_WEBHOOK_URL`, and optionally the Slack member IDs to mention in
+`SLACK_REPORT_PINGS`, both set in the `forecaster` user's `~/.Renviron`. See
 `notes/prod-health-check.md`.
 
 ## Install (on the production box, as the `forecaster` user)
