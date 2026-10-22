@@ -1,0 +1,63 @@
+---
+talk-title: "Delphi Forecasting Methods"
+talk-short-title: "Forecasting Methods"
+talk-subtitle: "State level quantile forecasting of flu and covid hospitalizations (NHSN dataset)"
+author: "Dmitry Shemetov & David Weber"
+other-authors: "help from Logan Brooks, Nat DeFries, Daniel McDonald, and Ryan Tibshirani."
+repo-address: ""
+date: "2026-10-22"
+format:
+  revealjs:
+    theme: [default, themer.scss]
+    css: tachyons-minimal.css
+    logo: "gfx/delphi.jpg"
+    chalkboard: false
+    width: 1280
+    height: 720
+    html-math-method: mathjax
+    slide-number: true
+    fig-format: svg
+    fig-align: center
+    fig-width: 5.33
+    fig-height: 3
+    scrollable: false
+    history: false
+    link-external-icon: true
+    link-external-newwindow: true
+    code-overflow: wrap
+    lang: en-CA
+    footer: "{{< meta talk-short-title >}} --- {{< meta repo-address >}}"
+    output-file: "methods.html"
+    self-contained: true
+---
+
+{{< include _titleslide.qmd >}}
+
+```{r data_setup, include=FALSE}
+library(aws.s3)
+library(qs2)
+library(tidyverse)
+library(epipredict)
+knitr::opts_chunk$set(
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  cache = FALSE,
+  dev = "png"
+)
+ggplot2::theme_set(ggplot2::theme_bw())
+here::i_am("reports/writeups/presentations/delphi_forecasting_2025/methods.qmd")
+suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
+source("data_helpers.R")
+
+flu_forecasts <- cached_load("flu_forecasts", \() bind_rows(
+  s3_read("2024/flu_hosp_prod/objects/local_forecasts_and_ensembles_nhsn"),
+  s3_read("2024/flu_hosp_prod/objects/external_forecasts_full") %>%
+    filter(target == "wk inc flu hosp" | is.na(target))
+) %>% rename_forecasters())
+flu_current <- cached_load("nhsn_archive_flu", \() s3_read("2024/flu_hosp_prod/objects/nhsn_archive_data")) %>%
+  epix_as_of_current() %>%
+  filter(geo_value %nin% c("as", "gu", "mp", "vi"))
+```
+
+{{< include _methods.qmd >}}

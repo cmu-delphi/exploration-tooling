@@ -1,6 +1,6 @@
 \DeclareMathOperator*{\minimize}{minimize}
 
-```{r title_setup}
+```{r setup}
 #| include: false
 primary <- "#a8201a"
 secondary <- "#f9c80e"
@@ -24,10 +24,13 @@ snapshots <- snapshots_all %>%
 #| include: false
 snapshots_all |>
   arrange(geo_value, version, time_value) |>
+  # filter(!latest) |>
   ggplot(aes(x = time_value, y = percent_cli)) +
   geom_line(
     aes(color = factor(version), group = interaction(geo_value, version))
   ) +
+  # geom_vline(aes(color = factor(version), xintercept = version), lty = 3,
+  #           size = 0.5) +
   scale_x_date(minor_breaks = "month", labels = NULL) +
   labs(x = "", y = "") +
   theme_void() +
@@ -48,6 +51,9 @@ snapshots_all |>
 
 ## {{< meta talk-title >}} {background-image="gfx/cover-art-1.svg" background-position="bottom"}
 
+::: {.notes}
+Just one project, the grad students are up to other things, such as nowcasting tools, real case count estimates, etc.
+:::
 ### {{< meta talk-subtitle >}}
 
 <br>

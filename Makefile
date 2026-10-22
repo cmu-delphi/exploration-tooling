@@ -304,14 +304,6 @@ summary-reports:
 	Rscript -e "rmarkdown::render('reports/writeups/season_summary_2025.Rmd', output_file = here::here('rendered_reports', 'season_summary_2025.html'))"; \
 	Rscript -e "rmarkdown::render('reports/writeups/first_day_wrong.Rmd', output_file = here::here('rendered_reports', 'first_day_wrong.html'))";
 
-season-summary-2025-talk:
-	quarto render reports/writeups/presentations/season_2025_talk/season_summary_2025_presentation.qmd --to revealjs --output-dir "../../../rendered_reports"; \
-	cp reports/writeups/presentations/season_2025_talk/tachyons-minimal.css reports/; \
-	cp -r reports/writeups/presentations/season_2025_talk/gfx reports/
-
-season-summary-2025-talk-preview:
-	quarto preview reports/writeups/presentations/season_2025_talk/season_summary_2025_presentation.qmd
-
 check-socrata-updates:
 	echo "NHSN Regular Update:"
 	@curl -s https://data.cdc.gov/api/views/ua7e-t2fy | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['rowsUpdatedAt'])" | xargs -I {} date -d "@{}"

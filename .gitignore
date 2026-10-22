@@ -57,9 +57,6 @@ reports/*_files/
 reports/**/*_files/
 reports/**/*.html
 reports/**/*.png
-reports/writeups/presentations/season_2025_talk/season_summary_2025_presentation_files/
-reports/writeups/presentations/season_2025_talk/season_summary_2025_presentation.html
-reports/writeups/presentations/season_2025_talk/season_summary_2025_presentation_cache/
 
 # one_offs render artifacts
 scripts/one_offs/*.pdf
