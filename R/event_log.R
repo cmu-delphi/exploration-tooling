@@ -26,6 +26,22 @@ log_event <- function(..., who = NULL, project = Sys.getenv("TAR_RUN_PROJECT", "
   invisible(line)
 }
 
+# For callers that log runner output to a file themselves (no Makefile `tee`):
+# copies each new line of `log_path` into the project's event log as
+# `[runner] <line>` until the returned process is killed. Returns NULL if it
+# cannot start, so a logging problem never stops a run.
+follow_log_into_events <- function(log_path, project) {
+  dir.create(dirname(log_path), recursive = TRUE, showWarnings = FALSE)
+  dir.create(dirname(event_log_path(project)), recursive = TRUE, showWarnings = FALSE)
+  tryCatch(
+    processx::process$new(
+      "sh",
+      c("-c", sprintf("tail -n0 -F %s | sed -u 's/^/[runner] /' >> %s", shQuote(log_path), shQuote(event_log_path(project))))
+    ),
+    error = function(e) NULL
+  )
+}
+
 # Runs `expr`, logging every warning, message and error it raises. Conditions
 # are not muffled, so targets still records them and errors still stop the run.
 with_event_log <- function(expr, label) {

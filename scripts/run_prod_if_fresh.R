@@ -167,6 +167,17 @@ run_logged <- function(command, args, log_path) {
 }
 
 run_project_pipeline <- function(project, log_path) {
+  # TAR_PROJECT is left at the last freshness-loop project, so name the project
+  # explicitly for the workers' event log (and the pipeline script's .g_project).
+  withr::local_envvar(TAR_RUN_PROJECT = project)
+  follower <- follow_log_into_events(log_path, project)
+  on.exit(
+    {
+      Sys.sleep(1)
+      if (!is.null(follower)) follower$kill_tree()
+    },
+    add = TRUE
+  )
   store <- targets::tar_config_get("store", project = project)
   script <- targets::tar_config_get("script", project = project)
   dir.create(store, showWarnings = FALSE)

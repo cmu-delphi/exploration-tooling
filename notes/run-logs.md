@@ -15,14 +15,20 @@
 `cache/logs/<project>_events.log` is the one place to look. Every line starts
 with who wrote it:
 
-- `[runner] <text>`: a line of `tar_make` output. The `prod-*` and `eval-*`
-  recipes in the `Makefile` copy it in (`tee_events`), so this needs `make`; a
-  bare `Rscript scripts/run.R` only writes the `run start` / `run end` lines.
+- `[runner] <text>`: a line of `tar_make` output. `make prod-*` / `eval-*` copy
+  it in (`tee_events` in the `Makefile`); the systemd path
+  (`scripts/run_prod_if_fresh.R`) does it with `follow_log_into_events()`, which
+  tails the per-disease log. A bare `Rscript scripts/run.R` only writes the
+  `run start` / `run end` lines.
 - `[worker <pid> <target>] <iso time> <text>`: written by a crew worker through
   `log_event()` (`R/event_log.R`). `run_forecaster` writes `start` / `done` for
   each forecast, and `with_event_log()` also copies every warning, message and
   error the forecaster raises (`warning <id> aheads=<n>: <text>`). They are
   still raised normally, so `targets` records them too.
+
+The project in the file name comes from `TAR_RUN_PROJECT`, which `scripts/run.R`,
+the Makefile recipes and `run_project_pipeline` set. A worker that does not see
+it writes to `unknown_events.log`.
 
 Lines from different processes interleave in the order they were written, so
 `grep '\[worker 1234 '` or a target name picks out one worker. The raw stdout of
