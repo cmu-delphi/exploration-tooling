@@ -1,6 +1,7 @@
 # Summarize today's systemd prod forecast run (see deploy/systemd/README.md).
 # Reads the log that scripts/run_prod_if_fresh.R writes and checks that the
 # live site serves the local index.
+source(here::here("R", "event_log.R"))
 log_file <- here::here("cache", "logs", "prod_forecast_freshness.log")
 site_url <- "https://delphi-forecasting-reports.netlify.app/"
 today <- format(Sys.Date())
@@ -45,6 +46,23 @@ cat(sprintf(
 if (service[["Result"]] != "success") {
   cat("last journal lines:\n")
   system2("journalctl", c("--user", "-u", "prod-forecasts.service", "-n", "10", "--no-pager"))
+}
+
+cat("\n== in flight (cache/logs/<project>_events.log) ==\n")
+for (project in c("covid_hosp_prod", "flu_hosp_prod", "rsv_hosp_prod")) {
+  path <- event_log_path(project)
+  events <- if (file.exists(path)) readLines(path) else character(0)
+  events <- events[startsWith(events, today)]
+  running <- events_in_flight(events)
+  cat(sprintf("%s: ", project))
+  if (length(events) == 0) {
+    cat("no events today\n")
+  } else if (nrow(running) == 0) {
+    cat(sprintf("nothing in flight (last: %s)\n", substring(tail(events, 1), 1, 100)))
+  } else {
+    cat(sprintf("%d in flight\n", nrow(running)))
+    print(running, row.names = FALSE)
+  }
 }
 
 cat("\n== data freshness ==\n")

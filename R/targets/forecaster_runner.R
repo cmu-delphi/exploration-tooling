@@ -58,11 +58,11 @@ run_forecaster <- function(
     snapshot <- snapshot %>% left_join(extra_data, by = join_by(geo_value, time_value))
   }
   forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params)
-  # Worker stdout is only visible in local_logs/, so mark start/end for hang triage.
+  # start/done lines let `make status` show which forecasts are in flight.
   started <- Sys.time()
-  cli::cli_inform("[{format(started, '%H:%M:%S')}] start {id} aheads={toString(aheads)} rows={nrow(snapshot)}")
+  log_event(sprintf("start %s aheads=%s rows=%d", id, toString(aheads), nrow(snapshot)))
   out <- forecaster_fn(snapshot)
-  cli::cli_inform("[{format(Sys.time(), '%H:%M:%S')}] done {id} in {round(difftime(Sys.time(), started, units = 'secs'))}s")
+  log_event(sprintf("done %s aheads=%s in %ds", id, toString(aheads), round(difftime(Sys.time(), started, units = "secs"))))
   if (join_extra_data && "source" %in% colnames(out)) {
     out <- out %>% select(-source)
   }
