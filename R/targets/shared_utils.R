@@ -336,6 +336,12 @@ create_joined_targets <- function() {
   )
 }
 
+# Fail a forecast target that runs this long, so a hang errors instead of
+# sitting at "dispatched". A normal forecast target takes minutes at most.
+forecast_resources <- function(seconds_timeout = 30 * 60) {
+  tar_resources(crew = tar_resources_crew(seconds_timeout = seconds_timeout))
+}
+
 set_targets_config <- function() {
   # Leave at least 4 cores free for other processes, but cap at 30 workers.
   num_workers <- min(max(parallel::detectCores() - 4L, 1L), 30L)

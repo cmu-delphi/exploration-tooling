@@ -99,7 +99,9 @@ if (!g_evaluation_mode) {
 
 # Trainer used by the seasonal forecasters; stored as a global and referenced by
 # symbol in the grid params so tar_map embeds the symbol, not the model_spec.
-g_quantreg <- epipredict::quantile_reg()
+# "br" (the default solver) can loop forever on some inputs; "fn" finished on
+# the one we hit. See notes/quantreg-solver.md.
+g_quantreg <- epipredict::quantile_reg(method = "fn")
 
 # Forecaster grid — behavior is defined by (id, bare forecaster function,
 # params). Per-forecaster wrapping that isn't a modeling parameter is declared
@@ -438,7 +440,8 @@ forecast_targets <- tar_map(
         sort_quantiles = sort_quantiles
       )
     },
-    pattern = map(aheads)
+    pattern = map(aheads),
+    resources = forecast_resources()
   ),
   tar_target(
     name = forecast_nssp,
@@ -490,7 +493,8 @@ forecast_targets <- tar_map(
         primary_source = "nssp"
       )
     },
-    pattern = map(aheads)
+    pattern = map(aheads),
+    resources = forecast_resources()
   )
 )
 

@@ -27,7 +27,9 @@ g_disease <- "flu"
 g_s3_prefix <- "exploration"
 # Trainer used by the seasonal forecasters; stored as a global and referenced by
 # symbol in the grid params so tar_map embeds the symbol, not the model_spec.
-g_quantreg <- epipredict::quantile_reg()
+# "br" (the default solver) can loop forever on some inputs; "fn" finished on
+# the one we hit. See notes/quantreg-solver.md.
+g_quantreg <- epipredict::quantile_reg(method = "fn")
 g_external_object_name <- glue::glue("2024/2024-2025_{g_disease}_hosp_forecasts.parquet")
 # needed for windowed_seasonal
 g_very_latent_locations <- list(list(
@@ -424,7 +426,8 @@ forecast_targets <- tar_map(
         primary_source = "nssp"
       )
     },
-    pattern = map(aheads)
+    pattern = map(aheads),
+    resources = forecast_resources()
   ),
   # As-of slice of the raw nssp archive used as an exogenous predictor
   # (extra_sources = "nssp"). Keeps the `nssp` column, unlike nssp_forecast_data
@@ -466,7 +469,8 @@ forecast_targets <- tar_map(
         sort_quantiles = sort_quantiles
       )
     },
-    pattern = map(aheads)
+    pattern = map(aheads),
+    resources = forecast_resources()
   )
 )
 

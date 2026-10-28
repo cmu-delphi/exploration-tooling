@@ -81,7 +81,9 @@ if (!g_evaluation_mode) {
 
 # Trainers referenced by symbol in the grid params so tar_map embeds the
 # symbol, not the model_spec.
-g_quantreg <- epipredict::quantile_reg()
+# "br" (the default solver) can loop forever on some inputs; "fn" finished on
+# the one we hit. See notes/quantreg-solver.md.
+g_quantreg <- epipredict::quantile_reg(method = "fn")
 g_quantreg_fn <- epipredict::quantile_reg(method = "fn")
 
 # Forecaster grid; see covid_hosp_prod.R for the spec columns. The three
@@ -342,7 +344,8 @@ forecast_targets <- tar_map(
         sort_quantiles = sort_quantiles
       )
     },
-    pattern = map(aheads)
+    pattern = map(aheads),
+    resources = forecast_resources()
   ),
   tar_target(
     name = forecast_nssp,
@@ -384,7 +387,8 @@ forecast_targets <- tar_map(
         primary_source = "nssp"
       )
     },
-    pattern = map(aheads)
+    pattern = map(aheads),
+    resources = forecast_resources()
   )
 )
 
