@@ -34,16 +34,21 @@ run:
 cache/logs:
 	mkdir -p cache/logs
 
+# Copy runner output into the project's unified events log (see
+# notes/run-logs.md), each line prefixed with [runner]. $(1) is the per-run log
+# name, $(2) the targets project.
+tee_events = tee -a cache/logs/$(1) >(sed -u 's/^/[runner] /' >> cache/logs/$(2)_events.log)
+
 # prod-<disease> runs one pipeline and publishes the reports; prod runs all
 # three pipelines and publishes once. The *-pipeline targets skip publishing.
 prod-covid-pipeline: | cache/logs
-	set -o pipefail; export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_covid
+	set -o pipefail; export TAR_RUN_PROJECT=covid_hosp_prod; Rscript scripts/run.R 2>&1 | $(call tee_events,prod_covid,covid_hosp_prod)
 
 prod-flu-pipeline: | cache/logs
-	set -o pipefail; export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_flu
+	set -o pipefail; export TAR_RUN_PROJECT=flu_hosp_prod; Rscript scripts/run.R 2>&1 | $(call tee_events,prod_flu,flu_hosp_prod)
 
 prod-rsv-pipeline: | cache/logs
-	set -o pipefail; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R 2>&1 | tee -a cache/logs/prod_rsv
+	set -o pipefail; export TAR_RUN_PROJECT=rsv_hosp_prod; Rscript scripts/run.R 2>&1 | $(call tee_events,prod_rsv,rsv_hosp_prod)
 
 prod-covid: prod-covid-pipeline
 	$(MAKE) publish
@@ -68,13 +73,13 @@ status:
 # EVALUATION_DATES=<d1,d2> and EVALUATION_FORECASTERS=<id1,id2> narrow it further;
 # EVALUATION_SUBSTITUTIONS=false replays without the data substitutions (AGENTS.md).
 eval-flu: | cache/logs
-	set -o pipefail; export TAR_RUN_PROJECT=flu_hosp_evaluation; Rscript scripts/run.R 2>&1 | tee -a cache/logs/eval_flu
+	set -o pipefail; export TAR_RUN_PROJECT=flu_hosp_evaluation; Rscript scripts/run.R 2>&1 | $(call tee_events,eval_flu,flu_hosp_evaluation)
 
 eval-covid: | cache/logs
-	set -o pipefail; export TAR_RUN_PROJECT=covid_hosp_evaluation; Rscript scripts/run.R 2>&1 | tee -a cache/logs/eval_covid
+	set -o pipefail; export TAR_RUN_PROJECT=covid_hosp_evaluation; Rscript scripts/run.R 2>&1 | $(call tee_events,eval_covid,covid_hosp_evaluation)
 
 eval-rsv: | cache/logs
-	set -o pipefail; export TAR_RUN_PROJECT=rsv_hosp_evaluation; Rscript scripts/run.R 2>&1 | tee -a cache/logs/eval_rsv
+	set -o pipefail; export TAR_RUN_PROJECT=rsv_hosp_evaluation; Rscript scripts/run.R 2>&1 | $(call tee_events,eval_rsv,rsv_hosp_evaluation)
 
 explore-covid:
 	export TAR_RUN_PROJECT=covid_hosp_explore; Rscript scripts/run.R

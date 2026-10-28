@@ -63,6 +63,11 @@ for (project in c("covid_hosp_prod", "flu_hosp_prod", "rsv_hosp_prod")) {
     cat(sprintf("%d in flight\n", nrow(running)))
     print(running, row.names = FALSE)
   }
+  problems <- events_problems(events)
+  if (length(problems) > 0) {
+    cat(sprintf("  %d warnings/errors logged by workers today; last:\n", length(problems)))
+    cat(paste0("    ", substring(tail(problems, 3), 1, 200)), sep = "\n")
+  }
 }
 
 cat("\n== data freshness ==\n")

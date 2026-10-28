@@ -37,9 +37,9 @@ if (!dir.exists(store_dir)) dir.create(store_dir)
 
 # Crew workers inherit this, so their log_event() lines reach the same file.
 Sys.setenv(TAR_RUN_PROJECT = tar_project)
-log_event("run start")
+log_event("run start", who = "runner")
 tar_make(
   store = store_dir,
   script = tar_config_get("script", project = tar_project)
 )
-log_event("run end")
+log_event("run end", who = "runner")
