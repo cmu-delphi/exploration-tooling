@@ -6,11 +6,12 @@ set -uo pipefail
 project=${1:?usage: scripts/tail_logs.sh <targets project>}
 cd "$(dirname "$0")/.."
 
-# Runner log names follow the Makefile: <kind>_<disease>.
+# Runner log names follow the Justfile's `run` recipe: <kind>_<disease>.
 disease=${project%%_*}
 case ${project##*_} in
   prod) runner=cache/logs/prod_$disease ;;
   evaluation) runner=cache/logs/eval_$disease ;;
+  explore) runner=cache/logs/explore_$disease ;;
   *) runner= ;;
 esac
 
