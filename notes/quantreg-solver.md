@@ -69,7 +69,17 @@ The prod grids here use `pop_scaling = FALSE` for the `g_quantreg` forecasters.
 
 ## Hang protection
 
-`forecast_resources()` (`R/targets/shared_utils.R`) sets a 30 minute per-target
-timeout on `forecast_nhsn` and `forecast_nssp`. When it fired in the local run
-the pipeline stopped and the stuck workers exited, but `tar_make()` reported
-the cryptic `invalid subscript type 'closure'` instead of naming the target.
+`forecast_resources()` (`R/targets/shared_utils.R`) sets a 30 minute timeout
+on each branch of `forecast_nhsn` and `forecast_nssp`, which is one forecaster x
+forecast date x ahead. Nothing else has a timeout. If a branch ever loops over
+many dates or aheads internally, the timeout covers the whole loop.
+
+The clock starts when targets dispatches the branch, not while it waits for a
+worker: targets only dispatches to an idle worker. Calling mirai or crew
+directly behaves differently, because time spent in their queue counts toward
+the timeout (checked with crew 1.3.3, mirai 2.7.3).
+
+When the timeout fires, the pipeline stops and the stuck workers exit, but
+`tar_make()` reports a cryptic error (`invalid subscript type 'closure'` or
+`object 'status' not found`) instead of naming the target. The runner log's
+last `dispatched` line without a matching `completed` names it.
