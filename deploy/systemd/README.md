@@ -13,7 +13,7 @@ original crontab.
 | `build_nhsn_archive.R` every 5 min | `nhsn-archive-builder.{service,timer}` |
 | `build_nssp_archive.R` every 5 min | `nssp-archive-builder.{service,timer}` |
 | `get_forecast_data.R` Tue 09:00 | `get-forecast-data.{service,timer}` |
-| `make prod` (was `prod-log`) Wed 10:10 | `prod-forecasts.{service,timer}` (see below) |
+| `just prod` Wed 10:10 | `prod-forecasts.{service,timer}` (see below) |
 | `nwss_download_script.py` daily 06:25 | `nwss-download.{service,timer}` |
 
 All timers carry `TimeZone=America/Los_Angeles` to match the old
@@ -54,7 +54,7 @@ sudo loginctl enable-linger forecaster
 ```
 
 Check status with `systemctl --user list-timers` and `journalctl --user -u
-<unit>`. For the prod forecast run, `make status` (`scripts/prod_status.R`)
+<unit>`. For the prod forecast run, `just status` (`scripts/prod_status.R`)
 summarizes today's freshness polls, upstream NHSN/NSSP update times from the
 epidata metadata endpoint, pipeline and publish steps, and whether the live
 site serves the local `rendered_reports/index.html`. Once confirmed

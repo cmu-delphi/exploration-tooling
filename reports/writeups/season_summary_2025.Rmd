@@ -179,7 +179,7 @@ weights %>% filter(forecast_family == "climate") %>% ggplot(aes(x = factor(ahead
   </details>
 
 # Season Scoring
-<!-- NOTE: to run this, you must run `make prod-flu` and `make prod-covid` successfully, as it will read the targets directly from the store. -->
+<!-- NOTE: to run this, you must run `just prod flu` and `just prod covid` successfully, as it will read the targets directly from the store. -->
 
 In addition to the plots below, it is worth keeping in mind the all model comparisons from [flu eval dashboard](https://reichlab.io/flusight-dashboard/eval.html) and [covid](https://reichlab.io/covidhub-dashboard/eval.html).
 We've included the best models there below as well.

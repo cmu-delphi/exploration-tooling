@@ -2,7 +2,7 @@
 
 | What | Where |
 | --- | --- |
-| Runner output (`tar_make` progress, timestamped) | `cache/logs/prod_{covid,flu,rsv}`, `cache/logs/eval_{covid,flu,rsv}` (Makefile `tee`, or `scripts/run_prod_if_fresh.R` on the systemd path) |
+| Runner output (`tar_make` progress, timestamped) | `cache/logs/prod_{covid,flu,rsv}`, `cache/logs/eval_{covid,flu,rsv}`, `cache/logs/explore_{covid,flu,rsv}` (Justfile `tee`, or `scripts/run_prod_if_fresh.R` on the systemd path) |
 | Each crew worker's stdout and stderr | `local_logs/<project>/<run id>/<random>.log` |
 | Warnings and errors per target | `tar_meta(fields = c(warnings, error), store = "<project>")` |
 | Freshness polls and start/finish of the whole systemd run | `cache/logs/prod_forecast_freshness.log` |
@@ -12,12 +12,11 @@
 
 ## Following a run
 
-`make logs project=covid_hosp_prod` (`scripts/tail_logs.sh`) follows the
+`just logs covid_hosp_prod` (`scripts/tail_logs.sh`) follows the
 runner log and every worker log of the project's latest run as one stream.
 Lines are prefixed `[runner]` or `[worker <first 6 chars of the log name>]`. It
 picks up worker logs that crew creates mid-run, since crew starts workers
-lazily and replaces them after they idle out. Explore projects have no runner
-log, so only their worker logs are followed.
+lazily and replaces them after they idle out.
 
 The runner log is where to look first: with the `timestamp` reporter
 (`reporter_make` in `_targets.yaml`, passed explicitly by `scripts/run.R` and
@@ -40,11 +39,11 @@ Worker startup is kept quiet: `set_targets_config()` sets
 `RENV_CONFIG_SYNCHRONIZED_CHECK=FALSE` (skips renv's out-of-sync check, which
 can also spend seconds scanning dependencies) and `QUIET_PACKAGE_STARTUP=true`,
 which makes `.Rprofile` drop package attach and masking messages. What remains
-is crew's own `sessionInfo()` header, which `make logs` filters out.
+is crew's own `sessionInfo()` header, which `just logs` filters out.
 
 ## Inspecting a live run
 
-- `make status` has an "in flight" section: targets that `tar_progress()`
+- `just status` has an "in flight" section: targets that `tar_progress()`
   reports as `dispatched`, with their dispatch time from the runner log, and
   today's warnings and errors from `tar_meta()`. A target stays `dispatched`
   if the runner died, so check the elapsed time.

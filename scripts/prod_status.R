@@ -55,7 +55,7 @@ dispatch_times <- function(runner_lines) {
   times[!duplicated(names(times), fromLast = TRUE)]
 }
 
-cat("\n== in flight (tar_progress; `make logs project=<p>` to follow) ==\n")
+cat("\n== in flight (tar_progress; `just logs <project>` to follow) ==\n")
 for (disease in c("covid", "flu", "rsv")) {
   project <- sprintf("%s_hosp_prod", disease)
   store <- here::here(targets::tar_config_get("store", project = project))
@@ -244,7 +244,7 @@ if (is.null(live_index)) {
 for (disease in c("covid", "flu", "rsv")) {
   if (startsWith(step_statuses[[sprintf("%s prod", disease)]], "failed")) {
     cat(sprintf(
-      "\n%s prod failed. To see the errors:\n  make get-%s-prod-errors\n  tail -n 100 cache/logs/prod_%s\n",
+      "\n%s prod failed. To see the errors:\n  just errors %s_hosp_prod\n  tail -n 100 cache/logs/prod_%s\n",
       disease, disease, disease
     ))
   }

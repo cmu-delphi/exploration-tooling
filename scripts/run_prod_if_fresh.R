@@ -247,7 +247,7 @@ announce_reports(failed = length(failures) > 0)
 if (length(failures) > 0) {
   if (published) {
     file.create(handoff_marker)
-    failures <- c(failures, "The site is live, so automatic retries stop for today. Rerun with `make prod-*`.")
+    failures <- c(failures, "The site is live, so automatic retries stop for today. Rerun with `just prod <disease>`.")
   }
   alert(paste("-", failures, collapse = "\n"))
   finish(1)

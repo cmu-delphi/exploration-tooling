@@ -345,7 +345,7 @@ forecast_resources <- function(seconds_timeout = 30 * 60) {
 new_run_id <- function() format(Sys.time(), "%Y%m%dT%H%M%S")
 
 # Crew worker logs for one run go in local_logs/<project>/<run id>/, so
-# `make logs` can find them. See notes/run-logs.md.
+# `just logs` can find them. See notes/run-logs.md.
 worker_log_dir <- function() {
   project <- Sys.getenv("TAR_RUN_PROJECT", Sys.getenv("TAR_PROJECT", "unknown"))
   here::here("local_logs", project, Sys.getenv("TAR_RUN_ID", new_run_id()))

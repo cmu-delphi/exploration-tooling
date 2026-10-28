@@ -50,14 +50,14 @@ message is sent at most once a day.
 If the netlify deploy succeeded despite the failure, the site is live and the
 day goes to a person instead: the run writes
 `cache/prod_forecast_handed_off_<date>`, and later firings do not run or post.
-Rerun by hand with `make prod-*`; that path ignores the marker. If the bot token or channel isn't set or the post fails, it logs a CRITICAL line saying
+Rerun by hand with `just prod <disease>`; that path ignores the marker. If the bot token or channel isn't set or the post fails, it logs a CRITICAL line saying
 the alert was not delivered.
 After every publish, failed or not, it also posts a message with links to the
 site and to the prod reports and health notebooks rendered that day.
 That message mentions the Slack member IDs in `SLACK_REPORT_PINGS`, a
 comma-separated list (for example `U0123456789,U9876543210`).
 If the variable is not set, the message has no mentions.
-The first run to end at or after 14:00 posts the output of `make status`
+The first run to end at or after 14:00 posts the output of `just status`
 (`scripts/prod_status.R`), once a day; delete `cache/prod_status_posted_<date>`
 to post it again.
 

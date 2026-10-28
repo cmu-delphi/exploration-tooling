@@ -215,7 +215,7 @@ Write as a standalone script in `_local/`.
 
 ## Evaluation Protocol
 
-Evaluate on flu and COVID holdout sets via `make eval-flu` / `make eval-covid`.
+Evaluate on flu and COVID holdout sets via `just eval flu` / `just eval covid`.
 Use `EVALUATION_N_DATES` to limit scope during iteration.
 
 Primary metric: WIS by ahead, aggregated across geos.

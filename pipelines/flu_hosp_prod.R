@@ -41,7 +41,7 @@ g_very_latent_locations <- list(list(
 g_truth_data_date <- "2023-09-01"
 # Whether we're running in evaluation (historical replay) mode. Dispatch is on
 # the targets project name: scripts/run.R and the oracle pass TAR_RUN_PROJECT;
-# direct tar_* invocations (e.g. make prune-flu-evaluation) set TAR_PROJECT.
+# direct tar_* invocations (e.g. just prune flu_hosp_evaluation) set TAR_PROJECT.
 # TAR_RUN_PROJECT wins so a stale TAR_PROJECT in the shell can't flip the mode.
 # If TRUE, we skip the weekly report notebook (each week's report is preserved
 # as an ASOF snapshot) and instead run the scoring notebook, which scores the
