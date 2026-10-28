@@ -13,9 +13,11 @@ rejust := quote(just_executable()) + " -f " + quote(justfile())
 default:
     @{{rejust}} --list
 
+[group('setup-sync-clean')]
 install:
     Rscript -e "install.packages(c('renv', 'pak', 'rspm')); renv::restore()"
 
+[group('deprecated')]
 test:
     Rscript -e "testthat::test_dir('tests/testthat')"
 
@@ -30,42 +32,51 @@ run disease kind="prod":
         | tee -a cache/logs/{{ if kind == "evaluation" { "eval" } else { kind } }}_{{disease}}
 
 # Prod pipelines (one disease or all three), then publish once.
+[group('production')]
 prod disease="all":
     for d in {{ if disease == "all" { diseases } else { disease } }}; do {{rejust}} run "$d" prod; done
     {{rejust}} publish
 
 # Historical replay + scoring in the disease's own evaluation store.
+[group('exploration')]
 eval disease: (run disease "evaluation")
 
 # Exploration sweeps (one disease, or all three and then publish).
+[group('exploration')]
 explore disease="all":
     for d in {{ if disease == "all" { diseases } else { disease } }}; do {{rejust}} run "$d" explore; done
     {{ if disease == "all" { rejust + " publish" } else { "" } }}
 
-# Potentially dead: one-off comparison of prod vs explore scores.
+# One-off comparison of prod vs explore scores.
+[group('deprecated')]
 prod-compare disease:
     Rscript scripts/one_offs/render_prod_explore_comparison.R {{disease}}
 
 # The project goes through TAR_RUN_PROJECT because an .Renviron TAR_PROJECT would override a shell export.
 # Prune a store via scripts/prune.R, e.g. `just prune flu_hosp_evaluation`; default prunes all nine.
+[group('setup-sync-clean')]
 prune project="all":
     for p in {{ if project == "all" { stores } else { project } }}; do TAR_RUN_PROJECT="$p" Rscript scripts/prune.R; done
 
 # Show errors from a project's last pipeline run.
+[group('debugging')]
 errors project="flu_hosp_prod":
     Rscript -e "{{load_all}}; get_targets_errors(project = '{{project}}')"
 
 # ---- Prod monitoring ----
 
 # Summarize today's systemd prod run: freshness polls, pipelines, site, netlify.
+[group('production')]
 status:
     @Rscript scripts/prod_status.R
 
 # Follow a project's runner log and its latest run's worker logs. See notes/run-logs.md.
+[group('debugging')]
 logs project:
     @scripts/tail_logs.sh {{project}}
 
 # Print when the CDC Socrata datasets last updated. Fail-soft: one bad fetch doesn't stop the rest.
+[group('debugging')]
 check-socrata-updates:
     @echo "NHSN Regular Update:"
     -@curl -s https://data.cdc.gov/api/views/ua7e-t2fy | python3 -c "import sys, json; print(json.load(sys.stdin)['rowsUpdatedAt'])" | xargs -I {} date -d "@{}"
@@ -80,6 +91,7 @@ check-socrata-updates:
 oracle_reference_date := "2026-06-24"
 
 # Capture a golden, e.g. `just oracle-capture flu_hosp_prod refactored`; n limits evaluation replays to the last n dates.
+[group('debugging')]
 oracle-capture project label n="":
     mkdir -p cache/logs
     TAR_RUN_PROJECT={{project}} ORACLE_LABEL={{label}} FORECAST_REFERENCE_DATE={{oracle_reference_date}} EVALUATION_N_DATES={{n}} \
@@ -87,6 +99,7 @@ oracle-capture project label n="":
 
 # Exits non-zero when anything differs; that is the signal, not an error.
 # Diff two captured labels of one project, e.g. `just oracle-compare flu_hosp_prod baseline refactored`.
+[group('debugging')]
 oracle-compare project a b:
     Rscript scripts/oracle/compare.R {{project}}:{{a}} {{project}}:{{b}}
 
@@ -99,12 +112,14 @@ _hub_repo disease:
     @echo {{ if disease == "covid" { "CDCgov/covid19-forecast-hub" } else if disease == "flu" { "cdcepi/FluSight-forecast-hub" } else if disease == "rsv" { "CDCgov/rsv-forecast-hub" } else { error("unknown disease: " + disease) } }}
 
 # Commit this week's forecast in the disease's hub checkout.
+[group('production')]
 commit disease:
     ./scripts/commit-script.sh "$({{rejust}} _hub_dir {{disease}})"
 
 # Other staged or dirty files stay out of the commit. Refuses to run off main, so a push can't carry
 # unrelated branch commits. Rebases onto origin first because origin usually has new commits.
 # Commit only the disease's weights files and push them to main.
+[group('production')]
 push-weights disease:
     [ "$(git branch --show-current)" = main ] || { echo "push-weights {{disease}}: not on main"; exit 1; }
     files="pipelines/{{disease}}_geo_exclusions.csv pipelines/{{disease}}_nssp_geo_exclusions.csv"; \
@@ -114,6 +129,7 @@ push-weights disease:
 
 # Weights go before the PR so a failed PR step can't skip them.
 # Commit the forecast, push the weights, and open the hub PR (one disease or all); `--dry-run` skips the weights push.
+[group('production')]
 submit disease="all" *flags:
     for d in {{ if disease == "all" { diseases } else { disease } }}; do \
         {{rejust}} commit "$d"; \
@@ -122,7 +138,8 @@ submit disease="all" *flags:
     done
 
 # Keeps the committed hosp rows and takes only the NSSP rows from the working file.
-# Potentially dead: one-off covid submission fix, e.g. `just update-only-nssp-submission 2025-09-13`.
+# One-off covid submission fix, e.g. `just update-only-nssp-submission 2025-09-13`.
+[group('deprecated')]
 update-only-nssp-submission date:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -134,40 +151,49 @@ update-only-nssp-submission date:
 
 # ---- Data sync ----
 
-# Potentially dead: NWSS wastewater export via the Python tool.
+# NWSS wastewater export via the Python tool.
+[group('deprecated')]
 get-nwss:
     mkdir -p aux_data/nwss_covid_data aux_data/nwss_flu_data
     cd scripts/nwss_export_tool && ../../.venv/bin/python nwss_covid_export.py && ../../.venv/bin/python nwss_influenza_export.py
 
 # Mirror S3 into local dirs (--delete). dir: aux_data, a store name, or all.
+[group('setup-sync-clean')]
 pull dir="all":
     for d in {{ if dir == "all" { "aux_data " + synced } else { dir } }}; do aws s3 sync "{{bucket}}/$d/" "$d/" --delete; done
 
 # Mirror local stores into S3 (--delete). dir: a store name, or all.
+[group('setup-sync-clean')]
 push dir="all":
     for d in {{ if dir == "all" { synced } else { dir } }}; do aws s3 sync "$d/" "{{bucket}}/$d/" --delete; done
 
 # ---- Reports site ----
 
 # Rebuild the report index and deploy it.
+[group('production')]
 publish: update-site netlify
 
+[group('production')]
 sync-reports:
     aws s3 sync rendered_reports/ {{bucket}}/reports/
     aws s3 sync {{bucket}}/reports/ rendered_reports/
 
+[group('production')]
 update-site: sync-reports
     Rscript -e "{{load_all}}; update_site()"
     aws s3 sync rendered_reports/ {{bucket}}/reports/
 
+[group('production')]
 netlify:
     netlify deploy --dir=rendered_reports --prod
 
-# Potentially dead: Shiny dashboard over the scores.
+# Shiny dashboard over the scores.
+[group('deprecated')]
 dashboard:
     Rscript scripts/app/dashboard.R
 
-# Potentially dead: render the 2025 one-off writeups into rendered_reports/.
+# Render the 2025 one-off writeups into rendered_reports/.
+[group('deprecated')]
 summary-reports:
     Rscript -e "rmarkdown::render('reports/writeups/revision/revision_summary_report_2025.Rmd', output_file = here::here('rendered_reports', 'revision_summary_2025.html'))"
     Rscript -e "rmarkdown::render('reports/writeups/decreasing_forecasters.Rmd', output_file = here::here('rendered_reports', 'decreasing_forecasters.html'))"
@@ -175,6 +201,7 @@ summary-reports:
     Rscript -e "rmarkdown::render('reports/writeups/first_day_wrong.Rmd', output_file = here::here('rendered_reports', 'first_day_wrong.html'))"
 
 # Render calibration experiment notebooks (all, or the named ones, e.g. e18_ref_op_bridge) and the index.
+[group('exploration')]
 calibration-experiments *notebooks:
     Rscript scripts/calibration/render_experiments.R {{notebooks}}
 
