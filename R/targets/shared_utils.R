@@ -357,6 +357,7 @@ set_targets_config <- function() {
   # Workers inherit these: skip renv's slow, noisy "out-of-sync" check and
   # package attach messages (.Rprofile) at startup.
   Sys.setenv(RENV_CONFIG_SYNCHRONIZED_CHECK = "FALSE", QUIET_PACKAGE_STARTUP = "true")
+  patch_crew_timeout_status()
 
   tar_option_set(
     # qs is a fast serialization format for R objects.

@@ -210,7 +210,12 @@ for (p in pipelines) {
   status <- run_project_pipeline(p$project, p$log)
   log_msg(sprintf("Finished: %s prod pipeline (%s)", p$disease, if (status == 0) "ok" else "failed"))
   if (status != 0) {
-    failures <- c(failures, sprintf("%s prod pipeline errored (log: %s)", p$disease, p$log))
+    # A timeout or a dead worker leaves its branch dispatched; name them here.
+    stuck <- dispatched_targets(p$project)
+    failures <- c(failures, sprintf(
+      "%s prod pipeline errored (log: %s)%s", p$disease, p$log,
+      if (length(stuck) > 0) sprintf("; in flight when it stopped: %s", toString(stuck)) else ""
+    ))
   }
 }
 for (p in pipelines) {

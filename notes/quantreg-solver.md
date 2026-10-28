@@ -79,7 +79,14 @@ worker: targets only dispatches to an idle worker. Calling mirai or crew
 directly behaves differently, because time spent in their queue counts toward
 the timeout (checked with crew 1.3.3, mirai 2.7.3).
 
-When the timeout fires, the pipeline stops and the stuck workers exit, but
-`tar_make()` reports a cryptic error (`invalid subscript type 'closure'` or
-`object 'status' not found`) instead of naming the target. The runner log's
-last `dispatched` line without a matching `completed` names it.
+When the timeout fires, the pipeline stops and the stuck workers exit, and
+`tar_make()` fails with `target <branch> error: 5 | Timed out`. That relies on
+`patch_crew_timeout_status()` (`R/targets/crew_patch.R`, called from
+`set_targets_config()`): crew 1.3.3 never sets a status for a timed-out task, so
+without the patch the error is `object 'status' not found`, or
+`invalid subscript type 'closure'` when renv is attached and its `status()`
+function gets picked up instead. The patch checks crew's behavior first and
+does nothing once crew is fixed
+([wlandau/crew#254](https://github.com/wlandau/crew/issues/254)). The timed-out branch is not recorded in
+`tar_meta()` and stays `dispatched` in `tar_progress()`; the systemd run's
+failure alert lists the branches still dispatched (`dispatched_targets()`).
