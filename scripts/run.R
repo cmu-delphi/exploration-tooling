@@ -35,11 +35,11 @@ cli::cli_inform(
 store_dir <- tar_config_get("store", project = tar_project)
 if (!dir.exists(store_dir)) dir.create(store_dir)
 
-# Crew workers inherit this, so their log_event() lines reach the same file.
-Sys.setenv(TAR_RUN_PROJECT = tar_project)
-log_event("run start", who = "runner")
+# The pipeline script reads these to put worker logs in
+# local_logs/<project>/<run id>/ (see notes/run-logs.md).
+Sys.setenv(TAR_RUN_PROJECT = tar_project, TAR_RUN_ID = Sys.getenv("TAR_RUN_ID", new_run_id()))
 tar_make(
   store = store_dir,
-  script = tar_config_get("script", project = tar_project)
+  script = tar_config_get("script", project = tar_project),
+  reporter = tar_config_get("reporter_make", project = tar_project)
 )
-log_event("run end", who = "runner")

@@ -1,7 +1,6 @@
 # Summarize today's systemd prod forecast run (see deploy/systemd/README.md).
 # Reads the log that scripts/run_prod_if_fresh.R writes and checks that the
 # live site serves the local index.
-source(here::here("R", "event_log.R"))
 log_file <- here::here("cache", "logs", "prod_forecast_freshness.log")
 site_url <- "https://delphi-forecasting-reports.netlify.app/"
 today <- format(Sys.Date())
@@ -48,25 +47,44 @@ if (service[["Result"]] != "success") {
   system2("journalctl", c("--user", "-u", "prod-forecasts.service", "-n", "10", "--no-pager"))
 }
 
-cat("\n== in flight (cache/logs/<project>_events.log) ==\n")
-for (project in c("covid_hosp_prod", "flu_hosp_prod", "rsv_hosp_prod")) {
-  path <- event_log_path(project)
-  events <- if (file.exists(path)) readLines(path) else character(0)
-  events <- events[startsWith(events, today)]
-  running <- events_in_flight(events)
+# Dispatch time of each target from the runner log's timestamp reporter lines.
+dispatch_times <- function(runner_lines) {
+  m <- regmatches(runner_lines, regexec("^(\\S+ \\S+) dispatched target (\\S+)$", runner_lines))
+  m <- m[lengths(m) == 3L]
+  times <- setNames(vapply(m, `[`, "", 2L), vapply(m, `[`, "", 3L))
+  times[!duplicated(names(times), fromLast = TRUE)]
+}
+
+cat("\n== in flight (tar_progress; `make logs project=<p>` to follow) ==\n")
+for (disease in c("covid", "flu", "rsv")) {
+  project <- sprintf("%s_hosp_prod", disease)
+  store <- here::here(targets::tar_config_get("store", project = project))
   cat(sprintf("%s: ", project))
-  if (length(events) == 0) {
-    cat("no events today\n")
-  } else if (nrow(running) == 0) {
-    cat(sprintf("nothing in flight (last: %s)\n", substring(tail(events, 1), 1, 100)))
+  progress <- tryCatch(suppressMessages(targets::tar_progress(store = store)), error = function(cond) NULL)
+  dispatched <- if (is.null(progress)) character(0) else progress$name[progress$progress == "dispatched"]
+  if (length(dispatched) == 0) {
+    cat("nothing dispatched\n")
   } else {
-    cat(sprintf("%d in flight\n", nrow(running)))
-    print(running, row.names = FALSE)
+    runner_log <- here::here("cache", "logs", sprintf("prod_%s", disease))
+    since <- dispatch_times(if (file.exists(runner_log)) readLines(runner_log) else character(0))[dispatched]
+    elapsed <- difftime(Sys.time(), as.POSIXct(since), units = "mins")
+    cat(sprintf("%d dispatched (stays so if the runner died)\n", length(dispatched)))
+    cat(sprintf("  %-60s since %s (%.1f min)\n", dispatched, substr(since, 12, 19), as.numeric(elapsed)), sep = "")
   }
-  problems <- events_problems(events)
-  if (length(problems) > 0) {
-    cat(sprintf("  %d warnings/errors logged by workers today; last:\n", length(problems)))
-    cat(paste0("    ", substring(tail(problems, 3), 1, 200)), sep = "\n")
+  meta <- tryCatch(
+    suppressMessages(targets::tar_meta(fields = c(time, warnings, error), store = store)),
+    error = function(cond) NULL
+  )
+  if (!is.null(meta)) {
+    meta <- meta[!is.na(meta$time) & format(meta$time, "%F") == today, ]
+    problems <- c(
+      sprintf("warning %s: %s", meta$name, meta$warnings)[!is.na(meta$warnings)],
+      sprintf("error %s: %s", meta$name, meta$error)[!is.na(meta$error)]
+    )
+    if (length(problems) > 0) {
+      cat(sprintf("  %d targets with warnings or errors today (tar_meta); last:\n", length(problems)))
+      cat(paste0("    ", substring(tail(problems, 3), 1, 200)), sep = "\n")
+    }
   }
 }
 

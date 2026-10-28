@@ -58,11 +58,7 @@ run_forecaster <- function(
     snapshot <- snapshot %>% left_join(extra_data, by = join_by(geo_value, time_value))
   }
   forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params)
-  # start/done lines let `make status` show which forecasts are in flight.
-  started <- Sys.time()
-  log_event(sprintf("start %s aheads=%s rows=%d", id, toString(aheads), nrow(snapshot)))
-  out <- with_event_log(forecaster_fn(snapshot), label = sprintf("%s aheads=%s", id, toString(aheads)))
-  log_event(sprintf("done %s aheads=%s in %ds", id, toString(aheads), round(difftime(Sys.time(), started, units = "secs"))))
+  out <- forecaster_fn(snapshot)
   if (join_extra_data && "source" %in% colnames(out)) {
     out <- out %>% select(-source)
   }

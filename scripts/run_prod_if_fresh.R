@@ -168,20 +168,13 @@ run_logged <- function(command, args, log_path) {
 
 run_project_pipeline <- function(project, log_path) {
   # TAR_PROJECT is left at the last freshness-loop project, so name the project
-  # explicitly for the workers' event log (and the pipeline script's .g_project).
-  withr::local_envvar(TAR_RUN_PROJECT = project)
-  follower <- follow_log_into_events(log_path, project)
-  on.exit(
-    {
-      Sys.sleep(1)
-      if (!is.null(follower)) follower$kill_tree()
-    },
-    add = TRUE
-  )
+  # explicitly for the pipeline script's .g_project and the worker log directory.
+  withr::local_envvar(TAR_RUN_PROJECT = project, TAR_RUN_ID = new_run_id())
   store <- targets::tar_config_get("store", project = project)
   script <- targets::tar_config_get("script", project = project)
+  reporter <- targets::tar_config_get("reporter_make", project = project)
   dir.create(store, showWarnings = FALSE)
-  run_logged_r(log_path, targets::tar_make(store = store, script = script))
+  run_logged_r(log_path, targets::tar_make(store = store, script = script, reporter = reporter))
 }
 
 pipelines <- list(

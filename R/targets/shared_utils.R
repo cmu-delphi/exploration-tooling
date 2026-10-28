@@ -342,9 +342,21 @@ forecast_resources <- function(seconds_timeout = 30 * 60) {
   tar_resources(crew = tar_resources_crew(seconds_timeout = seconds_timeout))
 }
 
+new_run_id <- function() format(Sys.time(), "%Y%m%dT%H%M%S")
+
+# Crew worker logs for one run go in local_logs/<project>/<run id>/, so
+# `make logs` can find them. See notes/run-logs.md.
+worker_log_dir <- function() {
+  project <- Sys.getenv("TAR_RUN_PROJECT", Sys.getenv("TAR_PROJECT", "unknown"))
+  here::here("local_logs", project, Sys.getenv("TAR_RUN_ID", new_run_id()))
+}
+
 set_targets_config <- function() {
   # Leave at least 4 cores free for other processes, but cap at 30 workers.
   num_workers <- min(max(parallel::detectCores() - 4L, 1L), 30L)
+  # Workers inherit these: skip renv's slow, noisy "out-of-sync" check and
+  # package attach messages (.Rprofile) at startup.
+  Sys.setenv(RENV_CONFIG_SYNCHRONIZED_CHECK = "FALSE", QUIET_PACKAGE_STARTUP = "true")
 
   tar_option_set(
     # qs is a fast serialization format for R objects.
@@ -354,7 +366,7 @@ set_targets_config <- function() {
     controller = crew_controller_local(
       workers = num_workers,
       garbage_collection = TRUE,
-      options_local = crew_options_local(log_directory = "local_logs")
+      options_local = crew_options_local(log_directory = worker_log_dir())
     ),
     error = "stop",
     # Run every n tasks.
