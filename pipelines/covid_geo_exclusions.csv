@@ -16,6 +16,24 @@ forecast_date,forecaster,geo_value,ahead,weight
 2024-10-01, revision_aware, all, 0, .1
 2024-10-01, windowed_seasonal_extra_sources, ia,, 0
 ##################
+# Oct 28
+##################
+2026-10-28, all, mp,, 0
+2026-10-28, windowed_seasonal, all,, 2
+2026-10-28, windowed_seasonal_extra_sources, all,, 3
+2026-10-28, climate_linear, all,, 0.001
+2026-10-28, linear, all,, 3
+2026-10-28, linearlog, all,, 0
+2026-10-28, climate_base, all,, 2
+2026-10-28, climate_geo_agged, all,, 0
+2026-10-28, climate_quantile_extrapolated, all,, 0
+2026-10-28, climate_linear, hi,, 0.0001
+2026-10-28, revision_aware, all, -1, 1
+2026-10-28, revision_aware, all, 0, .1
+2026-10-28, windowed_seasonal_extra_sources, ia,, 0
+2026-10-28, windowed_seasonal, ak,, 0
+2026-10-28, climate_linear, ak,, 2
+##################
 # Oct 21
 ##################
 2026-10-21, all, mp,, 0
