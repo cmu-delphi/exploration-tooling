@@ -38,7 +38,7 @@ run disease kind="prod":
 [group('production')]
 prod disease="all":
     for d in {{ if disease == "all" { diseases } else { disease } }}; do {{rejust}} run "$d" prod; done
-    {{rejust}} publish
+    {{rejust}} publish-netlify
 
 # Historical replay + scoring in the disease's own evaluation store.
 [group('exploration')]
@@ -48,7 +48,7 @@ eval disease: (run disease "evaluation")
 [group('exploration')]
 explore disease="all":
     for d in {{ if disease == "all" { diseases } else { disease } }}; do {{rejust}} run "$d" explore; done
-    {{ if disease == "all" { rejust + " publish" } else { "" } }}
+    {{ if disease == "all" { rejust + " publish-netlify" } else { "" } }}
 
 # One-off comparison of prod vs explore scores.
 [group('deprecated')]
@@ -184,7 +184,7 @@ push dir="all":
 
 # Rebuild the report index and deploy it.
 [group('production')]
-publish: update-site netlify
+publish-netlify: update-site netlify
 
 [group('production')]
 sync-reports:

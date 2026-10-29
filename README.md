@@ -73,7 +73,7 @@ just errors flu_hosp_prod
 
 # Automatically append the new reports to the site index and host the site on netlify
 # (this requires the netlify CLI to be installed and configured, talk to Dmitry about this)
-just publish
+just publish-netlify
 
 # Update weights until satisfied using *_geo_exclusions.csv, rerun the just command above
 # Submit (makes a commit, pushes to our fork, and makes a PR; this requires a GitHub token

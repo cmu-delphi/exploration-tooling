@@ -21,7 +21,7 @@ just explore covid        # covid exploration sweep (~3h)
 just explore rsv          # rsv exploration sweep (2024-25 and 2025-26 seasons)
 just eval flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n forecast dates; see Key env vars for the other EVALUATION_* scopes. Also: covid, rsv
 just pull / just push     # sync aux_data and targets stores with S3 (forecasting-team-data bucket); pass a store name to sync just that one
-just publish              # rebuild report index and deploy (update-site + netlify)
+just publish-netlify      # rebuild report index and deploy (update-site + netlify)
 just submit flu           # commit forecast to ../FluSight-forecast-hub, commit + push flu weights CSVs to main, open PR (no disease: all three; --dry-run skips the weights push)
 just errors flu_hosp_prod # show errors from the last pipeline run
 just status               # on the prod box: today's systemd prod run (freshness per source, pipelines, site, netlify)
