@@ -27,6 +27,9 @@ forecast_date,forecaster,geo_value,ahead,weight
 2026-10-28, climate_quantile_extrapolated, all,, 0
 2026-10-28, revision_aware, all, -1, 1
 2026-10-28, revision_aware, all,, 0.5
+2026-10-28, revision_aware, us,, 0
+2026-10-28, revision_aware, hi,, 0
+2026-10-28, windowed_seasonal, hi,, 8
 ##################
 # Oct 21
 ##################
@@ -480,4 +483,3 @@ forecast_date,forecaster,geo_value,ahead,weight
 2025-10-15, climate_base, all,, 2
 2025-10-15, climate_geo_agged, all,, 0
 2025-10-15, climate_quantile_extrapolated, all,, 0
-2026-10-28, revision_aware, us,, 0
