@@ -38,7 +38,7 @@ run disease kind="prod":
 [group('production')]
 prod disease="all":
     for d in {{ if disease == "all" { diseases } else { disease } }}; do {{rejust}} run "$d" prod; done
-    {{rejust}} publish-netlify
+    {{rejust}} publish-reports
 
 # Historical replay + scoring in the disease's own evaluation store.
 [group('exploration')]
@@ -48,7 +48,7 @@ eval disease: (run disease "evaluation")
 [group('exploration')]
 explore disease="all":
     for d in {{ if disease == "all" { diseases } else { disease } }}; do {{rejust}} run "$d" explore; done
-    {{ if disease == "all" { rejust + " publish-netlify" } else { "" } }}
+    {{ if disease == "all" { rejust + " publish-reports" } else { "" } }}
 
 # One-off comparison of prod vs explore scores.
 [group('deprecated')]
@@ -124,15 +124,15 @@ _hub_dir disease:
 _hub_repo disease:
     @echo {{ if disease == "covid" { "CDCgov/covid19-forecast-hub" } else if disease == "flu" { "cdcepi/FluSight-forecast-hub" } else if disease == "rsv" { "CDCgov/rsv-forecast-hub" } else { error("unknown disease: " + disease) } }}
 
-# Commit this week's forecast in the disease's hub checkout.
-[group('production')]
-commit disease:
+# Commit this week's forecast in the disease's hub checkout and force-push it to the delphi fork.
+[group('utils')]
+push-forecasts disease:
     ./scripts/commit-script.sh "$({{rejust}} _hub_dir {{disease}})"
 
 # Other staged or dirty files stay out of the commit. Refuses to run off main, so a push can't carry
 # unrelated branch commits. Rebases onto origin first because origin usually has new commits.
 # Commit only the disease's weights files and push them to main.
-[group('production')]
+[group('utils')]
 push-weights disease:
     [ "$(git branch --show-current)" = main ] || { echo "push-weights {{disease}}: not on main"; exit 1; }
     files="pipelines/{{disease}}_geo_exclusions.csv pipelines/{{disease}}_nssp_geo_exclusions.csv"; \
@@ -145,7 +145,7 @@ push-weights disease:
 [group('production')]
 submit disease="all" *flags:
     for d in {{ if disease == "all" { diseases } else { disease } }}; do \
-        {{rejust}} commit "$d"; \
+        {{rejust}} push-forecasts "$d"; \
         [[ "{{flags}}" == *--dry-run* ]] || {{rejust}} push-weights "$d"; \
         (cd "$({{rejust}} _hub_dir "$d")" && gh pr create --title "CMU-TimeSeries {{today}}" --repo "$({{rejust}} _hub_repo "$d")" {{flags}}); \
     done
@@ -182,22 +182,25 @@ push dir="all":
 
 # ---- Reports site ----
 
-# Rebuild the report index and deploy it.
+# Rebuild the report index and deploy the site.
 [group('production')]
-publish-netlify: update-site netlify
+publish-reports: update-reports-index deploy-reports
 
-[group('production')]
+# Two-way sync of rendered_reports/ with the team's S3 copy.
+[group('utils')]
 sync-reports:
     aws s3 sync rendered_reports/ {{bucket}}/reports/
     aws s3 sync {{bucket}}/reports/ rendered_reports/
 
-[group('production')]
-update-site: sync-reports
+# Sync with S3, rebuild rendered_reports/index.html, and upload it to S3.
+[group('utils')]
+update-reports-index: sync-reports
     Rscript -e "{{load_all}}; update_site()"
     aws s3 sync rendered_reports/ {{bucket}}/reports/
 
-[group('production')]
-netlify:
+# Deploy rendered_reports/ to the public Netlify site.
+[group('utils')]
+deploy-reports:
     netlify deploy --dir=rendered_reports --prod
 
 # Shiny dashboard over the scores.
@@ -219,5 +222,6 @@ calibration-experiments *notebooks:
     Rscript scripts/calibration/render_experiments.R {{notebooks}}
 
 # Build the sleepcycle EDA data targets and render rendered_reports/sleepcycle_cough.html.
+[group('exploration')]
 sleepcycle-eda:
     TAR_PROJECT=sleepcycle_eda Rscript -e 'targets::tar_make()'
