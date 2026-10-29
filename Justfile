@@ -73,9 +73,19 @@ errors project="flu_hosp_prod":
 status:
     @Rscript scripts/prod_status.R
 
-# Follow a project's runner log and its latest run's worker logs. See notes/run-logs.md.
+# Print the latest run's log directory and runner.log path. See notes/run-logs.md.
 [group('debugging')]
 logs project:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    run_dir=$(ls -d local_logs/{{project}}/*/ 2>/dev/null | sort | tail -n 1 || true)
+    [ -n "$run_dir" ] || { echo "no runs logged for {{project}} in local_logs/" >&2; exit 1; }
+    echo "run dir: ${run_dir%/}"
+    if [ -e "${run_dir}runner.log" ]; then echo "runner:  ${run_dir}runner.log"; else echo "runner:  (none; started without the run recipe)"; fi
+
+# Follow the latest run's runner log and worker logs as one stream, including logs created later.
+[group('debugging')]
+logs-follow project:
     @scripts/tail_logs.sh {{project}}
 
 # Print when the CDC Socrata datasets last updated. Fail-soft: one bad fetch doesn't stop the rest.

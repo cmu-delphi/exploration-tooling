@@ -13,7 +13,8 @@
 
 ## Following a run
 
-`just logs covid_hosp_prod` (`scripts/tail_logs.sh`) follows the
+`just logs covid_hosp_prod` prints the latest run's directory and `runner.log`
+path. `just logs-follow covid_hosp_prod` (`scripts/tail_logs.sh`) follows the
 runner log and every worker log of the project's latest run as one stream.
 Lines are prefixed `[runner]` or `[worker <first 6 chars of the log name>]`. It
 picks up worker logs that crew creates mid-run, since crew starts workers
@@ -42,7 +43,7 @@ Worker startup is kept quiet: `set_targets_config()` sets
 `RENV_CONFIG_SYNCHRONIZED_CHECK=FALSE` (skips renv's out-of-sync check, which
 can also spend seconds scanning dependencies) and `QUIET_PACKAGE_STARTUP=true`,
 which makes `.Rprofile` drop package attach and masking messages. What remains
-is crew's own `sessionInfo()` header, which `just logs` filters out.
+is crew's own `sessionInfo()` header, which `just logs-follow` filters out.
 
 ## Inspecting a live run
 

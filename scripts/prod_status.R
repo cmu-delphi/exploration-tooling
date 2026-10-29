@@ -61,7 +61,7 @@ latest_runner_log <- function(project) {
   if (length(run_dirs) == 0) NA_character_ else file.path(tail(run_dirs, 1), "runner.log")
 }
 
-cat("\n== in flight (tar_progress; `just logs <project>` to follow) ==\n")
+cat("\n== in flight (tar_progress; `just logs-follow <project>` to follow) ==\n")
 for (disease in c("covid", "flu", "rsv")) {
   project <- sprintf("%s_hosp_prod", disease)
   store <- here::here(targets::tar_config_get("store", project = project))
