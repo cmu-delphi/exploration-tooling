@@ -166,10 +166,10 @@ run_logged <- function(command, args, log_path) {
   if (is.null(status)) 0L else status
 }
 
-run_project_pipeline <- function(project, log_path) {
+run_project_pipeline <- function(project, run_id, log_path) {
   # TAR_PROJECT is left at the last freshness-loop project, so name the project
   # explicitly for the pipeline script's .g_project and the worker log directory.
-  withr::local_envvar(TAR_RUN_PROJECT = project, TAR_RUN_ID = new_run_id())
+  withr::local_envvar(TAR_RUN_PROJECT = project, TAR_RUN_ID = run_id)
   store <- targets::tar_config_get("store", project = project)
   script <- targets::tar_config_get("script", project = project)
   reporter <- targets::tar_config_get("reporter_make", project = project)
@@ -178,9 +178,9 @@ run_project_pipeline <- function(project, log_path) {
 }
 
 pipelines <- list(
-  list(project = "covid_hosp_prod", disease = "covid", log = here::here("cache", "logs", "prod_covid")),
-  list(project = "flu_hosp_prod", disease = "flu", log = here::here("cache", "logs", "prod_flu")),
-  list(project = "rsv_hosp_prod", disease = "rsv", log = here::here("cache", "logs", "prod_rsv"))
+  list(project = "covid_hosp_prod", disease = "covid"),
+  list(project = "flu_hosp_prod", disease = "flu"),
+  list(project = "rsv_hosp_prod", disease = "rsv")
 )
 publish_steps <- list(
   list(
@@ -207,13 +207,15 @@ publish_steps <- list(
 failures <- character(0)
 for (p in pipelines) {
   log_msg(sprintf("Starting: %s prod pipeline", p$disease))
-  status <- run_project_pipeline(p$project, p$log)
+  run_id <- new_run_id()
+  log_path <- file.path(run_log_dir(p$project, run_id), "runner.log")
+  status <- run_project_pipeline(p$project, run_id, log_path)
   log_msg(sprintf("Finished: %s prod pipeline (%s)", p$disease, if (status == 0) "ok" else "failed"))
   if (status != 0) {
     # A timeout or a dead worker leaves its branch dispatched; name them here.
     stuck <- dispatched_targets(p$project)
     failures <- c(failures, sprintf(
-      "%s prod pipeline errored (log: %s)%s", p$disease, p$log,
+      "%s prod pipeline errored (log: %s)%s", p$disease, log_path,
       if (length(stuck) > 0) sprintf("; in flight when it stopped: %s", toString(stuck)) else ""
     ))
   }

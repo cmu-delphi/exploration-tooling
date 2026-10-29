@@ -2,8 +2,9 @@
 
 | What | Where |
 | --- | --- |
-| Runner output (`tar_make` progress, timestamped) | `cache/logs/prod_{covid,flu,rsv}`, `cache/logs/eval_{covid,flu,rsv}`, `cache/logs/explore_{covid,flu,rsv}` (Justfile `tee`, or `scripts/run_prod_if_fresh.R` on the systemd path) |
+| Runner output (`tar_make` progress, timestamped) | `local_logs/<project>/<run id>/runner.log` (Justfile `run` recipe, or `scripts/run_prod_if_fresh.R` on the systemd path) |
 | Each crew worker's stdout and stderr | `local_logs/<project>/<run id>/<random>.log` |
+| Oracle captures, report-site updates | `cache/logs/oracle_capture`, `cache/logs/update_site_log.txt` |
 | Warnings and errors per target | `tar_meta(fields = c(warnings, error), store = "<project>")` |
 | Freshness polls and start/finish of the whole systemd run | `cache/logs/prod_forecast_freshness.log` |
 | systemd unit output | `journalctl --user -u prod-forecasts.service` |
@@ -25,14 +26,16 @@ The runner log is where to look first: with the `timestamp` reporter
 `message()` output, stdout, and warnings as they happen. targets also stores
 the warnings in its metadata when the target finishes.
 
-## Worker log directories
+## Run log directories
 
+Each run gets one directory holding its `runner.log` and its crew worker logs.
 crew names worker logs with random tokens and records no mapping, so the
-directory carries the meaning instead. `worker_log_dir()`
-(`R/targets/shared_utils.R`) builds `local_logs/<TAR_RUN_PROJECT>/<TAR_RUN_ID>`.
-`scripts/run.R` and `run_project_pipeline` set `TAR_RUN_ID` to a timestamp like
-`20261028T140000`, so run directories sort by start time. Calling `tar_make()`
-yourself without `TAR_RUN_ID` gets a fresh timestamp each time the pipeline
+directory carries the meaning instead. `run_log_dir()`
+(`R/targets/shared_utils.R`) builds `local_logs/<project>/<run id>`. The
+Justfile `run` recipe and `run_project_pipeline` set `TAR_RUN_ID` to a
+timestamp like `20261028T140000` before starting the run, so the runner log and
+worker logs land together and run directories sort by start time. Calling
+`tar_make()` yourself without `TAR_RUN_ID` gets a fresh timestamp each time the pipeline
 script is loaded.
 
 Worker startup is kept quiet: `set_targets_config()` sets

@@ -23,13 +23,16 @@ test:
 
 # ---- Pipelines ----
 
-# Output is tee'd to cache/logs/<prod|eval|explore>_<disease> (scripts/tail_logs.sh reads these names).
+# Output is tee'd to local_logs/<project>/<run id>/runner.log, next to the run's worker logs.
 # Evaluation env knobs (EVALUATION_N_DATES, EVALUATION_DATES, ...) pass through; see AGENTS.md.
 # Run one targets pipeline without publishing, e.g. `just run flu evaluation`. kind: prod | evaluation | explore.
 run disease kind="prod":
-    mkdir -p cache/logs
-    TAR_RUN_PROJECT={{disease}}_hosp_{{kind}} Rscript scripts/run.R 2>&1 \
-        | tee -a cache/logs/{{ if kind == "evaluation" { "eval" } else { kind } }}_{{disease}}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export TAR_RUN_PROJECT={{disease}}_hosp_{{kind}} TAR_RUN_ID=$(date +%Y%m%dT%H%M%S)
+    dir=local_logs/$TAR_RUN_PROJECT/$TAR_RUN_ID
+    mkdir -p "$dir"
+    Rscript scripts/run.R 2>&1 | tee -a "$dir/runner.log"
 
 # Prod pipelines (one disease or all three), then publish once.
 [group('production')]
