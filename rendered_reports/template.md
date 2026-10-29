@@ -38,6 +38,10 @@
 - [An Analysis of Decreasing Behavior in Forecasters](decreasing_forecasters.html)
 - [NHSN 2024-2025 Data Analysis](new_data.html)
 
+## 2026 Experiments
+
+- [Sleepcycle cough 2+ as an exogenous signal](sleepcycle_cough.html): EDA and correlations against NHSN/NSSP flu and COVID
+
 ## Calibration Experiments
 
 - [Calibration experiment notebooks](calibration_experiments/index.html)

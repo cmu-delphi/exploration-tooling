@@ -4,3 +4,7 @@ rscript := env_var_or_default("RSCRIPT", "Rscript")
 # Render calibration experiment notebooks (all, or the named ones, e.g. e18_ref_op_bridge) and the index.
 calibration-experiments *notebooks:
     {{rscript}} scripts/calibration/render_experiments.R {{notebooks}}
+
+# Build the sleepcycle EDA data targets and render rendered_reports/sleepcycle_cough.html.
+sleepcycle-eda:
+    TAR_PROJECT=sleepcycle_eda {{rscript}} -e 'targets::tar_make()'
