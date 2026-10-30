@@ -47,6 +47,8 @@ seasonal_features/
 # Rendered report artifacts
 rendered_reports/*.html
 rendered_reports/report.md
+rendered_reports/*.md
+!rendered_reports/template.md
 rendered_reports/tachyons-minimal.css
 rendered_reports/season_summary_2025_presentation_files/
 rendered_reports/gfx/
@@ -71,3 +73,6 @@ slide_forecaster_error.rds
 reportsBackup2/
 notes.org
 _local/*
+
+# Local agent notes
+.claude/CLAUDE.md
