@@ -401,7 +401,7 @@ compute_pca <- function(
     )
   )
   if (file.exists(cache_file_path)) {
-    seasonal_features <- qs::qread(cache_file_path)
+    seasonal_features <- qs2::qs_read(cache_file_path)
   } else {
     # need to create the pcs
     wide <- used_data %>%
@@ -419,7 +419,7 @@ compute_pca <- function(
     seasonal_features <- as_tibble(predict(pca)[, 1:3]) %>% select(PC1)
     seasonal_features$season_week <- 1:nrow(seasonal_features)
     dir.create(dirname(cache_file_path), showWarnings = FALSE, recursive = TRUE)
-    qs::qsave(seasonal_features, cache_file_path)
+    qs2::qs_save(seasonal_features, cache_file_path)
   }
   if (normalize) {
     # normalize so that the maximum value is between [-1,1]

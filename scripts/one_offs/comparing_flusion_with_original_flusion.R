@@ -1,8 +1,8 @@
 source(here::here("R", "load_all.R"))
-flusion_merged <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
+flusion_merged <- qs2::qs_read(here::here("aux_data/flusion_data/flusion_merged")) %>%
   filter(geo_value != "as") %>%
   as_epi_archive(other_keys = "source", compactify = TRUE)
-flusion_merged_nonprop <- qs::qread(here::here("aux_data/flusion_data/flusion_merged_nonprop")) %>%
+flusion_merged_nonprop <- qs2::qs_read(here::here("aux_data/flusion_data/flusion_merged_nonprop")) %>%
   filter(geo_value != "as") %>%
   as_epi_archive(other_keys = "source", compactify = TRUE)
 umass_flusion_predict <- read_csv(here::here("scripts/one_offs/2024-02-17-UMass-flusion.csv"))

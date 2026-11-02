@@ -21,7 +21,7 @@ best_15_forecasters <- data_to_add %>%
   `[`(1:15, ) %>%
   pull(forecaster)
 best_15_forecasters
-internal_scores <- qs::qread("covid_hosp_explore/legacy-exploration-scorecards.qs")
+internal_scores <- qs2::qs_read("covid_hosp_explore/legacy-exploration-scorecards.qs")
 new_data <- internal_scores %>%
   add_row(
     data_to_add %>%
@@ -49,7 +49,7 @@ new_data <- internal_scores %>%
   )
 new_data$forecaster %>% unique()
 new_data
-qs::qsave(new_data, "covid_hosp_explore/legacy-exploration-scorecards.qs")
+qs2::qs_save(new_data, "covid_hosp_explore/legacy-exploration-scorecards.qs")
 setdiff(names(data_to_add), names(internal_scores))
 
 external_scores <- targets::tar_read("external_scores")

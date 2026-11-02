@@ -162,7 +162,7 @@ make_forecast_snapshot <- function(
       dir.create("cache/slide_cache", showWarnings = FALSE, recursive = TRUE)
       file_path <- glue::glue("cache/slide_cache/{cache_key}_{cache_hash}_{before}_{generation_date}.parquet")
       if (file.exists(file_path)) {
-        snapshot <- qs::qread(file_path)
+        snapshot <- qs2::qs_read(file_path)
       } else {
         # a miss means the archive changed since these were written; every file
         # left over from the old hash is now unreachable garbage, so sweep it
@@ -170,7 +170,7 @@ make_forecast_snapshot <- function(
         stale <- stale[!startsWith(basename(stale), glue::glue("{cache_key}_{cache_hash}_"))]
         file.remove(stale)
         snapshot <- read_slice()
-        qs::qsave(snapshot, file_path)
+        qs2::qs_save(snapshot, file_path)
       }
     }
     other_keys <- attributes(snapshot)$metadata$other_keys

@@ -297,7 +297,7 @@ ch_backfill <- function(
   cache_file <- file.path(cache_dir, glue::glue("{CH_FORECASTER_ID}_{cache_key}.qs"))
   if (file.exists(cache_file) && !refresh) {
     cli::cli_alert_success("Loading cached forecasts from {.path {cache_file}}")
-    return(qs::qread(cache_file))
+    return(qs2::qs_read(cache_file))
   }
 
   cli::cli_alert_info(
@@ -366,7 +366,7 @@ ch_backfill <- function(
     attr(out, "failures") <- failures
   }
   dir.create(cache_dir, showWarnings = FALSE, recursive = TRUE)
-  qs::qsave(out, cache_file)
+  qs2::qs_save(out, cache_file)
   cli::cli_alert_success(
     "Backfilled {.val {length(unique(out$forecast_date))}} dates
      ({.val {nrow(out)}} rows) -> {.path {cache_file}}"

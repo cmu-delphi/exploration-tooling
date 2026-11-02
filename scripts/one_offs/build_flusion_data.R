@@ -468,7 +468,7 @@ flusion_merged <-
   rename(agg_level = agg_level.x)
 
 
-flusion_merged %>% qs::qsave(here::here("aux_data/flusion_data/flusion_merged"))
+flusion_merged %>% qs2::qs_save(here::here("aux_data/flusion_data/flusion_merged"))
 q()
 
 # half cooked plot demonstrating the distribution of growth rates for nhsn
@@ -509,7 +509,7 @@ mytable <- cbind(sites = c("site 1", "site 2", "site 3", "site 4"), mydata[10:13
 
 source(here::here("R", "load_all.R"))
 # dropping "as" (American Samoa) because the data is terrible; there's a single point that's 80 and the rest are zero
-flusion_merged <- qs::qread(here::here("aux_data/flusion_data/flusion_merged")) %>%
+flusion_merged <- qs2::qs_read(here::here("aux_data/flusion_data/flusion_merged")) %>%
   filter(geo_value != "as") %>%
   as_epi_archive(other_keys = "source", compactify = TRUE)
 options(error = NULL)

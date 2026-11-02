@@ -18,7 +18,6 @@
 library(dplyr)
 library(magrittr)
 library(purrr)
-library(qs)
 library(stringr)
 
 df <- targets::tar_manifest()
@@ -46,8 +45,8 @@ tib <- tibble::tibble(
   old_forecasts = old_forecasts,
   new_forecasts = new_forecasts,
   compare = map2_chr(old_forecasts, new_forecasts, function(x, y) {
-    x <- qs::qread(x) %>% select(-true_value)
-    y <- qs::qread(y) %>% select(-true_value)
+    x <- qs2::qs_read(x) %>% select(-true_value)
+    y <- qs2::qs_read(y) %>% select(-true_value)
     # If objects are not the same, `all.equal` returns a character vector that
     # can have `length` > 1 (for all the mismatches). In that case, we need to
     # collapse the output into a length-1 string so that `purrr::map2_chr`

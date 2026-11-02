@@ -62,7 +62,7 @@ revision_predictor_design <- function(
     cache_path <- glue::glue("cache/revision_cache/{cache_key}_{hash}_{spec_hash}.qs")
     if (file.exists(cache_path)) {
       tryCatch(
-        return(qs::qread(cache_path)),
+        return(qs2::qs_read(cache_path)),
         error = function(e) message("revision_cache: corrupt cache at ", cache_path, ", recomputing")
       )
     }
@@ -91,7 +91,7 @@ revision_predictor_design <- function(
     )
     if (!is.null(cache_path)) {
       tmp <- paste0(cache_path, ".tmp.", Sys.getpid())
-      qs::qsave(null_design, tmp)
+      qs2::qs_save(null_design, tmp)
       file.rename(tmp, cache_path)
     }
     return(null_design)
@@ -118,7 +118,7 @@ revision_predictor_design <- function(
 
   if (!is.null(cache_path)) {
     tmp <- paste0(cache_path, ".tmp.", Sys.getpid())
-    qs::qsave(design, tmp)
+    qs2::qs_save(design, tmp)
     file.rename(tmp, cache_path)
   }
   design
