@@ -146,21 +146,49 @@ render_prod_health <- function(project, disease) {
   c(health, list(file = file))
 }
 
-#' Post a message to Slack through the incoming webhook in `SLACK_WEBHOOK_URL`.
+#' Post a message to Slack as a reply in the thread for today's prod run.
 #'
-#' @return TRUE if sent, FALSE if no webhook is configured or the post failed.
-notify_slack <- function(text) {
-  url <- Sys.getenv("SLACK_WEBHOOK_URL")
-  if (!nzchar(url)) {
+#' The bot in `SLACK_BOT_TOKEN` posts to the channel ID in `SLACK_CHANNEL`. The
+#' first post of the day starts the thread with a header message and keeps its
+#' timestamp in `thread_file`. If `broadcast`, the reply also shows in the
+#' channel.
+#'
+#' @return TRUE if sent, FALSE if the token or channel is unset or the post failed.
+notify_slack <- function(text, broadcast = FALSE,
+                         thread_file = here::here("cache", sprintf("slack_thread_ts_%s", Sys.Date()))) {
+  token <- Sys.getenv("SLACK_BOT_TOKEN")
+  channel <- Sys.getenv("SLACK_CHANNEL")
+  if (!nzchar(token) || !nzchar(channel)) {
     return(FALSE)
   }
   tryCatch(
     {
-      httr2::request(url) %>%
-        httr2::req_body_json(list(text = text)) %>%
-        httr2::req_perform()
+      if (!file.exists(thread_file)) {
+        header <- post_slack_message(token, list(channel = channel, text = sprintf(":newspaper: prod forecasts for %s", Sys.Date())))
+        writeLines(header$ts, thread_file)
+      }
+      post_slack_message(token, list(
+        channel = channel, text = text,
+        thread_ts = readLines(thread_file, n = 1), reply_broadcast = broadcast
+      ))
       TRUE
     },
-    error = function(e) FALSE
+    error = function(e) {
+      message("Slack post failed: ", conditionMessage(e))
+      FALSE
+    }
   )
+}
+
+# The Slack Web API returns HTTP 200 with `ok: false` on failure, so check `ok`.
+post_slack_message <- function(token, body) {
+  resp <- httr2::request("https://slack.com/api/chat.postMessage") %>%
+    httr2::req_auth_bearer_token(token) %>%
+    httr2::req_body_json(body) %>%
+    httr2::req_perform() %>%
+    httr2::resp_body_json()
+  if (!isTRUE(resp$ok)) {
+    cli::cli_abort("chat.postMessage returned {.val {resp$error}}")
+  }
+  resp
 }

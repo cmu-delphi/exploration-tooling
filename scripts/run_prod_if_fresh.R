@@ -18,27 +18,27 @@ log_msg <- function(msg) {
   cat(sprintf("[%s] %s\n", format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"), msg), file = log_file, append = TRUE)
 }
 
-# Post `text` to Slack (SLACK_WEBHOOK_URL), once per distinct message per day
-# so the half-hourly retries don't repeat it. Returns FALSE if the post failed.
-post_once <- function(text) {
+# Post `text` to today's Slack thread, once per distinct message per day so the
+# half-hourly retries don't repeat it. Returns FALSE if the post failed.
+post_once <- function(text, broadcast = FALSE) {
   sent_file <- here::here("cache", sprintf("prod_alerts_sent_%s", Sys.Date()))
   sent <- if (file.exists(sent_file)) readLines(sent_file) else character(0)
   key <- rlang::hash(text)
   if (key %in% sent) {
     return(TRUE)
   }
-  delivered <- notify_slack(text)
+  delivered <- notify_slack(text, broadcast = broadcast)
   if (delivered) {
     cat(key, "\n", file = sent_file, append = TRUE, sep = "")
   }
   delivered
 }
 
-# Log a CRITICAL line and post it to Slack.
+# Log a CRITICAL line and post it to Slack, also shown in the channel.
 alert <- function(msg) {
   log_msg(sprintf("CRITICAL: %s", msg))
-  if (!post_once(sprintf(":rotating_light: prod forecasts\n%s", msg))) {
-    log_msg("CRITICAL: the alert above was not delivered (SLACK_WEBHOOK_URL unset or the post failed).")
+  if (!post_once(sprintf(":rotating_light: prod forecasts\n%s", msg), broadcast = TRUE)) {
+    log_msg("CRITICAL: the alert above was not delivered (SLACK_BOT_TOKEN or SLACK_CHANNEL unset or the post failed).")
   }
 }
 
@@ -61,7 +61,7 @@ announce_reports <- function(failed) {
     collapse = "\n"
   )
   if (!post_once(text)) {
-    log_msg("The report announcement was not delivered (SLACK_WEBHOOK_URL unset or the post failed).")
+    log_msg("The report announcement was not delivered (SLACK_BOT_TOKEN or SLACK_CHANNEL unset or the post failed).")
   }
 }
 
@@ -78,7 +78,7 @@ finish <- function(status) {
     if (notify_slack(sprintf(":clipboard: end-of-day prod status\n```\n%s\n```", paste(report, collapse = "\n")))) {
       file.create(posted_marker)
     } else {
-      log_msg("The end-of-day status was not delivered (SLACK_WEBHOOK_URL unset or the post failed).")
+      log_msg("The end-of-day status was not delivered (SLACK_BOT_TOKEN or SLACK_CHANNEL unset or the post failed).")
     }
   }
   quit(status = status)

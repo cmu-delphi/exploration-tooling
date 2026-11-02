@@ -44,14 +44,13 @@ the nhsn and nssp signals. The logic lives in `R/prod_health.R`.
 `scripts/run_prod_if_fresh.R` runs both pipelines, renders both health
 notebooks, and publishes the site even when something failed, so the notebook
 explaining a failure is online. On `fail`, `error`, a failed publish step, or
-stale data at the 14:00 cutoff, it posts one Slack message through the incoming
-webhook in `SLACK_WEBHOOK_URL`, exits nonzero, and leaves the day unfinished so
-the next half-hourly firing retries. The same message is sent at most once a
-day.
+stale data at the 14:00 cutoff, it posts one Slack alert, exits nonzero, and
+leaves the day unfinished so the next half-hourly firing retries. The same
+message is sent at most once a day.
 If the netlify deploy succeeded despite the failure, the site is live and the
 day goes to a person instead: the run writes
 `cache/prod_forecast_handed_off_<date>`, and later firings do not run or post.
-Rerun by hand with `make prod-*`; that path ignores the marker. If the webhook isn't set or the post fails, it logs a CRITICAL line saying
+Rerun by hand with `make prod-*`; that path ignores the marker. If the bot token or channel isn't set or the post fails, it logs a CRITICAL line saying
 the alert was not delivered.
 After every publish, failed or not, it also posts a message with links to the
 site and to the prod reports and health notebooks rendered that day.
@@ -62,6 +61,11 @@ The first run to end at or after 14:00 posts the output of `make status`
 (`scripts/prod_status.R`), once a day; delete `cache/prod_status_posted_<date>`
 to post it again.
 
-The webhook is a Slack incoming webhook for the team channel. Set it and
-`SLACK_REPORT_PINGS` in the `forecaster` user's `~/.Renviron` on the prod box
-(the project `.Rprofile` reads that file); never commit them.
+All Slack posts for a day go in one thread.
+The first post of the day starts the thread with a `prod forecasts for <date>` header, and its timestamp is kept in `cache/slack_thread_ts_<date>`.
+Alerts are also shown in the channel; the report links and the end-of-day status are only in the thread.
+Delete `cache/slack_thread_ts_<date>` to start a new thread.
+
+The posts come from a Slack app bot with the `chat:write` scope, which must be a member of the team channel.
+Set its token in `SLACK_BOT_TOKEN`, the channel ID (not the name) in `SLACK_CHANNEL`, and `SLACK_REPORT_PINGS` in the `forecaster` user's `~/.Renviron` on the prod box (the project `.Rprofile` reads that file).
+Never commit them.
