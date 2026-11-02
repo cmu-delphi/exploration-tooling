@@ -242,7 +242,7 @@ create_flu_data_targets <- function() {
             max_attempts = 10,
             wait_seconds = 1,
             fn = epidatr::epidata_archive,
-            source = "va_respiratory",
+            source = "va_respiratory_cases",
             signals = "flu_cases_per_100k_7dav",
             geo_type = geo_type,
             geo_values = geo_values,
