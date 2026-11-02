@@ -9,18 +9,24 @@
 - The season reports provide a general analysis of the 2024-2025 season's data and forecaster performance.
 - The backtesting reports were pre-season tests of a variety of forecasters on the 2023-2024 season's data.
 - The current forecaster consists of
-  - Main component: An AR model using the most recent week and the week before that, with training data taken from a 7 week window centered on the date of the forecast in all previous year's data. This is the seasonal training window described [here](### Autoregressive models with exogenous features)
-  - Minor secondary component: The same model without nssp, but potentially normalized and using alternative historical sources. This is described [here](### Autoregressive models with augmented data).
+  - Main component: An AR model using the most recent week and the week before that, with training data taken from a 7 week window centered on the date of the forecast in all previous year's data. This is the seasonal training window described [here](forecasters.html#autoregressive-models-with-exogenous-features)
+  - Minor secondary component: The same model without nssp, but potentially normalized and using alternative historical sources. This is described [here](forecasters.html#autoregressive-models-with-augmented-data).
   - Backup: climate linear, which combines the historical quantiles with a linear extrapolation of the most recent data.
-- A more detailed description of the forecaster families explored is provided at the bottom of the page.
+- A more detailed description of the forecaster families explored is on the [forecasters page](forecasters.html).
 
 ## Most recent week
 
 
-## Weekly Health Checks
+## Weekly Health Checks 2025-2026 Season
 
 
-## Score notebooks
+## Weekly Health Checks 2024-2025 Season
+
+
+## Score notebooks 2025-2026 Season
+
+
+## Score notebooks 2024-2025 Season
 
 
 ## Weekly Fanplots 2025-2026 Season
@@ -38,11 +44,18 @@
 - [An Analysis of Decreasing Behavior in Forecasters](decreasing_forecasters.html)
 - [NHSN 2024-2025 Data Analysis](new_data.html)
 
+## 2026 Experiments
+
+- [Sleepcycle cough 2+ as an exogenous signal](sleepcycle_cough.html): EDA and correlations against NHSN/NSSP flu and COVID
+
 ## Calibration Experiments
 
 - [Calibration experiment notebooks](calibration_experiments/index.html)
 
-## Explore Notebooks
+## 2025 Explore Notebooks
+
+
+## 2024 Explore Notebooks
 
 
 ## 2025-2026 Season Backtesting
@@ -53,7 +66,7 @@
 
 ## 2023-2024 Season Backtesting
 
-- [Forecaster Exploration Summary](#exploration-summary-2024-2025)
+- [Forecaster Exploration Summary](forecasters.html#exploration-summary-2024-2025)
 
 ## Description of Forecaster Families
 

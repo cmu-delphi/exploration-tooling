@@ -5,8 +5,8 @@
 # without running either pipeline.
 #
 # Usage:
-#   Rscript scripts/render_prod_explore_comparison.R
-#   Rscript scripts/render_prod_explore_comparison.R flu   # flu variant
+#   Rscript scripts/one_offs/render_prod_explore_comparison.R
+#   Rscript scripts/one_offs/render_prod_explore_comparison.R flu   # flu variant
 
 suppressPackageStartupMessages(source("R/load_all.R"))
 
@@ -34,7 +34,7 @@ prod_forecaster_ids <- c(
 explore_meta <- targets::tar_meta(store = explore_store, fields = "name") %>%
   filter(stringr::str_starts(name, "joined_scores_"))
 if (nrow(explore_meta) == 0) {
-  cli::cli_abort("No joined_scores_* targets found in {explore_store}. Run make explore-{disease} first.")
+  cli::cli_abort("No joined_scores_* targets found in {explore_store}. Run `just explore {disease}` first.")
 }
 best_slug <- explore_meta %>%
   mutate(slug = stringr::str_remove(name, "^joined_scores_")) %>%

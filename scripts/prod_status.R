@@ -55,7 +55,13 @@ dispatch_times <- function(runner_lines) {
   times[!duplicated(names(times), fromLast = TRUE)]
 }
 
-cat("\n== in flight (tar_progress; `make logs project=<p>` to follow) ==\n")
+# runner.log of the project's latest run (run dirs are timestamps, so they sort by start).
+latest_runner_log <- function(project) {
+  run_dirs <- sort(list.dirs(here::here("local_logs", project), recursive = FALSE))
+  if (length(run_dirs) == 0) NA_character_ else file.path(tail(run_dirs, 1), "runner.log")
+}
+
+cat("\n== in flight (tar_progress; `just logs-follow <project>` to follow) ==\n")
 for (disease in c("covid", "flu", "rsv")) {
   project <- sprintf("%s_hosp_prod", disease)
   store <- here::here(targets::tar_config_get("store", project = project))
@@ -65,7 +71,7 @@ for (disease in c("covid", "flu", "rsv")) {
   if (length(dispatched) == 0) {
     cat("nothing dispatched\n")
   } else {
-    runner_log <- here::here("cache", "logs", sprintf("prod_%s", disease))
+    runner_log <- latest_runner_log(project)
     since <- dispatch_times(if (file.exists(runner_log)) readLines(runner_log) else character(0))[dispatched]
     elapsed <- difftime(Sys.time(), as.POSIXct(since), units = "mins")
     cat(sprintf("%d dispatched (stays so if the runner died)\n", length(dispatched)))
@@ -244,8 +250,8 @@ if (is.null(live_index)) {
 for (disease in c("covid", "flu", "rsv")) {
   if (startsWith(step_statuses[[sprintf("%s prod", disease)]], "failed")) {
     cat(sprintf(
-      "\n%s prod failed. To see the errors:\n  make get-%s-prod-errors\n  tail -n 100 cache/logs/prod_%s\n",
-      disease, disease, disease
+      "\n%s prod failed. To see the errors:\n  just errors %s_hosp_prod\n  tail -n 100 %s\n",
+      disease, disease, latest_runner_log(sprintf("%s_hosp_prod", disease))
     ))
   }
 }

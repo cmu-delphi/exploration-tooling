@@ -91,3 +91,8 @@ rsv_hosp_evaluation:
   store: rsv_hosp_evaluation
   use_crew: yes
   reporter_make: timestamp
+sleepcycle_eda:
+  # Data targets + a rendered notebook; no forecasting. See notes/sleepcycle-eda.md.
+  script: pipelines/sleepcycle_eda.R
+  store: sleepcycle_eda
+  reporter_make: timestamp

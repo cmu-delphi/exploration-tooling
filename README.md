@@ -48,7 +48,7 @@ Run the pipeline using:
 ```sh
 # Install R 4.4.1 (we recommend https://github.com/r-lib/rig)
 # Install renv and R dependencies
-make install
+just install
 
 # Sync data and forecasts from the AWS bucket
 # - downloads the aux_data/ folder which contains non-public data used by some forecasters
@@ -56,31 +56,33 @@ make install
 # Requires the AWS CLI to be installed and configured
 # Reference: https://awscli.amazonaws.com/v2/documentation/api/latest/reference/s3/index.html
 # Installation instructions: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
-make pull
+just pull
 
 # Make forecasts
-make prod-flu
-make prod-covid
-make prod-rsv
+just prod flu
+just prod covid
+just prod rsv
+# or all three, publishing once at the end
+just prod
 
 # If there are errors, view the top n with (in an R session; replace with appropriate project):
 #   suppressPackageStartupMessages(source("R/load_all.R"))
 #   get_targets_errors("covid_hosp_prod", top_n = 10)
-# or use the make shortcut, e.g.
-make get-flu-prod-errors
+# or use the just shortcut, e.g.
+just errors flu_hosp_prod
 
 # Automatically append the new reports to the site index and host the site on netlify
 # (this requires the netlify CLI to be installed and configured, talk to Dmitry about this)
-make update-site && make netlify
+just publish-reports
 
-# Update weights until satisfied using *_geo_exclusions.csv, rerun the make command above
+# Update weights until satisfied using *_geo_exclusions.csv, rerun the just command above
 # Submit (makes a commit, pushes to our fork, and makes a PR; this requires a GitHub token
 # and the gh CLI to be installed and configured, talk to Dmitry about this)
-make submit-flu
-make submit-covid
+just submit flu
+just submit covid
 
 # Push your forecasts to the AWS bucket (requires AWS CLI)
-make push
+just push
 ```
 
 ## Exploration Usage
@@ -91,16 +93,16 @@ to run is about 3 hours per disease.
 
 ```sh
 # Install renv and R dependencies
-make install
+just install
 
 # Run the pipeline
-make explore-flu
-make explore-covid
+just explore flu
+just explore covid
 
 # If you anticipate running the pipeline for a long time and possibly logging off, you can run the pipeline with nohup
 # The job output can be found in nohup.out
-nohup make explore-flu &
-nohup make explore-covid &
+nohup just explore flu &
+nohup just explore covid &
 ```
 
 ## Development Overview
@@ -117,7 +119,7 @@ to a store directory (targets cache) of the same name:
 
 ### Directory Layout
 
-- `scripts/run.R` and `Makefile`: the main entrypoints for all pipelines
+- `scripts/run.R` and `Justfile`: the main entrypoints for all pipelines
 - `R/`: reusable R code for forecasters, targets, and data processing functions
 - `scripts/`: pipeline definitions (one per project), archive-building and
   data-processing scripts, and report generation scripts
@@ -251,7 +253,7 @@ df
 
 ### Tests
 
-The tests can be run with `make test`. We try to test the utility functions as
+The tests can be run with `just test`. We try to test the utility functions as
 much as we can. Due to the nature of data work, testing forecasting functions is
 hard and tends to be done by examining results. We made an attempt to add
 synthetic data tests, but they were very slow and not very useful.

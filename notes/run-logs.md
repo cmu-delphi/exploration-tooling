@@ -2,8 +2,9 @@
 
 | What | Where |
 | --- | --- |
-| Runner output (`tar_make` progress, timestamped) | `cache/logs/prod_{covid,flu,rsv}`, `cache/logs/eval_{covid,flu,rsv}` (Makefile `tee`, or `scripts/run_prod_if_fresh.R` on the systemd path) |
+| Runner output (`tar_make` progress, timestamped) | `local_logs/<project>/<run id>/runner.log` (Justfile `run` recipe, or `scripts/run_prod_if_fresh.R` on the systemd path) |
 | Each crew worker's stdout and stderr | `local_logs/<project>/<run id>/<random>.log` |
+| Oracle captures, report-site updates | `cache/logs/oracle_capture`, `cache/logs/update_site_log.txt` |
 | Warnings and errors per target | `tar_meta(fields = c(warnings, error), store = "<project>")` |
 | Freshness polls and start/finish of the whole systemd run | `cache/logs/prod_forecast_freshness.log` |
 | systemd unit output | `journalctl --user -u prod-forecasts.service` |
@@ -12,12 +13,12 @@
 
 ## Following a run
 
-`make logs project=covid_hosp_prod` (`scripts/tail_logs.sh`) follows the
+`just logs covid_hosp_prod` prints the latest run's directory and `runner.log`
+path. `just logs-follow covid_hosp_prod` (`scripts/tail_logs.sh`) follows the
 runner log and every worker log of the project's latest run as one stream.
 Lines are prefixed `[runner]` or `[worker <first 6 chars of the log name>]`. It
 picks up worker logs that crew creates mid-run, since crew starts workers
-lazily and replaces them after they idle out. Explore projects have no runner
-log, so only their worker logs are followed.
+lazily and replaces them after they idle out.
 
 The runner log is where to look first: with the `timestamp` reporter
 (`reporter_make` in `_targets.yaml`, passed explicitly by `scripts/run.R` and
@@ -26,25 +27,27 @@ The runner log is where to look first: with the `timestamp` reporter
 `message()` output, stdout, and warnings as they happen. targets also stores
 the warnings in its metadata when the target finishes.
 
-## Worker log directories
+## Run log directories
 
+Each run gets one directory holding its `runner.log` and its crew worker logs.
 crew names worker logs with random tokens and records no mapping, so the
-directory carries the meaning instead. `worker_log_dir()`
-(`R/targets/shared_utils.R`) builds `local_logs/<TAR_RUN_PROJECT>/<TAR_RUN_ID>`.
-`scripts/run.R` and `run_project_pipeline` set `TAR_RUN_ID` to a timestamp like
-`20261028T140000`, so run directories sort by start time. Calling `tar_make()`
-yourself without `TAR_RUN_ID` gets a fresh timestamp each time the pipeline
+directory carries the meaning instead. `run_log_dir()`
+(`R/targets/shared_utils.R`) builds `local_logs/<project>/<run id>`. The
+Justfile `run` recipe and `run_project_pipeline` set `TAR_RUN_ID` to a
+timestamp like `20261028T140000` before starting the run, so the runner log and
+worker logs land together and run directories sort by start time. Calling
+`tar_make()` yourself without `TAR_RUN_ID` gets a fresh timestamp each time the pipeline
 script is loaded.
 
 Worker startup is kept quiet: `set_targets_config()` sets
 `RENV_CONFIG_SYNCHRONIZED_CHECK=FALSE` (skips renv's out-of-sync check, which
 can also spend seconds scanning dependencies) and `QUIET_PACKAGE_STARTUP=true`,
 which makes `.Rprofile` drop package attach and masking messages. What remains
-is crew's own `sessionInfo()` header, which `make logs` filters out.
+is crew's own `sessionInfo()` header, which `just logs-follow` filters out.
 
 ## Inspecting a live run
 
-- `make status` has an "in flight" section: targets that `tar_progress()`
+- `just status` has an "in flight" section: targets that `tar_progress()`
   reports as `dispatched`, with their dispatch time from the runner log, and
   today's warnings and errors from `tar_meta()`. A target stays `dispatched`
   if the runner died, so check the elapsed time.

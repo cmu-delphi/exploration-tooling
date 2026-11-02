@@ -344,11 +344,13 @@ forecast_resources <- function(seconds_timeout = 30 * 60) {
 
 new_run_id <- function() format(Sys.time(), "%Y%m%dT%H%M%S")
 
-# Crew worker logs for one run go in local_logs/<project>/<run id>/, so
-# `make logs` can find them. See notes/run-logs.md.
+# One run's logs (runner.log plus crew worker logs) go in
+# local_logs/<project>/<run id>/, so `just logs` can find them. See notes/run-logs.md.
+run_log_dir <- function(project, run_id) here::here("local_logs", project, run_id)
+
 worker_log_dir <- function() {
   project <- Sys.getenv("TAR_RUN_PROJECT", Sys.getenv("TAR_PROJECT", "unknown"))
-  here::here("local_logs", project, Sys.getenv("TAR_RUN_ID", new_run_id()))
+  run_log_dir(project, Sys.getenv("TAR_RUN_ID", new_run_id()))
 }
 
 set_targets_config <- function() {

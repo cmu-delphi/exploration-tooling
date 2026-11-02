@@ -89,6 +89,10 @@ update_site <- function() {
     season_start = as.Date(c("2024-11-20", "2025-06-04")),
     season_end = as.Date(c("2025-06-03", "2026-10-15"))
   )
+  # Season a date belongs to; dates outside the table go to the nearest end.
+  season_of <- function(date) {
+    seasons$season_name[pmax(findInterval(as.Date(date), seasons$season_start), 1L)]
+  }
   for (iSeason in 1:nrow(seasons)) {
     season_name <- seasons[[iSeason, "season_name"]]
     season_start <- seasons[[iSeason, "season_start"]]
@@ -147,7 +151,7 @@ update_site <- function() {
       file_path
     )
 
-    report_md_content <- insert_after_section(report_md_content, "## Score notebooks", report_link)
+    report_md_content <- insert_after_section(report_md_content, glue("## Score notebooks {season_of(generation_date)} Season"), report_link)
     if (as.Date(generation_date) == max_score_gen_date) {
       report_md_content <- insert_after_section(report_md_content, "## Most recent week", report_link)
     }
@@ -208,23 +212,24 @@ update_site <- function() {
       ) %>%
       arrange(disease, season_name, desc(is_overall), family)
 
-    section_header <- "## Explore Notebooks"
-    all_explore_lines <- character(0)
-    for (season_name in sort(unique(explore_table$season_name), decreasing = TRUE)) {
-      season_rows <- explore_table %>%
-        filter(season_name == .env$season_name) %>%
-        arrange(disease, desc(is_overall), family)
-      all_explore_lines <- c(all_explore_lines, "", glue("### {season_name}"), "")
-      for (ii in seq_len(nrow(season_rows))) {
-        row <- season_rows[ii, ]
-        all_explore_lines <- c(
-          all_explore_lines,
-          sprintf("- [%s %s](%s)", str_to_title(row$disease), row$family, row$file_name)
-        )
+    # Pages are by the season's start year: 2024-2025 and 2024-2026 are 2024 experiments.
+    for (year_group in c(2024, 2025)) {
+      group_rows <- explore_table %>%
+        filter(if (year_group == 2024) as.integer(substr(season_name, 1, 4)) <= 2024 else as.integer(substr(season_name, 1, 4)) >= 2025)
+      lines <- character(0)
+      for (season_name in sort(unique(group_rows$season_name), decreasing = TRUE)) {
+        season_rows <- group_rows %>%
+          filter(season_name == .env$season_name) %>%
+          arrange(disease, desc(is_overall), family)
+        lines <- c(lines, "", glue("### {season_name}"), "")
+        for (ii in seq_len(nrow(season_rows))) {
+          row <- season_rows[ii, ]
+          lines <- c(lines, sprintf("- [%s %s](%s)", str_to_title(row$disease), row$family, row$file_name))
+        }
       }
-    }
-    if (length(all_explore_lines) > 0) {
-      report_md_content <- insert_after_section(report_md_content, section_header, all_explore_lines)
+      if (length(lines) > 0) {
+        report_md_content <- insert_after_section(report_md_content, glue("## {year_group} Explore Notebooks"), lines)
+      }
     }
   }
 
@@ -248,7 +253,10 @@ update_site <- function() {
       sprintf("- [%s health check, forecast %s (rendered %s)](%s)", str_to_title(row$disease), row$forecast_date, row$generation_date, row$file_name)
     }
     for (ii in seq_len(nrow(health_table))) {
-      report_md_content <- insert_after_section(report_md_content, "## Weekly Health Checks", health_link(health_table[ii, ]))
+      row <- health_table[ii, ]
+      report_md_content <- insert_after_section(
+        report_md_content, glue("## Weekly Health Checks {season_of(row$forecast_date)} Season"), health_link(row)
+      )
     }
     latest_health <- health_table %>% filter(forecast_date == max(forecast_date))
     for (ii in seq_len(nrow(latest_health))) {
@@ -256,12 +264,56 @@ update_site <- function() {
     }
   }
 
-  # Write the updated content to report.md
-  report_md_path <- path(reports_dir, "report.md")
-  writeLines(report_md_content, report_md_path)
-
-  # Convert the markdown file to HTML
-  system(
-    "pandoc rendered_reports/report.md -s -o rendered_reports/index.html --css=style.css --mathjax='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js' --metadata pagetitle='Delphi Reports'"
+  # The template is one document; each top-level section belongs to one page.
+  # Anything not listed (the title, Overview, Most recent week) stays on the index.
+  page_sections <- list(
+    "weekly_2025-2026" = c("Weekly Health Checks 2025-2026 Season", "Score notebooks 2025-2026 Season", "Weekly Fanplots 2025-2026 Season"),
+    "weekly_2024-2025" = c("Weekly Health Checks 2024-2025 Season", "Score notebooks 2024-2025 Season", "Weekly Fanplots 2024-2025 Season"),
+    "experiments_2026" = c("2026 Experiments", "Calibration Experiments", "2025-2026 Season Backtesting"),
+    "experiments_2025" = c("2025 Explore Notebooks"),
+    "experiments_2024" = c("2024-2025 Season Reports", "2024 Explore Notebooks", "2024-2025 Season Backtesting", "2023-2024 Season Backtesting"),
+    "forecasters" = c("Description of Forecaster Families", "Exploration Summary 2024-2025")
   )
+  page_titles <- c(
+    index = "Home",
+    "weekly_2025-2026" = "Weekly reports 2025-2026",
+    "weekly_2024-2025" = "Weekly reports 2024-2025",
+    experiments_2026 = "2026 experiments",
+    experiments_2025 = "2025 experiments",
+    experiments_2024 = "2024 experiments",
+    forecasters = "Forecasters"
+  )
+  is_header <- startsWith(report_md_content, "## ")
+  section_id <- cumsum(is_header)
+  section_title <- sub("^## ", "", report_md_content[is_header])
+  page_of_section <- vapply(c("", section_title), function(title) {
+    hit <- names(page_sections)[vapply(page_sections, \(x) title %in% x, logical(1))]
+    if (length(hit) == 0) "index" else hit
+  }, character(1), USE.NAMES = FALSE)
+  line_page <- page_of_section[section_id + 1L]
+  unassigned <- setdiff(unlist(page_sections), section_title)
+  if (length(unassigned) > 0) stop("Template is missing sections: ", paste(unassigned, collapse = ", "))
+
+  nav <- paste(
+    sprintf("[%s](%s.html)", page_titles, names(page_titles)),
+    collapse = " | "
+  )
+  for (page in names(page_titles)) {
+    body <- report_md_content[line_page == page]
+    if (page == "index") {
+      # The index carries the title block, then the page list under the overview.
+      page_list <- c("", "## Pages", "", sprintf("- [%s](%s.html)", page_titles[-1], names(page_titles)[-1]), "")
+      overview_end <- which(startsWith(body, "## Most recent week"))[1]
+      body <- append(body, page_list, after = overview_end - 1L)
+    } else {
+      body <- c(paste0("# ", page_titles[[page]]), "", nav, "", body)
+    }
+    md_path <- path(reports_dir, paste0(if (page == "index") "report" else page, ".md"))
+    writeLines(body, md_path)
+    system2("pandoc", c(
+      md_path, "-s", "-o", path(reports_dir, paste0(page, ".html")), "--css=style.css",
+      "--mathjax=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js",
+      "--metadata", shQuote(paste0("pagetitle=Delphi Reports: ", page_titles[[page]]))
+    ))
+  }
 }

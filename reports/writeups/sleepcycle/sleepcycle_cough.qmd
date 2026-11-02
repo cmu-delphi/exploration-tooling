@@ -1,0 +1,117 @@
+---
+title: "Sleepcycle cough 2+ as an exogenous signal"
+date: today
+format:
+  html:
+    toc: true
+    embed-resources: true
+    code-fold: true
+execute:
+  warning: false
+  message: false
+---
+
+Sleepcycle `pct_cough_2_plus_7dav` (state level, differentially-private noised) against NHSN
+confirmed admissions and NSSP ED visit percentages for flu and COVID. Built by the
+`sleepcycle_eda` targets project; every object below is read from a data target.
+
+**Caveat:** all three sources use their latest vintage as of the render date, not real-time as-of data. NHSN's recent weeks are revised heavily, so lead/lag results here are optimistic for forecasting use.
+
+```{r setup}
+library(targets); library(dplyr); library(tidyr); library(ggplot2); library(DT); library(purrr)
+# Quarto runs from this directory, so point at the store explicitly.
+rd <- function(name) tar_read_raw(name, store = here::here("sleepcycle_eda"))
+panel <- rd("panel"); national <- rd("national")
+national_cors <- rd("national_cors"); state_cors <- rd("state_cors")
+sc_revisions <- rd("sc_revisions"); sc_archive <- rd("sc_archive")
+targets_lab <- c(nhsn_flu = "NHSN flu admissions", nhsn_covid = "NHSN COVID admissions",
+                 nssp_flu = "NSSP flu ED %", nssp_covid = "NSSP COVID ED %")
+```
+
+## Coverage and revisions
+
+```{r coverage}
+cov <- panel |> group_by(geo_value) |> summarise(first = min(week), last = max(week), weeks = n())
+tibble(states = nrow(cov), first_week = min(cov$first), last_week = max(cov$last)) |> knitr::kable()
+```
+
+`r nrow(cov)` states report; AK, WY, MT, ND, SD, VT, WV, MS and territories are absent. The archive
+only goes back to April 2026, so earlier values are single backfilled versions.
+
+```{r revisions}
+n_keys <- sc_archive |> filter(signal == "pct_cough_2_plus_7dav") |> distinct(geo_value, reference_time) |> nrow()
+cat(sprintf("%.1f%% of state-days were ever revised; median |relative change| %.2f%%, p99 %.1f%%.\n",
+  100 * n_distinct(paste(sc_revisions$geo_value, sc_revisions$reference_time)) / n_keys,
+  100 * median(abs(sc_revisions$rel_change)), 100 * quantile(abs(sc_revisions$rel_change), 0.99)))
+```
+
+## Noise by state
+
+The noise sd is approximated as CI width / 3.92. Signal-to-noise compares the spread of the weekly
+signal to that noise.
+
+```{r noise}
+noise <- panel |> group_by(geo_value) |>
+  summarise(pop_m = first(pop) / 1e6, mean_cough = mean(cough2), sd_cough = sd(cough2),
+            noise_sd = median(ci_width2, na.rm = TRUE) / 3.92) |>
+  mutate(snr = sd_cough / noise_sd) |> arrange(desc(snr))
+ggplot(noise, aes(pop_m, snr, label = geo_value)) + geom_text() + scale_x_log10() +
+  labs(x = "Population (millions, log)", y = "sd(signal) / noise sd")
+```
+
+## National baseline
+
+Cough and NSSP are population-weighted means over the sleepcycle states; NHSN is summed over the
+same states, so all series cover the same population.
+
+```{r national-ts}
+national |> select(week, cough2, nhsn_flu, nhsn_covid, nssp_flu, nssp_covid) |>
+  pivot_longer(-week) |> group_by(name) |> mutate(z = as.numeric(scale(value))) |> ungroup() |>
+  mutate(group = if_else(name == "cough2", "cough 2+", "target")) |>
+  ggplot(aes(week, z, colour = name)) + geom_line() + facet_wrap(~ name) +
+  labs(y = "z-score") + theme(legend.position = "none")
+```
+
+Lagged correlation of cough at week *t* with the target at week *t + lag* (positive lag: cough leads).
+Levels are inflated by shared seasonality, so the week-over-week log change is the number to watch.
+
+```{r national-cors}
+national_cors |> mutate(target = targets_lab[target]) |>
+  ggplot(aes(lag, cor, colour = transform)) + geom_line() + geom_point() + geom_hline(yintercept = 0) +
+  facet_wrap(~ target) + labs(y = "correlation")
+national_cors |> group_by(target, transform) |> slice_max(cor, n = 1, with_ties = FALSE) |>
+  left_join(national_cors |> filter(lag == 0) |> select(target, transform, cor_lag0 = cor), by = c("target", "transform")) |>
+  transmute(target = targets_lab[target], transform, best_lag = lag, best_cor = round(cor, 2), cor_lag0 = round(cor_lag0, 2)) |>
+  knitr::kable()
+```
+
+## Per-state
+
+Best correlation of week-over-week log changes within +-3 weeks, and at lag 0.
+
+```{r state-table}
+best <- state_cors |> filter(transform == "wow log change", abs(lag) <= 3) |>
+  group_by(geo_value, target) |> arrange(desc(cor)) |>
+  summarise(best_lag = first(lag), best_cor = first(cor),
+            cor_lag0 = cor[lag == 0], .groups = "drop")
+best |> left_join(noise |> select(geo_value, snr), by = "geo_value") |>
+  mutate(target = targets_lab[target], across(c(best_cor, cor_lag0, snr), \(x) round(x, 2))) |>
+  datatable(filter = "top", options = list(pageLength = 15))
+```
+
+```{r state-heat, fig.height = 8}
+best |> mutate(target = targets_lab[target],
+               geo_value = factor(geo_value, levels = best |> filter(target == "nhsn_flu") |> arrange(cor_lag0) |> pull(geo_value))) |>
+  ggplot(aes(target, geo_value, fill = cor_lag0)) + geom_tile() + geom_text(aes(label = round(cor_lag0, 2)), size = 3) +
+  scale_fill_gradient2(limits = c(-0.2, 0.7), oob = scales::squish) + labs(x = NULL, y = NULL, fill = "lag-0 cor")
+```
+
+## What to expect for forecasting
+
+```{r takeaway}
+national_cors |> filter(transform == "wow log change") |> group_by(target) |> slice_max(cor, n = 1, with_ties = FALSE) |>
+  transmute(target = targets_lab[target], best_lag = lag, best_cor = round(cor, 2)) |> knitr::kable()
+```
+
+A signal only helps a forecast if it leads the target. The best lags above show whether cough 2+ is
+leading, coincident, or lagging each target.

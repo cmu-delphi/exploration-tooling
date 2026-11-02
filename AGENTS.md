@@ -9,21 +9,22 @@ Delphi (CMU) epidemic forecasting monorepo for COVID, flu, and RSV hospitalizati
 ## Common commands
 
 ```sh
-make install              # renv::restore() R dependencies (R 4.4.1)
-make test                 # testthat::test_dir('tests/testthat')
-make prod-flu             # run flu production pipeline (TAR_RUN_PROJECT=flu_hosp_prod), then publish (update-site + netlify)
-make prod-covid           # covid production pipeline, then publish
-make prod-rsv             # weekly rsv forecast, then publish; no calibration (no CMU-TimeSeries history in the rsv hub yet)
-make prod                 # all three pipelines, then publish once; prod-<disease>-pipeline runs one without publishing
-make explore-flu          # flu exploration sweep (~3h)
-make explore-covid        # covid exploration sweep (~3h)
-make explore-rsv          # rsv exploration sweep (2024-25 and 2025-26 seasons)
-make eval-flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n forecast dates; see Key env vars for the other EVALUATION_* scopes. Also: eval-covid, eval-rsv
-make pull / make push     # sync aux_data, targets stores, and forecasts with S3 (forecasting-team-data bucket)
-make update-site && make netlify   # rebuild report index and deploy
-make submit-flu           # commit forecast to ../FluSight-forecast-hub, open PR, then commit + push flu weights CSVs to main (also: submit-covid, submit-rsv; *-dry skips the weights push)
-make get-flu-prod-errors  # show errors from the last pipeline run
-make status               # on the prod box: today's systemd prod run (freshness per source, pipelines, site, netlify)
+just                      # list all recipes
+just install              # renv::restore() R dependencies (R 4.4.1)
+just test                 # testthat::test_dir('tests/testthat')
+just prod flu             # run flu production pipeline (TAR_RUN_PROJECT=flu_hosp_prod), then publish (update-reports-index + deploy-reports)
+just prod covid           # covid production pipeline, then publish
+just prod rsv             # weekly rsv forecast, then publish; no calibration (no CMU-TimeSeries history in the rsv hub yet)
+just prod                 # all three pipelines, then publish once; `just run <disease> [prod|evaluation|explore]` runs one without publishing
+just explore flu          # flu exploration sweep (~3h); `just explore` runs all three, then publishes
+just explore covid        # covid exploration sweep (~3h)
+just explore rsv          # rsv exploration sweep (2024-25 and 2025-26 seasons)
+just eval flu             # flu historical replay + scoring (own project/store: flu_hosp_evaluation); EVALUATION_N_DATES=<n> limits to last n forecast dates; see Key env vars for the other EVALUATION_* scopes. Also: covid, rsv
+just pull / just push     # sync aux_data and targets stores with S3 (forecasting-team-data bucket); pass a store name to sync just that one
+just publish-reports      # rebuild report index and deploy (update-reports-index + deploy-reports)
+just submit flu           # commit forecast to ../FluSight-forecast-hub, commit + push flu weights CSVs to main, open PR (no disease: all three; --dry-run skips the weights push)
+just errors flu_hosp_prod # show errors from the last pipeline run
+just status               # on the prod box: today's systemd prod run (freshness per source, pipelines, site, netlify)
 ```
 
 Run a single test file: `Rscript -e "testthat::test_file('tests/testthat/test-forecaster-utils.R')"`.
@@ -40,7 +41,7 @@ get_targets_errors("covid_hosp_prod", top_n = 10)
 forecaster_lookup("surprised.tarantula")  # map code name -> parameter settings
 ```
 
-Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in a REPL — never in `.Renviron`, which overrides the shell env on every Rscript start), `TAR_RUN_PROJECT` (how make recipes/`scripts/run.R` select the project, immune to `.Renviron`), `FORECAST_REFERENCE_DATE` (pins the pipeline's "today" for reproducible replays/captures), `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EVALUATION_N_DATES` / `EVALUATION_DATES` (comma-separated forecast dates) / `EVALUATION_FORECASTERS` (comma-separated grid ids; if any ensemble component is left out, the ensemble, submission, report and calibration targets are skipped) / `EVALUATION_SUBSTITUTIONS=false` (replay without `*_data_substitutions.csv`) — all inert outside evaluation mode, `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
+Key env vars: `TAR_PROJECT` (targets project selection; set via `Sys.setenv` in a REPL — never in `.Renviron`, which overrides the shell env on every Rscript start), `TAR_RUN_PROJECT` (how just recipes/`scripts/run.R` select the project, immune to `.Renviron`), `FORECAST_REFERENCE_DATE` (pins the pipeline's "today" for reproducible replays/captures), `DUMMY_MODE` (replace all forecasters with a dummy for pipeline testing), `EVALUATION_N_DATES` / `EVALUATION_DATES` (comma-separated forecast dates) / `EVALUATION_FORECASTERS` (comma-separated grid ids; if any ensemble component is left out, the ensemble, submission, report and calibration targets are skipped) / `EVALUATION_SUBSTITUTIONS=false` (replay without `*_data_substitutions.csv`) — all inert outside evaluation mode, `EPIDATR_USE_CACHE`, `FLU/COVID/RSV_SUBMISSION_DIRECTORY`, `AUX_DATA_PATH`.
 
 ## Architecture
 
@@ -121,7 +122,7 @@ files are experiment records. CLAUDE.md describes only the current state.
 ## Refactoring practice
 
 A behavior-preserving step succeeds when its golden diff
-is empty — replay with `make eval-flu` (separate `flu_hosp_evaluation` store,
+is empty — replay with `just eval flu` (separate `flu_hosp_evaluation` store,
 so replays can't invalidate the weekly prod cache; `EVALUATION_N_DATES=<n>`
 limits scope) and compare via oracle captures (`scripts/oracle/capture.R`).
 Never mix a refactor with a bug fix; the golden faithfully reproduces current

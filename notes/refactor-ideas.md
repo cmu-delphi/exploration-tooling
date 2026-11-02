@@ -312,7 +312,7 @@ before acting.
 - Change: delete the three files, their test rows/blocks, and the commented
   config blocks (recoverable from history). Keep `flusion_data_archive`.
 - Risk: behavior-preserving; no live target references them, so no cache
-  impact. `make test` confirms.
+  impact. `just test` confirms.
 
 #### H4. Extract the still-duplicated forecaster prologue/epilogue
 
@@ -341,7 +341,7 @@ arguments. Do H1 first so only the four live forecasters need porting.
 Risk: needs-golden-replay. Command text is unchanged, but the forecaster
 symbols (`scaled_pop` etc.) are spliced into commands via `rlang::syms`, so
 targets hashes their bodies — every forecast target recomputes. Replay
-`make eval-flu` / `eval-covid` against oracle captures.
+`just eval flu` / `just eval covid` against oracle captures.
 
 ### Medium
 
@@ -466,7 +466,7 @@ targets hashes their bodies — every forecast target recomputes. Replay
 - Change: at minimum fix the docs and drop `forecaster_args_names` (pass a
   named list, as the grids now do); better, move it next to the tests as a
   test helper so nobody mistakes it for pipeline code.
-- Risk: behavior-preserving; test-only surface, `make test` verifies.
+- Risk: behavior-preserving; test-only surface, `just test` verifies.
 
 #### L4. `forecaster_lookup` cruft
 
@@ -514,7 +514,7 @@ targets hashes their bodies — every forecast target recomputes. Replay
 
 ### Suggested sequencing
 
-H1 (pure deletion, `make test`) — then M4/L2/L4/L6 (comment/doc/global
+H1 (pure deletion, `just test`) — then M4/L2/L4/L6 (comment/doc/global
 tidies) — then M2/M5/M6/L5 (small helpers, manifest-diff or 1-date golden
 each) — then H4 (the one real refactor, full golden replay both diseases) —
 M1 last, since it needs a behavior adjudication from the user before
