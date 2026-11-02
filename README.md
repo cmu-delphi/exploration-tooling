@@ -46,7 +46,7 @@ with `Sys.setenv(TAR_PROJECT = "<project>")` (options in `_targets.yaml`).
 Run the pipeline using:
 
 ```sh
-# Install R 4.4.1 (we recommend https://github.com/r-lib/rig)
+# Install R 4.6.2 (we recommend https://github.com/r-lib/rig)
 # Install renv and R dependencies
 just install
 

@@ -10,7 +10,7 @@ Delphi (CMU) epidemic forecasting monorepo for COVID, flu, and RSV hospitalizati
 
 ```sh
 just                      # list all recipes
-just install              # renv::restore() R dependencies (R 4.4.1)
+just install              # renv::restore() R dependencies (R 4.6.2)
 just test                 # testthat::test_dir('tests/testthat')
 just prod flu             # run flu production pipeline (TAR_RUN_PROJECT=flu_hosp_prod), then publish (update-reports-index + deploy-reports)
 just prod covid           # covid production pipeline, then publish
