@@ -15,7 +15,7 @@ default:
 
 [group('setup-sync-clean')]
 install:
-    Rscript -e "install.packages(c('renv', 'pak', 'rspm')); renv::restore()"
+    Rscript -e "install.packages(c('renv', 'pak')); renv::restore()"
 
 [group('deprecated')]
 test:
