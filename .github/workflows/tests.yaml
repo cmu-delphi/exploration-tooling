@@ -44,9 +44,11 @@ jobs:
             libcairo2-dev libgit2-dev libx11-dev \
             cmake pandoc libnode-dev
 
+      - uses: extractions/setup-just@v3
+
       - uses: r-lib/actions/setup-renv@v2
 
       - name: Run tests
         run: |
-          make test
+          just test
         shell: bash
