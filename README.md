@@ -1,4 +1,4 @@
-# Exploration Tooling
+# Delphi Hub Forecasting
 
 This repo produces Delphi's COVID, flu, and RSV hospitalization forecasts
 (submitted to the CDC forecast hubs as "CMU-TimeSeries") and hosts the
