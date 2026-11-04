@@ -18,22 +18,42 @@ write_submission_file <- function(pred, forecast_reference_date, submission_dire
 #' The error message lists each failing check, so the targets metadata, the
 #' health notebook, and the Slack alert all carry the full reason. targets keeps
 #' only the first 2048 characters of an error, so each check message is cut to
-#' `max_chars` to keep every failing check visible.
+#' `max_chars` to keep every failing check visible. Checks that attach their
+#' failing rows (the hub's custom checks) also get one line per location,
+#' target, and horizon.
 validate_submission_or_abort <- function(hub_path, file_path, max_chars = 300) {
   validation <- hubValidations::validate_submission(hub_path, file_path = file_path)
   # The result groups the checks by where they ran (hub config, then the file).
   checks <- unlist(unname(validation), recursive = FALSE)
   failing <- purrr::keep(checks, hubValidations::not_pass)
   if (length(failing) > 0) {
-    messages <- purrr::map_chr(failing, "message")
-    messages <- ifelse(nchar(messages) > max_chars, paste0(substr(messages, 1, max_chars - 3), "..."), messages)
-    details <- sprintf("%s: %s", names(failing), messages)
-    rlang::abort(c(
-      sprintf("Hub validation failed for %s:", file_path),
-      rlang::set_names(details, rep("x", length(details)))
-    ))
+    details <- purrr::imap(failing, function(check, name) {
+      message <- check$message
+      if (nchar(message) > max_chars) message <- paste0(substr(message, 1, max_chars - 3), "...")
+      rows <- if (is.null(check$error_object)) character() else summarize_failing_rows(check$error_object)
+      c(x = sprintf("%s: %s", name, message), rlang::set_names(rows, rep("*", length(rows))))
+    })
+    rlang::abort(c(sprintf("Hub validation failed for %s:", file_path), purrr::list_c(unname(details))))
   }
   validation
+}
+
+#' One line per location, target, and horizon in the rows a hub check flagged,
+#' largest value first.
+summarize_failing_rows <- function(error_object) {
+  error_object %>%
+    group_by(location, target, horizon) %>%
+    summarize(
+      n_values = n(),
+      max_value = max(value),
+      lowest_quantile = min(as.numeric(output_type_id)),
+      .groups = "drop"
+    ) %>%
+    arrange(desc(max_value)) %>%
+    with(sprintf(
+      "location %s, %s, horizon %s: %d value(s), max %.3g, from quantile %s up",
+      location, target, horizon, n_values, max_value, lowest_quantile
+    ))
 }
 
 #' Utility to get the reference date for a given date. This is the last day of

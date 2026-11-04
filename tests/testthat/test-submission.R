@@ -61,3 +61,21 @@ test_that("validate_submission_or_abort cuts long check messages", {
   err <- expect_error(validate_submission_or_abort("hub", "model/file.csv", max_chars = 50))
   expect_match(conditionMessage(err), paste0("valid_vals: ", strrep("a", 47), "..."), fixed = TRUE)
 })
+
+test_that("validate_submission_or_abort summarizes the rows a custom check flagged", {
+  flagged <- tibble::tibble(
+    location = c("US", "US", "06"), target = "wk inc flu prop ed visits", horizon = c(3L, 3L, 3L),
+    output_type_id = c("0.99", "0.9", "0.99"), value = c(1.26, 0.35, 0.28)
+  )
+  checks <- as_collection(
+    valid_config = structure(list(message = "Config valid."), class = c("check_success", "hub_check")),
+    max_prop_ed_visits = structure(
+      list(message = "Values too high.", error_object = flagged),
+      class = c("check_failure", "hub_check")
+    )
+  )
+  local_mocked_bindings(validate_submission = function(...) checks, .package = "hubValidations")
+  err <- expect_error(validate_submission_or_abort("hub", "model/file.csv"))
+  expect_match(conditionMessage(err), "location US, wk inc flu prop ed visits, horizon 3: 2 value(s), max 1.26, from quantile 0.9 up", fixed = TRUE)
+  expect_match(conditionMessage(err), "location 06, wk inc flu prop ed visits, horizon 3: 1 value(s), max 0.28, from quantile 0.99 up", fixed = TRUE)
+})
