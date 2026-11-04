@@ -227,9 +227,15 @@ for (p in pipelines) {
   )
   log_msg(sprintf("%s health: %s. %s", p$disease, health$status, paste(health$reasons, collapse = "; ")))
   if (health$status %in% c("fail", "error")) {
+    error_block <- if (NROW(health$errors) > 0) {
+      sprintf("\n```\n%s\n```", paste(sprintf("%s: %s", health$errors$target, health$errors$message), collapse = "\n"))
+    } else {
+      ""
+    }
     failures <- c(failures, sprintf(
-      "%s health check %s: %s (%s)",
-      p$disease, toupper(health$status), paste(health$reasons, collapse = "; "), basename(health$file %||% "no report")
+      "%s health check %s: %s (%s)%s",
+      p$disease, toupper(health$status), paste(health$reasons, collapse = "; "), basename(health$file %||% "no report"),
+      error_block
     ))
   }
 }

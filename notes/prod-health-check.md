@@ -31,6 +31,10 @@ the nhsn and nssp signals. The logic lives in `R/prod_health.R`.
   forecast (for example `revision_aware` when the h−1 week isn't reported) warn,
   and those warnings land here. Warnings printed during `tar_make()` are not
   otherwise seen, since the run is unattended.
+- **Hub validation**: the `validate_result` and `validate_climate_result`
+  targets error when the submission fails a hub check.
+  Their error lists each failing check.
+  They use `error = "continue"`, so the rest of the pipeline and the reports still build.
 
 ## Status and alerts
 
@@ -47,6 +51,8 @@ explaining a failure is online. On `fail`, `error`, a failed publish step, or
 stale data at the 14:00 cutoff, it posts one Slack alert, exits nonzero, and
 leaves the day unfinished so the next half-hourly firing retries. The same
 message is sent at most once a day.
+The alert includes the full message of each errored target, up to the 2048
+characters that targets keeps.
 If the netlify deploy succeeded despite the failure, the site is live and the
 day goes to a person instead: the run writes
 `cache/prod_forecast_handed_off_<date>`, and later firings do not run or post.

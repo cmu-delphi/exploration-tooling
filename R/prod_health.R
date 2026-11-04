@@ -106,7 +106,8 @@ pipeline_messages <- function(store, forecast_date) {
 #' @param project a targets project name from `_targets.yaml` (e.g. "flu_hosp_prod").
 #' @param disease "flu" or "covid".
 #' @return a list with `status` ("ok", "attention", "fail", or "error" when the
-#'   pipeline failed), `reasons`, and the report `file`.
+#'   pipeline failed), `reasons`, `errors` (a tibble of errored targets and
+#'   their messages), and the report `file`.
 render_prod_health <- function(project, disease) {
   store <- targets::tar_config_get("store", project = project)
   names <- targets::tar_meta(store = store, fields = "name")$name
@@ -143,7 +144,7 @@ render_prod_health <- function(project, disease) {
     ),
     quiet = TRUE
   )
-  c(health, list(file = file))
+  c(health, list(errors = filter(messages, kind == "error"), file = file))
 }
 
 #' Post a message to Slack as a reply in the thread for today's prod run.

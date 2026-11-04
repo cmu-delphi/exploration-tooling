@@ -14,16 +14,25 @@ write_submission_file <- function(pred, forecast_reference_date, submission_dire
   readr::write_csv(pred, file_path)
 }
 
-#' Run the hub validations on a submission file and warn (do not abort) on failures.
-#' `check_for_errors()` prints the failing checks before it aborts.
-validate_submission_with_warning <- function(hub_path, file_path) {
+#' Run the hub validations on a submission file and abort on failures.
+#' The error message lists each failing check, so the targets metadata, the
+#' health notebook, and the Slack alert all carry the full reason. targets keeps
+#' only the first 2048 characters of an error, so each check message is cut to
+#' `max_chars` to keep every failing check visible.
+validate_submission_or_abort <- function(hub_path, file_path, max_chars = 300) {
   validation <- hubValidations::validate_submission(hub_path, file_path = file_path)
-  tryCatch(
-    hubValidations::check_for_errors(validation),
-    error = function(cnd) {
-      cli::cli_warn("Hub validation failed for {.file {file_path}}; see the failing checks above.", parent = cnd)
-    }
-  )
+  # The result groups the checks by where they ran (hub config, then the file).
+  checks <- unlist(unname(validation), recursive = FALSE)
+  failing <- purrr::keep(checks, hubValidations::not_pass)
+  if (length(failing) > 0) {
+    messages <- purrr::map_chr(failing, "message")
+    messages <- ifelse(nchar(messages) > max_chars, paste0(substr(messages, 1, max_chars - 3), "..."), messages)
+    details <- sprintf("%s: %s", names(failing), messages)
+    rlang::abort(c(
+      sprintf("Hub validation failed for %s:", file_path),
+      rlang::set_names(details, rep("x", length(details)))
+    ))
+  }
   validation
 }
 

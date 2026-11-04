@@ -124,9 +124,14 @@ _hub_dir disease:
 _hub_repo disease:
     @echo {{ if disease == "covid" { "CDCgov/covid19-forecast-hub" } else if disease == "flu" { "cdcepi/FluSight-forecast-hub" } else if disease == "rsv" { "CDCgov/rsv-forecast-hub" } else { error("unknown disease: " + disease) } }}
 
+# Run the hub validations on this week's submission files in the disease's hub checkout.
+[group('utils')]
+validate-forecasts disease:
+    Rscript scripts/validate_hub_submission.R "$({{rejust}} _hub_dir {{disease}})"
+
 # Commit this week's forecast in the disease's hub checkout and force-push it to the delphi fork.
 [group('utils')]
-push-forecasts disease:
+push-forecasts disease: (validate-forecasts disease)
     ./scripts/commit-script.sh "$({{rejust}} _hub_dir {{disease}})"
 
 # Other staged or dirty files stay out of the commit. Refuses to run off main, so a push can't carry

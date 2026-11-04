@@ -212,7 +212,7 @@ build_prod_ensemble_targets <- function(
         command = {
           make_climate_submission_csv
           if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
-            validate_submission_with_warning(
+            validate_submission_or_abort(
               g_submission_directory,
               file_path = sprintf(
                 "CMU-climate_baseline/%s-CMU-climate_baseline.csv",
@@ -222,7 +222,9 @@ build_prod_ensemble_targets <- function(
           } else {
             "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
           }
-        }
+        },
+        # The pipeline continues so the reports still build; the health check reports the error.
+        error = "continue"
       )
     )
   }
@@ -379,14 +381,16 @@ build_prod_ensemble_targets <- function(
       command = {
         make_submission_csv
         if (g_submission_directory != "cache" && (!g_evaluation_mode || as.Date(forecast_date_int) == max(g_forecast_dates))) {
-          validate_submission_with_warning(
+          validate_submission_or_abort(
             g_submission_directory,
             file_path = sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", get_forecast_reference_date(forecast_date_int))
           )
         } else {
           "not validating when there is no hub (set SUBMISSION_DIRECTORY)"
         }
-      }
+      },
+      # The pipeline continues so the reports still build; the health check reports the error.
+      error = "continue"
     ),
     tar_target(
       name = truth_data,
