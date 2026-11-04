@@ -20,24 +20,24 @@ log_msg <- function(msg) {
 
 # Post `text` to today's Slack thread, once per distinct message per day so the
 # half-hourly retries don't repeat it. Returns FALSE if the post failed.
-post_once <- function(text, broadcast = FALSE) {
+post_once <- function(text) {
   sent_file <- here::here("cache", sprintf("prod_alerts_sent_%s", Sys.Date()))
   sent <- if (file.exists(sent_file)) readLines(sent_file) else character(0)
   key <- rlang::hash(text)
   if (key %in% sent) {
     return(TRUE)
   }
-  delivered <- notify_slack(text, broadcast = broadcast)
+  delivered <- notify_slack(text)
   if (delivered) {
     cat(key, "\n", file = sent_file, append = TRUE, sep = "")
   }
   delivered
 }
 
-# Log a CRITICAL line and post it to Slack, also shown in the channel.
+# Log a CRITICAL line and post it to today's Slack thread.
 alert <- function(msg) {
   log_msg(sprintf("CRITICAL: %s", msg))
-  if (!post_once(sprintf(":rotating_light: prod forecasts\n%s", msg), broadcast = TRUE)) {
+  if (!post_once(sprintf(":rotating_light: prod forecasts\n%s", msg))) {
     log_msg("CRITICAL: the alert above was not delivered (SLACK_BOT_TOKEN or SLACK_CHANNEL unset or the post failed).")
   }
 }

@@ -63,7 +63,7 @@ to post it again.
 
 All Slack posts for a day go in one thread.
 The first post of the day starts the thread with a `prod forecasts for <date>` header, and its timestamp is kept in `cache/slack_thread_ts_<date>`.
-Alerts are also shown in the channel; the report links and the end-of-day status are only in the thread.
+Only the header shows in the channel; alerts, report links, and the end-of-day status are only in the thread.
 Delete `cache/slack_thread_ts_<date>` to start a new thread.
 
 The posts come from a Slack app bot with the `chat:write` scope, which must be a member of the team channel.

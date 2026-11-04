@@ -150,11 +150,10 @@ render_prod_health <- function(project, disease) {
 #'
 #' The bot in `SLACK_BOT_TOKEN` posts to the channel ID in `SLACK_CHANNEL`. The
 #' first post of the day starts the thread with a header message and keeps its
-#' timestamp in `thread_file`. If `broadcast`, the reply also shows in the
-#' channel.
+#' timestamp in `thread_file`.
 #'
 #' @return TRUE if sent, FALSE if the token or channel is unset or the post failed.
-notify_slack <- function(text, broadcast = FALSE,
+notify_slack <- function(text,
                          thread_file = here::here("cache", sprintf("slack_thread_ts_%s", Sys.Date()))) {
   token <- Sys.getenv("SLACK_BOT_TOKEN")
   channel <- Sys.getenv("SLACK_CHANNEL")
@@ -167,10 +166,7 @@ notify_slack <- function(text, broadcast = FALSE,
         header <- post_slack_message(token, list(channel = channel, text = sprintf(":newspaper: prod forecasts for %s", Sys.Date())))
         writeLines(header$ts, thread_file)
       }
-      post_slack_message(token, list(
-        channel = channel, text = text,
-        thread_ts = readLines(thread_file, n = 1), reply_broadcast = broadcast
-      ))
+      post_slack_message(token, list(channel = channel, text = text, thread_ts = readLines(thread_file, n = 1)))
       TRUE
     },
     error = function(e) {

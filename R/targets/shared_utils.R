@@ -357,8 +357,14 @@ set_targets_config <- function() {
   # Leave at least 4 cores free for other processes, but cap at 30 workers.
   num_workers <- min(max(parallel::detectCores() - 4L, 1L), 30L)
   # Workers inherit these: skip renv's slow, noisy "out-of-sync" check and
-  # package attach messages (.Rprofile) at startup.
-  Sys.setenv(RENV_CONFIG_SYNCHRONIZED_CHECK = "FALSE", QUIET_PACKAGE_STARTUP = "true")
+  # package attach messages (.Rprofile) at startup. Each worker uses one BLAS
+  # thread, because the workers already use all the cores. A threaded BLAS in
+  # each worker oversubscribes the cores and makes the quantreg fits very slow.
+  # See notes/quantreg-solver.md.
+  Sys.setenv(
+    RENV_CONFIG_SYNCHRONIZED_CHECK = "FALSE", QUIET_PACKAGE_STARTUP = "true",
+    OPENBLAS_NUM_THREADS = "1", OMP_NUM_THREADS = "1"
+  )
   patch_crew_timeout_status()
 
   tar_option_set(

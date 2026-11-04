@@ -90,3 +90,12 @@ does nothing once crew is fixed
 ([wlandau/crew#254](https://github.com/wlandau/crew/issues/254)). The timed-out branch is not recorded in
 `tar_meta()` and stays `dispatched` in `tar_progress()`; the systemd run's
 failure alert lists the branches still dispatched (`dispatched_targets()`).
+
+## BLAS threads
+
+`fn` does a Cholesky solve through BLAS on each iteration, and `br` does not.
+With `openblas-pthread`, each worker starts one BLAS thread per core by default.
+On 2026-11-04 a local covid prod run had 12 crew workers on 16 cores.
+The load average was about 170, and the `windowed_seasonal*` branches took about 10 minutes each instead of about 15 seconds.
+`set_targets_config()` now sets `OPENBLAS_NUM_THREADS=1` and `OMP_NUM_THREADS=1` before the workers start.
+OpenBLAS reads these variables only when it loads, so setting them inside a target has no effect.

@@ -38,15 +38,14 @@ test_that("notify_slack starts a daily thread once and replies in it", {
     httr2::response_json(body = list(ok = TRUE, ts = sprintf("100.%d", length(bodies))))
   })
   expect_true(notify_slack("first", thread_file = thread_file))
-  expect_true(notify_slack("second", broadcast = TRUE, thread_file = thread_file))
+  expect_true(notify_slack("second", thread_file = thread_file))
   expect_length(bodies, 3)
   expect_null(bodies[[1]]$thread_ts)
   expect_match(bodies[[1]]$text, "prod forecasts for")
   expect_equal(readLines(thread_file), "100.1")
   expect_equal(bodies[[2]]$thread_ts, "100.1")
-  expect_false(bodies[[2]]$reply_broadcast)
   expect_equal(bodies[[3]]$thread_ts, "100.1")
-  expect_true(bodies[[3]]$reply_broadcast)
+  expect_null(bodies[[3]]$reply_broadcast)
 })
 
 test_that("notify_slack returns FALSE when Slack responds with ok = FALSE", {
