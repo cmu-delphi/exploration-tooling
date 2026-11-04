@@ -380,7 +380,7 @@ scaled_pop_seasonal_revision <- function(
   }
 
   n_geos <- n_distinct(train$geo_value)
-  if (nrow(train) < max(n_geos * 3L, 20L, length(lag_cols) + 1L)) {
+  if (nrow(train) < max(n_geos * 2L, 20L, length(lag_cols) + 1L)) {
     return(make_null_forecast())
   }
 
