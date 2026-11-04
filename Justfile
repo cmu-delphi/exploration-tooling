@@ -2,6 +2,8 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 bucket := "s3://forecasting-team-data/2024"
 today := `date +%F`
+# The hub round this week's submission belongs to: the Saturday that ends the epiweek.
+reference_date := `date -d saturday +%F`
 diseases := "covid flu rsv"
 stores := "covid_hosp_prod covid_hosp_evaluation covid_hosp_explore flu_hosp_prod flu_hosp_evaluation flu_hosp_explore rsv_hosp_prod rsv_hosp_evaluation rsv_hosp_explore"
 # S3 sync covers aux_data and every store except rsv_hosp_evaluation.
@@ -127,12 +129,13 @@ _hub_repo disease:
 # Run the hub validations on this week's submission files in the disease's hub checkout.
 [group('utils')]
 validate-forecasts disease:
-    Rscript scripts/validate_hub_submission.R "$({{rejust}} _hub_dir {{disease}})"
+    Rscript scripts/validate_hub_submission.R "$({{rejust}} _hub_dir {{disease}})" {{reference_date}}
 
+# Changes to older rounds stay out of the commit; the script lists them.
 # Commit this week's forecast in the disease's hub checkout and force-push it to the delphi fork.
 [group('utils')]
 push-forecasts disease: (validate-forecasts disease)
-    ./scripts/commit-script.sh "$({{rejust}} _hub_dir {{disease}})"
+    ./scripts/commit-script.sh "$({{rejust}} _hub_dir {{disease}})" {{reference_date}}
 
 # Other staged or dirty files stay out of the commit. Refuses to run off main, so a push can't carry
 # unrelated branch commits. Rebases onto origin first because origin usually has new commits.

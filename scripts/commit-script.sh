@@ -6,13 +6,13 @@
 # only the relevant files from a specific directory while discarding other
 # changes.
 
-# Take command line input for directory switch
-[ $# -ne 1 ] && {
-	echo "Usage: $0 <target-directory>"
+[ $# -ne 2 ] && {
+	echo "Usage: $0 <target-directory> <reference-date>"
 	exit 1
 }
+ref_date=$2
 
-echo "Committing to hub in directory: $1"
+echo "Committing round $ref_date to hub in directory: $1"
 
 cd $1 || {
 	echo "Directory not found: $1"
@@ -32,15 +32,21 @@ git commit -m "Temp backup of today's work"
 git checkout main
 git reset --hard origin/main
 
-# 4. Restore our model directories from the backup. Not every hub has every
-# model (rsv has no CMU-TimeSeries_Cal), and git checkout restores nothing if
-# one pathspec is missing, so restore each directory that exists separately.
-for model_dir in model-output/CMU-TimeSeries model-output/CMU-TimeSeries_Cal; do
-	if git cat-file -e "work-backup:$model_dir" 2>/dev/null; then
-		git checkout work-backup -- "$model_dir"
-		git add "$model_dir"
+# 4. Restore this round's files from the backup. Not every hub has every model
+# (rsv has no CMU-TimeSeries_Cal), so restore each file that exists separately.
+# The hub rejects changes to older rounds, so those stay out of the commit.
+for model in CMU-TimeSeries CMU-TimeSeries_Cal; do
+	file="model-output/$model/$ref_date-$model.csv"
+	if git cat-file -e "work-backup:$file" 2>/dev/null; then
+		git checkout work-backup -- "$file"
+		git add "$file"
 	fi
 done
+left_out=$(git diff --name-only --diff-filter=AM HEAD work-backup -- model-output/CMU-TimeSeries model-output/CMU-TimeSeries_Cal | grep -v "/$ref_date-" || true)
+if [ -n "$left_out" ]; then
+	echo "Left out of the commit (other rounds, rejected by the hub):"
+	echo "$left_out"
+fi
 
 # 5. Commit and push. Stop, and keep work-backup, if there is nothing to submit.
 if git diff --cached --quiet; then

@@ -1,11 +1,13 @@
-# Run the hub validations on this week's submission files in a hub checkout.
+# Run the hub validations on one round's submission files in a hub checkout.
+# These are the files scripts/commit-script.sh commits for the same round.
 # Exits nonzero if a check fails, so `just submit` stops before it pushes.
 #
-# Usage: Rscript scripts/validate_hub_submission.R <hub-directory>
+# Usage: Rscript scripts/validate_hub_submission.R <hub-directory> <reference-date>
 suppressPackageStartupMessages(source(here::here("R", "load_all.R")))
 
-hub_path <- commandArgs(trailingOnly = TRUE)[[1]]
-reference_date <- get_forecast_reference_date(Sys.Date())
+args <- commandArgs(trailingOnly = TRUE)
+hub_path <- args[[1]]
+reference_date <- as.Date(args[[2]])
 
 # CMU-TimeSeries must be present; CMU-TimeSeries_Cal is not made for every hub.
 required <- sprintf("CMU-TimeSeries/%s-CMU-TimeSeries.csv", reference_date)
