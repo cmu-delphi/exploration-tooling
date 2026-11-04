@@ -39,9 +39,12 @@ validate_submission_or_abort <- function(hub_path, file_path, max_chars = 300) {
 }
 
 #' One line per location, target, and horizon in the rows a hub check flagged,
-#' largest value first.
+#' largest value first. Locations show as state abbreviations; codes without a
+#' state FIPS match (the hub's "US") stay as they are.
 summarize_failing_rows <- function(error_object) {
+  census <- epidatasets::state_census
   error_object %>%
+    mutate(location = toupper(coalesce(census$abbr[match(location, census$fips)], location))) %>%
     group_by(location, target, horizon) %>%
     summarize(
       n_values = n(),

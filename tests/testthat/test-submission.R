@@ -77,5 +77,5 @@ test_that("validate_submission_or_abort summarizes the rows a custom check flagg
   local_mocked_bindings(validate_submission = function(...) checks, .package = "hubValidations")
   err <- expect_error(validate_submission_or_abort("hub", "model/file.csv"))
   expect_match(conditionMessage(err), "location US, wk inc flu prop ed visits, horizon 3: 2 value(s), max 1.26, from quantile 0.9 up", fixed = TRUE)
-  expect_match(conditionMessage(err), "location 06, wk inc flu prop ed visits, horizon 3: 1 value(s), max 0.28, from quantile 0.99 up", fixed = TRUE)
+  expect_match(conditionMessage(err), "location CA, wk inc flu prop ed visits, horizon 3: 1 value(s), max 0.28, from quantile 0.99 up", fixed = TRUE)
 })
